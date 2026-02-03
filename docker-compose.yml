@@ -1,0 +1,151 @@
+version: "3.8"
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  ai-net:
+    driver: bridge
+
+volumes:
+  redpanda-data:
+  postgres-data:
+  redis-data:
+  # LiteLLM cache not strictly needed if in-memory default, but good for persistence if config'd
+
+services:
+  # --- Ingestion & Streaming ---
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: sovereign-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      # Advertise internal for backend, external for host access if needed
+      - --advertise-kafka-addr internal://sovereign-redpanda:9092,external://localhost:29092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://sovereign-redpanda:8082,external://localhost:28082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+    ports:
+      - "28081:18081"
+      - "28082:18082"
+      - "29092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Ingestion (Redpanda Connect) ---
+  ingestion:
+    image: jeffail/benthos:latest
+    container_name: sovereign-ingestion
+    volumes:
+      - ./backend/ingestion:/connect
+    command: 
+      - --chilled
+      - streams
+      - /connect/aviation_ingest.yaml
+      - /connect/maritime_ingest.yaml
+    environment:
+      - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
+      - LAT=45.5152
+      - LON=-122.6784
+      - RADIUS=150
+    networks:
+      - backend-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+
+  # --- Persistence ---
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: sovereign-timescaledb
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: sovereign_watch
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/home/postgres/pgdata/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend-net
+      - ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: sovereign-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-net
+      - ai-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Backend & AI ---
+  backend-api:
+    build: 
+      context: ./backend/api
+      dockerfile: Dockerfile
+    container_name: sovereign-backend
+    environment:
+      - DB_DSN=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      - LITELLM_MODEL=deep-reasoner
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/api:/app
+    networks:
+      - backend-net
+      - ai-net
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+  # --- Frontend ---
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sovereign-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Prevent host from overwriting container node_modules
+    networks:
+      - frontend-net
+      - backend-net # To access API directly from server side if needed (SSR) or proxy
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}

@@ -1,0 +1,72 @@
+input:
+  generate:
+    interval: "30s" # Slow down to avoid 429s (1 request per 30s)
+    mapping: 'root = ""'
+
+pipeline:
+  processors:
+    - http:
+        url: "https://api.airplanes.live/v2/point/${LAT}/${LON}/${RADIUS}"
+        verb: GET
+        headers:
+          User-Agent: "SovereignWatch/1.0"
+        timeout: 10s
+        retries: 3
+
+    # Error Handling & Validation
+    - switch:
+        - check: this.ac.type() != "array"
+          processors:
+            - log:
+                message: "API did not return an array in 'ac'. Likely 429 or empty. Payload: ${! content().slice(0, 100) }"
+            - mapping: "root = deleted()" # skip this message
+
+    - mapping: |
+        root = this.ac
+
+    - unarchive:
+        format: json_array
+
+    - mapping: |
+        # Context Check
+        root = if this.r == "T-F-M" { deleted() } else { this }
+
+    - mapping: |
+        # Root CoT fields
+        root.uid = this.hex
+        root.time = now()
+        root.start = now()
+        root.stale = now()
+
+        # Decoding dbFlags for Type
+        # Simply defaulting to avoid complexity for now
+        let is_mil = false
+        let is_ladd = false
+
+        root.type = if $is_mil {
+          "a-f-A-M-F" 
+        } else if $is_ladd {
+          "a-f-A-C-F-LADD"
+        } else {
+          "a-f-A-C-F" 
+        }
+
+        root.how = "m-g" 
+
+        # Point Data
+        root.point.lat = this.lat
+        root.point.lon = this.lon
+        root.point.hae = if this.alt_baro == "ground" { 0.0 } else { this.alt_baro.or(0).float64() } * 0.3048 
+        root.point.ce = 10.0
+        root.point.le = 10.0
+
+        # Details
+        root.detail.track.course = this.track
+        root.detail.track.speed = this.gs.or(0).float64() * 0.514444 
+        root.detail.contact.callsign = this.flight.trim().or(this.hex)
+
+output:
+  kafka:
+    addresses: ["sovereign-redpanda:9092"]
+    topic: "adsb_raw"
+    key: ${! json("uid") }

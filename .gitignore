@@ -1,0 +1,52 @@
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+dist/
+build/
+*.pyc
+__pycache__/
+venv/
+.venv/
+env/
+.env-python/
+
+# Logs
+*.log
+*_logs.txt
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+data/
+db_data/
+redpanda_data/
+redis_data/
+
+# System-specific
+.antigravity/
+.gemini/
+.agent
+docs
+
+# Project specific
+**/node_modules/
+**/dist/
+**/__pycache__/

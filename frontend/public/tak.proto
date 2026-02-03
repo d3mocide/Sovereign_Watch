@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package tak.proto;
+
+/* 
+ * Simplified TAK Protocol V1 for Sovereign Watch 
+ * Based on basic CoT (Cursor on Target) Schema 
+ */
+
+message TakMessage {
+  CotEvent cotEvent = 1;
+}
+
+message CotEvent {
+  // Required: Unique Identifier
+  string uid = 1;
+
+  // Required: Hierarchical Type (e.g., "a-f-A-M-F")
+  string type = 2;
+
+  // Required: Time stamps (ISO 8601 strings or epoch micros)
+  // For this simplified version we use epoch millis for speed
+  uint64 start = 3;
+  uint64 stale = 4;
+  uint64 time = 5;
+
+  // Recommended: How
+  string how = 6; // e.g., "m-g" (machine-gps)
+
+  // Point Data
+  double lat = 7;
+  double lon = 8;
+  double hae = 9; // Height Above Ellipsoid (Meters)
+  double ce = 10; // Circular Error
+  double le = 11; // Linear Error
+
+  // Detail Data (Flexible)
+  Detail detail = 12;
+}
+
+message Detail {
+  Contact contact = 1;
+  Track track = 2;
+  Group group = 3;
+  Status status = 4;
+  PrecisionLocation precisionLocation = 5;
+  // XML fallback for unmapped fields
+  string xmlDetail = 100; 
+}
+
+message Contact {
+  string callsign = 1;
+  string endpoint = 2;
+}
+
+message Track {
+  double course = 1; // Degrees
+  double speed = 2;  // Meters/second
+  double slope = 3;  // Degrees
+}
+
+message Group {
+  string name = 1;
+  string role = 2;
+}
+
+message Status {
+  uint32 battery = 1;
+  bool readiness = 2;
+}
+
+message PrecisionLocation {
+  string geopointsrc = 1;
+  string altsrc = 2;
+}

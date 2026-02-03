@@ -1,0 +1,26 @@
+model_list:
+  - model_name: secure-core
+    litellm_params:
+      model: ollama/llama3
+      api_base: "http://host.docker.internal:11434" # Assuming Ollama on host or sidecar
+      # If running in docker composition, might be http://ollama:11434
+
+  - model_name: public-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: deep-reasoner
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20240620
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+litellm_settings:
+  drop_params: true
+  callbacks: ["presidio"] # Enable Presidio PII redaction by default
+
+# Routing / Fallback logic
+router_settings:
+  fallbacks:
+    - public-flash: ["deep-reasoner"] # If Flash fails/rate-limits, use Claude
+    - secure-core: [] # Fail closed. No fallback to cloud.
