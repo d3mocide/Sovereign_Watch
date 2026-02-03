@@ -43,8 +43,12 @@ redis_data/
 # System-specific
 .antigravity/
 .gemini/
-.agent
-docs
+
+# Keep the intelligence, ignore the research noise
+docs/research/
+.agent/tasks/
+.agent/scripts/__pycache__/
+.agent/.shared/scripts/__pycache__/
 
 # Project specific
 **/node_modules/
