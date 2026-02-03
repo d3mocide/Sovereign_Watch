@@ -32,7 +32,6 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
     - **Tactical Map (UI)**: [http://localhost:3000](http://localhost:3000)
     - **Fusion API**: [http://localhost:8000/docs](http://localhost:8000/docs)
     - **Redpanda Console**: [http://localhost:8080](http://localhost:8080)
-    - **Portainer**: [http://localhost:9000](http://localhost:9000)
 
 ## 📂 Architecture Overview
 

@@ -49,6 +49,19 @@ services:
       timeout: 5s
       retries: 5
 
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: sovereign-redpanda-console
+    environment:
+      KAFKA_BROKERS: "sovereign-redpanda:9092"
+    ports:
+      - "8080:8080"
+    networks:
+      - backend-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
   # --- Ingestion (Redpanda Connect) ---
   ingestion:
     image: jeffail/benthos:latest
