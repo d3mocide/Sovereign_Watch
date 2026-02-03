@@ -73,10 +73,21 @@ graph TD
 
 | Path                 | Purpose                                                | Git Status  |
 | :------------------- | :----------------------------------------------------- | :---------- |
+| `/.agent`            | Agent memory, skills, and global project rules.        | **Tracked** |
 | `/backend/ingestion` | Redpanda Connect (Benthos) pipeline configs (`.yaml`). | **Tracked** |
 | `/backend/db`        | Database schema (`init.sql`) and migration scripts.    | **Tracked** |
 | `/backend/api`       | Python FastAPI service for Fusion and Analysis.        | **Tracked** |
 | `/frontend`          | React + Vite application (Tactical Map).               | **Tracked** |
+| `/docs`              | Architecture plans, research, and progress logs.       | **Tracked** |
+
+## 🤖 AI Agent Protocol
+
+This repository is **Agent-Aware**. If you are an AI assistant contributing to this project:
+
+1.  **Read Rules**: You **MUST** read `.agent/GEMINI.md` at the start of your session.
+2.  **Environment Protocol**: Never run commands (npm, pip, python) directly on the host. Always use the **Docker Compose** commands defined in the rules.
+3.  **Communication**: All inter-service data must adhere to the **TAK Protocol (Protobuf)** as defined in `tak.proto`.
+4.  **Aesthetics**: Follow the "Sovereign Glass" design principles for all UI modifications.
 
 ## 🧪 Development Workflow
 
