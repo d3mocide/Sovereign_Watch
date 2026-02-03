@@ -54,23 +54,29 @@ graph TD
         G -->|Tier 3| I[Claude 3.5]
     end
 
-    subgraph "Presentation (React)"
-        J[Web Worker] -->|Zero-Copy| K[Recall/Physics]
-        K -->|Float32| L[Deck.gl Overlay]
-        L -->|Interleaved| M[Mapbox GL]
+    subgraph "Presentation (React + Deck.gl)"
+        J[MainHud Shell] --> K[TopBar Tactical Clock]
+        J --> L[Pure Chevron Markers]
+        L --> M[Transient Update Loop]
+        M -->|WebGL| N[Mapbox Overlay]
     end
 ```
 
-## 🏗️ Directory Structure
+## 🛡️ Tactical Design ("Sovereign Glass")
 
-| Path                 | Purpose                                                 |
-| :------------------- | :------------------------------------------------------ |
-| `/.agent`            | Agent memory, skills, and workflows (DO NOT DELETE).    |
-| `/backend/ingestion` | Redpanda Connect (Benthos) pipeline configs (`.yaml`).  |
-| `/backend/db`        | Database schema (`init.sql`) and migration scripts.     |
-| `/backend/api`       | Python FastAPI service for Fusion and Analysis.         |
-| `/frontend`          | React + Vite application (Tactical Map).                |
-| `/docs`              | Architecture plans, research papers, and progress logs. |
+- **Chevron-First Architecture**: Unified directional trackers for all assets; no legacy dot markers.
+- **High-Fidelity HUD**: Integrated global TopBar with synchronized temporal reference (UTC) and live state metadata.
+- **Immersion Layers**: Micro-noise texture and tactical grid overlays for a professional surveillance aesthetic.
+- **Interactive Vectors**: Pickable chevrons for target locking, historic trail inspection, and telemetry drill-down.
+
+## 📂 Directory Structure
+
+| Path                 | Purpose                                                | Git Status  |
+| :------------------- | :----------------------------------------------------- | :---------- |
+| `/backend/ingestion` | Redpanda Connect (Benthos) pipeline configs (`.yaml`). | **Tracked** |
+| `/backend/db`        | Database schema (`init.sql`) and migration scripts.    | **Tracked** |
+| `/backend/api`       | Python FastAPI service for Fusion and Analysis.        | **Tracked** |
+| `/frontend`          | React + Vite application (Tactical Map).               | **Tracked** |
 
 ## 🧪 Development Workflow
 
