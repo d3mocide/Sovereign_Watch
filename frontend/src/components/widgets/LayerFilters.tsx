@@ -10,7 +10,7 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
   return (
     <div className="flex flex-col rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden relative">
       {/* Premium Shine */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.02] to-transparent pointer-events-none -translate-x-full animate-shimmer" />
+
       
       <div className="flex items-center justify-between border-b border-tactical-border bg-white/[0.03] px-3 py-2 relative z-10">
         <h3 className="text-mono-xs font-bold uppercase tracking-[0.2em] text-hud-green/70 flex items-center gap-2">

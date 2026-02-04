@@ -28,14 +28,7 @@ export default {
         "grid-pattern":
           "linear-gradient(to right, #1e1e1e 1px, transparent 1px), linear-gradient(to bottom, #1e1e1e 1px, transparent 1px)",
       },
-      keyframes: {
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
-        }
-      },
-      animation: {
-        shimmer: 'shimmer 8s infinite',
-      },
+
     },
   },
   plugins: [],

@@ -6,6 +6,10 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
 
 ---
 
+![Sovereign Watch](assets/images/SovereignWatch.png)
+
+---
+
 ## 🛠️ Quick Start
 
 ### Prerequisites

@@ -26,7 +26,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       {/* 1. Target Identity Header */}
       <div className={`p-4 border border-b-0 ${accentBorder} ${accentBg} backdrop-blur-md rounded-t-sm relative overflow-hidden`}>
         {/* Glass Reflection Shine */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none -translate-x-full animate-[shimmer_5s_infinite]" />
+
         
         <div className="relative z-10 flex justify-between items-start">
           <div className="flex flex-col">
