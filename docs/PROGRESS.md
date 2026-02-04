@@ -84,6 +84,8 @@
 - [ ] **[Ingest-05] Spectrum Verification** (SatNOGS Integration).
 - [ ] **[FE-04] Invisible WebGPU Worker** (Boids/Physics Compute).
 - [x] **[FE-05] TAK Decoder Worker** (Client-side Protobuf & Integrated).
+- [x] **[Ingest-01-Opt] Tier 1 Optimization** (Multi-Source + Staggered Polling).
+- [ ] **[Ingest-06] Gap 3 Smart Poller** (Python + H3 Service).
 
 ## Pending Tasks (Next Priority)
 

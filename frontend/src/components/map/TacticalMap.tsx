@@ -276,10 +276,10 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                 }),
                 
                 // 3. Trail Lines for selected entity
-                ...(selectedEntity && selectedEntity.trail.length > 1 ? [
+                ...(selectedEntity && entitiesRef.current.get(selectedEntity.uid)?.trail && entitiesRef.current.get(selectedEntity.uid)!.trail.length > 1 ? [
                     new PathLayer({
                         id: 'selected-trail',
-                        data: [{ path: selectedEntity.trail }],
+                        data: [{ path: entitiesRef.current.get(selectedEntity.uid)!.trail }],
                         getPath: (d: { path: TrailPoint[] }) => d.path,
                         getColor: selectedEntity.type.includes('S') 
                             ? [0, 255, 100, 180]  
