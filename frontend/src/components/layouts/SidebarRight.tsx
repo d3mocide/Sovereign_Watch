@@ -105,7 +105,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
              <Terminal size={12} />
              <h3 className="text-[10px] font-bold uppercase tracking-widest">Vector_Dynamics</h3>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid ${isShip ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
              <div className="bg-white/5 border border-white/5 p-2 rounded">
                 <span className="text-[9px] text-white/30 block mb-1">SPEED_KTS</span>
                 <span className={`text-mono-lg font-bold ${accentColor} tabular-nums`}>
@@ -118,6 +118,20 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     {Math.round(entity.course)}°
                 </span>
              </div>
+             {!isShip && (
+                <div className="bg-white/5 border border-white/5 p-2 rounded">
+                   <span className="text-[9px] text-white/30 block mb-1">ALTITUDE_FT</span>
+                   <span className={`text-mono-lg font-bold tabular-nums ${(() => {
+                        const ft = entity.altitude * 3.28084;
+                        if (ft < 200) return 'text-sky-400';
+                        if (ft < 5000) return 'text-yellow-400';
+                        if (ft < 25000) return 'text-orange-400';
+                        return 'text-red-400';
+                    })()}`}>
+                       {entity.altitude > 0 ? Math.round(entity.altitude * 3.28084).toLocaleString() : 'GND'}
+                   </span>
+                </div>
+             )}
           </div>
           
           {/* Linked Compass Widget */}

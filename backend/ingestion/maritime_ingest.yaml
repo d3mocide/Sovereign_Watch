@@ -1,16 +1,18 @@
 # Maritime AIS Ingestion Pipeline (AISStream.io -> TAK Format -> Redpanda)
 # Docs: https://aisstream.io/documentation
+#
+# Location is configured via ENV variables (set in docker-compose.yml):
+#   BBOX_MIN_LAT, BBOX_MIN_LON, BBOX_MAX_LAT, BBOX_MAX_LON
 
 input:
   websocket:
     url: "wss://stream.aisstream.io/v0/stream"
     # Send subscription message on connect with API key and bounding box
-    # Coverage: Oregon coast to Cascades, Eugene to Seattle (~275km)
     open_message: |
       {
         "APIKey": "${AISSTREAM_API_KEY}",
         "BoundingBoxes": [
-          [[43.5, -125.5], [47.5, -120.0]]
+          [[${BBOX_MIN_LAT}, ${BBOX_MIN_LON}], [${BBOX_MAX_LAT}, ${BBOX_MAX_LON}]]
         ],
         "FilterMessageTypes": ["PositionReport"]
       }

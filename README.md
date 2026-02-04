@@ -72,6 +72,28 @@ graph TD
 - **Immersion Layers**: Micro-noise texture and tactical grid overlays for a professional surveillance aesthetic.
 - **Interactive Vectors**: Pickable chevrons for target locking, historic trail inspection, and telemetry drill-down.
 
+## 🗼 Tactical Indicators
+
+### Asset Symbology
+
+- **Chevrons**: Indicate directional heading and asset type.
+- **Pulsating Rings**: Indicate active telemetry updates; intensity increases when an asset is selected.
+
+### Altitude Color Coding (Aviation)
+
+The Tactical Map uses a "thermal" gradient to indicate flight altitude at a glance:
+
+- 🔵 **Blue**: Grounded / Taxiing (< 200ft)
+- 🟡 **Yellow**: Departure / Approach (< 5,000ft)
+- 🟠 **Orange**: Mid-Altitude Climb/Descent (< 25,000ft)
+- 🔴 **Red**: High-Altitude Cruise (> 25,000ft)
+
+### Environmental Interaction
+
+- **2D Mode**: Standard top-down tactical view for area overview.
+- **3D Mode**: $45^{\circ}$ perspective view for spatial awareness and altitude visualization.
+- **Trails**: 3D history lines showing the recent flight path of selected assets.
+
 ## 📂 Directory Structure
 
 | Path                 | Purpose                                                | Git Status  |

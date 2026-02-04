@@ -1,56 +1,80 @@
 # Task: Gap 3 & 1 - Smart Python Ingestion Service
 
-**Status**: Planned
+**Status**: ✅ COMPLETED (2026-02-03)
 **Priority**: P1 (High)
 **Owner**: Data Engineering Agent
 **Reference**: [API-PIPE-Line Design](../research/API-PIPE-Line%20Design.md)
 
 ## 1. Objective
 
-Replace the static Benthos-based polling ("Tier 1") with a dynamic **Python Poller Service** that implements **Gap 3 (H3 Sharding)** and **Gap 1 (Round-Robin Multi-Source)**. This will increase update frequency from ~2/min to ~120/min by prioritizing active airspace cells over empty areas.
+Replace the static Benthos-based polling ("Tier 1") with a dynamic **Python Poller Service** that implements **Multi-Source Round-Robin** with weighted selection. This improves reliability and reduces rate limit errors by distributing load across multiple API providers.
 
-## 2. Architecture Shift
+## 2. Final Architecture
 
-- **Current**: Benthos Input (YAML) -> Kafka
-- **New**: Python Service (`backend/ingestion/poller`) -> Kafka
-  - _Note_: Benthos will still likely be used for Maritime or just as a stream processor, but Aviation Ingestion moves to Python code.
+```
+┌─────────────────────────────────────────────────────────────┐
+│  sovereign-adsb-poller (Python 3.11)                        │
+│  ├── multi_source_poller.py  - Weighted API rotation        │
+│  ├── main.py                 - Service loop + TAK normalize │
+│  └── h3_sharding.py          - (Available, not used in MVP) │
+└───────────────────┬─────────────────────────────────────────┘
+                    │ Kafka: adsb_raw
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  sovereign-backend (FastAPI)                                │
+│  └── WebSocket /api/tracks/live → Frontend                  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## 3. Implementation Plan
+## 3. Implementation Notes
 
-### 3.1 Python Service Scaffold
+### 3.1 What Was Built
 
-- Create `backend/ingestion/poller/`
-- Create `requirements.txt`:
-  - `aiohttp` (Async HTTP)
-  - `tenacity` (Smart Retries - Gap 2)
-  - `aiolimiter` (Rate Limiting)
-  - `h3` (Geospatial Sharding - Gap 3)
-  - `redis` (State/Priority Queue)
-  - `aiokafka` (Output to Redpanda)
+- **`backend/ingestion/poller/`** - Python async service
+- **Weighted Source Selection**:
+  - `adsb.fi` (40% of requests)
+  - `adsb.lol` (40% of requests)
+  - `airplanes.live` (20% - strictest rate limits)
+- **Rate Limiting**: `aiolimiter` with per-source limits
+- **Smart Retries**: `tenacity` with exponential backoff + jitter
+- **TAK Normalization**: Converts ADSBx format to TAK-like JSON
 
-### 3.2 Core Logic Implementation
+### 3.2 Simplified from Original Plan
 
-(Based on research doc code)
+- **H3 Sharding**: Code written but NOT USED in production
+  - Reason: With only 3 API sources, spreading requests across 469 H3 cells caused 5+ minute update gaps
+  - Solution: Use 3 fixed overlapping polling points (simpler, faster updates)
+- **Redis Priority Queue**: Not used (would be for H3 cell prioritization)
+- **Deduplication**: Moved to future Gap 4 task
 
-1.  **`multi_source_poller.py`**: Round-robin client for Airplanes.live, ADSB.fi, ADSB.lol.
-2.  **`h3_sharding.py`**: Manage H3 Res-7 cells. Priority queue logic (Redis ZSET).
-3.  **`deduplication.py`**: 5-second window dedupe using ICAO24 (Gap 4).
-4.  **`main.py`**: Service loop.
+### 3.3 Files Created
 
-### 3.3 Infrastructure Updates
+| File                            | Purpose                                             |
+| ------------------------------- | --------------------------------------------------- |
+| `poller/main.py`                | Service entrypoint, polling loop, TAK normalization |
+| `poller/multi_source_poller.py` | Weighted round-robin API client                     |
+| `poller/h3_sharding.py`         | H3 priority manager (for future scaling)            |
+| `poller/Dockerfile`             | Python 3.11-slim with dependencies                  |
+| `poller/requirements.txt`       | aiohttp, tenacity, aiolimiter, h3, aiokafka         |
 
-- Update `docker-compose.yml` to add `ingestion-poller` service.
-- Ensure Redis persistence is enabled for priority queue state.
+## 4. Docker Integration
 
-## 4. Work Breakdown
+Container renamed from `ingestion-poller` → `sovereign-adsb-poller` for clarity.
 
-1.  **Dependency Setup**: Create folder structure and requirements.
-2.  **Poller Implementation**: Port the research code into runnable service.
-3.  **Docker Integration**: Deploy and verify data flow to `adsb_raw` topic.
-4.  **Cleanup**: Disable `aviation_ingest.yaml` Benthos pipeline.
+```yaml
+# docker-compose.yml
+adsb-poller:
+  build: ./backend/ingestion/poller
+  container_name: sovereign-adsb-poller
+  environment:
+    - KAFKA_BROKERS=sovereign-redpanda:9092
+  depends_on:
+    - redpanda
+```
 
-## 5. Success Metrics
+## 5. Future Enhancements (When More API Capacity Available)
 
-- **Throughput**: >100 requests/minute (aggregate).
-- **Latency**: High-traffic cells updated every <10s.
-- **Quota**: Zero 429 errors (managed by `aiolimiter`).
+- [ ] Re-enable H3 sharding when we have 10+ API sources
+- [ ] Add Gap 4 deduplication (5-second ICAO24 window)
+- [ ] Prometheus metrics endpoint
+- [ ] Centralized ENV config for LAT/LON center point

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Map as GLMap, useControl } from 'react-map-gl';
+import { Map as GLMap, useControl, MapRef } from 'react-map-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { PolygonLayer, ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -77,10 +77,10 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                    const newLat = entity.lat;
                    const isShip = entity.type?.includes('S');
                    
-                   // Build trail from existing positions (max 20 points)
+                   // Build trail from existing positions (max 100 points for rich history)
                    let trail: TrailPoint[] = existing?.trail || [];
                    if (!existing || existing.lon !== newLon || existing.lat !== newLat) {
-                       trail = [...trail, [newLon, newLat] as TrailPoint].slice(-20);
+                       trail = [...trail, [newLon, newLat, entity.hae || 0] as TrailPoint].slice(-100);
                    }
                    
                    const callsign = entity.detail?.contact?.callsign?.trim() || entity.uid;
@@ -89,6 +89,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                        uid: entity.uid,
                        lat: newLat,
                        lon: newLon,
+                       altitude: entity.hae || 0, // Height Above Ellipsoid in meters (Proto is flat)
                        type: entity.type,
                        course: entity.detail?.track?.course || 0,
                        speed: entity.detail?.track?.speed || 0,
@@ -227,18 +228,21 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             // For this MVP refactor, we just iterate the map (slower, but functional for <10k).
             // Future Optimization: Use Binary Attributes (FE-04).
             
-            // 2. Coverage Boundary Data
-            // Aviation: 150nm radius circle around Portland
-            const PORTLAND_CENTER: [number, number] = [-122.6784, 45.5152];
-            const AVIATION_RADIUS_M = 150 * 1852; // 150 nautical miles in meters
+            // 2. Coverage Boundary Data (from ENV variables)
+            const CENTER_LAT = parseFloat(import.meta.env.VITE_CENTER_LAT || '45.5152');
+            const CENTER_LON = parseFloat(import.meta.env.VITE_CENTER_LON || '-122.6784');
+            const COVERAGE_RADIUS_NM = parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
             
-            // Maritime: Bounding box [[43.5, -125.5], [47.5, -120.0]]
+            const CENTER: [number, number] = [CENTER_LON, CENTER_LAT];
+            const AVIATION_RADIUS_M = COVERAGE_RADIUS_NM * 1852; // nautical miles to meters
+            
+            // Maritime: Bounding box ~2 degrees around center
             const maritimeBoundary = [
-                [-125.5, 43.5],
-                [-120.0, 43.5],
-                [-120.0, 47.5],
-                [-125.5, 47.5],
-                [-125.5, 43.5] // Close the polygon
+                [CENTER_LON - 3.0, CENTER_LAT - 2.0],
+                [CENTER_LON + 3.0, CENTER_LAT - 2.0],
+                [CENTER_LON + 3.0, CENTER_LAT + 2.0],
+                [CENTER_LON - 3.0, CENTER_LAT + 2.0],
+                [CENTER_LON - 3.0, CENTER_LAT - 2.0] // Close the polygon
             ];
             
             // 2. Animation Rhythm (Slightly faster: 600ms sweep)
@@ -263,7 +267,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                 // 2. Aviation Coverage Boundary (cyan circle)
                 new ScatterplotLayer({
                     id: 'aviation-coverage',
-                    data: [{ position: PORTLAND_CENTER, radius: AVIATION_RADIUS_M }],
+                    data: [{ position: CENTER, radius: AVIATION_RADIUS_M }],
                     getPosition: (d: { position: [number, number] }) => d.position,
                     getRadius: (d: { radius: number }) => d.radius,
                     getFillColor: [0, 0, 0, 0],
@@ -309,14 +313,25 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                         anchorY: 12, // Centered on coordinate
                         mask: true
                     }),
-                    getPosition: (d: any) => [d.lon, d.lat],
+                    getPosition: (d: any) => [d.lon, d.lat, d.altitude || 0],
                     getSize: (d: any) => selectedEntity?.uid === d.uid ? 32 : 24,
                     getAngle: (d: any) => -(d.course || 0),
                     getColor: (d: any) => {
                         const entity = d as CoTEntity;
-                        return entity.type.includes('S') 
-                            ? [0, 255, 100, 220] 
-                            : [0, 255, 255, 220];
+                        if (entity.type.includes('S')) {
+                            // Maritime: Green
+                            return [0, 255, 100, 220];
+                        } else {
+                            // Aviation: Altitude Gradient
+                            // < 5kft: Yellow (Takeoff/Landing)
+                            // 5k-25k: Orange (Climb/Descent)
+                            // > 25k: Red (Cruise/High)
+                            const alt = entity.altitude * 3.28084; // Meters to Feet
+                            if (alt < 200) return [0, 191, 255, 220];     // Blue (Grounded)
+                            if (alt < 5000) return [255, 255, 0, 220];    // Yellow
+                            if (alt < 25000) return [255, 165, 0, 220];   // Orange
+                            return [255, 50, 50, 220];                    // Red
+                        }
                     },
                     pickable: true,
                     onHover: (info: { object?: any; x: number; y: number }) => {
@@ -334,10 +349,13 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                             const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
                             onEntitySelect(newSelection);
                         } else {
-                             onEntitySelect(null);
+                            onEntitySelect(null);
                         }
                     },
-                    updateTriggers: { getSize: [selectedEntity?.uid] }
+                    updateTriggers: { 
+                        getSize: [selectedEntity?.uid],
+                        getColor: [selectedEntity?.uid] // Trigger color update if selection changes style (optional)
+                    }
                 }),
 
                 // 5. Halo / Glow Layer (Soft Pulse Detection)
@@ -349,23 +367,32 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                         if (!isShip && !filters?.showAir) return false;
                         return true;
                     }),
-                    getPosition: (d: CoTEntity) => [d.lon, d.lat],
+                    getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
                     getRadius: (d: CoTEntity) => {
                         const isSelected = selectedEntity?.uid === d.uid;
                         const offset = d.uid.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 100;
                         const pulse = (Math.sin((now + offset) / 600) + 1) / 2;
-                        const base = isSelected ? 22 : 12; // Tighter glow for chevrons
-                        return base * (1 + (pulse * 0.15));
+                        const base = isSelected ? 20 : 6; // Compact glow for unselected chevrons
+                        return base * (1 + (pulse * 0.1));
                     },
                     radiusUnits: 'pixels',
                     getFillColor: (d: CoTEntity) => {
                         const isSelected = selectedEntity?.uid === d.uid;
                         const offset = d.uid.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 100;
                         const pulse = (Math.sin((now + offset) / 600) + 1) / 2;
-                        const alpha = isSelected ? 40 : 10;
-                        return d.type.includes('S') 
-                            ? [0, 255, 100, alpha * (1 - pulse)]   
-                            : [0, 255, 255, alpha * (1 - pulse)];
+                        
+                        // Pulsating alpha
+                        const baseAlpha = isSelected ? 60 : 10;
+                        const a = baseAlpha * (0.8 + pulse * 0.2); 
+                        
+                        // Match glow color to icon color
+                        if (d.type.includes('S')) return [0, 255, 100, a]; // Green glow
+                        
+                        const alt = d.altitude * 3.28084;
+                        if (alt < 200) return [0, 191, 255, a];     // Blue glow
+                        if (alt < 5000) return [255, 255, 0, a];    // Yellow glow
+                        if (alt < 25000) return [255, 165, 0, a];   // Orange glow
+                        return [255, 50, 50, a];                    // Red glow
                     },
                     pickable: false,
                     updateTriggers: { getRadius: [now], getFillColor: [now] }
@@ -391,12 +418,28 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
         ? "mapbox://styles/mapbox/dark-v11" 
         : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
+    // Read center from ENV variables
+    const initialLat = parseFloat(import.meta.env.VITE_CENTER_LAT || '45.5152');
+    const initialLon = parseFloat(import.meta.env.VITE_CENTER_LON || '-122.6784');
+
+    const mapRef = useRef<MapRef>(null);
+
+    const setViewMode = (mode: '2d' | '3d') => {
+        if (!mapRef.current) return;
+        if (mode === '2d') {
+            mapRef.current.flyTo({ pitch: 0, bearing: 0, duration: 2000 });
+        } else {
+            mapRef.current.flyTo({ pitch: 45, bearing: 0, duration: 2000 });
+        }
+    };
+
     return (
     <>
         <GLMap
+            ref={mapRef}
             initialViewState={{
-                latitude: 45.5152,
-                longitude: -122.6784,
+                latitude: initialLat,
+                longitude: initialLon,
                 zoom: 9,
                 pitch: 0,
                 bearing: 0
@@ -413,6 +456,25 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                 }}
             />
         </GLMap>
+
+        {/* View Controls */}
+        {/* View Controls - Centered to avoid sidebar overlap */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-[100] pointer-events-auto">
+            <button 
+                onClick={() => setViewMode('2d')}
+                className="bg-black/60 hover:bg-black/80 backdrop-blur border border-white/10 text-cyan-400 p-2 rounded shadow-lg transition-all active:scale-95"
+                title="Top Down (2D)"
+            >
+                <div className="w-8 h-8 flex items-center justify-center font-mono font-bold text-xs">2D</div>
+            </button>
+            <button 
+                onClick={() => setViewMode('3d')}
+                className="bg-black/60 hover:bg-black/80 backdrop-blur border border-white/10 text-cyan-400 p-2 rounded shadow-lg transition-all active:scale-95"
+                title="Perspective (3D)"
+            >
+                 <div className="w-8 h-8 flex items-center justify-center font-mono font-bold text-xs">3D</div>
+            </button>
+        </div>
         
         {/* Modern Map Tooltip */}
         {hoveredEntity && hoverPosition && (

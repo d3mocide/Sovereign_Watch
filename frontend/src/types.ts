@@ -1,9 +1,10 @@
-export type TrailPoint = [number, number]; // [lon, lat]
+export type TrailPoint = [number, number, number]; // [lon, lat, altitude]
 
 export type CoTEntity = {
     uid: string;
     lat: number;
     lon: number;
+    altitude: number; // Height Above Ellipsoid in meters (0 for ships)
     type: string;
     course: number;
     speed: number;

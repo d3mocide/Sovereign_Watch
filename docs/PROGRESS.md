@@ -58,6 +58,13 @@
   - [x] Create `frontend/Dockerfile`
   - [x] Update `docker-compose.yml`
   - [x] Enable Vite HMR for live development
+- [x] **[FE-04] Altitude & Visualization Enhancements**
+  - [x] **Backend**: Fixed `adsb-poller` to correctly parse `alt_baro`/`alt_geom` into `hae`.
+  - [x] **Frontend**: Updated `TacticalMap` to read flattened Protobuf altitude field.
+  - [x] **3D Visualization**: Implemented floating icons based on real altitude.
+  - [x] **Color Dynamics**: Altitude-based color ramp (Blue < 200ft, Yellow < 5k, Orange < 25k, Red > 25k).
+  - [x] **UI Controls**: Added 2D/3D toggle buttons for map perspective switching.
+  - [x] **UI Consistency**: Synchronized altitude color themes in Sidebar details viewing.
 - [x] **[FE-06] Track Summary Panel**
   - [x] Real-time AIR/SEA counts from TacticalMap
   - [x] Color-coded indicators
@@ -85,7 +92,14 @@
 - [ ] **[FE-04] Invisible WebGPU Worker** (Boids/Physics Compute).
 - [x] **[FE-05] TAK Decoder Worker** (Client-side Protobuf & Integrated).
 - [x] **[Ingest-01-Opt] Tier 1 Optimization** (Multi-Source + Staggered Polling).
-- [ ] **[Ingest-06] Gap 3 Smart Poller** (Python + H3 Service).
+- [x] **[Ingest-06] Gap 3 Smart Poller** (Python + Multi-Source Service).
+  - [x] `sovereign-adsb-poller`: Python async multi-source aviation poller
+  - [x] Weighted source selection (adsb.fi, adsb.lol, airplanes.live)
+  - [x] Rate limiting with aiolimiter + tenacity retries
+  - [x] TAK-format normalization to `adsb_raw` topic
+- [x] **[Infra-02] Container Renaming** (Better observability)
+  - [x] `sovereign-ais-benthos` (Maritime AIS via Benthos)
+  - [x] `sovereign-adsb-poller` (Aviation ADS-B via Python)
 
 ## Pending Tasks (Next Priority)
 
@@ -96,3 +110,9 @@
 - [x] **Details Sidebar**: Show extended info for selected entity.
 - [x] **Filter Controls**: Toggle air/sea visibility, filter by type.
 - [ ] **Search**: Find entity by callsign or UID.
+- [x] **[Config-01] Centralized Location Config**: ENV-based LAT/LON for all services.
+  - [x] Docker Compose `.env` with `CENTER_LAT`, `CENTER_LON`, `COVERAGE_RADIUS_NM`
+  - [x] Backend poller reads from ENV
+  - [x] Maritime Benthos bounding box from ENV
+  - [x] Frontend map center from ENV
+  - [x] Boundary circles dynamically positioned
