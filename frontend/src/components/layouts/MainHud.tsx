@@ -51,7 +51,7 @@ export const MainHud: React.FC<MainHudProps> = ({
             <div className="flex-1" />
 
             {/* Right Panel Zone */}
-            <div className="pointer-events-auto flex h-full w-[350px] flex-col gap-4 overflow-hidden">
+            <div className="pointer-events-none flex h-full w-[350px] flex-col gap-4 overflow-hidden">
                 {rightSidebar}
             </div>
         </div>

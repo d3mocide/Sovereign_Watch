@@ -22,7 +22,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const accentBorder = isShip ? 'border-sea-green/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-cyan/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
 
   return (
-    <div className="flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-500">
+    <div className="pointer-events-auto flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-500">
       {/* 1. Target Identity Header */}
       <div className={`p-4 border border-b-0 ${accentBorder} ${accentBg} backdrop-blur-md rounded-t-sm relative overflow-hidden`}>
         {/* Glass Reflection Shine */}
