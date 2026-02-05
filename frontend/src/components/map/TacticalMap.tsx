@@ -28,6 +28,22 @@ function DeckGLOverlay(props: any) {
   return null;
 }
 
+// Helper: Simple Haversine Distance in Meters
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180; // φ, λ in radians
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
 // Props for TacticalMap
 interface TacticalMapProps {
     onCountsUpdate?: (counts: { air: number; sea: number }) => void;
@@ -169,6 +185,29 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                    const newLon = entity.lon;
                    const newLat = entity.lat;
                    const isShip = entity.type?.includes('S');
+
+                   // Spatial Filter: Drop entities outside active mission area
+                   // (Backend should filter, but this cleanup prevents stale data artifacts)
+                   const mission = currentMissionRef.current;
+                   if (mission) {
+                       const distToCenter = getDistanceMeters(newLat, newLon, mission.lat, mission.lon);
+                       const maxRadiusM = mission.radius_nm * 1852;
+                       
+                       // Allow 5% buffer for edge cases, but drop outliers
+                       if (distToCenter > maxRadiusM * 1.05) {
+                           // If it exists, remove it (it moved out of bounds)
+                           if (existing) {
+                               entitiesRef.current.delete(entity.uid);
+                               knownUidsRef.current.delete(entity.uid);
+                               onEvent?.({
+                                   type: 'lost',
+                                   message: `${isShip ? '🚢' : '✈️'} ${existing.callsign || entity.uid} (Out of Range)`,
+                                   entityType: isShip ? 'sea' : 'air'
+                               });
+                           }
+                           return; // Skip update
+                       }
+                   }
                    
                    // Build trail from existing positions (max 100 points for rich history)
                    let trail: TrailPoint[] = existing?.trail || [];
