@@ -45,6 +45,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     const rafRef = useRef<number>();
     const countsRef = useRef({ air: 0, sea: 0 });
     const knownUidsRef = useRef<Set<string>>(new Set()); // Track known UIDs for new/lost events
+    const currentMissionRef = useRef<{ lat: number; lon: number; radius_nm: number } | null>(null);
 
     // State for UI interactions (causes re-renders but tooltip needs it)
     const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -77,25 +78,31 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     }, [savedMissions, currentMission, onMissionPropsReady]);
 
     // Load active mission state on mount
+    // Load active mission state on mount and poll for updates
     useEffect(() => {
         const loadActiveMission = async () => {
             try {
                 const mission = await getMissionArea();
                 if (mission && mission.lat && mission.lon) {
-                    console.log('🔄 Syncing with active mission:', mission);
-                    setCurrentMission({
-                        lat: mission.lat,
-                        lon: mission.lon,
-                        radius_nm: mission.radius_nm
-                    });
-                    
-                    // Sync map view to active mission
-                    if (mapRef.current) {
-                        mapRef.current.flyTo({
-                            center: [mission.lon, mission.lat],
-                            zoom: 9,
-                            duration: 2000
+                    // Only update if mission has actually changed to prevent map resets/clears
+                    const prev = currentMissionRef.current;
+                    if (!prev || prev.lat !== mission.lat || prev.lon !== mission.lon || prev.radius_nm !== mission.radius_nm) {
+                        console.log('🔄 Syncing with active mission:', mission);
+                        // Update state (this will trigger the clear effect below)
+                        setCurrentMission({
+                            lat: mission.lat,
+                            lon: mission.lon,
+                            radius_nm: mission.radius_nm
                         });
+                        
+                        // Sync map view to active mission (Only on actual change)
+                        if (mapRef.current) {
+                            mapRef.current.flyTo({
+                                center: [mission.lon, mission.lat],
+                                zoom: 9,
+                                duration: 2000
+                            });
+                        }
                     }
                 }
             } catch (err) {
@@ -103,7 +110,27 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             }
         };
         loadActiveMission();
+        // Poll every 2 seconds for external updates
+        const timer = setInterval(loadActiveMission, 2000);
+        return () => clearInterval(timer);
     }, []);
+
+    // Clear entities when mission area changes (New Selection, Preset, or External Update)
+    useEffect(() => {
+        if (currentMission) {
+            // Update ref for polling comparison
+            currentMissionRef.current = currentMission;
+
+            console.log('🧹 Clearing map entities for new mission parameters...');
+            entitiesRef.current.clear();
+            knownUidsRef.current.clear();
+            countsRef.current = { air: 0, sea: 0 };
+            onCountsUpdate?.({ air: 0, sea: 0 });
+            
+            // Clear selection to avoid ghost trails
+            onEntitySelect(null);
+        }
+    }, [currentMission, onCountsUpdate, onEntitySelect]);
 
     // Worker Reference
     const workerRef = useRef<Worker | null>(null);
