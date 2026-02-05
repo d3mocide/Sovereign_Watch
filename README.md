@@ -128,10 +128,20 @@ To update the Database Schema:
 
 1.  **Edit** `backend/db/init.sql`.
 2.  **Reset** (Warning: Destructive):
-    ```bash
     docker compose down -v
     docker compose up -d db
     ```
+
+    ```
+
+### ⚡ Live Updates (HMR)
+
+Both Frontend and Backend services are configured for **Hot Module Replacement**.
+
+- **Frontend**: Vite automatically syncs changes. **No restart required.**
+- **Backend**: Uvicorn reloads on file save (StatReload). **No restart required.**
+
+> **Note**: Only restart containers when adding dependencies or changing env vars.
 
 ---
 

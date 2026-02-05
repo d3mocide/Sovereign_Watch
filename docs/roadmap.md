@@ -15,6 +15,7 @@ Following a rigorous technical audit (See `docs/research/`), the architecture ha
 1.  **Hybrid Rendering Engine**: Shifted from "Pure WebGPU" to **WebGL2 Interleaved Rendering** to solve depth occlusion (Z-buffering) issues with 3D terrain. WebGPU is retained solely as a headless compute engine for physics simulation ("Invisible WebGPU").
 2.  **Protocol Efficiency**: Standardization on **TAK Protocol V1 (Protobuf)** instead of XML/JSON. This reduces bandwidth by ~83% and eliminates main-thread parsing bottlenecks for high-volume tracks (100k+ entities).
 3.  **Pulse Ingestion**: Implementation of "Pulse" pipelines (Cron-based) for high-latency data sources like Space-Track (Orbital) and NOAA (Space Weather), decoupling them from the real-time streaming core.
+4.  **Dynamic Sovereignty**: Shift from static, fixed-radius monitoring to **Dynamic Area Management (DAM)**. This enables operators to pivot the entire collection, processing, and visualization stack to any global coordinate instantly ("Agile Intelligence").
 
 ### 1.3 Architectural Directive
 
@@ -99,19 +100,35 @@ The frontend is the "Single Pane of Glass" for the analyst.
 
 ## 7. Master Task List for AI Agents
 
-| ID             | Task Name      | Component | Description                                                              |
-| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
-| **Infra-01**   | Docker Env     | DevOps    | **DONE**. 3-network isolation, Redpanda, TimescaleDB.                    |
-| **DB-01**      | Schema         | Database  | **DONE**. Hypertables and Vector Index enabled.                          |
-| **FE-01**      | Hybrid Map     | Frontend  | **DONE (Code Refactored)**. Needs Build. Implements `interleaved: true`. |
-| **Ingest-01**  | Aviation       | Data Eng  | **Updates Required**: Migrate output from CoT XML to **TAK Protobuf**.   |
-| **Ingest-02**  | Maritime       | Data Eng  | **Updates Required**: Migrate output from CoT XML to **TAK Protobuf**.   |
-| **Ingest-03**  | Orbital        | Data Eng  | **NEW**. Create Pulse pipeline for Space-Track.                          |
-| **Ingest-04**  | SIGINT         | Data Eng  | **NEW**. Create Jamming Analysis pipeline (H3 Aggregation).              |
-| **FE-04**      | WebGPU Physics | Frontend  | **NEW**. Create Headless WebGPU worker for Boids/SGP4.                   |
-| **FE-05**      | TAK Decoder    | Frontend  | **NEW**. Create Client-side Protobuf worker with Magic Byte handling.    |
-| **FE-07**      | Dynamic Area   | Frontend  | **DONE**. Mission pivot, saved locations, adaptive zoom.                 |
-| **Backend-01** | Fusion API     | Backend   | **DONE**. FastAPI skeleton ready.                                        |
+| ID             | Task Name        | Component | Description                                                              |
+| :------------- | :--------------- | :-------- | :----------------------------------------------------------------------- |
+| **Infra-01**   | Docker Env       | DevOps    | **DONE**. 3-network isolation, Redpanda, TimescaleDB.                    |
+| **DB-01**      | Schema           | Database  | **DONE**. Hypertables and Vector Index enabled.                          |
+| **FE-01**      | Hybrid Map       | Frontend  | **DONE (Code Refactored)**. Needs Build. Implements `interleaved: true`. |
+| **Ingest-01**  | Aviation         | Data Eng  | **DONE**. Python Poller active.                                          |
+| **Ingest-02**  | Maritime         | Data Eng  | **DONE**. Python Poller active.                                          |
+| **Backend-01** | Fusion API       | Backend   | **DONE**. FastAPI skeleton ready.                                        |
+| **FE-07**      | Dynamic Area     | Frontend  | **DONE**. Mission pivot, saved locations, adaptive zoom.                 |
+| **Backend-03** | **Historian**    | Backend   | **NEW (P0)**. `kafka-to-timescale` consumer for persistence.             |
+| **FE-08**      | **Search**       | Frontend  | **NEW (P1)**. Callsign/UID search widget.                                |
+| **FE-09**      | Coverage Viz     | Frontend  | **NEW (P2)**. H3 Polling fidelity visualization.                         |
+| **FE-10**      | Payload Eval     | Frontend  | **NEW (P2)**. Raw JSON inspector (Terminal Mode).                        |
+| **FE-11**      | Replay System    | Frontend  | **NEW (P2)**. Historic time-slider (Deep Archive).                       |
+| **AI-01**      | AI Analyst       | Backend   | **DEFERRED**. Scheduled for Final Phase (Phase 8).                       |
+| **Backend-04** | **Auth/RBAC**    | Backend   | **NEW**. User management & Role-Based Access Control.                    |
+| **FE-12**      | **Settings UI**  | Frontend  | **NEW**. Configure API keys/Pollers via UI (No more ENV editing).        |
+| **Audit-01**   | **Code Review**  | Security  | **NEW**. Full codebase audit, linting, and security scan.                |
+| **FE-13**      | Mission Labels   | Frontend  | **NEW (P2)**. Floating text labels for coverage areas.                   |
+| **FE-14**      | Deep Linking     | Frontend  | **NEW (P2)**. Shareable URLs with encoded mission state.                 |
+| **FE-15**      | Data Portability | Frontend  | **NEW (P2)**. Import/Export Mission Presets (JSON).                      |
+| **Backend-05** | Multi-Area       | Backend   | **NEW (P3)**. Concurrent polling engine (Phase 6 Fusion).                |
+| **FE-16**      | Analytics Dash   | Frontend  | **NEW (P3)**. Mission heatmaps & metrics (Phase 6).                      |
+| **FE-17**      | Collab Sync      | Frontend  | **NEW (P3)**. Multi-user WebSocket mission sync (Phase 6).               |
+| **Ingest-03**  | Orbital Pulse    | Data Eng  | **PLANNED**. Space-Track pipeline (Phase 7).                             |
+| **Ingest-04**  | SIGINT/Jamming   | Data Eng  | **PLANNED**. H3 Integrity aggregation (Phase 7).                         |
+| **Ingest-05**  | Spectrum         | Data Eng  | **PLANNED**. SatNOGS integration (Phase 7).                              |
+| **FE-04**      | WebGPU Physics   | Frontend  | **PLANNED**. Headless worker for Boids/SGP4 (Phase 7).                   |
+| **FE-05**      | TAK Decoder      | Frontend  | **DONE**. Client-side Protobuf worker.                                   |
 
 ---
 
