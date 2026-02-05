@@ -297,49 +297,8 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             const AVIATION_RADIUS_M = COVERAGE_RADIUS_NM * 1852; // nautical miles to meters
             
             // Maritime: Bounding box ~2 degrees around center
-            const maritimeBoundary = [
-                [CENTER_LON - 3.0, CENTER_LAT - 2.0],
-                [CENTER_LON + 3.0, CENTER_LAT - 2.0],
-                [CENTER_LON + 3.0, CENTER_LAT + 2.0],
-                [CENTER_LON - 3.0, CENTER_LAT + 2.0],
-                [CENTER_LON - 3.0, CENTER_LAT - 2.0] // Close the polygon
-            ];
-            
-            // 2. Animation Rhythm (Slightly faster: 600ms sweep)
-            // Pulse values are calculated per-entity within the loop.
-            
             // 3. Construct Layers
             const layers = [
-                // 1. Maritime Coverage Boundary (green dashed rectangle)
-                new PolygonLayer({
-                    id: 'maritime-coverage',
-                    data: [{ polygon: maritimeBoundary }],
-                    getPolygon: (d: { polygon: number[][] }) => d.polygon,
-                    getFillColor: [0, 0, 0, 0], 
-                    getLineColor: [0, 255, 100, 30], 
-                    getLineWidth: 1.5,
-                    lineWidthMinPixels: 1.5,
-                    stroked: true,
-                    filled: false,
-                    pickable: false,
-                }),
-                
-                // 2. Aviation Coverage Boundary (cyan circle)
-                new ScatterplotLayer({
-                    id: 'aviation-coverage',
-                    data: [{ position: CENTER, radius: AVIATION_RADIUS_M }],
-                    getPosition: (d: { position: [number, number] }) => d.position,
-                    getRadius: (d: { radius: number }) => d.radius,
-                    getFillColor: [0, 0, 0, 0],
-                    getLineColor: [0, 255, 255, 30], 
-                    lineWidthMinPixels: 1.5,
-                    stroked: true,
-                    filled: false,
-                    radiusUnits: 'meters',
-                    pickable: false,
-                }),
-                
-                // 3. Trail Lines for selected entity
                 ...(selectedEntity && entitiesRef.current.get(selectedEntity.uid)?.trail && entitiesRef.current.get(selectedEntity.uid)!.trail.length > 1 ? [
                     new PathLayer({
                         id: 'selected-trail',

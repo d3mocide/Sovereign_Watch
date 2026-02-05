@@ -37,7 +37,7 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
   };
 
   return (
-    <div className="absolute top-28 left-[400px] z-50 w-80 bg-black/90 backdrop-blur-xl border border-hud-green/30 rounded-lg shadow-2xl">
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-80 bg-black/90 backdrop-blur-xl border border-hud-green/30 rounded-lg shadow-2xl">
       <div className="bg-gradient-to-r from-hud-green/20 to-transparent p-3 border-b border-hud-green/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
