@@ -6,7 +6,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { CoTEntity, TrailPoint } from '../../types';
 import { MapTooltip } from './MapTooltip';
 import { MapContextMenu } from './MapContextMenu';
-import { CoverageCircle } from './CoverageCircle';
+import { SaveLocationForm } from './SaveLocationForm';
+import { PollingAreaVisualization } from './PollingAreaVisualization';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
 
@@ -53,6 +54,10 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     // Context Menu State
     const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lon: number } | null>(null);
+
+    // Save Location Form State
+    const [showSaveForm, setShowSaveForm] = useState(false);
+    const [saveFormCoords, setSaveFormCoords] = useState<{ lat: number; lon: number } | null>(null);
 
     // Mission Management
     const { savedMissions, saveMission, deleteMission } = useMissionLocations();
@@ -473,6 +478,10 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             await setMissionArea({ lat, lon, radius_nm: radius });
             setCurrentMission({ lat, lon, radius_nm: radius });
             
+            // Clear old entities when changing mission area
+            entitiesRef.current.clear();
+            console.log('🗑️ Cleared old entities for new mission area');
+            
             // Fly map to new location
             if (mapRef.current) {
                 mapRef.current.flyTo({
@@ -489,17 +498,30 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     };
 
     const handleSaveLocation = (lat: number, lon: number) => {
-        const name = prompt('Enter a name for this location:');
-        if (!name) return;
+        // Open inline form instead of prompt
+        setSaveFormCoords({ lat, lon });
+        setShowSaveForm(true);
+        setContextMenuPos(null); // Close context menu
+    };
 
-        const radius = parseInt(prompt('Enter radius in nautical miles (10-300):', '150') || '150');
-        if (radius < 10 || radius > 300) {
-            alert('Radius must be between 10 and 300 nautical miles');
-            return;
-        }
-
-        saveMission({ name, lat, lon, radius_nm: radius });
+    const handleSaveFormSubmit = (name: string, radius: number) => {
+        if (!saveFormCoords) return;
+        
+        saveMission({ 
+            name, 
+            lat: saveFormCoords.lat, 
+            lon: saveFormCoords.lon, 
+            radius_nm: radius 
+        });
+        
         console.log(`💾 Saved mission location: ${name}`);
+        setShowSaveForm(false);
+        setSaveFormCoords(null);
+    };
+
+    const handleSaveFormCancel = () => {
+        setShowSaveForm(false);
+        setSaveFormCoords(null);
     };
 
     const handleReturnHome = async () => {
@@ -551,8 +573,21 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                     overlayRef.current = overlay;
                 }}
             />
+            
+            {/* Polling Area Visualization based on CURRENT mission state */}
+            {currentMission ? (
+                <PollingAreaVisualization 
+                    center={currentMission} 
+                    radiusNm={currentMission.radius_nm} 
+                />
+            ) : (
+                <PollingAreaVisualization 
+                    center={{ lat: initialLat, lon: initialLon }} 
+                    radiusNm={parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150')} 
+                />
+            )}
         </GLMap>
-
+            
         {/* View Controls */}
         {/* View Controls - Centered to avoid sidebar overlap */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-[100] pointer-events-auto">
@@ -584,6 +619,15 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                 setContextMenuCoords(null);
             }}
         />
+        
+        {/* Save Location Form */}
+        {showSaveForm && (
+            <SaveLocationForm
+                coordinates={saveFormCoords}
+                onSave={handleSaveFormSubmit}
+                onCancel={handleSaveFormCancel}
+            />
+        )}
         
         {/* Modern Map Tooltip */}
         {hoveredEntity && hoverPosition && (
