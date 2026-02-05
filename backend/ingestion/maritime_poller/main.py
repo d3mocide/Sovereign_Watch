@@ -162,12 +162,13 @@ class MaritimePollerService:
     def transform_to_tak(self, ais_message: dict) -> dict:
         """Transform AIS message to TAK-compatible format."""
         try:
+            from datetime import timedelta
+            
             msg = ais_message["Message"]["PositionReport"]
             meta = ais_message["MetaData"]
             
             now = datetime.utcnow().isoformat() + "Z"
-            stale_time = datetime.utcnow()
-            stale_time = stale_time.replace(minute=stale_time.minute + 5)
+            stale_time = datetime.utcnow() + timedelta(minutes=5)
             stale = stale_time.isoformat() + "Z"
             
             tak_event = {
@@ -205,9 +206,12 @@ class MaritimePollerService:
         while self.running:
             try:
                 # Connect or reconnect if needed
-                if self.ws is None or self.ws.closed or self.bbox_update_needed:
-                    if self.ws and not self.ws.closed:
-                        await self.ws.close()
+                if self.ws is None or (hasattr(self.ws, 'closed') and self.ws.closed) or self.bbox_update_needed:
+                    if self.ws:
+                        try:
+                            await self.ws.close()
+                        except:
+                            pass
                     
                     if not await self.connect_aisstream():
                         logger.warning(f"Retrying connection in {self.reconnect_delay}s...")
@@ -239,8 +243,11 @@ class MaritimePollerService:
                 
                 except asyncio.TimeoutError:
                     # No message in 30s - send ping to keep connection alive
-                    if self.ws and not self.ws.closed:
-                        await self.ws.ping()
+                    if self.ws:
+                        try:
+                            await self.ws.ping()
+                        except:
+                            pass
                 
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("🌊 AISStream connection closed, reconnecting...")
