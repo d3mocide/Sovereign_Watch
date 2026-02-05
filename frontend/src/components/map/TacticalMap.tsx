@@ -6,6 +6,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { CoTEntity, TrailPoint } from '../../types';
 import { MapTooltip } from './MapTooltip';
 import { MapContextMenu } from './MapContextMenu';
+import { CoverageCircle } from './CoverageCircle';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
 
@@ -33,9 +34,10 @@ interface TacticalMapProps {
     onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea' }) => void;
     selectedEntity: CoTEntity | null;
     onEntitySelect: (entity: CoTEntity | null) => void;
+    onMissionPropsReady?: (props: any) => void;
 }
 
-const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect }) => {
+const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady }) => {
     // Refs for Transient State (No React Re-renders)
     const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
     const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -53,8 +55,21 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lon: number } | null>(null);
 
     // Mission Management
-    const { savedMissions, saveMission } = useMissionLocations();
+    const { savedMissions, saveMission, deleteMission } = useMissionLocations();
     const [currentMission, setCurrentMission] = useState<{ lat: number; lon: number; radius_nm: number } | null>(null);
+
+    // Expose mission management to parent
+    useEffect(() => {
+        if (onMissionPropsReady) {
+            onMissionPropsReady({
+                savedMissions,
+                currentMission,
+                onSwitchMission: (mission: any) => handleSwitchMission(mission),
+                onDeleteMission: deleteMission,
+                onPresetSelect: handlePresetSelect,
+            });
+        }
+    }, [savedMissions, currentMission, onMissionPropsReady]);
 
     // Worker Reference
     const workerRef = useRef<Worker | null>(null);
@@ -496,6 +511,23 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
         setCurrentMission({ lat: defaultLat, lon: defaultLon, radius_nm: defaultRadius });
     };
 
+    const handlePresetSelect = async (radius: number) => {
+        if (!currentMission) return;
+        
+        try {
+            await setMissionArea({ lat: currentMission.lat, lon: currentMission.lon, radius_nm: radius });
+            setCurrentMission({ ...currentMission, radius_nm: radius });
+            console.log(`📐 Radius updated to ${radius}nm`);
+        } catch (error) {
+            console.error('Failed to update radius:', error);
+        }
+    };
+
+    const handleSwitchMission = async (mission: any) => {
+        await handleSetFocus(mission.lat, mission.lon);
+        setCurrentMission({ lat: mission.lat, lon: mission.lon, radius_nm: mission.radius_nm });
+    };
+
     return (
     <>
         <GLMap
@@ -513,6 +545,16 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             style={{width: '100vw', height: '100vh'}}
             onContextMenu={handleContextMenu}
         >
+            {/* Coverage Circle Overlay */}
+            {currentMission && (
+                <CoverageCircle
+                    center={[currentMission.lon, currentMission.lat]}
+                    radiusNm={currentMission.radius_nm}
+                    color="#00ff41"
+                    opacity={0.12}
+                />
+            )}
+            
             <DeckGLOverlay 
                 interleaved={true} 
                 onOverlayLoaded={(overlay: MapboxOverlay) => {

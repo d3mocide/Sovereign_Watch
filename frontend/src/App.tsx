@@ -28,6 +28,9 @@ function App() {
   // Intelligence feed events
   const [events, setEvents] = useState<IntelEvent[]>([]);
   
+  // Mission management state
+  const [missionProps, setMissionProps] = useState<any>(null);
+  
   // Map Ref for potential imperative actions (future: centering)
   const mapRef = useRef<any>(null);
 
@@ -55,6 +58,7 @@ function App() {
           filters={filters}
           onFilterChange={handleFilterChange}
           events={events}
+          missionProps={missionProps}
         />
       }
       rightSidebar={
@@ -74,6 +78,7 @@ function App() {
           onEvent={addEvent}
           selectedEntity={selectedEntity}
           onEntitySelect={setSelectedEntity}
+          onMissionPropsReady={setMissionProps}
       />
     </MainHud>
   )
