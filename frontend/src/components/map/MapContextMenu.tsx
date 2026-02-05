@@ -37,18 +37,16 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
 
   return (
     <>
-      {/* Backdrop - clicks close menu */}
-      <div
-        className="fixed inset-0 z-[999]"
-        onClick={onClose}
-      />
-      
-      {/* Context Menu */}
+      {/* Context Menu - No Backdrop (managed by map interaction) */}
       <div
         className="fixed z-[1000] min-w-[240px] animate-in fade-in-0 zoom-in-95 duration-200"
         style={{ 
           left: `${position.x}px`, 
           top: `${position.y}px`,
+        }}
+        onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation(); // prevent map from processing right click on menu itself
         }}
       >
         <div className="border border-hud-green/30 bg-black/90 backdrop-blur-xl rounded shadow-[0_0_20px_rgba(0,255,65,0.15)]">

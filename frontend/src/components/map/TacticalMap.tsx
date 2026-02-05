@@ -581,6 +581,10 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             mapLib={mapToken ? undefined : import('maplibre-gl')}
             style={{width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none'}}
             onContextMenu={handleContextMenu}
+            onClick={() => {
+                setContextMenuPos(null);
+                setContextMenuCoords(null);
+            }}
         >
             <DeckGLOverlay 
                 interleaved={true} 
