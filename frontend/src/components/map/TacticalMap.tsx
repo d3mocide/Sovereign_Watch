@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Map as GLMap, useControl, MapRef } from 'react-map-gl';
+import { Map as GLMap, useControl, MapRef, MapLayerMouseEvent } from 'react-map-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { PolygonLayer, ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { CoTEntity, TrailPoint } from '../../types';
 import { MapTooltip } from './MapTooltip';
+import { MapContextMenu } from './MapContextMenu';
+import { useMissionLocations } from '../../hooks/useMissionLocations';
+import { setMissionArea, getMissionArea } from '../../api/missionArea';
 
 // Sleek tactical kite icon (indented arrowhead) for heading vectors
 const TRIANGLE_ICON = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2l6 18-6-4-6 4z" fill="white" /></svg>')}`;
@@ -44,6 +47,14 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
     // selectedEntity is now passed as prop
     const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+
+    // Context Menu State
+    const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+    const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lon: number } | null>(null);
+
+    // Mission Management
+    const { savedMissions, saveMission } = useMissionLocations();
+    const [currentMission, setCurrentMission] = useState<{ lat: number; lon: number; radius_nm: number } | null>(null);
 
     // Worker Reference
     const workerRef = useRef<Worker | null>(null);
@@ -433,6 +444,58 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
         }
     };
 
+    // Mission Area Handlers
+    const handleContextMenu = (e: any) => {
+        e.preventDefault();
+        const { lngLat, point } = e;
+        setContextMenuPos({ x: point.x, y: point.y });
+        setContextMenuCoords({ lat: lngLat.lat, lon: lngLat.lng });
+    };
+
+    const handleSetFocus = async (lat: number, lon: number) => {
+        try {
+            const radius = currentMission?.radius_nm || parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
+            await setMissionArea({ lat, lon, radius_nm: radius });
+            setCurrentMission({ lat, lon, radius_nm: radius });
+            
+            // Fly map to new location
+            if (mapRef.current) {
+                mapRef.current.flyTo({
+                    center: [lon, lat],
+                    zoom: 9,
+                    duration: 2000
+                });
+            }
+            
+            console.log(`📍 Mission area pivoted to: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+        } catch (error) {
+            console.error('Failed to set mission focus:', error);
+        }
+    };
+
+    const handleSaveLocation = (lat: number, lon: number) => {
+        const name = prompt('Enter a name for this location:');
+        if (!name) return;
+
+        const radius = parseInt(prompt('Enter radius in nautical miles (10-300):', '150') || '150');
+        if (radius < 10 || radius > 300) {
+            alert('Radius must be between 10 and 300 nautical miles');
+            return;
+        }
+
+        saveMission({ name, lat, lon, radius_nm: radius });
+        console.log(`💾 Saved mission location: ${name}`);
+    };
+
+    const handleReturnHome = async () => {
+        const defaultLat = parseFloat(import.meta.env.VITE_CENTER_LAT || '45.5152');
+        const defaultLon = parseFloat(import.meta.env.VITE_CENTER_LON || '-122.6784');
+        const defaultRadius = parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
+
+        await handleSetFocus(defaultLat, defaultLon);
+        setCurrentMission({ lat: defaultLat, lon: defaultLon, radius_nm: defaultRadius });
+    };
+
     return (
     <>
         <GLMap
@@ -448,6 +511,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             mapboxAccessToken={mapToken}
             mapLib={mapToken ? undefined : import('maplibre-gl')}
             style={{width: '100vw', height: '100vh'}}
+            onContextMenu={handleContextMenu}
         >
             <DeckGLOverlay 
                 interleaved={true} 
@@ -475,6 +539,19 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                  <div className="w-8 h-8 flex items-center justify-center font-mono font-bold text-xs">3D</div>
             </button>
         </div>
+        
+        {/* Context Menu */}
+        <MapContextMenu
+            position={contextMenuPos}
+            coordinates={contextMenuCoords}
+            onSetFocus={handleSetFocus}
+            onSaveLocation={handleSaveLocation}
+            onReturnHome={handleReturnHome}
+            onClose={() => {
+                setContextMenuPos(null);
+                setContextMenuCoords(null);
+            }}
+        />
         
         {/* Modern Map Tooltip */}
         {hoveredEntity && hoverPosition && (
