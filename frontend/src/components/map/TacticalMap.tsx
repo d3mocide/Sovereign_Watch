@@ -545,16 +545,6 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             style={{width: '100vw', height: '100vh'}}
             onContextMenu={handleContextMenu}
         >
-            {/* Coverage Circle Overlay */}
-            {currentMission && (
-                <CoverageCircle
-                    center={[currentMission.lon, currentMission.lat]}
-                    radiusNm={currentMission.radius_nm}
-                    color="#00ff41"
-                    opacity={0.12}
-                />
-            )}
-            
             <DeckGLOverlay 
                 interleaved={true} 
                 onOverlayLoaded={(overlay: MapboxOverlay) => {

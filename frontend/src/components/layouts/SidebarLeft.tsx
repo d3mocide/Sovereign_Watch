@@ -2,19 +2,22 @@ import React from 'react';
 import { LayerFilters } from '../widgets/LayerFilters';
 import { SystemStatus } from '../widgets/SystemStatus';
 import { IntelFeed } from '../widgets/IntelFeed';
+import { MissionNavigator } from '../widgets/MissionNavigator';
 
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number };
   filters: { showAir: boolean; showSea: boolean };
   onFilterChange: (key: 'showAir' | 'showSea', value: boolean) => void;
   events: any[];
+  missionProps?: any;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({ 
   trackCounts, 
   filters, 
   onFilterChange, 
-  events 
+  events,
+  missionProps
 }) => {
   return (
     <div className="flex flex-col h-full gap-4 animate-in fade-in duration-1000">
@@ -23,6 +26,17 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         filters={filters} 
         onFilterChange={onFilterChange} 
       />
+
+      {/* Mission Navigator */}
+      {missionProps && (
+        <MissionNavigator
+          savedMissions={missionProps.savedMissions || []}
+          currentMission={missionProps.currentMission}
+          onSwitchMission={missionProps.onSwitchMission}
+          onDeleteMission={missionProps.onDeleteMission}
+          onPresetSelect={missionProps.onPresetSelect}
+        />
+      )}
 
       {/* 2. System Intelligence Feed */}
       <IntelFeed events={events} />
