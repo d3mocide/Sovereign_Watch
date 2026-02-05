@@ -68,6 +68,8 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
     const countsRef = useRef({ air: 0, sea: 0 });
     const knownUidsRef = useRef<Set<string>>(new Set()); // Track known UIDs for new/lost events
     const currentMissionRef = useRef<{ lat: number; lon: number; radius_nm: number } | null>(null);
+    
+
 
     // State for UI interactions (causes re-renders but tooltip needs it)
     const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -239,6 +241,8 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                            entityType: isShip ? 'sea' : 'air'
                        });
                    }
+
+
                }
             }
         };

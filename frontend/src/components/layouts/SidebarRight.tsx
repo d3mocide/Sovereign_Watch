@@ -22,7 +22,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const accentBorder = isShip ? 'border-sea-green/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-cyan/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
 
   return (
-    <div className="pointer-events-auto flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-500">
+    <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500">
       {/* 1. Target Identity Header */}
       <div className={`p-4 border border-b-0 ${accentBorder} ${accentBg} backdrop-blur-md rounded-t-sm relative overflow-hidden`}>
         {/* Glass Reflection Shine */}
@@ -75,7 +75,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       </div>
 
       {/* 2. Main Data Body */}
-      <div className="flex-1 overflow-y-auto border-x border-tactical-border bg-black/30 backdrop-blur-md p-4 space-y-4 scrollbar-none">
+      <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-4 space-y-4 scrollbar-none">
         
         {/* Positional Group */}
         <section className="space-y-3">
@@ -146,9 +146,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           </div>
           <div className="flex flex-col gap-2 pt-2">
              <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
-                <span className="text-[10px] text-white/40">Last_Update</span>
+                <span className="text-[10px] text-white/40">TIME_TRACKED</span>
                 <span className="text-mono-xs text-white/80 tabular-nums">
-                   {((Date.now() - entity.lastSeen) / 1000).toFixed(1)}s ago
+                   {((Date.now() - entity.lastSeen) / 1000).toFixed(1)}s
                 </span>
              </div>
              <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
