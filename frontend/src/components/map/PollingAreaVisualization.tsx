@@ -19,7 +19,8 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
         // lon_offset = radius_nm / (60.0 * math.cos(math.radians(center_lat)))
         const latOffset = radiusNm * NM_TO_DEG;
         const cosLat = Math.cos(center.lat * (Math.PI / 180));
-        const lonOffset = radiusNm * NM_TO_DEG / Math.abs(cosLat);
+        const safeCosLat = Math.max(Math.abs(cosLat), 0.0001); // Prevent division by zero at poles
+        const lonOffset = radiusNm * NM_TO_DEG / safeCosLat;
 
         const minLat = center.lat - latOffset;
         const maxLat = center.lat + latOffset;
@@ -49,7 +50,7 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
             // Simple flat earth approximation for display is sufficient, 
             // or use proper geodesic if needed. For visual feedback, this matches the box calculation logic.
             const dLat = (radiusNm * NM_TO_DEG) * Math.cos(angle);
-            const dLon = (radiusNm * NM_TO_DEG / Math.abs(cosLat)) * Math.sin(angle);
+            const dLon = (radiusNm * NM_TO_DEG / safeCosLat) * Math.sin(angle);
             points.push([center.lon + dLon, center.lat + dLat]);
         }
 
