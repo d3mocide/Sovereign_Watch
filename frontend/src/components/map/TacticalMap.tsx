@@ -39,6 +39,12 @@ interface TacticalMapProps {
 }
 
 const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady }) => {
+    // Adaptive Zoom Calculation
+    const calculateZoom = (radiusNm: number) => {
+        const r = Math.max(1, radiusNm);
+        return Math.max(2, 14 - Math.log2(r));
+    };
+
     // Refs for Transient State (No React Re-renders)
     const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
     const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -99,7 +105,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
                         if (mapRef.current) {
                             mapRef.current.flyTo({
                                 center: [mission.lon, mission.lat],
-                                zoom: 9,
+                                zoom: calculateZoom(mission.radius_nm),
                                 duration: 2000
                             });
                         }
@@ -501,7 +507,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             if (mapRef.current) {
                 mapRef.current.flyTo({
                     center: [lon, lat],
-                    zoom: 9,
+                    zoom: calculateZoom(radius),
                     duration: 2000
                 });
             }
@@ -554,6 +560,14 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
         try {
             await setMissionArea({ lat: currentMission.lat, lon: currentMission.lon, radius_nm: radius });
             setCurrentMission({ ...currentMission, radius_nm: radius });
+            
+            if (mapRef.current) {
+                mapRef.current.flyTo({
+                    zoom: calculateZoom(radius),
+                    duration: 1000
+                });
+            }
+
             console.log(`📐 Radius updated to ${radius}nm`);
         } catch (error) {
             console.error('Failed to update radius:', error);
