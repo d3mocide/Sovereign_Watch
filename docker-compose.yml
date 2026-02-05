@@ -62,30 +62,28 @@ services:
       redpanda:
         condition: service_healthy
 
-  # --- Ingestion: Maritime AIS (via Benthos/WebSocket) ---
-  ais-benthos:
-    image: jeffail/benthos:latest
-    container_name: sovereign-ais-benthos
-    volumes:
-      - ./backend/ingestion:/connect
-    command: 
-      - --chilled
-      - streams
-      # - /connect/aviation_ingest.yaml # Replaced by Gap 3 Python Poller
-      - /connect/maritime_ingest.yaml
+  # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
+  ais-poller:
+    build:
+      context: ./backend/ingestion/maritime_poller
+      dockerfile: Dockerfile
+    container_name: sovereign-ais-poller
     environment:
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
-      # Pre-calculated bounding box (~2 degrees around center, ~3 degrees longitude)
-      # Default: Portland area [[43.5, -125.7], [47.5, -119.7]]
-      - BBOX_MIN_LAT=${BBOX_MIN_LAT:-43.5}
-      - BBOX_MIN_LON=${BBOX_MIN_LON:--125.7}
-      - BBOX_MAX_LAT=${BBOX_MAX_LAT:-47.5}
-      - BBOX_MAX_LON=${BBOX_MAX_LON:--119.7}
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - REDIS_HOST=sovereign-redis
+      - REDIS_PORT=6379
+      - CENTER_LAT=${CENTER_LAT:-45.5152}
+      - CENTER_LON=${CENTER_LON:--122.6784}
+      - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
     networks:
       - backend-net
     depends_on:
       redpanda:
         condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
 
   # --- Ingestion: Aviation ADS-B (via Python Poller) ---
   adsb-poller:
@@ -105,7 +103,8 @@ services:
       redpanda:
         condition: service_healthy
       redis:
-        condition: service_healthy
+        condition: service_started
+    restart: unless-stopped
 
 
   # --- Persistence ---
