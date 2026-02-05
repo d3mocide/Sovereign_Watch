@@ -76,6 +76,35 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
         }
     }, [savedMissions, currentMission, onMissionPropsReady]);
 
+    // Load active mission state on mount
+    useEffect(() => {
+        const loadActiveMission = async () => {
+            try {
+                const mission = await getMissionArea();
+                if (mission && mission.lat && mission.lon) {
+                    console.log('🔄 Syncing with active mission:', mission);
+                    setCurrentMission({
+                        lat: mission.lat,
+                        lon: mission.lon,
+                        radius_nm: mission.radius_nm
+                    });
+                    
+                    // Sync map view to active mission
+                    if (mapRef.current) {
+                        mapRef.current.flyTo({
+                            center: [mission.lon, mission.lat],
+                            zoom: 9,
+                            duration: 2000
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to load active mission:', err);
+            }
+        };
+        loadActiveMission();
+    }, []);
+
     // Worker Reference
     const workerRef = useRef<Worker | null>(null);
 
@@ -564,7 +593,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ onCountsUpdate, filters, onEv
             mapStyle={mapStyle}
             mapboxAccessToken={mapToken}
             mapLib={mapToken ? undefined : import('maplibre-gl')}
-            style={{width: '100vw', height: '100vh'}}
+            style={{width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none'}}
             onContextMenu={handleContextMenu}
         >
             <DeckGLOverlay 
