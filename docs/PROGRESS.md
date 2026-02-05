@@ -68,6 +68,12 @@
 - [x] **[FE-06] Track Summary Panel**
   - [x] Real-time AIR/SEA counts from TacticalMap
   - [x] Color-coded indicators
+- [x] **[FE-07] Dynamic Area Management (DAM)**
+  - [x] **Tactical Context Menu**: Right-click to "Set Focus" or "Save Location".
+  - [x] **Radius-based Zoom**: Adaptive logarithmic zooming for situational awareness.
+  - [x] **Spatial Filter**: Haversine-based client-side cleanup of out-of-bounds entities.
+  - [x] **Mission Persistence**: LocalStorage-based saved mission list ("Mission Presets").
+  - [x] **System Health**: Real-time Latency (ms) and Network Integrity visualization in TopBar.
 
 ## Phase 6: Fusion & Integration (P2)
 

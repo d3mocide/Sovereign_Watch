@@ -110,6 +110,7 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Ingest-04**  | SIGINT         | Data Eng  | **NEW**. Create Jamming Analysis pipeline (H3 Aggregation).              |
 | **FE-04**      | WebGPU Physics | Frontend  | **NEW**. Create Headless WebGPU worker for Boids/SGP4.                   |
 | **FE-05**      | TAK Decoder    | Frontend  | **NEW**. Create Client-side Protobuf worker with Magic Byte handling.    |
+| **FE-07**      | Dynamic Area   | Frontend  | **DONE**. Mission pivot, saved locations, adaptive zoom.                 |
 | **Backend-01** | Fusion API     | Backend   | **DONE**. FastAPI skeleton ready.                                        |
 
 ---

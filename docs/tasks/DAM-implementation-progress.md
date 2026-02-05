@@ -43,7 +43,7 @@ curl -X POST http://localhost:8000/api/config/location \
 curl http://localhost:8000/api/config/location
 ```
 
-## Phase 2: Frontend UI (Next)
+## Phase 2: Frontend UI ✅ COMPLETE
 
 ### Components to Build:
 
@@ -82,9 +82,9 @@ curl http://localhost:8000/api/config/location
 
 ## What's Left:
 
-- [ ] Frontend right-click context menu
-- [ ] Frontend mission navigator widget
-- [ ] Frontend localStorage persistence
-- [ ] Frontend coverage circle visualization
-- [ ] Testing end-to-end workflow
-- [ ] Phase 2: Python maritime poller (future)
+- [x] Frontend right-click context menu
+- [x] Frontend mission navigator widget
+- [x] Frontend localStorage persistence
+- [x] Frontend coverage circle visualization
+- [x] Testing end-to-end workflow
+- [x] Phase 2: Python maritime poller (Integrated via shared config)
