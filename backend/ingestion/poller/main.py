@@ -9,12 +9,14 @@ import time
 from typing import Dict, List, Optional
 from aiokafka import AIOKafkaProducer
 from multi_source_poller import MultiSourcePoller
+import redis.asyncio as redis
 
 # Config - Read from ENV (set in docker-compose.yml)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
+REDIS_URL = f"redis://{os.getenv('REDIS_HOST', 'sovereign-redis')}:6379"
 TOPIC_OUT = "adsb_raw"
 
-# Location config - centralized in docker-compose.yml / .env
+# Location config - centralized in docker-compose.yml / .env (defaults)
 CENTER_LAT = float(os.getenv("CENTER_LAT", "45.5152"))
 CENTER_LON = float(os.getenv("CENTER_LON", "-122.6784"))
 COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
@@ -27,33 +29,85 @@ class PollerService:
         self.running = True
         self.poller = MultiSourcePoller()
         self.producer = None
+        self.redis_client = None
+        self.pubsub = None
+        
+        # Dynamic mission area (can be updated via Redis)
+        self.center_lat = CENTER_LAT
+        self.center_lon = CENTER_LON
+        self.radius_nm = COVERAGE_RADIUS_NM
 
     async def setup(self):
         await self.poller.start()
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
         await self.producer.start()
+        
+        # Connect to Redis for mission area updates
+        self.redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
+        self.pubsub = self.redis_client.pubsub()
+        await self.pubsub.subscribe("navigation-updates")
+        
+        # Check for existing active mission from Redis
+        await self.load_active_mission()
+        
         logger.info("Poller service ready")
+
+    async def load_active_mission(self):
+        """Load the current active mission area from Redis on startup."""
+        mission_json = await self.redis_client.get("mission:active")
+        if mission_json:
+            mission = json.loads(mission_json)
+            self.center_lat = mission["lat"]
+            self.center_lon = mission["lon"]
+            self.radius_nm = mission["radius_nm"]
+            logger.info(f"Loaded active mission: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+        else:
+            logger.info(f"Using default mission area: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
 
     async def shutdown(self):
         logger.info("Shutting down...")
         self.running = False
         await self.poller.close()
         await self.producer.stop()
+        if self.pubsub:
+            await self.pubsub.unsubscribe("navigation-updates")
+            await self.pubsub.close()
+        if self.redis_client:
+            await self.redis_client.close()
+
+    def calculate_polling_points(self):
+        """Calculate polling coverage points based on current mission area."""
+        return [
+            (self.center_lat, self.center_lon, self.radius_nm),           # Center
+            (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset  
+            (self.center_lat - 0.5, self.center_lon + 0.5, min(100, self.radius_nm)),  # SE offset
+        ]
+    
+    async def navigation_listener(self):
+        """Background task listening for mission area updates from Redis."""
+        try:
+            async for message in self.pubsub.listen():
+                if message["type"] == "message":
+                    try:
+                        mission = json.loads(message["data"])
+                        old_center = (self.center_lat, self.center_lon, self.radius_nm)
+                        self.center_lat = mission["lat"]
+                        self.center_lon = mission["lon"]
+                        self.radius_nm = mission["radius_nm"]
+                        logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                    except Exception as e:
+                        logger.error(f"Failed to parse mission update: {e}")
+        except asyncio.CancelledError:
+            logger.info("Navigation listener cancelled")
 
     async def loop(self):
-        """Main Event Loop - Simple Round-Robin of fixed polling points."""
-        logger.info(f"Starting Polling Loop - Center: ({CENTER_LAT}, {CENTER_LON}), Radius: {COVERAGE_RADIUS_NM}nm")
+        """Main Event Loop - Dynamic polling based on mission area."""
+        logger.info(f"Starting Polling Loop - Center: ({self.center_lat}, {self.center_lon}), Radius: {self.radius_nm}nm")
         
-        # 3 overlapping circles to cover the monitoring region
-        # Main circle at center, plus 2 offset circles for edge coverage
-        polling_points = [
-            (CENTER_LAT, CENTER_LON, COVERAGE_RADIUS_NM),           # Center
-            (CENTER_LAT + 0.5, CENTER_LON - 0.5, 100),              # NW offset  
-            (CENTER_LAT - 0.5, CENTER_LON + 0.5, 100),              # SE offset
-        ]
         current_point = 0
         
         while self.running:
+            polling_points = self.calculate_polling_points()
             lat, lon, radius = polling_points[current_point]
             current_point = (current_point + 1) % len(polling_points)
             
@@ -151,7 +205,11 @@ if __name__ == "__main__":
         
     loop.run_until_complete(service.setup())
     try:
-        loop.run_until_complete(service.loop())
+        # Run both the polling loop and the navigation listener concurrently
+        loop.run_until_complete(asyncio.gather(
+            service.loop(),
+            service.navigation_listener()
+        ))
     except asyncio.CancelledError:
         pass
     finally:
