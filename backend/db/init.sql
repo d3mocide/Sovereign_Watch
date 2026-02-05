@@ -37,6 +37,10 @@ ALTER TABLE tracks SET (
 -- Add Compression Policy (Compress data older than 24 hours)
 SELECT add_compression_policy('tracks', INTERVAL '24 hours');
 
+-- Add Retention Policy (Auto-delete data older than 24 hours)
+-- This runs every hour and drops chunks outside the retention window
+SELECT add_retention_policy('tracks', INTERVAL '24 hours');
+
 -- Indices
 CREATE INDEX IF NOT EXISTS ix_tracks_geom ON tracks USING GIST (geom);
 CREATE INDEX IF NOT EXISTS ix_tracks_entity_time ON tracks (entity_id, time DESC);
