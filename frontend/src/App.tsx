@@ -51,7 +51,7 @@ function App() {
 
   return (
     <MainHud
-      topBar={<TopBar alertsCount={alertsCount} />}
+      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} />}
       leftSidebar={
         <SidebarLeft 
           trackCounts={trackCounts}

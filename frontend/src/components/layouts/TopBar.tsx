@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 interface TopBarProps {
     alertsCount: number;
     hasNewAlert?: boolean;
+    location?: { lat: number; lon: number } | null;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert }) => {
+export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, location }) => {
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -51,7 +52,9 @@ export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert }) => {
             <div className="mx-12 hidden flex-1 items-center justify-center gap-8 xl:flex">
                 <div className="flex flex-col items-center">
                     <span className="text-[8px] text-white/20 uppercase tracking-tighter">Lat / Lon Focus</span>
-                    <span className="text-[10px] text-hud-green/40 font-bold tabular-nums">45.5152°N / 122.6784°W</span>
+                    <span className="text-[10px] text-hud-green/40 font-bold tabular-nums">
+                        {location ? `${location.lat.toFixed(4)}°N / ${location.lon.toFixed(4)}°W` : 'NO_SIGNAL'}
+                    </span>
                 </div>
                 <div className="h-4 w-[1px] bg-white/5" />
                 <div className="flex flex-col items-center">

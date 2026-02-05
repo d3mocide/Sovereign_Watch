@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MapPin, Target } from 'lucide-react';
+import { X, MapPin, Target, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface SaveLocationFormProps {
   coordinates: { lat: number; lon: number } | null;
@@ -90,17 +90,42 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
           <label className="block text-[10px] text-white/60 mb-1.5 uppercase tracking-wide">
             Coverage Radius (nm)
           </label>
-          <input
-            type="number"
-            value={radius}
-            onChange={(e) => {
-              setRadius(e.target.value);
-              setError('');
-            }}
-            min="10"
-            max="300"
-            className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-hud-green/50 focus:bg-white/15 transition-all"
-          />
+          <div className="relative group">
+            <input
+              type="number"
+              value={radius}
+              onChange={(e) => {
+                setRadius(e.target.value);
+                setError('');
+              }}
+              min="10"
+              max="300"
+              className="w-full bg-white/10 border border-white/20 rounded pl-3 pr-8 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-hud-green/50 focus:bg-white/15 transition-all appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            {/* Custom Spinners */}
+            <div className="absolute right-1 top-1 bottom-1 flex flex-col w-6 gap-0.5 my-0.5">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    const val = parseInt(radius) || 0;
+                    if (val < 300) setRadius((val + 1).toString());
+                  }}
+                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all"
+                >
+                    <ChevronUp size={10} />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                      const val = parseInt(radius) || 0;
+                      if (val > 10) setRadius((val - 1).toString());
+                  }}
+                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all"
+                >
+                    <ChevronDown size={10} />
+                </button>
+            </div>
+          </div>
           <div className="text-[9px] text-white/40 mt-1">
             Min: 10nm • Max: 300nm
           </div>
