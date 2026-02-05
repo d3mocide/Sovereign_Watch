@@ -14,9 +14,7 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
         const NM_TO_DEG = 1 / 60;
         
         // 1. Maritime Bounding Box (Rectangle)
-        // Matches Python poller calculation:
-        // lat_offset = radius_nm / 60.0
-        // lon_offset = radius_nm / (60.0 * math.cos(math.radians(center_lat)))
+        // Matches Python poller calculation
         const latOffset = radiusNm * NM_TO_DEG;
         const cosLat = Math.cos(center.lat * (Math.PI / 180));
         const safeCosLat = Math.max(Math.abs(cosLat), 0.0001); // Prevent division by zero at poles
@@ -71,46 +69,27 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
 
     return (
         <Source id="polling-area-source" type="geojson" data={shapes as any}>
-            {/* Maritime Box - Cyan Dotted Line */}
+            {/* Maritime Box - Green Solid Line */}
             <Layer
                 id="maritime-box-line"
                 type="line"
                 paint={{
-                    'line-color': '#00ffff',
+                    'line-color': '#00ff41',
                     'line-width': 1,
-                    'line-dasharray': [2, 4],
-                    'line-opacity': 0.6
-                }}
-                filter={['==', 'type', 'maritime']}
-            />
-             <Layer
-                id="maritime-box-fill"
-                type="fill"
-                paint={{
-                    'fill-color': '#00ffff',
-                    'fill-opacity': 0.05
+                    // Solid line (dash removed)
+                    'line-opacity': 0.8
                 }}
                 filter={['==', 'type', 'maritime']}
             />
 
-            {/* Aviation Circle - Green Solid Line */}
+            {/* Aviation Circle - Cyan Solid Line */}
             <Layer
                 id="aviation-circle-line"
                 type="line"
                 paint={{
-                    'line-color': '#00ff41',
+                    'line-color': '#00ffff',
                     'line-width': 2,
                     'line-opacity': 0.8
-                }}
-                filter={['==', 'type', 'aviation']}
-            />
-            {/* Pulsing Fill for Aviation */}
-             <Layer
-                id="aviation-circle-fill"
-                type="fill"
-                paint={{
-                    'fill-color': '#00ff41',
-                    'fill-opacity': 0.08
                 }}
                 filter={['==', 'type', 'aviation']}
             />
