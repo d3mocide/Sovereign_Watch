@@ -4,12 +4,15 @@ import { SystemStatus } from '../widgets/SystemStatus';
 import { IntelFeed } from '../widgets/IntelFeed';
 import { MissionNavigator } from '../widgets/MissionNavigator';
 
+import { SystemHealth } from '../../hooks/useSystemHealth';
+
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number };
   filters: { showAir: boolean; showSea: boolean };
   onFilterChange: (key: 'showAir' | 'showSea', value: boolean) => void;
   events: any[];
   missionProps?: any;
+  health?: SystemHealth;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({ 
@@ -17,7 +20,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   filters, 
   onFilterChange, 
   events,
-  missionProps
+  missionProps,
+  health
 }) => {
   return (
     <div className="flex flex-col h-full gap-4 animate-in fade-in duration-1000">
@@ -47,7 +51,9 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       {/* Visual Tech Metadata */}
       <div className="flex items-center justify-between px-1 opacity-20 hover:opacity-100 transition-opacity">
           <span className="text-[8px] tracking-tighter">SIGINT_PROCESSOR_V4.2</span>
-          <span className="text-[8px] tracking-tighter">LATENCY: 42MS</span>
+          <span className="text-[8px] tracking-tighter tabular-nums">
+              LATENCY: {health ? `${health.latency}MS` : '...'}
+          </span>
       </div>
     </div>
   );

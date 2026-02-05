@@ -5,6 +5,7 @@ import { SidebarRight } from './components/layouts/SidebarRight'
 import { MainHud } from './components/layouts/MainHud'
 import { TopBar } from './components/layouts/TopBar'
 import { CoTEntity } from './types'
+import { useSystemHealth } from './hooks/useSystemHealth'
 
 // Event type for intelligence feed
 interface IntelEvent {
@@ -18,6 +19,7 @@ interface IntelEvent {
 function App() {
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
+  const health = useSystemHealth();
   
   // Filter state
   const [filters, setFilters] = useState({
@@ -51,7 +53,7 @@ function App() {
 
   return (
     <MainHud
-      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} />}
+      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} health={health} />}
       leftSidebar={
         <SidebarLeft 
           trackCounts={trackCounts}
@@ -59,6 +61,7 @@ function App() {
           onFilterChange={handleFilterChange}
           events={events}
           missionProps={missionProps}
+          health={health}
         />
       }
       rightSidebar={

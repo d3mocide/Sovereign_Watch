@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
+import { SystemHealth } from '../../hooks/useSystemHealth';
+
 interface TopBarProps {
     alertsCount: number;
     hasNewAlert?: boolean;
     location?: { lat: number; lon: number } | null;
+    health?: SystemHealth;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, location }) => {
+export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, location, health }) => {
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -17,6 +20,22 @@ export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, locati
     const formatTime = (date: Date) => {
         return date.toISOString().split('T')[1].split('.')[0] + 'Z';
     };
+
+    // Calculate integrity bars based on latency
+    // < 50ms: 6 bars
+    // < 100ms: 5 bars
+    // < 200ms: 4 bars
+    // < 500ms: 3 bars
+    // Offline: 0 bars (or red)
+    const getIntegrityBars = () => {
+        if (!health || health.status === 'offline') return 0;
+        if (health.latency < 50) return 6;
+        if (health.latency < 100) return 5;
+        if (health.latency < 200) return 4;
+        if (health.latency < 500) return 3;
+        return 1;
+    };
+    const activeBars = getIntegrityBars();
 
     return (
         <div className="flex h-14 items-center px-6">
@@ -61,7 +80,14 @@ export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, locati
                     <span className="text-[8px] text-white/20 uppercase tracking-tighter">Network Integrity</span>
                     <div className="flex gap-0.5">
                         {[1, 2, 3, 4, 5, 6].map(i => (
-                            <div key={i} className={`h-1.5 w-3 ${i < 5 ? 'bg-hud-green/30' : 'bg-hud-green/10 animate-pulse'}`} />
+                            <div 
+                                key={i} 
+                                className={`h-1.5 w-3 rounded-[1px] transition-all duration-300 ${
+                                    i <= activeBars 
+                                        ? (health?.status === 'offline' ? 'bg-alert-red' : 'bg-hud-green shadow-[0_0_4px_rgba(0,255,65,0.5)]') 
+                                        : 'bg-white/5'
+                                }`} 
+                            />
                         ))}
                     </div>
                 </div>
