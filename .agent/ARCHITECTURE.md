@@ -9,7 +9,7 @@
 Antigravity Kit is a modular system consisting of:
 
 - **19 Specialist Agents** - Role-based AI personas
-- **36 Skills** - Domain-specific knowledge modules
+- **37 Skills** - Domain-specific knowledge modules
 - **11 Workflows** - Slash command procedures
 
 ---
@@ -56,7 +56,7 @@ Specialist AI personas for different domains.
 
 ---
 
-## 🧩 Skills (36)
+## 🧩 Skills (37)
 
 Modular knowledge domains that agents can load on-demand. based on task context.
 
@@ -115,6 +115,7 @@ Modular knowledge domains that agents can load on-demand. based on task context.
 | Skill | Description |
 | ----- | ----------- |
 | `vulnerability-scanner` | Security auditing, OWASP |
+| `package-vulnerability-checker` | Python/npm dependency CVE scanning |
 | `red-team-tactics` | Offensive security |
 
 ### Architecture & Planning
@@ -267,7 +268,7 @@ For details, see [scripts/README.md](scripts/README.md)
 | Metric | Value |
 | ------ | ----- |
 | **Total Agents** | 19 |
-| **Total Skills** | 36 |
+| **Total Skills** | 37 |
 | **Total Workflows** | 11 |
 | **Total Scripts** | 2 (master) + 18 (skill-level) |
 | **Coverage** | ~90% web/mobile development |
