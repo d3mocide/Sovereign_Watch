@@ -22,14 +22,19 @@ Entity discrimination: `entity.type.includes('S')` → maritime, else → aviati
 
 **File**: `frontend/src/types.ts`
 
-Add a `speed` field to trail data so per-vertex speed coloring is possible for maritime trails.
+Add a `speed` field to trail data so per-vertex speed coloring is possible for maritime trails. Also add `uidHash` to `CoTEntity` for pre-computed glow animation phase offsets (avoids per-frame string operations).
 
 ```typescript
-// BEFORE
+// TrailPoint — BEFORE
 export type TrailPoint = [number, number, number]; // [lon, lat, altitude]
 
-// AFTER
+// TrailPoint — AFTER
 export type TrailPoint = [number, number, number, number]; // [lon, lat, altitude, speed]
+```
+
+```typescript
+// CoTEntity — ADD this field after `trail`:
+uidHash: number; // Pre-computed phase offset for glow animation (avoids per-frame string ops)
 ```
 
 Update the trail push in `TacticalMap.tsx` (around line 217) to include speed:
@@ -182,6 +187,34 @@ function entityColor(entity: CoTEntity, alpha: number = 220): [number, number, n
 }
 ```
 
+### 1F: Hoist Environment Variables to Module Scope
+
+The current code re-parses `VITE_CENTER_LAT`, `VITE_CENTER_LON`, and `VITE_COVERAGE_RADIUS_NM` via `parseFloat`/`parseInt` inside the animate loop every frame. Move them to module-scope constants:
+
+```typescript
+// Module-scope constants — parsed once, not every frame
+const ENV_CENTER_LAT = parseFloat(import.meta.env.VITE_CENTER_LAT || '0');
+const ENV_CENTER_LON = parseFloat(import.meta.env.VITE_CENTER_LON || '0');
+const ENV_COVERAGE_RADIUS_NM = parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '0', 10);
+```
+
+Then replace all `parseFloat(import.meta.env.VITE_CENTER_LAT)` (etc.) references inside the component with the module-scope constants. This eliminates string parsing on every animation frame.
+
+### 1G: UID Hash Helper
+
+Pre-compute a deterministic phase offset from a UID string. Used by the glow layer instead of recomputing `uid.split('').reduce(...)` every frame for every entity:
+
+```typescript
+/** Deterministic hash from UID for animation phase offset */
+function uidToHash(uid: string): number {
+    let h = 0;
+    for (let i = 0; i < uid.length; i++) {
+        h += uid.charCodeAt(i);
+    }
+    return h * 100;
+}
+```
+
 ---
 
 ## Section 2: Canvas-Drawn Icon Atlas (Aircraft + Vessel Silhouettes)
@@ -326,17 +359,20 @@ Add a ref to store previous smoothed course values, right after the existing `cu
 const prevCourseRef = useRef<Map<string, number>>(new Map());
 ```
 
-Then inside the `worker.onmessage` handler, AFTER the line that sets `entitiesRef.current.set(...)` (after line 233), add heading damping:
+Then inside the `worker.onmessage` handler, AFTER the line that sets `entitiesRef.current.set(...)` (after line 233), add heading damping and uidHash:
 
 ```typescript
+// Pre-compute UID hash for glow animation (once per entity, not per frame)
+const stored = entitiesRef.current.get(entity.uid)!;
+if (stored.uidHash == null) {
+    stored.uidHash = uidToHash(entity.uid);
+}
+
 // Smooth course transitions
 const prevCourse = prevCourseRef.current.get(entity.uid);
 const rawCourse = entity.detail?.track?.course || 0;
 const smoothedCourse = prevCourse != null ? lerpAngle(prevCourse, rawCourse, 0.18) : rawCourse;
 prevCourseRef.current.set(entity.uid, smoothedCourse);
-
-// Update the entity with smoothed course
-const stored = entitiesRef.current.get(entity.uid)!;
 stored.course = smoothedCourse;
 ```
 
@@ -521,23 +557,21 @@ Uses the canvas-drawn atlas from Section 2. Key changes from the old auto-packin
 Uses `entityColor()` for glow color matching:
 
 ```typescript
-    // 3. Halo / Glow Layer
+    // 3. Halo / Glow Layer (uses pre-computed uidHash instead of per-frame string ops)
     new ScatterplotLayer({
         id: 'entity-glow',
         data: interpolated,
         getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
         getRadius: (d: CoTEntity) => {
             const isSelected = selectedEntity?.uid === d.uid;
-            const offset = d.uid.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) * 100;
-            const pulse = (Math.sin((now + offset) / 600) + 1) / 2;
+            const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
             const base = isSelected ? 20 : 6;
             return base * (1 + (pulse * 0.1));
         },
         radiusUnits: 'pixels' as const,
         getFillColor: (d: CoTEntity) => {
             const isSelected = selectedEntity?.uid === d.uid;
-            const offset = d.uid.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) * 100;
-            const pulse = (Math.sin((now + offset) / 600) + 1) / 2;
+            const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
             const baseAlpha = isSelected ? 60 : 10;
             const a = baseAlpha * (0.8 + pulse * 0.2);
             return entityColor(d, a);
@@ -572,6 +606,46 @@ Uses `entityColor()` for glow color matching:
     ] : []),
 ];
 ```
+
+### 5D: Velocity Vector (LineLayer)
+
+A short line extending from each entity's position in the direction of travel, with length proportional to speed. This gives immediate visual feedback on both heading and velocity — a stationary entity has no line, a fast one has a long projection.
+
+The line projects where the entity will be in ~45 seconds based on current course and speed. Uses great-circle approximation (good enough for short distances).
+
+```typescript
+    // 5. Velocity Vectors — projected track lines
+    new LineLayer({
+        id: 'velocity-vectors',
+        data: interpolated.filter(e => e.speed > 0.5), // Skip stationary
+        getSourcePosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
+        getTargetPosition: (d: CoTEntity) => {
+            const projectionSeconds = 45;
+            const distMeters = d.speed * projectionSeconds; // speed is m/s
+            const courseRad = (d.course || 0) * Math.PI / 180;
+            const R = 6371000;
+            const latRad = d.lat * Math.PI / 180;
+            const dLat = (distMeters * Math.cos(courseRad)) / R;
+            const dLon = (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
+            return [
+                d.lon + dLon * (180 / Math.PI),
+                d.lat + dLat * (180 / Math.PI),
+                d.altitude || 0,
+            ];
+        },
+        getColor: (d: CoTEntity) => entityColor(d, 120),
+        getWidth: 1.5,
+        widthMinPixels: 1,
+        pickable: false,
+    }),
+];
+```
+
+**Notes:**
+- `LineLayer` must be imported from `@deck.gl/layers` (add to existing import if not already there).
+- The 45-second projection is a good balance — long enough to be visible, short enough to not clutter.
+- Alpha is set to 120 (semi-transparent) so vectors don't compete visually with the icon itself.
+- Entities with `speed <= 0.5 m/s` are filtered out to avoid rendering tiny meaningless stubs.
 
 Close the layers array properly. The `];` at the end terminates the array.
 
@@ -645,10 +719,13 @@ Read the file first. Only modify color rendering logic if present.
 
 1. **Delete** the old `TRIANGLE_ICON` constant (and `BOAT_ICON` if it exists). The canvas atlas replaces all SVG icon constants.
 2. Remove any unused imports after refactoring.
-3. Ensure `TrailPoint` is imported correctly everywhere it's used (the type changed from 3-tuple to 4-tuple).
-4. Search for any remaining references to the old flat `[0, 255, 100, 220]` maritime color and replace with `entityColor()` or `speedToColor()` calls where appropriate.
-5. Search for any remaining auto-packing `getIcon` calls that return objects (`{ url, width, height, mask }`). All icon layers should now use the pre-packed atlas with string keys.
-6. Ensure the `prevCourseRef`, `prevSnapshotsRef`, `currSnapshotsRef` maps are cleaned up on mission change and entity stale-out as specified.
+3. Ensure `LineLayer` is imported from `@deck.gl/layers` (needed for velocity vectors). Add to existing import block.
+4. Ensure `TrailPoint` is imported correctly everywhere it's used (the type changed from 3-tuple to 4-tuple).
+5. Replace all inline `parseFloat(import.meta.env.VITE_CENTER_*)` / `parseInt(import.meta.env.VITE_COVERAGE_*)` calls with the module-scope `ENV_CENTER_LAT`, `ENV_CENTER_LON`, `ENV_COVERAGE_RADIUS_NM` constants.
+6. Replace all `d.uid.split('').reduce(...)` hash computations in the glow layer with `d.uidHash`.
+7. Search for any remaining references to the old flat `[0, 255, 100, 220]` maritime color and replace with `entityColor()` or `speedToColor()` calls where appropriate.
+8. Search for any remaining auto-packing `getIcon` calls that return objects (`{ url, width, height, mask }`). All icon layers should now use the pre-packed atlas with string keys.
+9. Ensure the `prevCourseRef`, `prevSnapshotsRef`, `currSnapshotsRef` maps are cleaned up on mission change and entity stale-out as specified.
 
 ---
 
@@ -673,12 +750,12 @@ If the build succeeds, the implementation is complete.
 
 | # | What | Where | Type |
 |---|------|-------|------|
-| 0 | Extend `TrailPoint` to 4-tuple (add speed) | `types.ts`, `TacticalMap.tsx` | Data |
-| 1 | Add utility functions (`lerpAngle`, `smoothPath3D`, `altitudeToColor`, `speedToColor`, `entityColor`) | `TacticalMap.tsx` | Utilities |
+| 0 | Extend `TrailPoint` to 4-tuple (add speed), add `uidHash` to `CoTEntity` | `types.ts`, `TacticalMap.tsx` | Data |
+| 1 | Add utility functions (`lerpAngle`, `smoothPath3D`, `altitudeToColor`, `speedToColor`, `entityColor`, `uidToHash`), hoist env vars to module scope | `TacticalMap.tsx` | Utilities / Perf |
 | 2 | Canvas-drawn icon atlas: aircraft silhouette + ship hull (pre-packed, replaces SVG kite) | `TacticalMap.tsx` | Icon Atlas |
-| 3 | Heading damping via `lerpAngle` + `prevCourseRef` | `TacticalMap.tsx` | Smoothing |
+| 3 | Heading damping via `lerpAngle` + `prevCourseRef`, pre-compute `uidHash` on ingestion | `TacticalMap.tsx` | Smoothing / Perf |
 | 4 | Position interpolation via snapshot system | `TacticalMap.tsx` | Animation |
-| 5 | Replace layer stack: all-entity trails, updated icons, glow, selection ring | `TacticalMap.tsx` | Rendering |
+| 5 | Replace layer stack: all-entity trails, pre-packed icons, glow (w/ uidHash), selection ring, **velocity vectors** | `TacticalMap.tsx` | Rendering |
 | 6 | Dynamic speed/altitude colors in sidebar | `SidebarRight.tsx` | UI |
 | 7 | Update tooltip colors if applicable | `MapTooltip.tsx` | UI |
 | 8 | Cleanup dead code and old color references | Multiple | Cleanup |
