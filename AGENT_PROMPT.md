@@ -184,14 +184,137 @@ function entityColor(entity: CoTEntity, alpha: number = 220): [number, number, n
 
 ---
 
-## Section 2: Distinct Maritime Icon
+## Section 2: Canvas-Drawn Icon Atlas (Aircraft + Vessel Silhouettes)
 
-Add a second SVG icon constant right below the existing `TRIANGLE_ICON` (line 15). This is a diamond/hull shape that visually distinguishes boats from aircraft:
+**Delete** the existing `TRIANGLE_ICON` constant (line 15). Replace it with a pre-packed canvas icon atlas that contains both a recognizable top-down aircraft silhouette and a top-down ship hull. This replaces the generic kite chevron with shapes that are instantly identifiable.
+
+Place this code at **module scope**, right after the imports (replacing line 14-15):
 
 ```typescript
-// Maritime hull diamond icon
-const BOAT_ICON = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2 L20 12 L12 22 L4 12 Z" fill="white" /></svg>')}`;
+// ============================================================
+// Tactical Icon Atlas — Canvas-drawn, pre-packed sprite sheet
+// Two 128x128 cells: [aircraft | vessel] in a 256x128 canvas
+// ============================================================
+const ICON_CELL = 128;
+
+function createTacticalIconAtlas(): string {
+    if (typeof document === 'undefined') return '';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;       // 2 cells wide
+    canvas.height = ICON_CELL; // 1 cell tall
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, 256, ICON_CELL);
+
+    // === AIRCRAFT (cell 0: x=0..127) ===
+    // Top-down silhouette, nose pointing UP toward y=0
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(64, 6);       // Nose tip
+    ctx.lineTo(71, 19);      // Right nose
+    ctx.lineTo(71, 33);      // Right fuselage before wing
+    ctx.lineTo(100, 44);     // Right wing leading edge
+    ctx.lineTo(106, 52);     // Right wingtip
+    ctx.lineTo(80, 53);      // Right wing trailing edge
+    ctx.lineTo(72, 56);      // Right fuselage after wing
+    ctx.lineTo(72, 88);      // Right fuselage before tail
+    ctx.lineTo(90, 101);     // Right tailplane tip
+    ctx.lineTo(88, 108);     // Right tail trailing edge
+    ctx.lineTo(69, 99);      // Right tail junction
+    ctx.lineTo(69, 121);     // Right tail fin
+    ctx.lineTo(64, 126);     // Tail center
+    ctx.lineTo(59, 121);     // Left tail fin
+    ctx.lineTo(59, 99);      // Left tail junction
+    ctx.lineTo(40, 108);     // Left tail trailing edge
+    ctx.lineTo(38, 101);     // Left tailplane tip
+    ctx.lineTo(56, 88);      // Left fuselage before tail
+    ctx.lineTo(56, 56);      // Left fuselage after wing
+    ctx.lineTo(48, 53);      // Left wing trailing edge
+    ctx.lineTo(22, 52);      // Left wingtip
+    ctx.lineTo(28, 44);      // Left wing leading edge
+    ctx.lineTo(57, 33);      // Left fuselage before wing
+    ctx.lineTo(57, 19);      // Left nose
+    ctx.closePath();
+    ctx.fill();
+
+    // Cockpit cutout (transparent hole for detail)
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.moveTo(64, 13);
+    ctx.lineTo(67, 19);
+    ctx.lineTo(64, 24);
+    ctx.lineTo(61, 19);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // === VESSEL (cell 1: x=128..255) ===
+    // Top-down ship hull, bow pointing UP toward y=0
+    const ox = 128; // x-offset for vessel cell
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(ox + 64, 8);      // Bow tip
+    ctx.lineTo(ox + 74, 28);     // Right bow curve
+    ctx.lineTo(ox + 78, 48);     // Right forward hull
+    ctx.lineTo(ox + 80, 60);     // Right mid hull
+    ctx.lineTo(ox + 80, 85);     // Widest beam, starboard
+    ctx.lineTo(ox + 76, 105);    // Right stern taper
+    ctx.lineTo(ox + 72, 115);    // Right stern corner
+    ctx.lineTo(ox + 56, 115);    // Left stern corner
+    ctx.lineTo(ox + 52, 105);    // Left stern taper
+    ctx.lineTo(ox + 48, 85);     // Widest beam, port
+    ctx.lineTo(ox + 48, 60);     // Left mid hull
+    ctx.lineTo(ox + 50, 48);     // Left forward hull
+    ctx.lineTo(ox + 54, 28);     // Left bow curve
+    ctx.closePath();
+    ctx.fill();
+
+    // Bridge superstructure (semi-transparent for subtle detail under mask tinting)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillRect(ox + 54, 76, 20, 14);
+
+    // Bow centerline detail
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ox + 64, 14);
+    ctx.lineTo(ox + 64, 45);
+    ctx.stroke();
+
+    return canvas.toDataURL();
+}
+
+// Cache the atlas globally — created once, reused forever
+let _tacticalAtlasUrl: string | undefined;
+function getTacticalAtlasUrl(): string {
+    if (!_tacticalAtlasUrl) _tacticalAtlasUrl = createTacticalIconAtlas();
+    return _tacticalAtlasUrl;
+}
+
+// Pre-packed icon mapping (atlas coordinates)
+// anchorX/anchorY are ABSOLUTE positions in the atlas, not relative to the cell
+const TACTICAL_ICON_MAPPING: Record<string, { x: number; y: number; width: number; height: number; anchorX: number; anchorY: number; mask: boolean }> = {
+    aircraft: {
+        x: 0, y: 0,
+        width: ICON_CELL, height: ICON_CELL,
+        anchorX: 64, anchorY: 64,
+        mask: true,
+    },
+    vessel: {
+        x: ICON_CELL, y: 0,
+        width: ICON_CELL, height: ICON_CELL,
+        anchorX: ICON_CELL + 64, // 192 — absolute atlas x for center of vessel cell
+        anchorY: 64,
+        mask: true,
+    },
+};
 ```
+
+**Why canvas atlas over SVG data URIs:**
+- Single texture upload to GPU (pre-packed). Current code uses auto-packing (`getIcon` returning an object), which re-packs on every new icon instance.
+- Canvas atlas is what the Aeris flight tracker uses in production with Deck.gl 9.
+- `mask: true` uses the alpha channel for shape — cockpit cutout (`destination-out`) and bridge superstructure (`rgba 0.55 alpha`) create visible detail even when tinted by `getColor`.
+- Both shapes have "forward" pointing UP (toward y=0), matching the existing `getAngle: (d) => -(d.course || 0)` rotation convention.
 
 ---
 
@@ -346,24 +469,26 @@ getColor: isShip
     : altitudeToColor(e.altitude, isSelected ? 180 : 100),
 ```
 
-### 5B: Heading Icons (IconLayer) — Updated
+### 5B: Heading Icons (IconLayer) — Pre-Packed Atlas
 
-Uses `entityColor()`, the new boat icon, heading from smoothed `entity.course`, and interpolated positions:
+Uses the canvas-drawn atlas from Section 2. Key changes from the old auto-packing approach:
+- `iconAtlas` and `iconMapping` are set at the layer level (single GPU texture)
+- `getIcon` returns a **string key** (`'aircraft'` or `'vessel'`), NOT an object
+- `billboard: false` so icons rotate with the map bearing (correct for tactical heading indicators)
+- `sizeUnits: 'pixels'` for consistent display size regardless of zoom
 
 ```typescript
-    // 2. Heading Arrows (Primary Tactical Markers)
+    // 2. Heading Arrows (Primary Tactical Markers — Pre-packed Atlas)
     new IconLayer({
         id: 'heading-arrows',
         data: interpolated,
-        getIcon: (d: any) => ({
-            url: d.type.includes('S') ? BOAT_ICON : TRIANGLE_ICON,
-            width: 24,
-            height: 24,
-            anchorY: 12,
-            mask: true
-        }),
+        iconAtlas: getTacticalAtlasUrl(),
+        iconMapping: TACTICAL_ICON_MAPPING,
+        getIcon: (d: any) => d.type?.includes('S') ? 'vessel' : 'aircraft',
         getPosition: (d: any) => [d.lon, d.lat, d.altitude || 0],
         getSize: (d: any) => selectedEntity?.uid === d.uid ? 32 : 24,
+        sizeUnits: 'pixels' as const,
+        billboard: false,
         getAngle: (d: any) => -(d.course || 0),
         getColor: (d: any) => entityColor(d as CoTEntity),
         pickable: true,
@@ -387,7 +512,6 @@ Uses `entityColor()`, the new boat icon, heading from smoothed `entity.course`, 
         },
         updateTriggers: {
             getSize: [selectedEntity?.uid],
-            getIcon: [],
         }
     }),
 ```
@@ -519,10 +643,12 @@ Read the file first. Only modify color rendering logic if present.
 
 ## Section 8: Cleanup
 
-1. Remove any unused imports after refactoring.
-2. Ensure `TrailPoint` is imported correctly everywhere it's used (the type changed from 3-tuple to 4-tuple).
-3. Search for any remaining references to the old flat `[0, 255, 100, 220]` maritime color and replace with `entityColor()` or `speedToColor()` calls where appropriate.
-4. Ensure the `prevCourseRef`, `prevSnapshotsRef`, `currSnapshotsRef` maps are cleaned up on mission change and entity stale-out as specified.
+1. **Delete** the old `TRIANGLE_ICON` constant (and `BOAT_ICON` if it exists). The canvas atlas replaces all SVG icon constants.
+2. Remove any unused imports after refactoring.
+3. Ensure `TrailPoint` is imported correctly everywhere it's used (the type changed from 3-tuple to 4-tuple).
+4. Search for any remaining references to the old flat `[0, 255, 100, 220]` maritime color and replace with `entityColor()` or `speedToColor()` calls where appropriate.
+5. Search for any remaining auto-packing `getIcon` calls that return objects (`{ url, width, height, mask }`). All icon layers should now use the pre-packed atlas with string keys.
+6. Ensure the `prevCourseRef`, `prevSnapshotsRef`, `currSnapshotsRef` maps are cleaned up on mission change and entity stale-out as specified.
 
 ---
 
@@ -549,7 +675,7 @@ If the build succeeds, the implementation is complete.
 |---|------|-------|------|
 | 0 | Extend `TrailPoint` to 4-tuple (add speed) | `types.ts`, `TacticalMap.tsx` | Data |
 | 1 | Add utility functions (`lerpAngle`, `smoothPath3D`, `altitudeToColor`, `speedToColor`, `entityColor`) | `TacticalMap.tsx` | Utilities |
-| 2 | Add distinct maritime diamond icon `BOAT_ICON` | `TacticalMap.tsx` | Icon |
+| 2 | Canvas-drawn icon atlas: aircraft silhouette + ship hull (pre-packed, replaces SVG kite) | `TacticalMap.tsx` | Icon Atlas |
 | 3 | Heading damping via `lerpAngle` + `prevCourseRef` | `TacticalMap.tsx` | Smoothing |
 | 4 | Position interpolation via snapshot system | `TacticalMap.tsx` | Animation |
 | 5 | Replace layer stack: all-entity trails, updated icons, glow, selection ring | `TacticalMap.tsx` | Rendering |
