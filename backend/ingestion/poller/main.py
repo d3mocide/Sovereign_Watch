@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import json
+import math
 import os
 import signal
 import time
@@ -24,6 +25,34 @@ COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("poller_service")
 
+# ---------------------------------------------------------------------------
+# Arbitration cache constants
+# ---------------------------------------------------------------------------
+# Minimum elapsed source-time before the same hex will be re-published.
+# Set to 500ms so the fastest sources (1 req/s each) can only push one
+# meaningful update per aircraft every half-second to Kafka.
+ARBI_MIN_DELTA_S = 0.5
+
+# Minimum spatial displacement (metres) that always bypasses the time gate.
+# Handles the edge case where an aircraft's position changes significantly
+# within the same 500ms window (very fast, low-altitude targets).
+ARBI_MIN_DIST_M = 50.0
+
+# How long (seconds) to retain an entry in the cache after last publish.
+# Entries older than this are evicted to reclaim memory for departed aircraft.
+ARBI_TTL_S = 30.0
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return distance in metres between two WGS-84 coordinates."""
+    R = 6_371_000.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
 class PollerService:
     def __init__(self):
         self.running = True
@@ -31,11 +60,16 @@ class PollerService:
         self.producer = None
         self.redis_client = None
         self.pubsub = None
-        
+
         # Dynamic mission area (can be updated via Redis)
         self.center_lat = CENTER_LAT
         self.center_lon = CENTER_LON
         self.radius_nm = COVERAGE_RADIUS_NM
+
+        # Per-hex arbitration cache: hex → {"ts": float, "lat": float, "lon": float, "wall": float}
+        # "ts" is the source_ts of the last published message for this hex.
+        # "wall" is the local wall-clock time of that publish (for TTL eviction).
+        self._arbi_cache: Dict[str, Dict] = {}
 
     async def setup(self):
         await self.poller.start()
@@ -137,21 +171,83 @@ class PollerService:
             # Reduced to 0.5s for high-frequency updates.
             await asyncio.sleep(0.5) 
 
+    def _evict_stale_arbi_entries(self) -> None:
+        """Remove cache entries for aircraft not seen recently to reclaim memory."""
+        now = time.time()
+        stale = [hex_id for hex_id, entry in self._arbi_cache.items()
+                 if now - entry["wall"] > ARBI_TTL_S]
+        for hex_id in stale:
+            del self._arbi_cache[hex_id]
+
+    def _should_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> bool:
+        """
+        Arbitration gate: return True only if this position update is worth
+        publishing to Kafka.
+
+        Rules (any one is sufficient to allow publish):
+          1. No prior entry for this hex (first time we've seen it).
+          2. source_ts is at least ARBI_MIN_DELTA_S newer than last published ts.
+          3. Spatial displacement from last published position exceeds ARBI_MIN_DIST_M
+             (catches fast-movers that move a lot within the time window).
+        """
+        entry = self._arbi_cache.get(hex_id)
+        if entry is None:
+            return True
+
+        delta_ts = source_ts - entry["ts"]
+        if delta_ts >= ARBI_MIN_DELTA_S:
+            return True
+
+        dist = _haversine_m(entry["lat"], entry["lon"], lat, lon)
+        if dist >= ARBI_MIN_DIST_M:
+            return True
+
+        return False
+
+    def _record_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> None:
+        """Update the arbitration cache after a successful publish."""
+        self._arbi_cache[hex_id] = {
+            "ts": source_ts,
+            "lat": lat,
+            "lon": lon,
+            "wall": time.time(),
+        }
+
     async def process_point(self, lat: float, lon: float, radius: int):
         """Poll a single point and publish aircraft to Kafka."""
         aircraft = await self.poller.poll_point(lat, lon, radius)
-        
+
         if not aircraft:
             return
-            
+
         logger.debug(f"Received {len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
 
+        # Evict stale arbitration entries periodically (cheap — runs per poll cycle)
+        self._evict_stale_arbi_entries()
+
+        published = 0
         for ac in aircraft:
             tak_msg = self.normalize_to_tak(ac)
-            if tak_msg:
-                key = tak_msg["uid"].encode("utf-8")
-                val = json.dumps(tak_msg).encode("utf-8")
-                await self.producer.send(TOPIC_OUT, value=val, key=key)
+            if not tak_msg:
+                continue
+
+            hex_id = tak_msg["uid"]
+            source_ts = tak_msg["time"] / 1000.0  # convert ms back to seconds
+            msg_lat = tak_msg["point"]["lat"]
+            msg_lon = tak_msg["point"]["lon"]
+
+            if not self._should_publish(hex_id, source_ts, msg_lat, msg_lon):
+                continue  # Duplicate or too-soon update — skip Kafka publish
+
+            self._record_publish(hex_id, source_ts, msg_lat, msg_lon)
+
+            key = hex_id.encode("utf-8")
+            val = json.dumps(tak_msg).encode("utf-8")
+            await self.producer.send(TOPIC_OUT, value=val, key=key)
+            published += 1
+
+        if published:
+            logger.debug(f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
 
     def normalize_to_tak(self, ac: Dict) -> Optional[Dict]:
         """Convert ADSBx format to SovereignWatch TAK-ish JSON format."""
@@ -162,8 +258,13 @@ class PollerService:
         # Calculate TRUE source time (subtract latency)
         # 'seen_pos' = seconds since position update
         # 'seen' = seconds since any update
+        # Anchor to _fetched_at (when HTTP response arrived) rather than
+        # time.time() here, which is later and drifts per-aircraft as the
+        # normalization loop runs. This eliminates cross-source timestamp
+        # inversions caused by processing lag.
+        fetched_at = float(ac.get("_fetched_at") or time.time())
         latency = float(ac.get("seen_pos") or ac.get("seen") or 0.0)
-        source_ts = time.time() - latency
+        source_ts = fetched_at - latency
             
         return {
             "uid": ac.get("hex", "").lower(),
