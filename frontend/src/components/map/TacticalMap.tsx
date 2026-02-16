@@ -499,10 +499,29 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         stored.uidHash = uidToHash(entity.uid);
                     }
                     
-                    // Smooth course transitions
+                    // Smooth course transitions.
+                    // Guard against "false-zero" course: ADS-B sources frequently omit
+                    // the track field; protobuf fills missing floats with 0.0, making a
+                    // southbound/eastbound aircraft appear to be heading north. We detect
+                    // this by checking whether the reported heading change is physically
+                    // implausible (>= 90° in a single update at ~1/s). If so, keep the
+                    // last known good heading rather than lerping toward the bad value.
                     const prevCourse = prevCourseRef.current.get(entity.uid);
-                    const rawCourse = entity.detail?.track?.course || 0;
-                    const smoothedCourse = prevCourse != null ? lerpAngle(prevCourse, rawCourse, 0.18) : rawCourse;
+                    const rawCourse = entity.detail?.track?.course ?? 0;
+                    const speedMs = entity.detail?.track?.speed || 0;
+                    let courseToLerp = rawCourse;
+                    if (prevCourse != null && speedMs > 2.0) {
+                        const headingDelta = Math.abs(((rawCourse - prevCourse + 540) % 360) - 180);
+                        if (headingDelta >= 90) {
+                            // Reject: change is too large to be a real maneuver at this update rate.
+                            // Likely a missing-data zero from the source.
+                            courseToLerp = prevCourse;
+                        }
+                    }
+                    // Factor raised from 0.18 → 0.35 so heading converges in ~6 updates
+                    // (6s) rather than ~17 updates. Fast enough to track genuine turns,
+                    // slow enough to absorb per-packet noise.
+                    const smoothedCourse = prevCourse != null ? lerpAngle(prevCourse, courseToLerp, 0.35) : courseToLerp;
                     prevCourseRef.current.set(entity.uid, smoothedCourse);
                     stored.course = smoothedCourse;
                    
