@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-15
+
+### Added
+
+- **Persistent Tactical Views:**
+  - "Hist_Tail" global toggle in TopBar to control historical trails for all assets.
+  - `localStorage` persistence for "Hist_Tail" state.
+- **Maritime Intelligence Upgrades:**
+  - `SpeedLegend` component added for localized maritime speed color mapping.
+  - Applied muted, solid "Sovereign Glass" styling to AOR boundaries; synced visibility with AIR/SEA layer toggles.
+  - Standardized 90px width for all tactical legends.
+
+### Fixed
+
+- **Tactical Stability Overhaul (Jitter & Rubber-Banding):**
+  - **Fix A (Temporal Anchoring):** Anchored timestamps to `_fetched_at` to eliminate processing-lag drift.
+  - **Fix B (Arbitration Cache):** Short-TTL cache in poller to suppress cross-source redundant updates.
+  - **Fix C (Extrapolation Cap):** Clamped geometric interpolation to 1.0x to eliminate forward-snap rubber-banding.
+  - **Fix E (Trail Noise Filtering):** 30m distance gate on trail points to eliminate multilateration zigzag artifacts.
+- **Ingestion:**
+  - Parallelized multi-source polling using staggered `asyncio` tasks for better throughput and lower latency.
+  - Switched to dedicated rate-limiters per source to prevent 429 errors.
+
+### Changed
+
+- **Visual Balancing:**
+  - Vessel icons increased (24px -> 32px) to match aircraft prominence.
+  - Altitude Legend repositioned to `top-[72px]`.
+  - Maritime Legend repositioned to `top-[320px]`.
+
 ## [0.2.0] - 2026-02-15
 
 ### Added
@@ -16,7 +46,7 @@ All notable changes to this project will be documented in this file.
   - Velocity vectors (45s projection) for moving entities.
   - Pulsating glow effects with pre-computed phase offsets.
 - **UI Components:**
-  - `AltitudeLegend`: Visual gradient reference for altitude colors.
+  - **Muted AORs**: Mission boundaries (Circle/Square) are now subtle solid HUD elements synced to visibility toggles.
   - `SpeedLegend` (implicitly via Sidebar): Visual reference for speed colors.
   - Updated Sidebar telemetry to match map colors.
 - **Ingestion Optimization:**
@@ -40,6 +70,6 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **Rubber Banding:** Eliminated sawtooth artifacts by enforcing strict timestamp monotonicity (`>=`).
+- **Muted AOR Boundaries:** Mission areas are now rendered as subtle, solid "HUD" overlays (Aviation Circle & Maritime Square), with visibility synced to operator toggles.
 - **Freezing:** Fixed entities locking in place during data gaps by relaxing interpolation clamp.
 - **Build System:** Resolved TypeScript errors in `MapContextMenu.tsx`.

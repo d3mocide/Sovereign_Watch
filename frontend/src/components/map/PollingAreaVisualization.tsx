@@ -4,9 +4,16 @@ import { Source, Layer } from 'react-map-gl';
 interface PollingAreaVisualizationProps {
     center: { lat: number; lon: number } | null;
     radiusNm: number;
+    showAir?: boolean;
+    showSea?: boolean;
 }
 
-export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> = ({ center, radiusNm }) => {
+export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> = ({ 
+    center, 
+    radiusNm,
+    showAir = true,
+    showSea = true
+}) => {
     const shapes = useMemo(() => {
         if (!center) return null;
 
@@ -72,27 +79,32 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
     return (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <Source id="polling-area-source" type="geojson" data={shapes as any}>
-            {/* Maritime Box - Green Solid Line */}
+            {/* Maritime Box - Sky Blue Solid Line (Synced with Sea Filter) */}
             <Layer
                 id="maritime-box-line"
                 type="line"
                 paint={{
-                    'line-color': '#00ff41',
+                    'line-color': '#0ea5e9', // Sky Blue
                     'line-width': 1,
-                    // Solid line (dash removed)
-                    'line-opacity': 0.8
+                    'line-opacity': 0.5
+                }}
+                layout={{
+                    'visibility': showSea ? 'visible' : 'none'
                 }}
                 filter={['==', 'type', 'maritime']}
             />
 
-            {/* Aviation Circle - Cyan Solid Line */}
+            {/* Aviation Circle - Tactical Green Solid Line (Synced with Air Filter) */}
             <Layer
                 id="aviation-circle-line"
                 type="line"
                 paint={{
-                    'line-color': '#00ffff',
-                    'line-width': 2,
-                    'line-opacity': 0.8
+                    'line-color': '#00ff41',
+                    'line-width': 1,
+                    'line-opacity': 0.4
+                }}
+                layout={{
+                    'visibility': showAir ? 'visible' : 'none'
                 }}
                 filter={['==', 'type', 'aviation']}
             />

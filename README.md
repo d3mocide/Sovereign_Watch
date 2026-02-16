@@ -1,4 +1,4 @@
-# Sovereign Watch v0.2.0: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.3.0: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 1 (Infrastructure & Foundation) - _Active Development_
 

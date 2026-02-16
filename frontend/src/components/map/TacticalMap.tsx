@@ -11,6 +11,7 @@ import { MapContextMenu } from './MapContextMenu';
 import { SaveLocationForm } from './SaveLocationForm';
 import { PollingAreaVisualization } from './PollingAreaVisualization';
 import { AltitudeLegend } from './AltitudeLegend';
+import { SpeedLegend } from './SpeedLegend';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
 
@@ -200,6 +201,7 @@ interface TacticalMapProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onMissionPropsReady?: (props: any) => void;
     showVelocityVectors?: boolean;
+    showHistoryTails?: boolean;
 }
 
 // Adaptive Zoom Calculation
@@ -208,7 +210,7 @@ const calculateZoom = (radiusNm: number) => {
     return Math.max(2, 14 - Math.log2(r));
 };
 
-export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, showVelocityVectors }: TacticalMapProps) {
+export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, showVelocityVectors, showHistoryTails }: TacticalMapProps) {
 
     // Refs for Transient State (No React Re-renders)
     const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
@@ -239,6 +241,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
     // Velocity Vector Toggle - use ref for reactivity in animation loop
     const velocityVectorsRef = useRef(showVelocityVectors ?? false);
+    const historyTailsRef = useRef(showHistoryTails ?? true); // Default to true as per user preference
     
     // Update ref when prop changes
     useEffect(() => {
@@ -246,6 +249,12 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             velocityVectorsRef.current = showVelocityVectors;
         }
     }, [showVelocityVectors]);
+
+    useEffect(() => {
+        if (showHistoryTails !== undefined) {
+            historyTailsRef.current = showHistoryTails;
+        }
+    }, [showHistoryTails]);
 
     // Mission Management
     const { savedMissions, saveMission, deleteMission } = useMissionLocations();
@@ -675,19 +684,22 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
                 if (prev && curr && curr.ts > prev.ts) {
                     const elapsed = now - curr.ts;
-                    const duration = curr.ts - prev.ts;
-                    // Cap at 1.0× — beyond the measured update interval we switch to
-                    // physics-based dead reckoning using the aircraft's own course/speed
-                    // rather than overshooting the geometric interpolation.
-                    const t = Math.min(elapsed / Math.max(duration, 100), 1.0);
+                    const rawDuration = curr.ts - prev.ts;
+                    
+                    // Jitter Buffer: Dead-reckoning/Interpolation must take at least 1s
+                    // to complete, even if the next packet arrived faster (bursty).
+                    // This creates a slight lag but ensures perfectly smooth flow.
+                    const stableDuration = Math.max(rawDuration, 1000);
+                    
+                    // 1. Geometric Interpolation (within the measured segment)
+                    const t_geom = Math.min(elapsed / stableDuration, 1.0);
+                    targetLon = prev.lon + (curr.lon - prev.lon) * t_geom;
+                    targetLat = prev.lat + (curr.lat - prev.lat) * t_geom;
 
-                    targetLon = prev.lon + (curr.lon - prev.lon) * t;
-                    targetLat = prev.lat + (curr.lat - prev.lat) * t;
-
-                    // Dead reckoning: once we've exhausted the measured interval,
-                    // project forward using course + speed from the track message.
-                    if (elapsed > duration && entity.speed > 1.0) {
-                        const overrun = (elapsed - duration) / 1000; // seconds past last update
+                    // 2. Dead Reckoning (Physics projection after the segment)
+                    // Only project forward using track data if the stable duration has elapsed.
+                    if (elapsed > stableDuration && entity.speed > 1.0) {
+                        const overrun = Math.min((elapsed - stableDuration), 5000) / 1000;
                         const courseRad = (entity.course || 0) * Math.PI / 180;
                         const R = 6_371_000;
                         const latRad = entity.lat * Math.PI / 180;
@@ -703,14 +715,13 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 if (!visual) {
                     visual = { lat: targetLat, lon: targetLon };
                 } else {
-                    // Velocity-adaptive EWMA: fast aircraft converge quickly to avoid
-                    // visible positional lag (83m at 500kts with α=0.05); slow vessels
-                    // keep the gentle smoothing. Applied to position only — heading
-                    // smoothing is handled separately via lerpAngle in the update handler.
+                    // Position Smoothing (EWMA):
+                    // Lowered significantly (0.04-0.10) to act as a low-pass filter
+                    // for multi-source coordinate jitter.
                     const speedKts = entity.speed * 1.94384;
-                    const SMOOTH_FACTOR = speedKts > 200 ? 0.15 :
-                                         speedKts > 50  ? 0.10 :
-                                                          0.05;
+                    const SMOOTH_FACTOR = speedKts > 200 ? 0.10 :
+                                          speedKts > 50  ? 0.07 :
+                                                           0.04;
                     visual.lat = visual.lat + (targetLat - visual.lat) * SMOOTH_FACTOR;
                     visual.lon = visual.lon + (targetLon - visual.lon) * SMOOTH_FACTOR;
                 }
@@ -723,6 +734,30 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
 
             const layers = [
+                // 1. All History Trails (Global Toggle)
+                ...(historyTailsRef.current ? [
+                    new PathLayer({
+                        id: 'all-history-trails',
+                        data: interpolated.filter(e => e.trail.length >= 2),
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        getPath: (d: any) => d.trail.map((p: any) => [p[0], p[1], p[2]]),
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        getColor: (d: any) => {
+                            const isShip = d.type.includes('S');
+                            return isShip
+                                ? speedToColor(d.speed, 100)
+                                : altitudeToColor(d.altitude, 100);
+                        },
+                        getWidth: 1.5,
+                        widthMinPixels: 1,
+                        pickable: false,
+                        jointRounded: true,
+                        capRounded: true,
+                        opacity: 0.6,
+                    })
+                ] : []),
+
+                // 2. Selected Entity Highlight Trail
                 ...(selectedEntity && interpolated.find(e => e.uid === selectedEntity.uid)
                     ? (() => {
                         const entity = interpolated.find(e => e.uid === selectedEntity.uid)!;
@@ -730,8 +765,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         const trailPath = entity.trail.map(p => [p[0], p[1], p[2]]);
                         const isShip = entity.type.includes('S');
                         const trailColor = isShip
-                            ? speedToColor(entity.speed, 200)
-                            : altitudeToColor(entity.altitude, 200);
+                            ? speedToColor(entity.speed, 255)
+                            : altitudeToColor(entity.altitude, 255);
 
                         return [new PathLayer({
                             id: `selected-trail-${selectedEntity.uid}`,
@@ -764,7 +799,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     getSize: (d: any) => {
                         const isSelected = selectedEntity?.uid === d.uid;
                         const isVessel = d.type.includes('S');
-                        const baseSize = isVessel ? 24 : 32;
+                        // Bumping marine size from 24 -> 32 to match aircraft prominence
+                        const baseSize = isVessel ? 32 : 32;
                         return isSelected ? baseSize * 1.3 : baseSize;
                     },
                     sizeUnits: 'pixels' as const,
@@ -988,11 +1024,15 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 <PollingAreaVisualization 
                     center={currentMission} 
                     radiusNm={currentMission.radius_nm} 
+                    showAir={filters?.showAir}
+                    showSea={filters?.showSea}
                 />
             ) : (
                 <PollingAreaVisualization 
                     center={{ lat: initialLat, lon: initialLon }} 
                     radiusNm={parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150')} 
+                    showAir={filters?.showAir}
+                    showSea={filters?.showSea}
                 />
             )}
         </GLMap>
@@ -1046,6 +1086,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         
         {/* Altitude Legend (Visible for Air Layer) */}
         <AltitudeLegend visible={filters?.showAir ?? true} />
+        
+        {/* Speed Legend (Visible for Sea Layer) */}
+        <SpeedLegend visible={filters?.showSea ?? true} />
     </>
     );
 };

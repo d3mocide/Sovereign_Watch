@@ -40,6 +40,20 @@ function App() {
       return newValue;
     });
   }, []);
+
+  // History Tails Toggle
+  const [showHistoryTails, setShowHistoryTails] = useState(() => {
+    const saved = localStorage.getItem('showHistoryTails');
+    return saved !== null ? JSON.parse(saved) : true; // Default to true for better initial UX
+  });
+
+  const handleHistoryTailsToggle = useCallback(() => {
+    setShowHistoryTails((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem('showHistoryTails', JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
   
   // Intelligence feed events
   const [events, setEvents] = useState<IntelEvent[]>([]);
@@ -64,7 +78,17 @@ function App() {
 
   return (
     <MainHud
-      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} health={health} showVelocityVectors={showVelocityVectors} onToggleVelocityVectors={handleVelocityVectorToggle} />}
+      topBar={
+        <TopBar 
+          alertsCount={alertsCount} 
+          location={missionProps?.currentMission} 
+          health={health} 
+          showVelocityVectors={showVelocityVectors} 
+          onToggleVelocityVectors={handleVelocityVectorToggle}
+          showHistoryTails={showHistoryTails}
+          onToggleHistoryTails={handleHistoryTailsToggle}
+        />
+      }
       leftSidebar={
         <SidebarLeft 
           trackCounts={trackCounts}
@@ -94,6 +118,7 @@ function App() {
           onEntitySelect={setSelectedEntity}
           onMissionPropsReady={setMissionProps}
           showVelocityVectors={showVelocityVectors}
+          showHistoryTails={showHistoryTails}
       />
     </MainHud>
   )

@@ -1,66 +1,65 @@
-# Sovereign Watch v0.2.0 Release Notes
+# Sovereign Watch v0.3.0 Release Notes
 
-**"High Fidelity" Update**
+**"Tactical Persistence" Update**
 
-We are proud to announce version 0.2.0 of Sovereign Watch. This release focuses on transforming the Tactical Map from a basic position plotter into a professional-grade situational awareness tool. We have completely rewritten the rendering pipeline, optimized data ingestion, and eliminated visual artifacts for a buttery-smooth operator experience.
+Following the high-fidelity foundation of 0.2.0, version 0.3.0 introduces deep persistence and maritime parity. We've enhanced the operator's ability to track long-term history and standardized the tactical HUD for multi-domain operations.
 
 ## 🌟 Key Features
 
-### 1. High-Fidelity Rendering Engine
+### 1. Global History Trails ("Hist_Tail")
 
-The Tactical Map now uses a custom WebGL logic layer to render thousands of entities with zero lag.
+Operators can now visualize the historical paths of all active entities simultaneously.
 
-- **Canvas-Based Icons:** Replaced generic triangles with distinct, high-performance silhouettes for Aircraft (Delta Wing) and Vessels (Hull).
-- **Smooth Trails:** Flight paths are now rendered with Chaikin smoothing algorithms, creating organic, curved trails instead of jagged lines.
-- **Velocity Vectors:** Moving targets now project 45-second velocity vectors, giving operators instant visual cues on heading and speed.
+- **Global Toggle:** A new "Hist_Tail" button in the TopBar enables/disables trails for every asset on the map.
+- **Persistence:** This state is stored in `localStorage`, ensuring your tactical layout persists across browser refreshes.
+- **Adaptive Coloration:** Trails are automatically color-coded (Altitude for air, Speed for sea) for instant classification.
 
-### 2. "Sovereign Glass" Aesthetic
+### 2. Maritime Intelligence Upgrades
 
-We've refined the UI to match our "Dark / Glass" design language.
+Maritime tracking is no longer a secondary layer. We've brought vessels up to full visual parity with aircraft.
 
-- **Dynamic Gradients:**
-  - **Aviation:** Altitude is now heat-mapped (Teal → Green → Orange → Red) for instant situational awareness of flight levels.
-  - **Maritime:** Speed is encoded (Blue → Orange), allowing operators to spot fast-moving interceptors at a glance.
-- **Pulsating Glows:** Active entities now pulse with a "heartbeat" animation (phase-shifted to avoid visual synchronization artifacts).
+- **Increased Prominence:** Marine icons have been bumped to **32px**, matching the scale of commercial aviation targets.
+- **Maritime Speed Legend:** A dedicated speed key (0-25+ kts) provides a visual reference for the maritime color gradients.
 
-### 3. Jitter Elimination & Performance
+### 3. "Sovereign Glass" HUD Refinement
 
-We tackled the "rubber-banding" and "freezing" issues plaguing fast-moving aircraft.
+The tactical legend system has been standardized into a vertical stack in the top-left corner.
 
-- **Dead Reckoning:** The interpolation engine now allows aircraft to "coast" for up to 10x the update interval. Fast jets no longer freeze when data lags.
-- **Strict Monotonicity:** We implemented a strict partial-update filter that rejects out-of-order packets. Your timeline never moves backward.
-- **Latency Compensation:** The backend now subtracts transmission latency from timestamps, ensuring that the map represents the _actual_ position time, not the arrival time.
+- **Stacked View:** Altitude Legend is pinned to the top, with the Maritime Legend directly beneath it.
+- **Standardized Width:** All legends now share a uniform **90px** width for a cohesive "Command Center" aesthetic.
+- **Muted AOR Boundaries:** Mission areas are now rendered as subtle, dashed "HUD" overlays (Aviation Circle & Maritime Square), eliminating high-contrast visual clutter.
 
-### 4. Optimized Ingestion
+### 4. Stability & Jitter Elimination
 
-The python `adsb-poller` has been turbocharged.
+We've implemented the full suite of mitigations from our ADS-B Jitter Analysis.
 
-- **Weighted Polling:** Intelligently rotates between `adsb.fi`, `adsb.lol`, and `airplanes.live` to maximize data freshness without hitting rate limits.
-- **4x Throughput:** Polling loops now run every 0.5s (down from 2.0s), providing near real-time updates for local traffic.
+- **Arbitration Gate:** A new cache-based filter in the poller suppresses the "duplicate storm" caused by multi-source overlap.
+- **Hardware-Anchored Time:** Timestamps are now relative to the exact moment of HTTP receipt, eliminating lag-induced time travel.
+- **Zero-Overshoot Interpolation:** The map no longer extrapolates paths beyond the last update, killing the "snap-back" rubber-banding effect.
+- **Trail Smoothing:** History trails are now filtered for GPS/Multilateration noise, resulting in clean paths even at high zoom.
 
 ---
 
 ## 🔧 Technical Details
 
-- **Version:** v0.2.0
+- **Version:** v0.3.0
 - **Release Date:** 2026-02-15
 - **Compatibility:** Requires Docker Compose v2.0+
-- **Breaking Changes:**
-  - Legacy `aviation_ingest.yaml` configuration removed.
-  - `CoTEntity` TypeScript interface updated with `lastSourceTime`.
-  - Frontend now requires `types.ts` synchronization with backend Protobuf definitions.
+- **Key Changes:**
+  - Standardized legend positioning logic in `TacticalMap.tsx`.
+  - Added `SpeedLegend.tsx` component.
+  - Implemented `showHistoryTails` state management across `App.tsx` and `TopBar.tsx`.
 
 ## 🚀 Upgrade Instructions
 
 ```bash
 # 1. Pull latest changes
-git pull origin main
+git pull origin dev
 
-# 2. Rebuild Frontend (Required for new rendering engine)
+# 2. Rebuild Frontend
 docker compose up -d --build frontend
-
-# 3. Restart Poller (Required for ingestion optimization)
-docker compose restart adsb-poller
 ```
 
-_Fly safe. Watch the skies._
+---
+
+_Release 0.3.0 is live. Tactical baseline elevated._

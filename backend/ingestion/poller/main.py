@@ -29,9 +29,9 @@ logger = logging.getLogger("poller_service")
 # Arbitration cache constants
 # ---------------------------------------------------------------------------
 # Minimum elapsed source-time before the same hex will be re-published.
-# Set to 500ms so the fastest sources (1 req/s each) can only push one
-# meaningful update per aircraft every half-second to Kafka.
-ARBI_MIN_DELTA_S = 0.5
+# Increased to 0.8s to prevent "bursting" where multiple sources report
+# the same aircraft nearly simultaneously, creating interpolation jitter.
+ARBI_MIN_DELTA_S = 0.8
 
 # Minimum spatial displacement (metres) that always bypasses the time gate.
 # Handles the edge case where an aircraft's position changes significantly
@@ -112,6 +112,11 @@ class PollerService:
 
     def calculate_polling_points(self):
         """Calculate polling coverage points based on current mission area."""
+        # Optimization: For small tactical areas (< 50nm), a single point is sufficient
+        # and allows for higher update frequency (1.0s vs 3.0s latency).
+        if self.radius_nm < 50:
+            return [(self.center_lat, self.center_lon, self.radius_nm)]
+            
         return [
             (self.center_lat, self.center_lon, self.radius_nm),           # Center
             (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset  
@@ -167,9 +172,10 @@ class PollerService:
             await self.process_point(lat, lon, radius)
             
             # Sleep based on source rate limits
-            # With 3 sources at 2s each, we can cycle at a sustainable rate.
-            # Increased to 2.0s to mitigate upstream rate limiting.
-            await asyncio.sleep(2.0) 
+            # Lowered to 0.1s to allow the MultiSourcePoller's internal limiters
+            # to drive the pace. If a source is ready, we fire immediately.
+            # If rate limited, the _fetch call will block/wait efficiently.
+            await asyncio.sleep(0.1) 
 
     def _evict_stale_arbi_entries(self) -> None:
         """Remove cache entries for aircraft not seen recently to reclaim memory."""
@@ -184,11 +190,11 @@ class PollerService:
         Arbitration gate: return True only if this position update is worth
         publishing to Kafka.
 
-        Rules (any one is sufficient to allow publish):
-          1. No prior entry for this hex (first time we've seen it).
+        Rules:
+          1. No prior entry for this hex.
           2. source_ts is at least ARBI_MIN_DELTA_S newer than last published ts.
-          3. Spatial displacement from last published position exceeds ARBI_MIN_DIST_M
-             (catches fast-movers that move a lot within the time window).
+             Distance bypass is disabled as it allowed multi-source jitter to
+             trigger instantaneous "backwards" snaps.
         """
         entry = self._arbi_cache.get(hex_id)
         if entry is None:
@@ -196,10 +202,6 @@ class PollerService:
 
         delta_ts = source_ts - entry["ts"]
         if delta_ts >= ARBI_MIN_DELTA_S:
-            return True
-
-        dist = _haversine_m(entry["lat"], entry["lon"], lat, lon)
-        if dist >= ARBI_MIN_DIST_M:
             return True
 
         return False
@@ -213,16 +215,76 @@ class PollerService:
             "wall": time.time(),
         }
 
-    async def process_point(self, lat: float, lon: float, radius: int):
-        """Poll a single point and publish aircraft to Kafka."""
-        aircraft = await self.poller.poll_point(lat, lon, radius)
+    async def source_loop(self, source_idx: int):
+        """Independent loop for a specific aviation source."""
+        source = self.poller.sources[source_idx]
+        logger.info(f"🚀 Started dedicated loop for {source.name}")
+        
+        current_point_idx = 0
+        
+        while self.running:
+            try:
+                polling_points = self.calculate_polling_points()
+                lat, lon, radius = polling_points[current_point_idx]
+                current_point_idx = (current_point_idx + 1) % len(polling_points)
 
+                # Poll using the specific source directly
+                path = source.url_format.format(lat=lat, lon=lon, radius=radius)
+                url = f"{source.base_url}{path}"
+                
+                try:
+                    # Respect per-source rate limits
+                    async with source.limiter:
+                        data = await self.poller._fetch(source, url)
+                        aircraft = data.get("ac") or data.get("aircraft") or []
+                        
+                        if aircraft:
+                            # Add metadata for arbitration
+                            fetched_at = time.time()
+                            for ac in aircraft:
+                                ac["_source"] = source.name
+                                ac["_fetched_at"] = fetched_at
+                                
+                            await self.process_aircraft_batch(aircraft, lat, lon)
+                except Exception as e:
+                    logger.error(f"Error in {source.name} cycle: {e}")
+                    # Note: source.penalize() is already called inside _fetch for 429s
+
+                # Small sleep to prevent tight-looping
+                await asyncio.sleep(0.1)
+                
+            except Exception as e:
+                logger.error(f"CRITICAL error in {source.name} loop: {e}")
+                await asyncio.sleep(5)
+
+    async def loop(self):
+        """Main Orchestration Loop - Spawns concurrent source tasks."""
+        logger.info(f"Initializing Parallel Ingestion - Center: ({self.center_lat}, {self.center_lon}), Radius: {self.radius_nm}nm")
+        
+        # Start one independent loop per source
+        tasks = []
+        for i in range(len(self.poller.sources)):
+            # Stagger loop starts slightly to prevent bursty network traffic
+            # and synchronized multi-source updates for the same plane.
+            delay = i * 0.5 
+            tasks.append(asyncio.create_task(self.staggered_start(i, delay)))
+            
+        # Wait for all (they run until self.running is False)
+        await asyncio.gather(*tasks)
+
+    async def staggered_start(self, source_idx: int, delay: float):
+        """Wait before starting the source loop to stagger update bursts."""
+        await asyncio.sleep(delay)
+        await self.source_loop(source_idx)
+
+    async def process_aircraft_batch(self, aircraft: List[Dict], lat: float, lon: float):
+        """Process and publish a batch of aircraft from a specific source."""
         if not aircraft:
             return
 
-        logger.debug(f"Received {len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
+        logger.info(f"Received {len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
 
-        # Evict stale arbitration entries periodically (cheap — runs per poll cycle)
+        # Evict stale arbitration entries periodically
         self._evict_stale_arbi_entries()
 
         published = 0
@@ -232,12 +294,12 @@ class PollerService:
                 continue
 
             hex_id = tak_msg["uid"]
-            source_ts = tak_msg["time"] / 1000.0  # convert ms back to seconds
+            source_ts = tak_msg["time"] / 1000.0
             msg_lat = tak_msg["point"]["lat"]
             msg_lon = tak_msg["point"]["lon"]
 
             if not self._should_publish(hex_id, source_ts, msg_lat, msg_lon):
-                continue  # Duplicate or too-soon update — skip Kafka publish
+                continue
 
             self._record_publish(hex_id, source_ts, msg_lat, msg_lon)
 
@@ -247,7 +309,7 @@ class PollerService:
             published += 1
 
         if published:
-            logger.debug(f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
+            logger.info(f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
 
     def normalize_to_tak(self, ac: Dict) -> Optional[Dict]:
         """Convert ADSBx format to SovereignWatch TAK-ish JSON format."""

@@ -23,7 +23,7 @@ export const AltitudeLegend: React.FC<AltitudeLegendProps> = ({ visible }) => {
     )`;
 
     return (
-        <div className="absolute left-[405px] bottom-10 z-10 pointer-events-none select-none flex flex-col gap-1 items-start bg-black/40 backdrop-blur-sm p-2 rounded border border-white/10 animate-in fade-in slide-in-from-left-4 duration-500">
+        <div className="absolute left-[405px] top-[72px] z-10 w-[90px] pointer-events-none select-none flex flex-col gap-1 items-start bg-black/40 backdrop-blur-sm p-2 rounded border border-white/10 animate-in fade-in slide-in-from-top-4 duration-500">
             <span className="text-[9px] font-bold tracking-[0.2em] text-white/50 uppercase ml-0.5 mb-1">ALTITUDE</span>
             <div className="flex gap-2 h-48">
                 {/* Gradient Bar */}
