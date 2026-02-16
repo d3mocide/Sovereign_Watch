@@ -167,9 +167,9 @@ class PollerService:
             await self.process_point(lat, lon, radius)
             
             # Sleep based on source rate limits
-            # With 3 sources at 1s each, we can cycle much faster.
-            # Reduced to 0.5s for high-frequency updates.
-            await asyncio.sleep(0.5) 
+            # With 3 sources at 2s each, we can cycle at a sustainable rate.
+            # Increased to 2.0s to mitigate upstream rate limiting.
+            await asyncio.sleep(2.0) 
 
     def _evict_stale_arbi_entries(self) -> None:
         """Remove cache entries for aircraft not seen recently to reclaim memory."""

@@ -88,21 +88,33 @@ class MultiSourcePoller:
                 name="adsb_fi",
                 base_url="https://opendata.adsb.fi/api/v3",
                 url_format="/lat/{lat}/lon/{lon}/dist/{radius}",
+<<<<<<< Updated upstream
                 rate_limit_period=1.0,
+=======
+                rate_limit_period=2.0,  # Sustainable polling (was 1.0)
+>>>>>>> Stashed changes
                 priority=1
             ),
             AviationSource(
                 name="adsb_lol",
                 base_url="https://api.adsb.lol/v2",
                 url_format="/point/{lat}/{lon}/{radius}",
+<<<<<<< Updated upstream
                 rate_limit_period=1.0,
+=======
+                rate_limit_period=2.0,  # Sustainable polling (was 1.0)
+>>>>>>> Stashed changes
                 priority=1
             ),
             AviationSource(
                 name="airplanes_live",
                 base_url="https://api.airplanes.live/v2",
                 url_format="/point/{lat}/{lon}/{radius}",
+<<<<<<< Updated upstream
                 rate_limit_period=2.0,
+=======
+                rate_limit_period=5.0,  # Significant backoff (was 2.0)
+>>>>>>> Stashed changes
                 priority=2  # Lower priority = use as backup
             ),
         ]
@@ -125,10 +137,19 @@ class MultiSourcePoller:
         rather than blocking.
         """
         self.request_count += 1
+<<<<<<< Updated upstream
 
         # Weighted pattern: fi, lol, fi, lol, airplanes (repeat every 5 requests)
         if self.request_count % 5 == 0:
             preferred = self.sources[2]  # airplanes_live
+=======
+        
+        # Weighted pattern: use airplanes.live only every 10th request
+        # Pattern: fi/lol alternates, airplanes (every 10th)
+        if self.request_count % 10 == 0:
+            # Use airplanes.live (index 2) every 10th request
+            source = self.sources[2]
+>>>>>>> Stashed changes
         else:
             preferred = self.sources[self.request_count % 2]  # alternate fi/lol
 
