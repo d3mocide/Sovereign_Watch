@@ -439,9 +439,16 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                        }
                    }
                    
-                   // Build trail from existing positions (max 100 points for rich history)
+                   // Build trail from existing positions (max 100 points for rich history).
+                   // Minimum distance gate (30m) prevents multilateration noise between
+                   // ADS-B source networks from accumulating as zigzag artefacts in the trail.
+                   const MIN_TRAIL_DIST_M = 30;
                    let trail: TrailPoint[] = existing?.trail || [];
-                   if (!existing || existing.lon !== newLon || existing.lat !== newLat) {
+                   const lastTrail = trail[trail.length - 1];
+                   const distFromLastTrail = lastTrail
+                       ? getDistanceMeters(lastTrail[1], lastTrail[0], newLat, newLon)
+                       : Infinity;
+                   if (distFromLastTrail > MIN_TRAIL_DIST_M) {
                        const speed = entity.detail?.track?.speed || 0;
                        trail = [...trail, [newLon, newLat, entity.hae || 0, speed] as TrailPoint].slice(-100);
                    }
@@ -650,17 +657,41 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 if (prev && curr && curr.ts > prev.ts) {
                     const elapsed = now - curr.ts;
                     const duration = curr.ts - prev.ts;
-                    const t = Math.min(elapsed / Math.max(duration, 100), 2.5); 
+                    // Cap at 1.0× — beyond the measured update interval we switch to
+                    // physics-based dead reckoning using the aircraft's own course/speed
+                    // rather than overshooting the geometric interpolation.
+                    const t = Math.min(elapsed / Math.max(duration, 100), 1.0);
 
                     targetLon = prev.lon + (curr.lon - prev.lon) * t;
                     targetLat = prev.lat + (curr.lat - prev.lat) * t;
+
+                    // Dead reckoning: once we've exhausted the measured interval,
+                    // project forward using course + speed from the track message.
+                    if (elapsed > duration && entity.speed > 1.0) {
+                        const overrun = (elapsed - duration) / 1000; // seconds past last update
+                        const courseRad = (entity.course || 0) * Math.PI / 180;
+                        const R = 6_371_000;
+                        const latRad = entity.lat * Math.PI / 180;
+                        const distM = entity.speed * overrun;
+                        const dLat = (distM * Math.cos(courseRad)) / R;
+                        const dLon = (distM * Math.sin(courseRad)) / (R * Math.cos(latRad));
+                        targetLat = entity.lat + dLat * (180 / Math.PI);
+                        targetLon = entity.lon + dLon * (180 / Math.PI);
+                    }
                 }
 
                 let visual = visualStateRef.current.get(entity.uid);
                 if (!visual) {
                     visual = { lat: targetLat, lon: targetLon };
                 } else {
-                    const SMOOTH_FACTOR = 0.05;
+                    // Velocity-adaptive EWMA: fast aircraft converge quickly to avoid
+                    // visible positional lag (83m at 500kts with α=0.05); slow vessels
+                    // keep the gentle smoothing. Applied to position only — heading
+                    // smoothing is handled separately via lerpAngle in the update handler.
+                    const speedKts = entity.speed * 1.94384;
+                    const SMOOTH_FACTOR = speedKts > 200 ? 0.15 :
+                                         speedKts > 50  ? 0.10 :
+                                                          0.05;
                     visual.lat = visual.lat + (targetLat - visual.lat) * SMOOTH_FACTOR;
                     visual.lon = visual.lon + (targetLon - visual.lon) * SMOOTH_FACTOR;
                 }
