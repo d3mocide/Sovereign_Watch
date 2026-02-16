@@ -7,9 +7,9 @@ interface PollingAreaVisualizationProps {
 }
 
 export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> = ({ center, radiusNm }) => {
-    if (!center) return null;
-
     const shapes = useMemo(() => {
+        if (!center) return null;
+
         // Constants
         const NM_TO_DEG = 1 / 60;
         
@@ -67,7 +67,10 @@ export const PollingAreaVisualization: React.FC<PollingAreaVisualizationProps> =
         };
     }, [center, radiusNm]);
 
+    if (!center || !shapes) return null;
+
     return (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <Source id="polling-area-source" type="geojson" data={shapes as any}>
             {/* Maritime Box - Green Solid Line */}
             <Layer

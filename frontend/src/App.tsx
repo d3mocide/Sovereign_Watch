@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import TacticalMap from './components/map/TacticalMap'
 import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
@@ -27,15 +27,26 @@ function App() {
     showSea: true,
   });
   
+  // Velocity Vector Toggle
+  const [showVelocityVectors, setShowVelocityVectors] = useState(() => {
+    const saved = localStorage.getItem('showVelocityVectors');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
+  const handleVelocityVectorToggle = useCallback(() => {
+    setShowVelocityVectors((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem('showVelocityVectors', JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
+  
   // Intelligence feed events
   const [events, setEvents] = useState<IntelEvent[]>([]);
   
   // Mission management state
-  const [missionProps, setMissionProps] = useState<any>(null);
+  const [missionProps, setMissionProps] = useState<unknown>(null);
   
-  // Map Ref for potential imperative actions (future: centering)
-  const mapRef = useRef<any>(null);
-
   // Add new event to feed (max 50 events)
   const addEvent = useCallback((event: Omit<IntelEvent, 'id' | 'time'>) => {
     setEvents(prev => [{
@@ -53,7 +64,7 @@ function App() {
 
   return (
     <MainHud
-      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} health={health} />}
+      topBar={<TopBar alertsCount={alertsCount} location={missionProps?.currentMission} health={health} showVelocityVectors={showVelocityVectors} onToggleVelocityVectors={handleVelocityVectorToggle} />}
       leftSidebar={
         <SidebarLeft 
           trackCounts={trackCounts}
@@ -69,7 +80,7 @@ function App() {
           entity={selectedEntity} 
           onClose={() => setSelectedEntity(null)} 
           onCenterMap={(lat, lon) => {
-            console.log("Centering on:", lat, lon);
+            // console.log("Centering on:", lat, lon);
             // Imperative map centering could be handled here via a prop to TacticalMap
           }}
         />
@@ -82,6 +93,7 @@ function App() {
           selectedEntity={selectedEntity}
           onEntitySelect={setSelectedEntity}
           onMissionPropsReady={setMissionProps}
+          showVelocityVectors={showVelocityVectors}
       />
     </MainHud>
   )

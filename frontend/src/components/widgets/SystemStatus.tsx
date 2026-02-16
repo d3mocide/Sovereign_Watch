@@ -22,11 +22,11 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts }) => {
            
            <div className="flex gap-4 text-right">
               <div className="flex flex-col items-end">
-                  <span className="text-[8px] text-air-cyan uppercase font-bold tracking-wider">Aviation</span>
+                  <span className="text-[8px] text-air-accent uppercase font-bold tracking-wider">Aviation</span>
                   <span className="text-sm font-bold text-white/90 tabular-nums leading-none">{trackCounts.air}</span>
               </div>
               <div className="flex flex-col items-end">
-                  <span className="text-[8px] text-sea-green uppercase font-bold tracking-wider">Maritime</span>
+                  <span className="text-[8px] text-sea-accent uppercase font-bold tracking-wider">Maritime</span>
                   <span className="text-sm font-bold text-white/90 tabular-nums leading-none">{trackCounts.sea}</span>
               </div>
            </div>
@@ -35,11 +35,11 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts }) => {
         {/* Visual Bar */}
         <div className="h-1.5 w-full bg-white/10 rounded-full flex overflow-hidden">
            <div 
-             className="h-full bg-air-cyan transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(0,255,255,0.5)]" 
+             className="h-full bg-air-accent transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(0,255,65,0.5)]" 
              style={{ width: `${airPercent}%` }} 
            />
            <div 
-             className="h-full bg-sea-green transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(0,255,100,0.5)]" 
+             className="h-full bg-sea-accent transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(0,255,255,0.5)]" 
              style={{ width: `${seaPercent}%` }} 
            />
         </div>

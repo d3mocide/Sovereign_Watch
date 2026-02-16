@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Crosshair, Save, Home, MapPin } from 'lucide-react';
 
 interface MapContextMenuProps {

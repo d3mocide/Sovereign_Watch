@@ -21,9 +21,9 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
       
       <div className="grid grid-cols-2 gap-2 p-3"> {/* Added p-3 here to maintain padding for the grid */}
         {/* Aircraft Filter */}
-        <label className={`group flex cursor-pointer items-center justify-between rounded border p-2 transition-all ${filters.showAir ? 'border-air-cyan/30 bg-air-cyan/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+        <label className={`group flex cursor-pointer items-center justify-between rounded border p-2 transition-all ${filters.showAir ? 'border-air-accent/30 bg-air-accent/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
           <div className="flex items-center gap-2">
-            <Plane size={14} className={filters.showAir ? 'text-air-cyan' : 'text-white/20'} />
+            <Plane size={14} className={filters.showAir ? 'text-air-accent' : 'text-white/20'} />
             <span className={`text-[10px] font-bold tracking-widest ${filters.showAir ? 'text-white' : 'text-white/40'}`}>AIR</span>
           </div>
           
@@ -33,15 +33,15 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
             checked={filters.showAir}
             onChange={(e) => onFilterChange('showAir', e.target.checked)}
           />
-          <div className={`h-3 w-6 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out relative ${filters.showAir ? 'bg-air-cyan' : 'bg-white/10'}`}>
+          <div className={`h-3 w-6 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out relative ${filters.showAir ? 'bg-air-accent' : 'bg-white/10'}`}>
             <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showAir ? 'left-3.5' : 'left-0.5'}`} />
           </div>
         </label>
 
         {/* Vessel Filter */}
-        <label className={`group flex cursor-pointer items-center justify-between rounded border p-2 transition-all ${filters.showSea ? 'border-sea-green/30 bg-sea-green/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+        <label className={`group flex cursor-pointer items-center justify-between rounded border p-2 transition-all ${filters.showSea ? 'border-sea-accent/30 bg-sea-accent/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
           <div className="flex items-center gap-2">
-            <Ship size={14} className={filters.showSea ? 'text-sea-green' : 'text-white/20'} />
+            <Ship size={14} className={filters.showSea ? 'text-sea-accent' : 'text-white/20'} />
             <span className={`text-[10px] font-bold tracking-widest ${filters.showSea ? 'text-white' : 'text-white/40'}`}>SEA</span>
           </div>
           
@@ -51,7 +51,7 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
             checked={filters.showSea}
             onChange={(e) => onFilterChange('showSea', e.target.checked)}
           />
-          <div className={`h-3 w-6 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out relative ${filters.showSea ? 'bg-sea-green' : 'bg-white/10'}`}>
+          <div className={`h-3 w-6 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out relative ${filters.showSea ? 'bg-sea-accent' : 'bg-white/10'}`}>
             <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showSea ? 'left-3.5' : 'left-0.5'}`} />
           </div>
         </label>

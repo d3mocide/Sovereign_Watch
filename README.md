@@ -1,4 +1,4 @@
-# Sovereign Watch: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.2.0: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 1 (Infrastructure & Foundation) - _Active Development_
 
@@ -130,6 +130,7 @@ To update the Database Schema:
 2.  **Reset** (Warning: Destructive):
     docker compose down -v
     docker compose up -d db
+
     ```
 
     ```

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface MissionLocation {
   id: string;
@@ -13,19 +13,15 @@ const STORAGE_KEY = 'sovereign_mission_locations';
 const MAX_SAVED_MISSIONS = 50;
 
 export const useMissionLocations = () => {
-  const [savedMissions, setSavedMissions] = useState<MissionLocation[]>([]);
-
-  // Load from localStorage on mount
-  useEffect(() => {
+  const [savedMissions, setSavedMissions] = useState<MissionLocation[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setSavedMissions(JSON.parse(stored));
-      }
+      return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Failed to load saved missions:', error);
+      return [];
     }
-  }, []);
+  });
 
   // Persist to localStorage whenever missions change
   useEffect(() => {
@@ -36,7 +32,7 @@ export const useMissionLocations = () => {
     }
   }, [savedMissions]);
 
-  const saveMission = (mission: Omit<MissionLocation, 'id' | 'created_at'>) => {
+  const saveMission = useCallback((mission: Omit<MissionLocation, 'id' | 'created_at'>) => {
     const newMission: MissionLocation = {
       ...mission,
       id: `mission-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -50,17 +46,17 @@ export const useMissionLocations = () => {
     });
 
     return newMission;
-  };
+  }, []);
 
-  const deleteMission = (id: string) => {
+  const deleteMission = useCallback((id: string) => {
     setSavedMissions((prev) => prev.filter((m) => m.id !== id));
-  };
+  }, []);
 
-  const updateMission = (id: string, updates: Partial<Omit<MissionLocation, 'id' | 'created_at'>>) => {
+  const updateMission = useCallback((id: string, updates: Partial<Omit<MissionLocation, 'id' | 'created_at'>>) => {
     setSavedMissions((prev) =>
       prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
     );
-  };
+  }, []);
 
   return {
     savedMissions,

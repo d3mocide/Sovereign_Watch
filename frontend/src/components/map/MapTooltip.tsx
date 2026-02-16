@@ -9,8 +9,8 @@ interface MapTooltipProps {
 
 export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isShip = entity.type.includes('S');
-  const accentColor = isShip ? 'text-sea-green' : 'text-air-cyan';
-  const borderColor = isShip ? 'border-sea-green/50' : 'border-air-cyan/50';
+  const accentColor = isShip ? 'text-sea-accent' : 'text-air-accent';
+  const borderColor = isShip ? 'border-sea-accent/50' : 'border-air-accent/50';
 
   return (
     <div

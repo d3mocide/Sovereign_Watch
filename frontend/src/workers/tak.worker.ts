@@ -1,33 +1,17 @@
-import { load, Type, Root } from 'protobufjs';
+import { load, Type } from 'protobufjs';
 
 // --- State ---
 let takType: Type | null = null;
-let processing = false;
+// let processing = false;
 
 // --- Constants ---
 // Magic Bytes: 0xbf 0x01 0xbf
-const MAGIC_BYTES = new Uint8Array([0xbf, 0x01, 0xbf]);
+// const MAGIC_BYTES = new Uint8Array([0xbf, 0x01, 0xbf]);
 
 // --- Initialization ---
 // We can't rely on standard fetch relative paths easily in workers without some Vite magic
 // or passing the absolute URL from the main thread.
 // For now, we'll assume the main thread passes the proto definition string or URL.
-// But valid strategy: Use a self-hosted string or a known URL.
-// Better: Compile the proto to JSON/JS and bundle it.
-// FASTEST PATH: Just embed the JSON descriptor here to avoid network fetches in the worker startup.
-// ... But user asked for .proto.
-// Let's try fetching relative to the worker script context.
-
-const initialize = async () => {
-    try {
-        // In Vite, assets in `public` or imported via `?url` are best.
-        // We'll trust the main thread might initialize us or we fetch from a known path.
-        // For MVP, let's try fetching from the generated bundle location if possible.
-        // Simplify: The main thread will pass the Schema URL in the "init" message.
-    } catch (err) {
-        console.error("Worker Init Failed:", err);
-    }
-};
 
 // --- Message Handling ---
 self.onmessage = async (e: MessageEvent) => {
@@ -38,7 +22,7 @@ self.onmessage = async (e: MessageEvent) => {
         try {
             const root = await load(protoUrl);
             takType = root.lookupType("tak.proto.TakMessage");
-            console.log("TAK Worker: Schema Loaded");
+            // console.log("TAK Worker: Schema Loaded");
             self.postMessage({ type: 'status', status: 'ready' });
         } catch (err) {
             console.error("TAK Worker: Schema Load Failed", err);
@@ -76,12 +60,12 @@ self.onmessage = async (e: MessageEvent) => {
                 self.postMessage({ type: 'entity_update', data: object });
                 
             } catch (parseErr) {
-                console.warn("TAK Parse Error:", parseErr);
+                // console.warn("TAK Parse Error:", parseErr);
             }
         }
     }
 };
 
-function str(err: any): string {
+function str(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
 }

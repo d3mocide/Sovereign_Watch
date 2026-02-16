@@ -44,21 +44,21 @@ class MultiSourcePoller:
                 name="adsb_fi",
                 base_url="https://opendata.adsb.fi/api/v3",
                 url_format="/lat/{lat}/lon/{lon}/dist/{radius}",
-                rate_limit_period=1.5,  # Can handle faster rates
+                rate_limit_period=1.0,  # Aggressive polling (was 1.5)
                 priority=1
             ),
             AviationSource(
                 name="adsb_lol",
                 base_url="https://api.adsb.lol/v2",
                 url_format="/point/{lat}/{lon}/{radius}",
-                rate_limit_period=1.5,
+                rate_limit_period=1.0,  # Aggressive polling (was 1.5)
                 priority=1
             ),
             AviationSource(
                 name="airplanes_live",
                 base_url="https://api.airplanes.live/v2",
                 url_format="/point/{lat}/{lon}/{radius}",
-                rate_limit_period=3.0,  # Conservative - they're strict
+                rate_limit_period=2.0,  # Reduced from 3.0
                 priority=2  # Lower priority = use as backup
             ),
         ]

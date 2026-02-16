@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getMissionArea } from '../api/missionArea';
 
 export interface SystemHealth {
@@ -8,11 +8,11 @@ export interface SystemHealth {
 }
 
 export const useSystemHealth = (intervalMs = 5000) => {
-    const [health, setHealth] = useState<SystemHealth>({
+    const [health, setHealth] = useState<SystemHealth>(() => ({
         latency: 0,
         status: 'online', // Assume online initially to prevent flash of error
         lastCheck: Date.now()
-    });
+    }));
 
     useEffect(() => {
         const checkHealth = async () => {
@@ -32,7 +32,7 @@ export const useSystemHealth = (intervalMs = 5000) => {
                     status,
                     lastCheck: Date.now()
                 });
-            } catch (error) {
+            } catch {
                 setHealth({
                     latency: 0, // No response
                     status: 'offline',

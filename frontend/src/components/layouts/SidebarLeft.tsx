@@ -10,8 +10,8 @@ interface SidebarLeftProps {
   trackCounts: { air: number; sea: number };
   filters: { showAir: boolean; showSea: boolean };
   onFilterChange: (key: 'showAir' | 'showSea', value: boolean) => void;
-  events: any[];
-  missionProps?: any;
+  events: unknown[];
+  missionProps?: unknown;
   health?: SystemHealth;
 }
 

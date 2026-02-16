@@ -71,9 +71,10 @@ class PollerService:
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
-            await self.pubsub.close()
+            # aclose() is the new async close method for redis-py 5.x+
+            await self.pubsub.aclose() if hasattr(self.pubsub, 'aclose') else await self.pubsub.close()
         if self.redis_client:
-            await self.redis_client.close()
+            await self.redis_client.aclose() if hasattr(self.redis_client, 'aclose') else await self.redis_client.close()
 
     def calculate_polling_points(self):
         """Calculate polling coverage points based on current mission area."""
@@ -85,20 +86,38 @@ class PollerService:
     
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""
-        try:
-            async for message in self.pubsub.listen():
-                if message["type"] == "message":
-                    try:
-                        mission = json.loads(message["data"])
-                        old_center = (self.center_lat, self.center_lon, self.radius_nm)
-                        self.center_lat = mission["lat"]
-                        self.center_lon = mission["lon"]
-                        self.radius_nm = mission["radius_nm"]
-                        logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
-                    except Exception as e:
-                        logger.error(f"Failed to parse mission update: {e}")
-        except asyncio.CancelledError:
-            logger.info("Navigation listener cancelled")
+        while self.running:
+            try:
+                # Re-subscribe if connection was lost
+                if not self.pubsub.connection:
+                     await self.pubsub.subscribe("navigation-updates")
+
+                async for message in self.pubsub.listen():
+                    if not self.running: 
+                        break
+                        
+                    if message["type"] == "message":
+                        try:
+                            mission = json.loads(message["data"])
+                            old_center = (self.center_lat, self.center_lon, self.radius_nm)
+                            self.center_lat = mission["lat"]
+                            self.center_lon = mission["lon"]
+                            self.radius_nm = mission["radius_nm"]
+                            logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                        except Exception as e:
+                            logger.error(f"Failed to parse mission update: {e}")
+            except (redis.ConnectionError, asyncio.CancelledError):
+                if self.running:
+                    logger.warning("Redis connection lost in listener. Retrying in 5s...")
+                    await asyncio.sleep(5)
+                else:
+                    break
+            except Exception as e:
+                logger.error(f"Unexpected error in navigation listener: {e}")
+                if self.running:
+                    await asyncio.sleep(5)
+                else:
+                    break
 
     async def loop(self):
         """Main Event Loop - Dynamic polling based on mission area."""
@@ -114,9 +133,9 @@ class PollerService:
             await self.process_point(lat, lon, radius)
             
             # Sleep based on source rate limits
-            # With 3 sources at 2s each, we cycle every 6s which means each point ~18s
-            # That's way better than 5 minutes!
-            await asyncio.sleep(2.0) 
+            # With 3 sources at 1s each, we can cycle much faster.
+            # Reduced to 0.5s for high-frequency updates.
+            await asyncio.sleep(0.5) 
 
     async def process_point(self, lat: float, lon: float, radius: int):
         """Poll a single point and publish aircraft to Kafka."""
@@ -140,11 +159,17 @@ class PollerService:
         if not ac.get("lat") or not ac.get("lon"):
             return None
             
+        # Calculate TRUE source time (subtract latency)
+        # 'seen_pos' = seconds since position update
+        # 'seen' = seconds since any update
+        latency = float(ac.get("seen_pos") or ac.get("seen") or 0.0)
+        source_ts = time.time() - latency
+            
         return {
             "uid": ac.get("hex", "").lower(),
             "type": "a-f-A-C-F", # Simplified default
             "how": "m-g",
-            "time": time.time() * 1000, # MS? API uses now() which is TS.
+            "time": source_ts * 1000, # MS timestamp adjusted for age
             # Python time.time() is float seconds. JS/TAK usually likes MS or ISO.
             # Let's use ISO string to be safe or just matching Benthos 'now()'
             # Benthos now() is RFC3339 string.

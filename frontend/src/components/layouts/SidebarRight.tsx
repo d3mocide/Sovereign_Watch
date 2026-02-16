@@ -2,6 +2,7 @@ import React from 'react';
 import { CoTEntity } from '../../types';
 import { Compass } from '../widgets/Compass';
 import { Crosshair, Map as MapIcon, Shield, Info, Activity, Terminal } from 'lucide-react';
+import { TimeTracked } from './TimeTracked';
 
 interface SidebarRightProps {
   entity: CoTEntity | null;
@@ -17,9 +18,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (!entity) return null;
 
   const isShip = entity.type.includes('S');
-  const accentColor = isShip ? 'text-sea-green' : 'text-air-cyan';
-  const accentBg = isShip ? 'bg-gradient-to-br from-sea-green/20 to-sea-green/5' : 'bg-gradient-to-br from-air-cyan/20 to-air-cyan/5';
-  const accentBorder = isShip ? 'border-sea-green/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-cyan/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+  const accentColor = isShip ? 'text-sea-accent' : 'text-air-accent';
+  const accentBg = isShip ? 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5' : 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
+  const accentBorder = isShip ? 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500">
@@ -108,8 +109,19 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           <div className={`grid ${isShip ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
              <div className="bg-white/5 border border-white/5 p-2 rounded">
                 <span className="text-[9px] text-white/30 block mb-1">SPEED_KTS</span>
-                <span className={`text-mono-base font-bold ${accentColor} tabular-nums`}>
-                    {(entity.speed * 1.94384).toFixed(1)}
+                <span className={`text-mono-base font-bold tabular-nums`} style={isShip ? {
+                    color: `rgb(${(() => {
+                        const kts = entity.speed * 1.94384;
+                        if (kts <= 2) return '0,50,150';
+                        if (kts <= 8) return '0,100,200';
+                        if (kts <= 15) return '0,150,255';
+                        if (kts <= 25) return '200,255,255';
+                        return '255,255,255';
+                    })()})`
+                } : undefined}>
+                    <span className={isShip ? '' : accentColor}>
+                        {(entity.speed * 1.94384).toFixed(1)}
+                    </span>
                 </span>
              </div>
              <div className="bg-white/5 border border-white/5 p-2 rounded">
@@ -123,10 +135,14 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                    <span className="text-[9px] text-white/30 block mb-1">ALTITUDE_FT</span>
                    <span className={`text-mono-base font-bold tabular-nums ${(() => {
                         const ft = entity.altitude * 3.28084;
-                        if (ft < 200) return 'text-sky-400';
-                        if (ft < 5000) return 'text-yellow-400';
-                        if (ft < 25000) return 'text-orange-400';
-                        return 'text-red-400';
+                        const norm = Math.min(ft / 42650, 1.0);
+                        const g = Math.pow(norm, 0.4);
+                        if (g < 0.20) return 'text-green-500';
+                        if (g < 0.40) return 'text-lime-400';
+                        if (g < 0.60) return 'text-yellow-400';
+                        if (g < 0.80) return 'text-orange-400';
+                        if (g < 0.95) return 'text-red-500';
+                        return 'text-fuchsia-400';
                     })()}`}>
                        {entity.altitude > 0 ? Math.round(entity.altitude * 3.28084).toLocaleString() : 'GND'}
                    </span>
@@ -148,7 +164,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
              <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
                 <span className="text-[10px] text-white/40">TIME_TRACKED</span>
                 <span className="text-mono-xs text-white/80 tabular-nums">
-                   {((Date.now() - entity.lastSeen) / 1000).toFixed(1)}s
+                <span className="text-mono-xs text-white/80 tabular-nums">
+                   <TimeTracked lastSeen={entity.lastSeen} />
+                </span>
                 </span>
              </div>
              <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">

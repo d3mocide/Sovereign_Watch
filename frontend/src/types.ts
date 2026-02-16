@@ -1,4 +1,4 @@
-export type TrailPoint = [number, number, number]; // [lon, lat, altitude]
+export type TrailPoint = [number, number, number, number]; // [lon, lat, altitude, speed]
 
 export type CoTEntity = {
     uid: string;
@@ -9,7 +9,10 @@ export type CoTEntity = {
     course: number;
     speed: number;
     callsign: string;
+    time?: number; // Source Timestamp
     lastSeen: number; // Timestamp for staleness check
     trail: TrailPoint[]; // Position history for trail lines
-    detail?: any; // For extra properties that might be passed from the worker
+    uidHash: number; // Pre-computed phase offset for glow animation (avoids per-frame string ops)
+    detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
+    lastSourceTime?: number; // Latest timestamp from source (for ordering)
 };

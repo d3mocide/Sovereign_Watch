@@ -41,11 +41,11 @@ export const IntelFeed: React.FC<IntelFeedProps> = ({ events }) => {
               
               const accentColor = isAlert ? 'bg-alert-red' : 
                                  isLost ? 'bg-alert-amber' : 
-                                 isAir ? 'bg-air-cyan' : 'bg-sea-green';
+                                 isAir ? 'bg-air-accent' : 'bg-sea-accent';
               
               const borderLight = isAlert ? 'border-alert-red/30' : 
                                  isLost ? 'border-alert-amber/30' : 
-                                 isAir ? 'border-air-cyan/30' : 'border-sea-green/30';
+                                 isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
 
               return (
                 <div 
@@ -60,9 +60,9 @@ export const IntelFeed: React.FC<IntelFeedProps> = ({ events }) => {
                        <div className="flex items-center gap-2">
                           {isAlert ? <Bell size={10} className="text-alert-red" /> : 
                            isLost ? <TrendingDown size={10} className="text-alert-amber" /> : 
-                           <TrendingUp size={10} className={isAir ? 'text-air-cyan' : 'text-sea-green'} />}
+                           <TrendingUp size={10} className={isAir ? 'text-air-accent' : 'text-sea-accent'} />}
                           
-                          <span className={`text-[10px] font-bold tracking-widest uppercase ${isAlert ? 'text-alert-red' : isLost ? 'text-alert-amber' : isAir ? 'text-air-cyan' : 'text-sea-green'}`}>
+                          <span className={`text-[10px] font-bold tracking-widest uppercase ${isAlert ? 'text-alert-red' : isLost ? 'text-alert-amber' : isAir ? 'text-air-accent' : 'text-sea-accent'}`}>
                              {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
                           </span>
                        </div>

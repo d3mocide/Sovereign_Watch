@@ -7,9 +7,11 @@ interface TopBarProps {
     hasNewAlert?: boolean;
     location?: { lat: number; lon: number } | null;
     health?: SystemHealth;
+    showVelocityVectors?: boolean;
+    onToggleVelocityVectors?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, location, health }) => {
+export const TopBar: React.FC<TopBarProps> = ({ alertsCount, location, health, showVelocityVectors, onToggleVelocityVectors }) => {
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -111,6 +113,23 @@ export const TopBar: React.FC<TopBarProps> = ({ alertsCount, hasNewAlert, locati
                              <span className="text-[10px] font-bold text-hud-green tracking-widest">ENCRYPTED</span>
                         </div>
                     </div>
+
+                    {/* Velocity Vector Toggle */}
+                    {onToggleVelocityVectors && (
+                        <button
+                            onClick={onToggleVelocityVectors}
+                            className="group flex flex-col items-end gap-1 transition-all hover:scale-105 active:scale-95"
+                            title="Toggle velocity vectors"
+                        >
+                            <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-hud-green/50 transition-colors">Vec_Proj</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`h-1.5 w-1.5 rounded-full transition-all ${showVelocityVectors ? 'bg-hud-green shadow-[0_0_5px_#00ff41]' : 'bg-white/20'}`} />
+                                <span className={`text-[10px] font-bold tracking-widest transition-colors ${showVelocityVectors ? 'text-hud-green' : 'text-white/40'}`}>
+                                    {showVelocityVectors ? 'ACTIVE' : 'STANDBY'}
+                                </span>
+                            </div>
+                        </button>
+                    )}
                 </div>
 
                 {/* Alerts Indicator */}
