@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-02-16
+
+### Added
+
+- **Hybrid 3D Engine (Mapbox + CARTO):**
+  - **Dual-Mode Rendering:** Automatically switches between **Mapbox GL JS** (Photorealistic 3D) and **MapLibre GL** (Lightweight 2D) based on token availability.
+  - **CARTO Integration:** Implemented **CARTO Dark Matter** as the default high-performance basemap for disconnected/local-only operations.
+  - **3D Tactical Visualization:**
+    - **Altitude Stems:** Vertical "drop lines" connecting aircraft to their ground shadow for precise 3D spatial awareness.
+    - **Ground Shadows:** Dynamic projected shadows for airborne assets to aid depth perception.
+    - **Camera Control:** New Pitch ($0^{\circ}-85^{\circ}$) and Bearing controls for tactical perspective.
+
+### Changed
+
+- **Tactical Display Improvements (CoT Alignment Fix):**
+  - **Trail Geometry Alignment:** Icons now align with the _last two points_ of their history trail, ensuring perfect visual correlation with the ground track.
+  - **Rhumb Line Math:** Switched bearing calculations to Loxodrome formulas to match the Mercator projection exactly.
+  - **Rotation Correction:** Inverted rotation logic to reconcile DeckGL (CCW) with Compass (CW) coordinate systems.
+- **Visual Stylization:**
+  - **Solid AOT Lines:** Maritime boundaries converted to solid lines for better readability against the CARTO Dark Matter background.
+  - **Enhanced Trails:** Increased trail width (2.5px) and opacity (0.8) for better history tracking.
+
 ## [0.3.0] - 2026-02-15
 
 ### Added

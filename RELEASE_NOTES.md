@@ -1,3 +1,63 @@
+# Sovereign Watch v0.4.0 Release Notes
+
+**"Hybrid Reality" Update**
+
+Version 0.4.0 brings true 3D tactical awareness to Sovereign Watch. We've introduced a **Hybrid Rendering Engine** that seamlessly bridges high-fidelity photogrammetry (Mapbox) with high-performance vector basemaps (CARTO), ensuring mission capability in both connected and disconnected environments.
+
+## 🌟 Key Features
+
+### 1. Hybrid 3D Engine (Mapbox + CARTO)
+
+The Tactical Map now operates in two distinct modes based on your environment:
+
+- **Photorealistic 3D (Mapbox):** Full terrain depth, satellite imagery, and atmospheric lighting when connected.
+- **Tactical Vector (CARTO Dark Matter):** A lightweight, high-contrast 2D/2.5D mode for local-only operations.
+- **Seamless Switch:** The engine automatically degrades to CARTO if Mapbox tokens are unavailable, ensuring zero downtime.
+
+### 2. Tactical Precision (CoT Alignment)
+
+We've eliminated the "crabbing" effect where icons appeared misaligned with their movement paths.
+
+- **Trail Geometry Alignment:** Icons now align with the _actual_ ground track (History Trail) rather than reported heading, providing 100% visual truth.
+- **Rhumb Line Math:** Bearing calculations now use Loxodrome formulas to match the Mercator projection perfectly.
+- **Inverted Rotation:** Corrected the coordinate system mismatch between DeckGL (CCW) and Compass (CW).
+
+### 3. Immersive 3D Visualization
+
+Even in 2D mode, we now simulate depth to improve spatial awareness:
+
+- **Altitude Stems:** Vertical "drop lines" connect aircraft to the ground, visually anchoring high-altitude targets.
+- **Dynamic Shadows:** Projected ground shadows help operators instinctively gauge altitude differences.
+- **Camera Control:** New Pitch ($0^{\circ}-85^{\circ}$) and Bearing controls allow for "on-the-deck" tactical views.
+
+### 4. Visibility Enhancements
+
+- **Solid AOT Lines:** Maritime boundaries are now solid, authoritative lines rather than dashes.
+- **Enhanced Trails:** History trails are thicker (`2.5px`), brighter, and more opaque (`0.8`), making them clearly visible against the dark map.
+
+---
+
+## 🔧 Technical Details
+
+- **Version:** v0.4.0
+- **Release Date:** 2026-02-16
+- **Key Changes:**
+  - Implemented `HybridEngine` logic in `TacticalMap.tsx`.
+  - Refactored `getBearing` to support Rhumb Lines.
+  - Inverted `getAngle` rotation logic.
+
+## 🚀 Upgrade Instructions
+
+```bash
+# 1. Pull latest changes
+git pull origin dev
+
+# 2. Rebuild Frontend
+docker compose up -d --build frontend
+```
+
+---
+
 # Sovereign Watch v0.3.0 Release Notes
 
 **"Tactical Persistence" Update**

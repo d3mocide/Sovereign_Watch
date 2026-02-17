@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
-export interface MissionLocation {
-  id: string;
-  name: string;
-  lat: number;
-  lon: number;
-  radius_nm: number;
-  created_at: string;
-}
+import { MissionLocation } from '../types';
 
 const STORAGE_KEY = 'sovereign_mission_locations';
 const MAX_SAVED_MISSIONS = 50;

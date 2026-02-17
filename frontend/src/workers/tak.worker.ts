@@ -4,6 +4,20 @@ import { load, Type } from 'protobufjs';
 let takType: Type | null = null;
 // let processing = false;
 
+// Batching: accumulate decoded entities and flush periodically
+let batch: any[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const BATCH_SIZE = 10;
+const FLUSH_INTERVAL_MS = 50;
+
+function flushBatch() {
+  if (batch.length > 0) {
+    self.postMessage({ type: "entity_batch", data: batch });
+    batch = [];
+  }
+  flushTimer = null;
+}
+
 // --- Constants ---
 // Magic Bytes: 0xbf 0x01 0xbf
 // const MAGIC_BYTES = new Uint8Array([0xbf, 0x01, 0xbf]);
@@ -57,7 +71,12 @@ self.onmessage = async (e: MessageEvent) => {
                 // Return Parsed Data
                 // Optimization: In real world, we would write to a SharedArrayBuffer here.
                 // For FE-05 MVP, we just return the object.
-                self.postMessage({ type: 'entity_update', data: object });
+                batch.push(object);
+                if (batch.length >= BATCH_SIZE) {
+                  flushBatch();
+                } else if (!flushTimer) {
+                  flushTimer = setTimeout(flushBatch, FLUSH_INTERVAL_MS);
+                }
                 
             } catch (parseErr) {
                 // console.warn("TAK Parse Error:", parseErr);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MapPin, Trash2, ChevronDown, Crosshair } from 'lucide-react';
-import { MissionLocation } from '../../hooks/useMissionLocations';
+import { MissionLocation } from '../../types';
 
 // Mission Presets - aligned with documentation
 const MISSION_PRESETS = [

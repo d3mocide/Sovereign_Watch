@@ -16,3 +16,28 @@ export type CoTEntity = {
     detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
     lastSourceTime?: number; // Latest timestamp from source (for ordering)
 };
+
+export interface IntelEvent {
+    id: string;
+    time: Date;
+    type: 'new' | 'lost' | 'alert';
+    message: string;
+    entityType?: 'air' | 'sea';
+}
+
+export interface MissionLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  radius_nm: number;
+  created_at: string;
+}
+
+export interface MissionProps {
+    savedMissions: MissionLocation[];
+    currentMission: { lat: number; lon: number; radius_nm: number; } | null;
+    onSwitchMission: (mission: MissionLocation) => void;
+    onDeleteMission: (id: string) => void;
+    onPresetSelect: (radius: number) => void;
+}

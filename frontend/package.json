@@ -1,7 +1,7 @@
 {
   "name": "sovereign-watch-ui",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,8 +14,10 @@
     "@deck.gl/layers": "^8.9.0",
     "@deck.gl/mapbox": "^8.9.0",
     "@deck.gl/react": "^8.9.0",
+    "@types/mapbox-gl": "^3.4.1",
     "deck.gl": "^8.9.0",
     "lucide-react": "^0.300.0",
+    "mapbox-gl": "^3.18.1",
     "maplibre-gl": "^3.0.0",
     "protobufjs": "^7.5.4",
     "react": "^18.2.0",

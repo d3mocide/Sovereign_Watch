@@ -36,7 +36,7 @@ ARBI_MIN_DELTA_S = 0.8
 # Minimum spatial displacement (metres) that always bypasses the time gate.
 # Handles the edge case where an aircraft's position changes significantly
 # within the same 500ms window (very fast, low-altitude targets).
-ARBI_MIN_DIST_M = 50.0
+
 
 # How long (seconds) to retain an entry in the cache after last publish.
 # Entries older than this are evicted to reclaim memory for departed aircraft.
@@ -185,7 +185,7 @@ class PollerService:
         for hex_id in stale:
             del self._arbi_cache[hex_id]
 
-    def _should_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> bool:
+    def _should_publish(self, hex_id: str, source_ts: float) -> bool:
         """
         Arbitration gate: return True only if this position update is worth
         publishing to Kafka.
@@ -225,6 +225,12 @@ class PollerService:
         while self.running:
             try:
                 polling_points = self.calculate_polling_points()
+                if not polling_points:
+                    await asyncio.sleep(1)
+                    continue
+                    
+                # Ensure index is in range (handles mission area changes that shrink the point list)
+                current_point_idx %= len(polling_points)
                 lat, lon, radius = polling_points[current_point_idx]
                 current_point_idx = (current_point_idx + 1) % len(polling_points)
 
@@ -298,7 +304,7 @@ class PollerService:
             msg_lat = tak_msg["point"]["lat"]
             msg_lon = tak_msg["point"]["lon"]
 
-            if not self._should_publish(hex_id, source_ts, msg_lat, msg_lon):
+            if not self._should_publish(hex_id, source_ts):
                 continue
 
             self._record_publish(hex_id, source_ts, msg_lat, msg_lon)

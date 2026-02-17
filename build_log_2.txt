@@ -1,0 +1,12 @@
+
+> sovereign-watch-ui@0.4.0 build
+> tsc && vite build
+
+src/App.tsx(98,25): error TS6133: 'lat' is declared but its value is never read.
+src/App.tsx(98,30): error TS6133: 'lon' is declared but its value is never read.
+src/components/layouts/SidebarLeft.tsx(38,11): error TS2322: Type '{ id: string; name: string; lat: number; lon: number; radius_nm: number; }[]' is not assignable to type 'MissionLocation[]'.
+  Property 'created_at' is missing in type '{ id: string; name: string; lat: number; lon: number; radius_nm: number; }' but required in type 'MissionLocation'.
+src/components/layouts/SidebarLeft.tsx(41,11): error TS2322: Type '(id: string, e: MouseEvent<Element, MouseEvent>) => void' is not assignable to type '(id: string) => void'.
+  Target signature provides too few arguments. Expected 2 or more, but got 1.
+src/components/map/TacticalMap.tsx(1293,13): error TS2578: Unused '@ts-expect-error' directive.
+src/components/map/TacticalMap.tsx(1375,17): error TS2554: Expected 2 arguments, but got 0.

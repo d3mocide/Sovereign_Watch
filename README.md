@@ -1,4 +1,4 @@
-# Sovereign Watch v0.3.0: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.4.0: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 1 (Infrastructure & Foundation) - _Active Development_
 
@@ -23,7 +23,9 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
 
     ```bash
     cp .env.example .env
-    # Edit .env with your keys (Airplanes.live, Mapbox, etc.)
+    # Edit .env with your keys:
+    # - AISSTREAM_API_KEY (Maritime)
+    # - VITE_MAPBOX_TOKEN (3D Terrain)
     ```
 
 2.  **Boot System**:
@@ -68,6 +70,7 @@ graph TD
 ## 🛡️ Tactical Design ("Sovereign Glass")
 
 - **Chevron-First Architecture**: Unified directional trackers for all assets; no legacy dot markers.
+- **Hybrid 3D Engine**: Seamlessly switches between **Mapbox 3D** (Terrain/Satellite) and **CARTO Dark Matter** (Vector/Local) based on configuration.
 - **High-Fidelity HUD**: Integrated global TopBar with synchronized temporal reference (UTC) and live state metadata.
 - **Immersion Layers**: Micro-noise texture and tactical grid overlays for a professional surveillance aesthetic.
 - **Interactive Vectors**: Pickable chevrons for target locking, historic trail inspection, and telemetry drill-down.
@@ -88,10 +91,8 @@ The Tactical Map uses a "thermal" gradient to indicate flight altitude at a glan
 - 🟠 **Orange**: Mid-Altitude Climb/Descent (< 25,000ft)
 - 🔴 **Red**: High-Altitude Cruise (> 25,000ft)
 
-### Environmental Interaction
-
-- **2D Mode**: Standard top-down tactical view for area overview.
-- **3D Mode**: $45^{\circ}$ perspective view for spatial awareness and altitude visualization.
+- **2D Mode**: Standard top-down tactical view (CARTO Dark Matter default) for area overview.
+- **3D Mode**: $45^{\circ}$ perspective view with **Altitude Stems**, **Ground Shadows**, and Terrain (if Mapbox enabled).
 - **Trails**: 3D history lines showing the recent flight path of selected assets.
 
 ## 📂 Directory Structure

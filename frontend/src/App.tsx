@@ -4,17 +4,8 @@ import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
 import { MainHud } from './components/layouts/MainHud'
 import { TopBar } from './components/layouts/TopBar'
-import { CoTEntity } from './types'
+import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { useSystemHealth } from './hooks/useSystemHealth'
-
-// Event type for intelligence feed
-interface IntelEvent {
-    id: string;
-    time: Date;
-    type: 'new' | 'lost' | 'alert';
-    message: string;
-    entityType?: 'air' | 'sea';
-}
 
 function App() {
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0 });
@@ -56,10 +47,11 @@ function App() {
   }, []);
   
   // Intelligence feed events
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [events, setEvents] = useState<IntelEvent[]>([]);
   
   // Mission management state
-  const [missionProps, setMissionProps] = useState<unknown>(null);
+  const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
   
   // Add new event to feed (max 50 events)
   const addEvent = useCallback((event: Omit<IntelEvent, 'id' | 'time'>) => {
@@ -103,7 +95,7 @@ function App() {
         <SidebarRight 
           entity={selectedEntity} 
           onClose={() => setSelectedEntity(null)} 
-          onCenterMap={(lat, lon) => {
+          onCenterMap={() => {
             // console.log("Centering on:", lat, lon);
             // Imperative map centering could be handled here via a prop to TacticalMap
           }}

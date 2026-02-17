@@ -22,9 +22,9 @@ export default defineConfig({
       }
     }
   },
-  resolve: {
-    alias: {
-      'mapbox-gl': 'maplibre-gl'
-    }
-  }
+  // resolve: {
+  //   alias: {
+  //     'mapbox-gl': 'maplibre-gl'
+  //   }
+  // }
 })
