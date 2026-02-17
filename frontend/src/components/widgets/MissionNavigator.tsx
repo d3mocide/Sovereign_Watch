@@ -7,8 +7,7 @@ const MISSION_PRESETS = [
   { radius: 30, icon: '✈️', label: 'Airport Ops', color: 'text-cyan-400' },
   { radius: 100, icon: '🏙️', label: 'Metro Area', color: 'text-blue-400' },
   { radius: 150, icon: '🌊', label: 'Coastal Region', color: 'text-emerald-400' },
-  { radius: 250, icon: '🛤️', label: 'Transit Corridor', color: 'text-amber-400' },
-  { radius: 300, icon: '🌐', label: 'Maximum Range', color: 'text-red-400' },
+  { radius: 250, icon: '🌐', label: 'Maximum Range', color: 'text-red-400' },
 ];
 
 interface MissionNavigatorProps {

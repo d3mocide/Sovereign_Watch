@@ -1,6 +1,41 @@
-# Changelog
+## [0.5.0] - 2026-02-16
 
-All notable changes to this project will be documented in this file.
+### Added
+
+- **Historian Service (Backend):**
+  - **TimescaleDB Integration:** Persistent storage for all Kafka track messages.
+  - **Search API:** `GET /api/tracks/search` for fuzzy-finding entities by callsign/Hex/Type.
+  - **Replay API:** `GET /api/tracks/replay` for retrieving historical track segments.
+  - **Batch Ingestion:** Robust protobuf decoding and batch writing to DB.
+- **Frontend Interaction Suite:**
+  - **Search Widget:** Sidebar component for searching live and historical entities.
+  - **Replay System:** "Time Travel" controls to playback historical situations (1h, 6h, 12h, 24h windows).
+  - **Follow Mode:** "Center View" functionality to lock camera on a moving target.
+  - **Live Updates:** Real-time property updates for selected entities in the sidebar.
+  - **Unified 3D Centering:** Implemented `getCompensatedCenter` to ensure the camera focus remains on the aircraft chevron rather than the ground, accounting for pitch and altitude.
+- **Synchronized Telemetry:** Sidebar numbers now update at 30Hz in perfect lockstep with the map's interpolated camera movement.
+- **Intelligent Zoom Defaults:** The "Center" action now uses **Zoom 12** as its tactical default and respects manual zoom levels within the 12-18 range.
+
+### Changed
+
+- **Follow Mode Refinement:** Reduced centering flight duration to 1.0s for faster target acquisition.
+- **Tracking Stability:** Removed random throttle from selected entity updates and refined interaction checks to prevent drift.
+
+### Fixed
+
+- **Critical Stability:**
+  - **ADSB Poller:** Fixed crash loop caused by malformed Airport OPS messages.
+  - **Mission Radius:** Fixed custom coverage radius resetting to default on reload.
+  - **App Props:** Removed duplicate React props causing build warnings.
+- **UI/UX:**
+  - **Replay Controls:** Compacted UI to prevent obscuring the map.
+  - **Follow Mode:** Fixed "rubber-banding" and loop errors in camera logic.
+  - **Trail Sync:** Fixed "disconnected tail" artifacts during high-speed movement.
+
+### Known Issues
+
+- **CoT Tracking:** Native Cursor-on-Target tracking is currently non-functional (scheduled for future fix).
+- **Jitter/Rubber-Banding:** Small occurrences of "rubber-banding" observed on certain ADSB CoT feeds; investigation ongoing.
 
 ## [0.4.0] - 2026-02-16
 

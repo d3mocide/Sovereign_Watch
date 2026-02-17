@@ -11,12 +11,15 @@ interface TopBarProps {
     onToggleVelocityVectors?: () => void;
     showHistoryTails?: boolean;
     onToggleHistoryTails?: () => void;
+    isReplayMode?: boolean;
+    onToggleReplay?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ 
     alertsCount, location, health, 
     showVelocityVectors, onToggleVelocityVectors,
-    showHistoryTails, onToggleHistoryTails 
+    showHistoryTails, onToggleHistoryTails,
+    isReplayMode, onToggleReplay
 }) => {
     const [time, setTime] = useState(new Date());
 
@@ -112,13 +115,22 @@ export const TopBar: React.FC<TopBarProps> = ({
                              <span className="text-[10px] font-bold text-hud-green tracking-widest">ONLINE</span>
                         </div>
                     </div>
-                    <div className="group flex flex-col items-end gap-1">
-                        <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-hud-green/50 transition-colors">Net_Link</span>
-                        <div className="flex items-center gap-2">
-                             <span className="h-1.5 w-1.5 rounded-full bg-hud-green shadow-[0_0_5px_#00ff41]" />
-                             <span className="text-[10px] font-bold text-hud-green tracking-widest">ENCRYPTED</span>
-                        </div>
-                    </div>
+                    {/* Replay Mode Toggle */}
+                    {onToggleReplay && (
+                        <button
+                            onClick={onToggleReplay}
+                            className="group flex flex-col items-end gap-1 transition-all hover:scale-105 active:scale-95"
+                            title="Toggle Replay Mode"
+                        >
+                            <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-amber-500/50 transition-colors">Sim_Replay</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`h-1.5 w-1.5 rounded-full transition-all ${isReplayMode ? 'bg-amber-500 shadow-[0_0_5px_#f59e0b] animate-pulse' : 'bg-white/20'}`} />
+                                <span className={`text-[10px] font-bold tracking-widest transition-colors ${isReplayMode ? 'text-amber-500' : 'text-white/40'}`}>
+                                    {isReplayMode ? 'RUNNING' : 'OFFLINE'}
+                                </span>
+                            </div>
+                        </button>
+                    )}
 
                     {/* History Trail Toggle */}
                     {onToggleHistoryTails && (
@@ -136,6 +148,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                             </div>
                         </button>
                     )}
+
+
 
                     {/* Velocity Vector Toggle */}
                     {onToggleVelocityVectors && (

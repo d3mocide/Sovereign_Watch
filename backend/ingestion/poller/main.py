@@ -114,15 +114,12 @@ class PollerService:
         """Calculate polling coverage points based on current mission area."""
         # Optimization: For small tactical areas (< 50nm), a single point is sufficient
         # and allows for higher update frequency (1.0s vs 3.0s latency).
-        if self.radius_nm < 50:
-            return [(self.center_lat, self.center_lon, self.radius_nm)]
-            
         return [
             (self.center_lat, self.center_lon, self.radius_nm),           # Center
-            (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset  
+            (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset
             (self.center_lat - 0.5, self.center_lon + 0.5, min(100, self.radius_nm)),  # SE offset
         ]
-    
+
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""
         while self.running:
@@ -132,9 +129,9 @@ class PollerService:
                      await self.pubsub.subscribe("navigation-updates")
 
                 async for message in self.pubsub.listen():
-                    if not self.running: 
+                    if not self.running:
                         break
-                        
+
                     if message["type"] == "message":
                         try:
                             mission = json.loads(message["data"])
@@ -157,25 +154,6 @@ class PollerService:
                     await asyncio.sleep(5)
                 else:
                     break
-
-    async def loop(self):
-        """Main Event Loop - Dynamic polling based on mission area."""
-        logger.info(f"Starting Polling Loop - Center: ({self.center_lat}, {self.center_lon}), Radius: {self.radius_nm}nm")
-        
-        current_point = 0
-        
-        while self.running:
-            polling_points = self.calculate_polling_points()
-            lat, lon, radius = polling_points[current_point]
-            current_point = (current_point + 1) % len(polling_points)
-            
-            await self.process_point(lat, lon, radius)
-            
-            # Sleep based on source rate limits
-            # Lowered to 0.1s to allow the MultiSourcePoller's internal limiters
-            # to drive the pace. If a source is ready, we fire immediately.
-            # If rate limited, the _fetch call will block/wait efficiently.
-            await asyncio.sleep(0.1) 
 
     def _evict_stale_arbi_entries(self) -> None:
         """Remove cache entries for aircraft not seen recently to reclaim memory."""
@@ -206,6 +184,7 @@ class PollerService:
 
         return False
 
+
     def _record_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> None:
         """Update the arbitration cache after a successful publish."""
         self._arbi_cache[hex_id] = {
@@ -235,7 +214,9 @@ class PollerService:
                 current_point_idx = (current_point_idx + 1) % len(polling_points)
 
                 # Poll using the specific source directly
-                path = source.url_format.format(lat=lat, lon=lon, radius=radius)
+                # Clamp radius to source-specific maximum (e.g. 250nm) to avoid 400 errors
+                effective_radius = min(radius, source.max_radius)
+                path = source.url_format.format(lat=lat, lon=lon, radius=effective_radius)
                 url = f"{source.base_url}{path}"
                 
                 try:

@@ -15,6 +15,7 @@ export type CoTEntity = {
     uidHash: number; // Pre-computed phase offset for glow animation (avoids per-frame string ops)
     detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
     lastSourceTime?: number; // Latest timestamp from source (for ordering)
+    raw?: string; // Hex-encoded raw payload for inspection
 };
 
 export interface IntelEvent {
@@ -40,4 +41,10 @@ export interface MissionProps {
     onSwitchMission: (mission: MissionLocation) => void;
     onDeleteMission: (id: string) => void;
     onPresetSelect: (radius: number) => void;
+}
+
+export interface MapActions {
+    flyTo: (lat: number, lon: number, zoom?: number) => void;
+    fitBounds: (bounds: [[number, number], [number, number]]) => void;
+    searchLocal: (query: string) => CoTEntity[];
 }

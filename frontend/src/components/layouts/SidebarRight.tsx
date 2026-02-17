@@ -3,6 +3,7 @@ import { CoTEntity } from '../../types';
 import { Compass } from '../widgets/Compass';
 import { Crosshair, Map as MapIcon, Shield, Info, Activity, Terminal } from 'lucide-react';
 import { TimeTracked } from './TimeTracked';
+import { PayloadInspector } from '../widgets/PayloadInspector';
 
 interface SidebarRightProps {
   entity: CoTEntity | null;
@@ -15,12 +16,27 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   onClose,
   onCenterMap
 }) => {
+  const [showInspector, setShowInspector] = React.useState(false);
+
+  // Reset inspector when entity changes
+  React.useEffect(() => {
+      setShowInspector(false);
+  }, [entity?.uid]);
+
   if (!entity) return null;
 
   const isShip = entity.type.includes('S');
   const accentColor = isShip ? 'text-sea-accent' : 'text-air-accent';
   const accentBg = isShip ? 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5' : 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
   const accentBorder = isShip ? 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+
+  if (showInspector) {
+      return (
+          <div className="pointer-events-auto h-full animate-in slide-in-from-right duration-500 w-full">
+               <PayloadInspector entity={entity} onClose={() => setShowInspector(false)} />
+          </div>
+      );
+  }
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500">
@@ -183,7 +199,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
       {/* 3. Footer Actions */}
       <div className="p-4 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
-         <button className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all">
+         <button 
+            onClick={() => setShowInspector(true)}
+            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
+         >
             <div className="flex items-center justify-between px-3">
                 <span className="text-[10px] font-bold tracking-[.4em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD_EVAL</span>
                 <Terminal size={14} className="text-white/20" />

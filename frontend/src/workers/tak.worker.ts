@@ -61,12 +61,21 @@ self.onmessage = async (e: MessageEvent) => {
                 const cleanBuffer = buffer.subarray(3);
                 
                 const message = takType.decode(cleanBuffer);
+                // Convert raw buffer to Hex String for inspection
+                const hex = Array.from(cleanBuffer)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join(' ');
+
                 // Convert to plain object
                 const object = takType.toObject(message, {
                     longs: Number,
                     enums: String,
                     bytes: String,
                 });
+                
+                // Attach raw payload
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (object as any).raw = hex;
                 
                 // Return Parsed Data
                 // Optimization: In real world, we would write to a SharedArrayBuffer here.

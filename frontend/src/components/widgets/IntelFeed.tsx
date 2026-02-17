@@ -1,19 +1,14 @@
 import React from 'react';
 import { Radio, Bell, TrendingDown, TrendingUp, Filter } from 'lucide-react';
-
-interface IntelEvent {
-    id: string;
-    time: Date;
-    type: 'new' | 'lost' | 'alert';
-    message: string;
-    entityType?: 'air' | 'sea';
-}
+import { CoTEntity, MapActions, IntelEvent } from '../../types';
 
 interface IntelFeedProps {
   events: IntelEvent[];
+  onEntitySelect?: (entity: CoTEntity) => void;
+  mapActions?: MapActions;
 }
 
-export const IntelFeed: React.FC<IntelFeedProps> = ({ events }) => {
+export const IntelFeed: React.FC<IntelFeedProps> = ({ events, onEntitySelect, mapActions }) => {
   return (
     <div className="flex flex-1 flex-col min-h-0 rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-inner overflow-hidden">
       <div className="flex items-center justify-between border-b border-tactical-border bg-white/5 px-3 py-2">
@@ -50,7 +45,30 @@ export const IntelFeed: React.FC<IntelFeedProps> = ({ events }) => {
               return (
                 <div 
                   key={event.id}
-                  className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight}`}
+                  onClick={() => {
+                      if (onEntitySelect && mapActions) {
+                          // Attempt to extract callsign/ID from message
+                          // Formats: "New Track: ASA19", "Alert: ASA19 entered..."
+                          // Simple heuristic: match alphanumeric words > 3 chars?
+                          // Or just try to match the known entities.
+                          // Let's try to extract typical callsign pattern (uppercase, alphanumeric).
+                          const words = event.message.split(' ').map((w: string) => w.replace(/[^a-zA-Z0-9]/g, ''));
+                          
+                          for (const word of words) {
+                              if (word.length < 3) continue;
+                              const matches = mapActions.searchLocal(word);
+                              // Exact match preferred
+                              const exact = matches.find((e: CoTEntity) => e.callsign === word || e.uid === word);
+                              if (exact) {
+                                  onEntitySelect(exact);
+                                  mapActions.flyTo(exact.lat, exact.lon, 14);
+                                  return;
+                              }
+                          }
+                          // Fallback: click does nothing if not found.
+                      }
+                  }}
+                  className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
                 >
                   {/* Event Marker Bar */}
                   <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
