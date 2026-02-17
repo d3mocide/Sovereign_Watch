@@ -223,6 +223,28 @@ function uidToHash(uid: string): number {
     return h * 100;
 }
 
+/**
+ * Helper: Applies 3D altitude compensation to center the focal point on the icon
+ * rather than the ground coordinates.
+ */
+function getCompensatedCenter(lat: number, lon: number, alt: number, map: any): [number, number] {
+    const pitch = map.getPitch();
+    if (pitch <= 0 || alt <= 0) return [lon, lat];
+
+    const bearing = (map.getBearing() * Math.PI) / 180;
+    const pitchRad = (pitch * Math.PI) / 180;
+
+    // Horizontal shift (meters) required to compensate for height projection
+    const shiftM = alt * Math.tan(pitchRad);
+
+    // Convert meters to lat/lon degrees
+    const R = 6371000;
+    const dLat = (shiftM * Math.cos(bearing)) / R * (180 / Math.PI);
+    const dLon = (shiftM * Math.sin(bearing)) / (R * Math.cos(lat * Math.PI / 180)) * (180 / Math.PI);
+
+    return [lon + dLon, lat + dLat];
+}
+
 
 // Props for TacticalMap
 interface TacticalMapProps {
@@ -232,8 +254,13 @@ interface TacticalMapProps {
     selectedEntity: CoTEntity | null;
     onEntitySelect: (entity: CoTEntity | null) => void;
     onMissionPropsReady?: (props: MissionProps) => void;
+    onMapActionsReady?: (actions: import('../../types').MapActions) => void;
     showVelocityVectors?: boolean;
     showHistoryTails?: boolean;
+    replayMode?: boolean;
+    replayEntities?: Map<string, CoTEntity>;
+    followMode?: boolean;
+    onFollowModeChange?: (enabled: boolean) => void;
 }
 
 // Adaptive Zoom Calculation
@@ -242,7 +269,7 @@ const calculateZoom = (radiusNm: number) => {
     return Math.max(2, 14 - Math.log2(r));
 };
 
-export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, showVelocityVectors, showHistoryTails }: TacticalMapProps) {
+export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, replayMode, replayEntities, followMode, onFollowModeChange }: TacticalMapProps) {
 
     const lastFrameTimeRef = useRef<number>(Date.now());
     
@@ -257,7 +284,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
     // Map & Style States
     const [mapLoaded, setMapLoaded] = useState(false);
-    const [enable3d, setEnable3d] = useState(import.meta.env.VITE_ENABLE_3D_TERRAIN === 'true');
+    const [enable3d, setEnable3d] = useState(false);
     const mapToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const mapStyle = mapToken 
         ? "mapbox://styles/mapbox/standard" 
@@ -297,6 +324,26 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
     // Velocity Vector Toggle - use ref for reactivity in animation loop
     const velocityVectorsRef = useRef(showVelocityVectors ?? false);
     const historyTailsRef = useRef(showHistoryTails ?? true); // Default to true as per user preference
+    const replayEntitiesRef = useRef<Map<string, CoTEntity>>(new Map());
+    const followModeRef = useRef(followMode ?? false);
+    const selectedEntityRef = useRef<CoTEntity | null>(selectedEntity);
+    
+    // Sync followMode ref
+    useEffect(() => {
+        followModeRef.current = followMode ?? false;
+    }, [followMode]);
+
+    // Sync selectedEntity ref
+    useEffect(() => {
+        selectedEntityRef.current = selectedEntity;
+    }, [selectedEntity]);
+
+    // Sync Replay Entities Ref
+    useEffect(() => {
+        if (replayEntities) {
+            replayEntitiesRef.current = replayEntities;
+        }
+    }, [replayEntities]);
     
     // Update ref when prop changes
     useEffect(() => {
@@ -358,13 +405,12 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         setContextMenuCoords({ lat: lngLat.lat, lon: lngLat.lng });
     }, []);
 
-    const handleSetFocus = useCallback(async (lat: number, lon: number) => {
+    const handleSetFocus = useCallback(async (lat: number, lon: number, radius?: number) => {
          try {
-             // Use ref or current state. Since this is async/user-triggered, current state is fine but we need it in deps.
-             // But to decouple, we can read the ENV fallback if mission is null.
-             const radius = currentMissionRef.current?.radius_nm || parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
-             await setMissionArea({ lat, lon, radius_nm: radius });
-             setCurrentMission({ lat, lon, radius_nm: radius });
+             // Use provided radius, or fallback to current/default
+             const targetRadius = radius || currentMissionRef.current?.radius_nm || parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
+             await setMissionArea({ lat, lon, radius_nm: targetRadius });
+             setCurrentMission({ lat, lon, radius_nm: targetRadius });
              
              // Clear old entities when changing mission area
              entitiesRef.current.clear();
@@ -374,13 +420,13 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
              if (mapRef.current) {
                  mapRef.current.flyTo({
                      center: [lon, lat],
-                     zoom: calculateZoom(radius),
+                     zoom: calculateZoom(targetRadius),
                      duration: 2000,
                      easing: (t: number) => 1 - Math.pow(1 - t, 3),
                  });
              }
              
-             console.log(`📍 Mission area pivoted to: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+             console.log(`📍 Mission area pivoted to: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${targetRadius}nm`);
          } catch (error) {
              console.error('Failed to set mission focus:', error);
          }
@@ -390,28 +436,13 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         const mission = currentMissionRef.current;
         if (!mission) return;
         
-        try {
-            await setMissionArea({ lat: mission.lat, lon: mission.lon, radius_nm: radius });
-            setCurrentMission({ ...mission, radius_nm: radius });
-            
-            if (mapRef.current) {
-                mapRef.current.flyTo({
-                    zoom: calculateZoom(radius),
-                    duration: 1000,
-                    easing: (t: number) => 1 - Math.pow(1 - t, 3),
-                });
-            }
-
-            console.log(`📐 Radius updated to ${radius}nm`);
-        } catch (error) {
-            console.error('Failed to update radius:', error);
-        }
-    }, []);
+        await handleSetFocus(mission.lat, mission.lon, radius);
+    }, [handleSetFocus]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleSwitchMission = useCallback(async (mission: any) => {
-        await handleSetFocus(mission.lat, mission.lon);
-        setCurrentMission({ lat: mission.lat, lon: mission.lon, radius_nm: mission.radius_nm });
+        await handleSetFocus(mission.lat, mission.lon, mission.radius_nm);
+        // setCurrentMission is now handled inside handleSetFocus to ensure sync
     }, [handleSetFocus]);
 
     // Expose mission management to parent
@@ -426,6 +457,11 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             });
         }
     }, [savedMissions, currentMission, onMissionPropsReady, handleSwitchMission, deleteMission, handlePresetSelect]);
+    
+    // Expose Map Actions (Search, FlyTo)
+    // onMapActionsReady is already destructured from props
+    
+
 
     // Load active mission state on mount and poll for updates
     useEffect(() => {
@@ -485,6 +521,23 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             onEntitySelect(null);
         }
     }, [currentMission, onCountsUpdate, onEntitySelect]);
+
+    // FOLLOW MODE EFFECT
+    // DEPRECATED: useEffect based following causes rubber-banding due to state/render desync.
+    // We now handle this imperatively in the animation loop.
+    /*
+    useEffect(() => {
+        if (followMode && selectedEntity) {
+             setViewState(prev => ({
+                 ...prev,
+                 longitude: selectedEntity.lon,
+                 latitude: selectedEntity.lat,
+                 transitionDuration: 100, // Smooth small updates
+                 transitionEasing: (t: number) => t 
+             }));
+        }
+    }, [followMode, selectedEntity?.lat, selectedEntity?.lon]);
+    */
 
     // Worker Reference
     const workerRef = useRef<Worker | null>(null);
@@ -587,7 +640,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         lastSourceTime: entity.time || existingEntity?.lastSourceTime, 
                         lastSeen: Date.now(), 
                         trail,
-                        uidHash: 0 // Will be set below
+                        uidHash: 0, // Will be set below
+                        raw: updateData.raw // Map raw hex from worker
                     });
                     
                     // Pre-compute UID hash for glow animation (once per entity, not per frame)
@@ -749,75 +803,166 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             const staleUids: string[] = [];
             const interpolated: CoTEntity[] = [];
 
-            for (const [uid, entity] of entities) {
-              const isShip = entity.type?.includes("S");
-              const threshold = isShip ? STALE_THRESHOLD_SEA_MS : STALE_THRESHOLD_AIR_MS;
+            if (replayMode) {
+                // REPLAY MODE: Render static snapshots from parent
+                for (const [, entity] of replayEntitiesRef.current) {
+                     const isShip = entity.type?.includes("S");
+                     
+                     // Filter
+                     if (isShip && !filters?.showSea) continue;
+                     if (!isShip && !filters?.showAir) continue;
+                     
+                     if (isShip) seaCount++; else airCount++;
 
-              // Stale check
-              if (now - entity.lastSeen > threshold) {
-                staleUids.push(uid);
-                continue;
-              }
-
-              // Count
-              if (isShip) {
-                seaCount++;
-              } else {
-                airCount++;
-              }
-
-              // Filter
-              if (isShip && !filters?.showSea) continue;
-              if (!isShip && !filters?.showAir) continue;
-
-              // Interpolate
-              const prev = prevSnapshotsRef.current.get(uid);
-              const curr = currSnapshotsRef.current.get(uid);
-
-              let targetLon = entity.lon;
-              let targetLat = entity.lat;
-
-              if (prev && curr && curr.ts > prev.ts) {
-                const elapsed = now - curr.ts;
-                const rawDuration = curr.ts - prev.ts;
-                const stableDuration = Math.max(rawDuration, 1000);
-
-                const t_geom = Math.min(elapsed / stableDuration, 1.0);
-                targetLon = prev.lon + (curr.lon - prev.lon) * t_geom;
-                targetLat = prev.lat + (curr.lat - prev.lat) * t_geom;
-
-                if (elapsed > stableDuration && entity.speed > 1.0) {
-                  const overrun = Math.min(elapsed - stableDuration, 5000) / 1000;
-                  const courseRad = ((entity.course || 0) * Math.PI) / 180;
-                  const R = 6_371_000;
-                  const latRad = (curr.lat * Math.PI) / 180;
-                  const distM = entity.speed * overrun;
-                  const dLat = (distM * Math.cos(courseRad)) / R;
-                  const dLon = (distM * Math.sin(courseRad)) / (R * Math.cos(latRad));
-                  targetLat = curr.lat + dLat * (180 / Math.PI);
-                  targetLon = curr.lon + dLon * (180 / Math.PI);
+                     interpolated.push(entity);
                 }
-              }
+            } else {
+                // LIVE MODE: Interpolate and Smooth
+                // const liveUpdate = entitiesRef.current.get(selectedEntity?.uid || '');
+                // if (liveUpdate && selectedEntity) {
+                     // Check if data changed significantly to avoid react render thrashing?
+                     // Actually, for sidebar we want 1Hz or so. 
+                     // But strictly, we should just push the latest object up if it's new.
+                     // To avoid loop: parent only updates if object ref changes.
+                     // But we are creating new object refs on every frame here? No, only on ws message.
+                     // So passing the ref from entitiesRef.current is safe!
+                // }
 
-              let visual = visualStateRef.current.get(uid);
-              if (!visual) {
-                visual = { lat: targetLat, lon: targetLon, alt: entity.altitude };
-              } else {
-                const speedKts = entity.speed * 1.94384;
-                const BASE_ALPHA = speedKts > 200 ? 0.1 : speedKts > 50 ? 0.07 : 0.04;
-                const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, dt / 16.67);
-                visual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
-                visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
-                visual.alt = visual.alt + (entity.altitude - visual.alt) * smoothFactor;
-              }
-              visualStateRef.current.set(uid, visual);
+                for (const [uid, entity] of entities) {
+                    
 
-              interpolated.push({
-                ...entity,
-                lon: visual.lon,
-                lat: visual.lat,
-                altitude: visual.alt,
-              });
+                  const isShip = entity.type?.includes("S");
+                  const threshold = isShip ? STALE_THRESHOLD_SEA_MS : STALE_THRESHOLD_AIR_MS;
+
+                  // Stale check
+                  if (now - entity.lastSeen > threshold) {
+                    staleUids.push(uid);
+                    continue;
+                  }
+
+                  // Count
+                  if (isShip) {
+                    seaCount++;
+                  } else {
+                    airCount++;
+                  }
+
+                  // Filter
+                  if (isShip && !filters?.showSea) continue;
+                  if (!isShip && !filters?.showAir) continue;
+
+                  // Interpolate
+                  const prev = prevSnapshotsRef.current.get(uid);
+                  const curr = currSnapshotsRef.current.get(uid);
+
+                  let targetLon = entity.lon;
+                  let targetLat = entity.lat;
+
+                  if (prev && curr && curr.ts > prev.ts) {
+                    const elapsed = now - curr.ts;
+                    const rawDuration = curr.ts - prev.ts;
+                    const stableDuration = Math.max(rawDuration, 1000);
+
+                    const t_geom = Math.min(elapsed / stableDuration, 1.0);
+                    targetLon = prev.lon + (curr.lon - prev.lon) * t_geom;
+                    targetLat = prev.lat + (curr.lat - prev.lat) * t_geom;
+
+                    // DEAD RECKONING (EXTRAPOLATION)
+                    // Configurable: Re-enabled with 2.5s cap to smooth over data gaps
+                    // without causing massive rubber-banding.
+                    if (elapsed > stableDuration && entity.speed > 1.0) {
+                      const overrun = Math.min(elapsed - stableDuration, 2500) / 1000;
+                      const courseRad = ((entity.course || 0) * Math.PI) / 180;
+                      const R = 6_371_000;
+                      const latRad = (curr.lat * Math.PI) / 180;
+                      const distM = entity.speed * overrun;
+                      const dLat = (distM * Math.cos(courseRad)) / R;
+                      const dLon = (distM * Math.sin(courseRad)) / (R * Math.cos(latRad));
+                      targetLat = curr.lat + dLat * (180 / Math.PI);
+                      targetLon = curr.lon + dLon * (180 / Math.PI);
+                    }
+                  }
+
+                  let visual = visualStateRef.current.get(uid);
+                  if (!visual) {
+                    // Initialize immediately to prevent startup delay
+                    visual = { lat: targetLat, lon: targetLon, alt: entity.altitude };
+                    visualStateRef.current.set(uid, visual);
+                  } else {
+                    const speedKts = entity.speed * 1.94384;
+                    const BASE_ALPHA = speedKts > 200 ? 0.1 : speedKts > 50 ? 0.07 : 0.04;
+                    const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, dt / 16.67);
+                    visual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
+                    visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
+                    visual.alt = visual.alt + (entity.altitude - visual.alt) * smoothFactor;
+                  }
+                  
+                  // Clamp to target if very close (prevent micro-jitter)
+                  if (Math.abs(visual.lat - targetLat) < 0.000001 && Math.abs(visual.lon - targetLon) < 0.000001) {
+                      visual.lat = targetLat;
+                      visual.lon = targetLon;
+                  }
+                  
+                  visualStateRef.current.set(uid, visual);
+
+                  const interpolatedEntity: CoTEntity = {
+                    ...entity,
+                    lon: visual.lon,
+                    lat: visual.lat,
+                    altitude: visual.alt,
+                  };
+
+                  interpolated.push(interpolatedEntity);
+
+                  // Update Selected Entity Data (Live Sidebar) - Sync with interpolation
+                  // This ensures the numbers in the sidebar move in perfect lockstep with the map
+                  const currentSelected = selectedEntityRef.current;
+                  if (currentSelected && uid === currentSelected.uid && onEntitySelect) {
+                      // Throttle to ~30Hz (every 2nd frame) to prevent React render saturation
+                      // while providing silky smooth numerical updates.
+                      if (Math.floor(now / 33) % 2 === 0) {
+                          onEntitySelect(interpolatedEntity);
+                      }
+                  }
+                }
+            }
+
+            // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
+            // This ensures the camera moves EXACTLY with the interpolated selection
+            // Preventing "rubber banding" or jitter.
+            // Executed ONCE per frame, not per entity.
+            // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
+            // This ensures the camera moves EXACTLY with the interpolated selection
+            // Preventing "rubber banding" or jitter.
+            // Executed ONCE per frame, not per entity.
+            const currentSelected = selectedEntityRef.current;
+            if (followModeRef.current && currentSelected && mapRef.current) {
+                const visual = visualStateRef.current.get(currentSelected.uid);
+                if (visual) {
+                    try {
+                        const map = mapRef.current.getMap();
+                        
+                        // Use unified compensation helper
+                        const [centerLon, centerLat] = getCompensatedCenter(visual.lat, visual.lon, visual.alt, map);
+
+                        // Use a more lenient movement check:
+                        // Only block jump if the user is explicitly manipulating the view (rot/zoom/drag)
+                        // This prevents fighting user input without blocking the follow logic.
+                        const isUserInteracting = map.dragPan.isActive() || 
+                                                map.scrollZoom.isActive() || 
+                                                map.touchZoomRotate.isActive() || 
+                                                map.dragRotate.isActive();
+                        
+                        if (!isUserInteracting && !map.isEasing()) {
+                            map.jumpTo({ 
+                                center: [centerLon, centerLat],
+                                animate: false 
+                            });
+                        }
+                    } catch (e) {
+                        // Map instance might not be ready
+                    }
+                }
             }
 
             // Deferred stale cleanup (don't delete during iteration)
@@ -854,7 +999,15 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         id: 'all-history-trails',
                         data: interpolated.filter(e => e.trail.length >= 2),
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        getPath: (d: any) => d.trail.map((p: any) => [p[0], p[1], p[2]]),
+                        getPath: (d: any) => {
+                            // Sync tail with head: Replace last point with current interpolated position
+                            // so the line connects perfectly to the icon.
+                            if (!d.trail || d.trail.length === 0) return [];
+                            // Convert standard trail points to [lon, lat, alt]
+                            const cleanTrail = d.trail.map((p: any) => [p[0], p[1], p[2]]);
+                            // Append current visual head
+                            return [...cleanTrail.slice(0, -1), [d.lon, d.lat, d.altitude]];
+                        },
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getColor: (d: any) => {
                             const isShip = d.type.includes('S');
@@ -876,8 +1029,12 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 ...(selectedEntity && interpolated.find(e => e.uid === selectedEntity.uid)
                     ? (() => {
                         const entity = interpolated.find(e => e.uid === selectedEntity.uid)!;
-                        if (entity.trail.length < 2) return [];
-                        const trailPath = entity.trail.map(p => [p[0], p[1], p[2]]);
+                        if (!entity.trail || entity.trail.length < 2) return [];
+                        
+                        // Sync tail with head for highlight too
+                        const cleanTrail = entity.trail.map(p => [p[0], p[1], p[2]]);
+                        const trailPath = [...cleanTrail.slice(0, -1), [entity.lon, entity.lat, entity.altitude]];
+
                         const isShip = entity.type.includes('S');
                         const trailColor = isShip
                             ? speedToColor(entity.speed, 255)
@@ -1064,7 +1221,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 cancelAnimationFrame(rafRef.current);
             }
         };
-    }, [selectedEntity, onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, viewState]);
+    }, [selectedEntity, onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, viewState, replayMode]);
 
 
 
@@ -1136,8 +1293,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         const defaultLon = parseFloat(import.meta.env.VITE_CENTER_LON || '-122.6784');
         const defaultRadius = parseInt(import.meta.env.VITE_COVERAGE_RADIUS_NM || '150');
 
-        await handleSetFocus(defaultLat, defaultLon);
-        setCurrentMission({ lat: defaultLat, lon: defaultLon, radius_nm: defaultRadius });
+        await handleSetFocus(defaultLat, defaultLon, defaultRadius);
     }, [handleSetFocus]);
 
     const handleOverlayLoaded = useCallback((overlay: MapboxOverlay) => {
@@ -1301,6 +1457,52 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         else map.on('style.load', sync3D);
         return () => { map.off('style.load', sync3D); };
     }, [mapLoaded, enable3d, mapToken]);
+    
+    // Check if map actions are ready and expose them
+    useEffect(() => {
+        if (mapLoaded && mapRef.current && onMapActionsReady) {
+            onMapActionsReady({
+                flyTo: (lat, lon, zoom) => {
+                    const map = mapRef.current?.getMap();
+                    if (map) {
+                        // Intelligent Zoom: Maintain current if reasonable, otherwise snap to tactical default
+                        const currentZoom = map.getZoom();
+                        let targetZoom = zoom;
+                        
+                        if (!targetZoom) {
+                            // Expand range to include zoom 12
+                            if (currentZoom >= 12 && currentZoom <= 18) {
+                                targetZoom = currentZoom; // Maintain user perspective
+                            } else {
+                                targetZoom = 12; // Use new tactical default
+                            }
+                        }
+
+                        // Apply compensation even for the initial flyTo if selection is known 
+                        const selected = selectedEntityRef.current;
+                        const [cLon, cLat] = (selected && selected.lat === lat && selected.lon === lon)
+                            ? getCompensatedCenter(lat, lon, selected.altitude, map)
+                            : [lon, lat];
+
+                        map.flyTo({ center: [cLon, cLat], zoom: targetZoom, duration: 1000 });
+                    }
+                },
+                fitBounds: (bounds) => {
+                   mapRef.current?.fitBounds(bounds, { padding: 50 });
+                },
+                searchLocal: (query: string) => {
+                    const results: CoTEntity[] = [];
+                    const q = query.toLowerCase();
+                    entitiesRef.current.forEach((e: CoTEntity) => {
+                        if (e.callsign.toLowerCase().includes(q) || e.uid.toLowerCase().includes(q)) {
+                            results.push(e);
+                        }
+                    });
+                    return results;
+                }
+            });
+        }
+    }, [mapLoaded, onMapActionsReady]);
 
     return (
     <>
@@ -1308,7 +1510,14 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             ref={mapRef}
             onLoad={handleMapLoad}
             {...viewState}
-            onMove={evt => setViewState(evt.viewState as any)}
+            onMove={(evt: any) => {
+                // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
+                if (evt.originalEvent && followModeRef.current && onFollowModeChange) {
+                    followModeRef.current = false; // Instant kill before next frame
+                    onFollowModeChange(false);
+                }
+                setViewState(evt.viewState as any);
+            }}
             mapStyle={mapStyle}
             mapboxAccessToken={mapToken}
             config={{

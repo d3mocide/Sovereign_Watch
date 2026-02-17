@@ -3,6 +3,7 @@ import { LayerFilters } from '../widgets/LayerFilters';
 import { SystemStatus } from '../widgets/SystemStatus';
 import { IntelFeed } from '../widgets/IntelFeed';
 import { MissionNavigator } from '../widgets/MissionNavigator';
+import { SearchWidget } from '../widgets/SearchWidget';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent, MissionProps } from '../../types';
@@ -14,6 +15,8 @@ interface SidebarLeftProps {
   events: IntelEvent[];
   missionProps: MissionProps | null;
   health?: SystemHealth;
+  mapActions: import('../../types').MapActions | null;
+  onEntitySelect: (entity: import('../../types').CoTEntity) => void;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({ 
@@ -22,10 +25,20 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onFilterChange, 
   events,
   missionProps,
-  health
+  health,
+  mapActions,
+  onEntitySelect
 }) => {
   return (
     <div className="flex flex-col h-full gap-4 animate-in fade-in duration-1000">
+      {/* Search Widget */}
+      {mapActions && (
+          <SearchWidget 
+            mapActions={mapActions} 
+            onEntitySelect={onEntitySelect} 
+          />
+      )}
+
       {/* 1. Global Controls Moved to Top */}
       <LayerFilters 
         filters={filters} 
@@ -44,7 +57,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       )}
 
       {/* 2. System Intelligence Feed */}
-      <IntelFeed events={events} />
+      <IntelFeed events={events} onEntitySelect={onEntitySelect} mapActions={mapActions} />
 
       {/* 3. Metrics & Analytics */}
       <SystemStatus trackCounts={trackCounts} />

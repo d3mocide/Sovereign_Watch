@@ -40,16 +40,123 @@ app.add_middleware(
 # Database Connection Pool
 pool: Optional[asyncpg.Pool] = None
 redis_client: Optional[redis.Redis] = None
+historian_task_handle: Optional[asyncio.Task] = None
+
+async def historian_task():
+    """
+    Background task to consume Kafka messages and persist them to TimescaleDB.
+    Runs independently of the WebSocket consumers.
+    """
+    logger.info("📜 Historian task started")
+    consumer = AIOKafkaConsumer(
+        "adsb_raw", "ais_raw",
+        bootstrap_servers='sovereign-redpanda:9092',
+        group_id="historian-writer",
+        auto_offset_reset="latest"
+    )
+    
+    try:
+        await consumer.start()
+        
+        batch = []
+        last_flush = time.time()
+        BATCH_SIZE = 100
+        FLUSH_INTERVAL = 2.0
+        
+        # PostGIS Geometry Insert: ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+        insert_sql = """
+            INSERT INTO tracks (time, entity_id, type, lat, lon, alt, speed, heading, meta, geom)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ST_SetSRID(ST_MakePoint($5, $4), 4326))
+        """
+        
+        async for msg in consumer:
+            try:
+                data = json.loads(msg.value.decode('utf-8'))
+                
+                # --- Parsing Logic (Mirrors WebSocket logic but simplified) ---
+                
+                # Time: Prefer 'time' (ms), fallback to 'start' (epoch s or iso), fallback to now
+                ts_val = data.get("time")
+                if isinstance(ts_val, (int, float)):
+                    ts = datetime.fromtimestamp(ts_val / 1000.0, tz=timezone.utc)
+                else:
+                    ts = datetime.now(timezone.utc)
+
+                uid = str(data.get("uid", "unknown"))
+                etype = str(data.get("type", "a-u-G"))
+                
+                point = data.get("point", {})
+                lat = float(point.get("lat") or 0.0)
+                lon = float(point.get("lon") or 0.0)
+                alt = float(point.get("hae") or 0.0)
+                
+                detail = data.get("detail", {})
+                track = detail.get("track", {})
+                speed = float(track.get("speed") or 0.0)
+                heading = float(track.get("course") or 0.0)
+                
+                # Meta: Store contact info and other details for search/context
+                # We store 'callsign' explicitly in meta for easier searching
+                contact = detail.get("contact", {})
+                callsign = contact.get("callsign") or uid
+                
+                meta = json.dumps({
+                    "callsign": callsign,
+                    "how": data.get("how"),
+                    "ce": point.get("ce"),
+                    "le": point.get("le")
+                })
+                
+                batch.append((ts, uid, etype, lat, lon, alt, speed, heading, meta))
+                
+                # --- Batch Flush Logic ---
+                now = time.time()
+                if len(batch) >= BATCH_SIZE or (now - last_flush > FLUSH_INTERVAL and batch):
+                    if pool:
+                        try:
+                            async with pool.acquire() as conn:
+                                await conn.executemany(insert_sql, batch)
+                            # logger.info(f"Historian: wrote {len(batch)} rows") 
+                        except Exception as db_err:
+                            logger.error(f"Historian DB Error: {db_err}")
+                            
+                    batch = []
+                    last_flush = now
+                    
+            except Exception as e:
+                logger.error(f"Historian message processing error: {e}")
+                continue
+                
+    except asyncio.CancelledError:
+        logger.info("Historian task cancelled")
+    except Exception as e:
+        logger.error(f"Historian Fatal Error: {e}")
+    finally:
+        await consumer.stop()
+        logger.info("Historian consumer stopped")
+
 
 @app.on_event("startup")
 async def startup():
-    global pool, redis_client
+    global pool, redis_client, historian_task_handle
     pool = await asyncpg.create_pool(DB_DSN)
     redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
-    logger.info("Database and Redis connections established")
+    
+    # Start Historian
+    historian_task_handle = asyncio.create_task(historian_task())
+    
+    logger.info("Database, Redis, and Historian started")
 
 @app.on_event("shutdown")
 async def shutdown():
+    global historian_task_handle
+    if historian_task_handle:
+        historian_task_handle.cancel()
+        try:
+            await historian_task_handle
+        except asyncio.CancelledError:
+            pass
+            
     if pool:
         await pool.close()
     if redis_client:
@@ -330,6 +437,105 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket Loop failed: {e}")
     finally:
         await consumer.stop()
+
+# --- Historical Data Endpoints ---
+
+@app.get("/api/tracks/history/{entity_id}")
+async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
+    """
+    Get raw track points for a specific entity.
+    """
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+    
+    query = """
+        SELECT time, lat, lon, alt, speed, heading, meta
+        FROM tracks
+        WHERE entity_id = $1
+        AND time > NOW() - INTERVAL '1 hour' * $2
+        ORDER BY time DESC
+        LIMIT $3
+    """
+    try:
+        rows = await pool.fetch(query, entity_id, float(hours), limit)
+        # Convert to dict to handle non-serializable types if any (asyncpg returns Record)
+        return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"History query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tracks/search")
+async def search_tracks(q: str, limit: int = 10):
+    """
+    Search for entities by ID or Callsign (substring).
+    Returns the most recent position for each match.
+    """
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+        
+    if len(q) < 2:
+        return []
+        
+    query = """
+        SELECT DISTINCT ON (entity_id) entity_id, type, time as last_seen, lat, lon, meta
+        FROM tracks
+        WHERE entity_id ILIKE $1 OR meta->>'callsign' ILIKE $1
+        ORDER BY entity_id, time DESC
+        LIMIT $2
+    """
+    try:
+        rows = await pool.fetch(query, f"%{q}%", limit)
+        results = []
+        for row in rows:
+            d = dict(row)
+            # Parse meta to extract callsign for convenience
+            meta_json = d.get('meta')
+            if meta_json:
+                try:
+                    meta = json.loads(meta_json)
+                    d['callsign'] = meta.get('callsign')
+                except:
+                    d['callsign'] = None
+            else:
+                d['callsign'] = None
+            
+            # Clean up response
+            d.pop('meta', None)
+            results.append(d)
+        return results
+    except Exception as e:
+        logger.error(f"Search query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tracks/replay")
+async def replay_tracks(start: str, end: str):
+    """
+    Get all track points within a time window for replay.
+    Timestamps must be ISO 8601.
+    """
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+    
+    try:
+        # Pydantic/FastAPI handles some ISO parsing, but we need robust handling
+        dt_start = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        dt_end = datetime.fromisoformat(end.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ISO8601 timestamp format")
+        
+    query = """
+        SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
+        FROM tracks
+        WHERE time >= $1 AND time <= $2
+        ORDER BY time ASC
+    """
+    try:
+        rows = await pool.fetch(query, dt_start, dt_end)
+        return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Replay query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

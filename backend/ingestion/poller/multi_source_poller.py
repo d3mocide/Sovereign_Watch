@@ -31,6 +31,7 @@ class AviationSource:
     url_format: str  # URL format string with {lat}, {lon}, {radius} placeholders
     rate_limit_period: float  # seconds between requests (e.g., 2.0 = 1 req per 2 sec)
     priority: int      # Lower number = higher priority
+    max_radius: int = 250  # Limit request radius (nm) to prevent 400 errors from upstream
     limiter: AsyncLimiter = field(init=False)
     # Cooldown replaces the old consecutive_failures counter.
     # A source is skipped until wall-clock time exceeds cooldown_until.

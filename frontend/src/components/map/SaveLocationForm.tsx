@@ -28,8 +28,8 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
     }
     
     const radiusNum = parseInt(radius);
-    if (isNaN(radiusNum) || radiusNum < 10 || radiusNum > 300) {
-      setError('Radius must be between 10 and 300 nm');
+    if (isNaN(radiusNum) || radiusNum < 10 || radiusNum > 250) {
+      setError('Radius must be between 10 and 250 nm');
       return;
     }
     
@@ -99,7 +99,7 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
                 setError('');
               }}
               min="10"
-              max="300"
+              max="250"
               className="w-full bg-white/10 border border-white/20 rounded pl-3 pr-8 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-hud-green/50 focus:bg-white/15 transition-all appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             {/* Custom Spinners */}
@@ -108,7 +108,7 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
                   type="button"
                   onClick={() => {
                     const val = parseInt(radius) || 0;
-                    if (val < 300) setRadius((val + 1).toString());
+                    if (val < 250) setRadius((val + 1).toString());
                   }}
                   className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all"
                 >
@@ -127,7 +127,7 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
             </div>
           </div>
           <div className="text-[9px] text-white/40 mt-1">
-            Min: 10nm • Max: 300nm
+            Min: 10nm • Max: 250nm
           </div>
         </div>
 
