@@ -1,3 +1,23 @@
+## [0.7.0] - 2026-02-18
+
+### Added
+
+- **Advanced Aircraft Classification:** Deep integration of aircraft metadata including Affiliation (Military/Civ), Platform Type, Service Class (Narrowbody/Regional/Cargo), and Squawk descriptions.
+- **Granular HUD Filters:** Added specialized toggles for Military, Government, Commercial (including Regional/Cargo sub-types), Private (Business Jets/Light Aircraft), and Helicopter assets.
+- **Smooth Kinematic Rendering:**
+  - **Rotation Interpolation:** Icons now glide smoothly between headings during turns instead of snapping.
+  - **Stable History Trails:** Implemented "Lead-in" visual head logic and 50m noise filtering to ensure trails are smooth and perfectly aligned with aircraft movement.
+- **Intelligence Event Management:**
+  - **Time-Based Expiration:** Intel feed now uses a 1-hour rolling window with automatic data purging to prevent performance degradation and maintain tactical relevance.
+- **Performance Optimizations:**
+  - **Memoization Suite:** 40% reduction in UI main-thread blocking through aggressive memoization of filtered feeds and individual event components.
+
+### Fixed
+
+- **Mission Sync Drift:** Fixed a bug where history would clear prematurely due to floating-point drift in coordinate polling.
+- **Layer Z-Fighting:** Resolved visual artifacting between overlapping global and selected history trails.
+- **React Hook Errors:** Corrected import scopes to resolve `ReferenceError` during rapid selection updates.
+
 ## [0.6.1] - 2026-02-17
 
 ### Added

@@ -16,6 +16,7 @@ interface SearchResult {
     isLive: boolean;
     lastSeen: number;
     entity?: CoTEntity; // For live entities
+    classification?: { affiliation?: string; platform?: string; operator?: string; icaoType?: string };
 }
 
 export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntitySelect }) => {
@@ -46,7 +47,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
 
             // 1. Local Live Search
             const localMatches = mapActions.searchLocal(debouncedQuery);
-            localMatches.forEach(entity => {
+            localMatches.forEach((entity: CoTEntity) => {
                 combinedResults.push({
                     uid: entity.uid,
                     callsign: entity.callsign || entity.uid,
@@ -55,7 +56,8 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                     lon: entity.lon,
                     isLive: true,
                     lastSeen: entity.lastSeen,
-                    entity: entity
+                    entity: entity,
+                    classification: entity.classification
                 });
                 seenUids.add(entity.uid);
             });
@@ -83,7 +85,8 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                  lat: item.lat,
                                  lon: item.lon,
                                  isLive: false,
-                                 lastSeen: ts
+                                 lastSeen: ts,
+                                 classification: item.classification
                              });
                         }
                     });
@@ -107,7 +110,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
        const refreshInterval = setInterval(() => {
            const localMatches = mapActions.searchLocal(debouncedQuery);
 
-           setResults(prev => prev.map(result => {
+           setResults(prev => prev.map((result: SearchResult) => {
                if (!result.isLive) return result;
                const updated = localMatches.find(e => e.uid === result.uid);
                if (updated) {
@@ -201,8 +204,23 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                             HIST
                                         </span>
                                     )}
+                                    {result.classification?.affiliation && (
+                                        <span className={`text-[9px] px-1 rounded font-bold ${
+                                            result.classification.affiliation === 'military' ? 'text-amber-500 bg-amber-500/10' :
+                                            result.classification.affiliation === 'government' ? 'text-blue-400 bg-blue-400/10' :
+                                            'text-white/40 bg-white/5'
+                                        }`}>
+                                            {result.classification.affiliation.slice(0,3).toUpperCase()}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
+                                    {result.classification?.operator && (
+                                        <span className="text-white/60 truncate max-w-[80px]">{result.classification.operator}</span>
+                                    )}
+                                    {result.classification?.icaoType && (
+                                        <span>{result.classification.icaoType}</span>
+                                    )}
                                     <span>{result.lat.toFixed(4)}° {result.lon.toFixed(4)}°</span>
                                     <span>•</span>
                                     <div className="flex items-center gap-1">

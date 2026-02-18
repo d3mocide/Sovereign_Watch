@@ -249,8 +249,16 @@ function getCompensatedCenter(lat: number, lon: number, alt: number, map: any): 
 // Props for TacticalMap
 interface TacticalMapProps {
     onCountsUpdate?: (counts: { air: number; sea: number }) => void;
-    filters?: { showAir: boolean; showSea: boolean };
-    onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea' }) => void;
+    filters?: { 
+        showAir: boolean; 
+        showSea: boolean;
+        showHelicopter?: boolean;
+        showMilitary?: boolean;
+        showGovernment?: boolean;
+        showCommercial?: boolean;
+        showPrivate?: boolean;
+    };
+    onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea', classification?: import('../../types').EntityClassification }) => void;
     selectedEntity: CoTEntity | null;
     onEntitySelect: (entity: CoTEntity | null) => void;
     onMissionPropsReady?: (props: MissionProps) => void;
@@ -488,7 +496,13 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 if (mission && mission.lat && mission.lon) {
                     // Only update if mission has actually changed to prevent map resets/clears
                     const prev = currentMissionRef.current;
-                    if (!prev || prev.lat !== mission.lat || prev.lon !== mission.lon || prev.radius_nm !== mission.radius_nm) {
+                    // Add tolerance for floating point drift to prevent constant clearing
+                    const isDiff = !prev || 
+                        Math.abs(prev.lat - mission.lat) > 0.0001 || 
+                        Math.abs(prev.lon - mission.lon) > 0.0001 || 
+                        Math.abs(prev.radius_nm - mission.radius_nm) > 0.1;
+
+                    if (isDiff) {
                         console.log('🔄 Syncing with active mission:', mission);
                         // Update state (this will trigger the clear effect below)
                         setCurrentMission({
@@ -598,7 +612,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                                onEvent?.({
                                    type: 'lost',
                                    message: `${isShip ? '🚢' : '✈️'} ${existing.callsign || entity.uid} (Out of Range)`,
-                                   entityType: isShip ? 'sea' : 'air'
+                                   entityType: isShip ? 'sea' : 'air',
+                                   classification: existing.classification
                                });
                            }
                            return; // Skip update
@@ -608,7 +623,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                    // Build trail from existing positions (max 100 points for rich history).
                    // Minimum distance gate (30m) prevents multilateration noise between
                    // ADS-B source networks from accumulating as zigzag artefacts in the trail.
-                   const MIN_TRAIL_DIST_M = 30;
+                    // Minimum distance gate (50m) prevents multilateration noise
+                    const MIN_TRAIL_DIST_M = 50;
                    let trail: TrailPoint[] = existing?.trail || [];
                    const lastTrail = trail[trail.length - 1];
                    const distFromLastTrail = lastTrail
@@ -642,6 +658,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     const visual = visualStateRef.current.get(entity.uid);
                     const blendLat = visual ? visual.lat : newLat;
                     const blendLon = visual ? visual.lon : newLon;
+                    
+                    const classification = entity.detail?.classification as import('../../types').EntityClassification | undefined;
 
                     // Calculate interval (clamped to avoid jitter from rapid updates)
                     const lastServerTime = currentDr ? currentDr.serverTime : now - 1000;
@@ -669,6 +687,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         type: entity.type,
                         course: entity.detail?.track?.course || 0,
                         speed: entity.detail?.track?.speed || 0,
+                        vspeed: entity.detail?.track?.vspeed || 0,
                         callsign,
                         // SEPARATION OF CONCERNS:
                         // time: The raw source time from the packet
@@ -679,7 +698,15 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         lastSeen: Date.now(), 
                         trail,
                         uidHash: 0, // Will be set below
-                        raw: updateData.raw // Map raw hex from worker
+                        raw: updateData.raw, // Map raw hex from worker
+                        classification: classification ? {
+                            ...existingEntity?.classification,
+                            ...classification,
+                            // Priority: keep existing description if new one is missing/empty
+                            description: classification.description || existingEntity?.classification?.description || '',
+                            operator: classification.operator || existingEntity?.classification?.operator || '',
+                            registration: classification.registration || existingEntity?.classification?.registration || '',
+                        } : existingEntity?.classification,
                     });
                     
                     // Pre-compute UID hash for glow animation (once per entity, not per frame)
@@ -725,7 +752,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                        onEvent?.({
                            type: 'new',
                            message: `${isShip ? '🚢' : '✈️'} ${callsign}`,
-                           entityType: isShip ? 'sea' : 'air'
+                           entityType: isShip ? 'sea' : 'air',
+                           classification
                        });
                    }
                }
@@ -848,7 +876,15 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                      
                      // Filter
                      if (isShip && !filters?.showSea) continue;
-                     if (!isShip && !filters?.showAir) continue;
+                     if (!isShip) {
+                         if (!filters?.showAir) continue;
+                         if (entity.classification) {
+                             const cls = entity.classification;
+                             if (cls.platform === 'helicopter' && filters?.showHelicopter === false) continue;
+                             if (cls.affiliation === 'military' && filters?.showMilitary === false) continue;
+                             if (cls.affiliation === 'government' && filters?.showGovernment === false) continue;
+                         }
+                     }
                      
                      if (isShip) seaCount++; else airCount++;
 
@@ -887,7 +923,17 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
                   // Filter
                   if (isShip && !filters?.showSea) continue;
-                  if (!isShip && !filters?.showAir) continue;
+                  if (!isShip) {
+                      if (!filters?.showAir) continue;
+                      if (entity.classification) {
+                          const cls = entity.classification;
+                          if (cls.platform === 'helicopter' && filters?.showHelicopter === false) continue;
+                          if (cls.affiliation === 'military' && filters?.showMilitary === false) continue;
+                          if (cls.affiliation === 'government' && filters?.showGovernment === false) continue;
+                          if (cls.affiliation === 'commercial' && filters?.showCommercial === false) continue;
+                          if (cls.affiliation === 'general_aviation' && filters?.showPrivate === false) continue;
+                      }
+                  }
 
                   // Interpolate
                   // Projective Velocity Blending (PVB)
@@ -961,6 +1007,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     lon: visual.lon,
                     lat: visual.lat,
                     altitude: visual.alt,
+                    course: dr ? (dr.blendCourseRad * 180 / Math.PI) : entity.course
                   };
 
                   interpolated.push(interpolatedEntity);
@@ -1060,24 +1107,20 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
             const layers = [
                 // 1. All History Trails (Global Toggle)
+                // Filter out the selected entity's trail to avoid z-fighting/jaggedness
                 ...(historyTailsRef.current ? [
                     new PathLayer({
                         id: 'all-history-trails',
-                        data: interpolated.filter(e => e.trail.length >= 2),
+                        data: interpolated.filter(e => e.trail.length >= 2 && (!currentSelected || e.uid !== currentSelected.uid)),
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getPath: (d: any) => {
-                            // Sync tail with head: Replace last point with current interpolated position
-                            // so the line connects perfectly to the icon.
                             if (!d.trail || d.trail.length === 0) return [];
-                            // Convert standard trail points to [lon, lat, alt]
-                            const cleanTrail = d.trail.map((p: any) => [p[0], p[1], p[2]]);
-                            // Append current visual head
-                            return [...cleanTrail.slice(0, -1), [d.lon, d.lat, d.altitude]];
+                            // Append visual head as an extra point for smooth growth
+                            return [...d.trail.map((p: any) => [p[0], p[1], p[2]]), [d.lon, d.lat, d.altitude]];
                         },
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getColor: (d: any) => {
                             const isShip = d.type.includes('S');
-                            // Bumping alpha from 100 -> 180 for better visibility
                             return isShip
                                 ? speedToColor(d.speed, 180)
                                 : altitudeToColor(d.altitude, 180);
@@ -1097,9 +1140,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         const entity = interpolated.find(e => e.uid === currentSelected.uid)!;
                         if (!entity.trail || entity.trail.length < 2) return [];
                         
-                        // Sync tail with head for highlight too
-                        const cleanTrail = entity.trail.map(p => [p[0], p[1], p[2]]);
-                        const trailPath = [...cleanTrail.slice(0, -1), [entity.lon, entity.lat, entity.altitude]];
+                        // Append head
+                        const trailPath = [...entity.trail.map(p => [p[0], p[1], p[2]]), [entity.lon, entity.lat, entity.altitude]];
 
                         const isShip = entity.type.includes('S');
                         const trailColor = isShip
@@ -1112,7 +1154,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             getPath: (d: any) => d.path,
                             getColor: trailColor,
-                            getWidth: 3,
+                            getWidth: 3.5,
                             widthMinPixels: 2.5,
                             pickable: false,
                             jointRounded: true,
@@ -1166,8 +1208,11 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     },
                     sizeUnits: 'pixels' as const,
                     billboard: false, 
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    getAngle: (d: any) => -(d.course || 0), // Negate course because DeckGL rotates CCW, Compass is CW
+                    // Smoothly interpolate course for rotation (CCW -> CW conversion)
+                    getAngle: (d: any) => {
+                        const course = (d.course || 0);
+                        return -course;
+                    },
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     getColor: (d: any) => entityColor(d as CoTEntity),
                     pickable: true,

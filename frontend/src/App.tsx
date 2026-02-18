@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import TacticalMap from './components/map/TacticalMap'
 import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
@@ -7,7 +7,6 @@ import { TopBar } from './components/layouts/TopBar'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
-import { useRef, useEffect } from 'react'
 
 function App() {
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0 });
@@ -22,6 +21,11 @@ function App() {
   const [filters, setFilters] = useState({
     showAir: true,
     showSea: true,
+    showHelicopter: true,
+    showMilitary: true,
+    showGovernment: true,
+    showCommercial: true,
+    showPrivate: true,
   });
   
   // Velocity Vector Toggle
@@ -222,19 +226,39 @@ function App() {
   }, [isPlaying, playbackSpeed, replayRange.end, updateReplayFrame]);
 
 
+  // Add new event to feed (keep events from the last hour)
   const addEvent = useCallback((event: Omit<IntelEvent, 'id' | 'time'>) => {
+    const now = Date.now();
+    const oneHourAgo = now - 3600000; // 3600 seconds * 1000 ms
+
     setEvents(prev => [{
       ...event,
       id: crypto.randomUUID(),
       time: new Date(),
-    }, ...prev].slice(0, 50));
+    }, ...prev].filter(e => e.time.getTime() > oneHourAgo));
   }, []);
 
-  const handleFilterChange = (key: 'showAir' | 'showSea', value: boolean) => {
+  // Periodic cleanup for events older than 1 hour
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const oneHourAgo = now - 3600000;
+      setEvents(prev => {
+        const filtered = prev.filter(e => e.time.getTime() > oneHourAgo);
+        // Only update state if something was actually removed to avoid unnecessary re-renders
+        return filtered.length === prev.length ? prev : filtered;
+      });
+    }, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleFilterChange = (key: string, value: boolean) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const alertsCount = events.filter(e => e.type === 'alert').length;
+  const alertsCount = useMemo(() => 
+    events.filter(e => e.type === 'alert').length, 
+  [events]);
 
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {
       setSelectedEntity(e);

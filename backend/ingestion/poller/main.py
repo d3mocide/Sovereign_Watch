@@ -45,6 +45,102 @@ ARBI_MIN_SPATIAL_M = 30.0
 ARBI_TTL_S = 30.0
 
 
+# ---------------------------------------------------------------------------
+# Classification Constants
+# ---------------------------------------------------------------------------
+# Known Military Operators (User-defined + common variants)
+MILITARY_OPERATORS = {
+    "United States Air Force", "United States Army", "United States Navy",
+    "United States Marine Corps", "US Coast Guard", "Royal Air Force",
+    "Royal Canadian Air Force", "Luftwaffe", "USAF", "US Navy", "US Army"
+}
+
+# Known Government Operators
+GOV_OPERATORS = {
+    "US Customs and Border Protection", "FBI", "Department of Homeland Security",
+    "NASA", "State Police", "DHS", "CBP", "National Police"
+}
+
+def classify_aircraft(ac: Dict) -> Dict:
+    """
+    Derive a rich classification from raw ADS-B fields.
+    Returns a dict with affiliation, platform, size, and raw fields.
+    """
+    # Extract raw fields safely
+    category = ac.get("category", "")
+    t_field = ac.get("t", "")
+    db_flags = int(ac.get("dbFlags") or 0)
+    operator = (ac.get("ownOp") or "").strip()
+    hex_id = (ac.get("hex") or "").upper()
+    callsign = (ac.get("flight") or "").strip()
+
+    # 1. Determine Affiliation
+    affiliation = "general_aviation"  # Default
+    
+    # Logic Priority:
+    # 1. dbFlags & 1 -> Military
+    if db_flags & 1:
+        affiliation = "military"
+    # 2. Operator match -> Military
+    elif operator in MILITARY_OPERATORS:
+        affiliation = "military"
+    # 3. Operator match -> Government
+    elif operator in GOV_OPERATORS:
+        affiliation = "government"
+    # 4. Hex range AE0000-AFFFFF -> Military (US)
+    elif "AE0000" <= hex_id <= "AFFFFF":
+        affiliation = "military"
+    # 5. Commercial patterns
+    # - Callsign 3-letter ICAO prefix (e.g., AAL123, UAL456)
+    # - Category A3 (Large), A4 (Heavy), A5 (High Performance) typically commercial
+    elif (len(callsign) > 3 and callsign[:3].isalpha() and callsign[3].isdigit()) or \
+         category in ("A3", "A4", "A5"):
+        affiliation = "commercial"
+
+    # 2. Determine Platform
+    platform = "fixed_wing"  # Default
+    
+    if category == "A7" or t_field.startswith("H"):
+        platform = "helicopter"
+    elif category == "B6":
+        platform = "drone"
+    elif category == "B2":
+        platform = "balloon"
+    elif category == "B1":
+        platform = "glider"
+    elif category == "A6":
+        platform = "high_performance"
+
+    # 3. Determine Size (Approximate mapping from Category)
+    # A0: No info, A1: Light < 15500lbs, A2: Small < 75000lbs, A3: Large < 300000lbs
+    # A4: Heavy > 300000lbs, A5: High Performance, A6: Amphibious, A7: Helicopter
+    size = "unknown"
+    if category == "A1":
+        size = "light"
+    elif category == "A2":
+        size = "small"
+    elif category == "A3":
+        size = "large"
+    elif category == "A4":
+        size = "heavy"
+    elif category == "A5":
+        size = "high_performance"
+
+    return {
+        "affiliation": affiliation,
+        "platform": platform,
+        "size": size,
+        "icaoType": t_field,
+        "category": category,
+        "dbFlags": db_flags,
+        "operator": operator,
+        "registration": ac.get("r", ""),
+        "description": ac.get("desc", ""),
+        "squawk": ac.get("squawk", ""),
+        "emergency": ac.get("emergency", "")
+    }
+
+
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return distance in metres between two WGS-84 coordinates."""
     R = 6_371_000.0
@@ -311,6 +407,10 @@ class PollerService:
 
     def normalize_to_tak(self, ac: Dict) -> Optional[Dict]:
         """Convert ADSBx format to SovereignWatch TAK-ish JSON format."""
+        
+        # Extract category locally for mapping scope
+        category = ac.get("category", "")
+        
         # Simple mapping matching aviation_ingest.yaml logic
         if not ac.get("lat") or not ac.get("lon"):
             return None
@@ -326,9 +426,34 @@ class PollerService:
         latency = float(ac.get("seen_pos") or ac.get("seen") or 0.0)
         source_ts = fetched_at - latency
             
+        target_class = classify_aircraft(ac)
+        
+        # Derive CoT Type String based on classification
+        # Default: "a-f-A-C-F" (Friendly - Air - Civilian - Fixed Wing)
+        cot_type = "a-f-A-C-F"
+        
+        affil_code = "C" # Civilian
+        plat_code = "F" # Fixed Wing
+        
+        if target_class["affiliation"] == "military":
+            affil_code = "M"
+        
+        if target_class["platform"] == "helicopter":
+            plat_code = "H"
+            
+        cot_type = f"a-f-A-{affil_code}-{plat_code}"
+        
+        # Special case: Maritime (unchanged per spec)
+        if category == "C1" or category == "C2" or category == "C3":
+             cot_type = "a-f-S-C-M"
+
+        # Special case: Drone
+        if target_class["platform"] == "drone":
+             cot_type = f"a-f-A-{affil_code}-Q" # Q is typically drone/RPV in CoT 2525B mapping variants, or use F per spec fallback
+
         return {
             "uid": ac.get("hex", "").lower(),
-            "type": "a-f-A-C-F", # Simplified default
+            "type": cot_type,
             "how": "m-g",
             "time": source_ts * 1000, # MS timestamp adjusted for age
             # Python time.time() is float seconds. JS/TAK usually likes MS or ISO.
@@ -346,11 +471,13 @@ class PollerService:
             "detail": {
                 "track": {
                     "course": ac.get("track") or 0,
-                    "speed": self._safe_float(ac.get("gs")) * 0.514444  # Knots to m/s
+                    "speed": self._safe_float(ac.get("gs")) * 0.514444,  # Knots to m/s
+                    "vspeed": self._safe_float(ac.get("baro_rate") or ac.get("geom_rate") or 0)
                 },
                 "contact": {
                     "callsign": (ac.get("flight", "") or ac.get("hex", "")).strip()
-                }
+                },
+                "classification": target_class
             }
         }
 

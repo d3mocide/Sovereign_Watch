@@ -1,7 +1,7 @@
 import React from 'react';
 import { CoTEntity } from '../../types';
 import { Compass } from '../widgets/Compass';
-import { Crosshair, Map as MapIcon, Shield, Info, Activity, Terminal } from 'lucide-react';
+import { Crosshair, Map as MapIcon, Shield, Terminal } from 'lucide-react';
 import { TimeTracked } from './TimeTracked';
 import { PayloadInspector } from '../widgets/PayloadInspector';
 
@@ -39,9 +39,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
 
   return (
-    <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500">
+    <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
       {/* 1. Target Identity Header */}
-      <div className={`p-4 border border-b-0 ${accentBorder} ${accentBg} backdrop-blur-md rounded-t-sm relative overflow-hidden`}>
+      <div className={`p-3 border border-b-0 ${accentBorder} ${accentBg} backdrop-blur-md rounded-t-sm relative overflow-hidden`}>
         {/* Glass Reflection Shine */}
 
         
@@ -50,10 +50,38 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
              <div className="flex items-center gap-2 mb-1">
                 <Shield size={14} className={accentColor} />
                 <span className="text-[10px] font-bold tracking-[.3em] text-white/40">IDENTIFIED_TARGET</span>
+                {entity.classification?.affiliation && (
+                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
+                        entity.classification.affiliation === 'military' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' :
+                        entity.classification.affiliation === 'government' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                        'bg-white/10 text-white/60 border border-white/20'
+                    }`}>
+                        {entity.classification.affiliation.toUpperCase()}
+                    </span>
+                )}
              </div>
-             <h2 className={`text-mono-xl font-bold tracking-tighter ${accentColor} drop-shadow-[0_0_8px_currentColor]`}>
+             <h2 className={`text-mono-xl font-bold tracking-tighter ${accentColor} drop-shadow-[0_0_8px_currentColor] mb-2`}>
                {entity.callsign}
              </h2>
+
+             {/* Aircraft Info Box */}
+             {entity.classification && (
+                <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
+                    <h3 className="text-mono-sm font-bold text-white/90">
+                        {entity.classification.description || entity.classification.icaoType || 'UNKNOWN_MODEL'}
+                    </h3>
+                    <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">Operator:</span>
+                            <span className="text-white/80">{entity.classification.operator || 'UNKNOWN'}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">Category:</span>
+                            <span className="text-white/80">{entity.classification.category || entity.classification.sizeClass || 'UNKNOWN'}</span>
+                        </div>
+                    </div>
+                </section>
+             )}
           </div>
           <button 
             onClick={onClose}
@@ -64,19 +92,21 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         </div>
 
         {/* Global IDs */}
-        <div className="mt-3 flex gap-2 overflow-hidden">
-            <div className="bg-black/60 px-2 py-1 rounded border border-white/5 flex flex-col min-w-0 shadow-inner">
+        <div className="flex gap-2 overflow-hidden mb-2">
+            <div className="bg-black/40 px-2 py-1 rounded border border-white/10 flex flex-col min-w-0 shadow-inner">
                 <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">TYPE_TAG</span>
-                <span className="text-mono-xs truncate text-white/90">{entity.type}</span>
+                <span className="text-mono-xs font-bold truncate text-white">{entity.type}</span>
             </div>
-            <div className="bg-black/60 px-2 py-1 rounded border border-white/5 flex flex-col flex-1 shadow-inner">
-                <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">PLATFORM_UID</span>
-                <span className="text-mono-xs truncate tabular-nums text-white/90">{entity.uid.split('-')[0]}</span>
+            <div className="bg-black/40 px-2 py-1 rounded border border-white/10 flex flex-col flex-1 shadow-inner">
+                <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">REGISTRATION</span>
+                <span className="text-mono-xs font-bold truncate text-white">
+                    {entity.classification?.registration || 'N/A'}
+                </span>
             </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="mt-2 flex gap-2">
+        <div className="flex gap-2">
             <button 
                 onClick={(e) => {
                     e.stopPropagation();
@@ -95,113 +125,111 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       </div>
 
       {/* 2. Main Data Body */}
-      <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-4 space-y-4 scrollbar-none">
+      <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
         
         {/* Positional Group */}
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 text-hud-green/40 border-b border-hud-green/10 pb-1">
-             <Activity size={12} />
-             <h3 className="text-[10px] font-bold uppercase tracking-widest">Positional_Telemetry</h3>
+        <section className="space-y-2">
+          <div className="flex items-center gap-2 text-hud-green/40 pb-1">
+             <h3 className="text-[10px] text-white/50 font-bold">Positional_Telemetry</h3>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-             <div className="bg-white/5 border border-white/5 p-2 rounded shadow-inner">
-                <span className="text-[9px] text-white/30 block mb-0.5">LATITUDE</span>
-                <span className="text-mono-base font-bold text-white tabular-nums">
-                    {entity.lat.toFixed(6)}°
-                </span>
+          <div className="flex gap-4 text-mono-xs">
+             <div className="flex gap-2">
+                <span className="text-white/30">LAT:</span>
+                <span className="text-white tabular-nums">{entity.lat.toFixed(6)}°</span>
              </div>
-             <div className="bg-white/5 border border-white/5 p-2 rounded shadow-inner">
-                <span className="text-[9px] text-white/30 block mb-0.5">LONGITUDE</span>
-                <span className="text-mono-base font-bold text-white tabular-nums">
-                    {entity.lon.toFixed(6)}°
-                </span>
+             <div className="flex gap-2">
+                <span className="text-white/30">LON:</span>
+                <span className="text-white tabular-nums">{entity.lon.toFixed(6)}°</span>
              </div>
           </div>
         </section>
 
         {/* Kinematics Group */}
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 text-hud-green/40 border-b border-hud-green/10 pb-1">
-             <Terminal size={12} />
-             <h3 className="text-[10px] font-bold uppercase tracking-widest">Vector_Dynamics</h3>
+        <section className="space-y-2">
+          <div className="flex items-center gap-2 text-hud-green/40 pb-1">
+             <h3 className="text-[10px] text-white/50 font-bold">Vector_Dynamics</h3>
           </div>
-          <div className={`grid ${isShip ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
-             <div className="bg-white/5 border border-white/5 p-2 rounded">
-                <span className="text-[9px] text-white/30 block mb-1">SPEED_KTS</span>
-                <span className={`text-mono-base font-bold tabular-nums`} style={isShip ? {
-                    color: `rgb(${(() => {
-                        const kts = entity.speed * 1.94384;
-                        if (kts <= 2) return '0,50,150';
-                        if (kts <= 8) return '0,100,200';
-                        if (kts <= 15) return '0,150,255';
-                        if (kts <= 25) return '200,255,255';
-                        return '255,255,255';
-                    })()})`
-                } : undefined}>
-                    <span className={isShip ? '' : accentColor}>
-                        {(entity.speed * 1.94384).toFixed(1)}
-                    </span>
-                </span>
-             </div>
-             <div className="bg-white/5 border border-white/5 p-2 rounded">
-                <span className="text-[9px] text-white/30 block mb-1">HEADING</span>
-                <span className={`text-mono-base font-bold ${accentColor} tabular-nums`}>
-                    {Math.round(entity.course)}°
-                </span>
-             </div>
-             {!isShip && (
-                <div className="bg-white/5 border border-white/5 p-2 rounded">
-                   <span className="text-[9px] text-white/30 block mb-1">ALTITUDE_FT</span>
-                   <span className={`text-mono-base font-bold tabular-nums ${(() => {
-                        const ft = entity.altitude * 3.28084;
-                        const norm = Math.min(ft / 42650, 1.0);
-                        const g = Math.pow(norm, 0.4);
-                        if (g < 0.20) return 'text-green-500';
-                        if (g < 0.40) return 'text-lime-400';
-                        if (g < 0.60) return 'text-yellow-400';
-                        if (g < 0.80) return 'text-orange-400';
-                        if (g < 0.95) return 'text-red-500';
-                        return 'text-fuchsia-400';
-                    })()}`}>
-                       {entity.altitude > 0 ? Math.round(entity.altitude * 3.28084).toLocaleString() : 'GND'}
-                   </span>
-                </div>
-             )}
+          
+          <div className="space-y-1 text-mono-xs font-medium">
+              {/* Row 1: Speed / Hdg */}
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">SPEED:</span>
+                      <span className={`${accentColor} tabular-nums`}>{(entity.speed * 1.94384).toFixed(1)} kts</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">HDG:</span>
+                      <span className={`${accentColor} tabular-nums`}>{Math.round(entity.course)}°</span>
+                  </div>
+              </div>
+
+              {/* Row 2: Alt / VS */}
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">ALT:</span>
+                      <span className="text-white tabular-nums">
+                         {entity.altitude > 0 ? Math.round(entity.altitude * 3.28084).toLocaleString() : 'GND'} ft
+                      </span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">VS:</span>
+                      <span className={`${entity.vspeed && Math.abs(entity.vspeed) > 100 ? 'text-white' : 'text-white/40'} tabular-nums`}>
+                          {entity.vspeed ? Math.round(entity.vspeed).toLocaleString() : '0'} fpm
+                      </span>
+                  </div>
+              </div>
+
+               {/* Row 3: Squawk / Emergency */}
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">SQUAWK:</span>
+                      <span className="text-amber-500/80 tabular-nums">{entity.classification?.squawk || '----'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 pb-1">
+                      <span className="text-white/30">EMRG:</span>
+                      <span className={`${entity.classification?.emergency && entity.classification.emergency !== 'none' ? 'text-alert-red animate-pulse font-bold' : 'text-white/40'} tabular-nums`}>
+                          {entity.classification?.emergency ? entity.classification.emergency.toUpperCase() : 'NONE'}
+                      </span>
+                  </div>
+              </div>
           </div>
           
           {/* Linked Compass Widget */}
-          <Compass heading={entity.course} size={140} />
+          <div className="pt-1 flex justify-center opacity-80 scale-90">
+             <Compass heading={entity.course} size={140} />
+          </div>
         </section>
 
+        <div className="h-px bg-white/5 w-full my-2"></div>
+
         {/* Metadata Group */}
-        <section className="space-y-2">
-           <div className="flex items-center gap-2 text-hud-green/40 border-b border-hud-green/10 pb-1">
-             <Info size={12} />
-             <h3 className="text-[10px] font-bold uppercase tracking-widest">Metadata_Source</h3>
-          </div>
-          <div className="flex flex-col gap-2 pt-2">
-             <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
-                <span className="text-[10px] text-white/40">TIME_TRACKED</span>
-                <span className="text-mono-xs text-white/80 tabular-nums">
-                <span className="text-mono-xs text-white/80 tabular-nums">
-                   <TimeTracked lastSeen={entity.lastSeen} />
-                </span>
-                </span>
-             </div>
-             <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
-                <span className="text-[10px] text-white/40">Signal_Source</span>
-                <span className="text-mono-xs text-white/80">{isShip ? 'AIS_BENTHOS' : 'ADSB_DIRECT'}</span>
-             </div>
-             <div className="flex justify-between items-baseline py-1 border-b border-white-[3%]">
-                <span className="text-[10px] text-white/40">Security_Clearance</span>
-                <span className="text-mono-xs text-hud-green">LEVEL_01_PUBLIC</span>
-             </div>
-          </div>
-        </section>
+        <section className="space-y-1">
+           <h3 className="text-[10px] text-white/50 font-bold pb-1">Metadata_Source</h3>
+           <div className="flex flex-col gap-1 text-[10px] font-mono">
+              <div className="grid grid-cols-[100px_1fr]">
+                 <span className="text-white/30">TIME_TRACKED:</span>
+                 <span className="text-white/80"><TimeTracked lastSeen={entity.lastSeen} /></span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr]">
+                 <span className="text-white/30">Signal_Source:</span>
+                 <span className="text-hud-green/80">{isShip ? 'AIS_BENTHOS' : 'ADSB_DIRECT'}</span>
+              </div>
+              <div className="grid grid-cols-[100px_1fr]">
+                 <span className="text-white/30">Classification:</span>
+                 <span className={`${
+                     entity.classification?.affiliation === 'military' ? 'text-amber-500' :
+                     entity.classification?.affiliation === 'government' ? 'text-blue-400' :
+                     'text-white/60'
+                 } uppercase`}>
+                     {entity.classification?.affiliation || 'UNKNOWN'}
+                 </span>
+              </div>
+            </div>
+         </section>
       </div>
 
       {/* 3. Footer Actions */}
-      <div className="p-4 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
+      <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
          <button 
             onClick={() => setShowInspector(true)}
             className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"

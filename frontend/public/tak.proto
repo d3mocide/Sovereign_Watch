@@ -44,6 +44,7 @@ message Detail {
   Group group = 3;
   Status status = 4;
   PrecisionLocation precisionLocation = 5;
+  Classification classification = 6;
   // XML fallback for unmapped fields
   string xmlDetail = 100; 
 }
@@ -57,6 +58,7 @@ message Track {
   double course = 1; // Degrees
   double speed = 2;  // Meters/second
   double slope = 3;  // Degrees
+  double vspeed = 4; // Feet/minute (standard aviation)
 }
 
 message Group {
@@ -72,4 +74,18 @@ message Status {
 message PrecisionLocation {
   string geopointsrc = 1;
   string altsrc = 2;
+}
+
+message Classification {
+  string affiliation = 1;
+  string platform = 2;
+  string size_class = 3;
+  string icao_type = 4;
+  string category = 5;
+  uint32 db_flags = 6;
+  string operator = 7;
+  string registration = 8;
+  string description = 9;
+  string squawk = 10;
+  string emergency = 11;
 }

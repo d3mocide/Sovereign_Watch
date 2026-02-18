@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from aiokafka import AIOKafkaConsumer
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
-from proto.tak_pb2 import TakMessage, CotEvent, Detail, Contact, Track
+from proto.tak_pb2 import TakMessage, CotEvent, Detail, Contact, Track, Classification
 import redis.asyncio as redis
 
 # Setup Logging
@@ -100,11 +100,15 @@ async def historian_task():
                 contact = detail.get("contact", {})
                 callsign = contact.get("callsign") or uid
                 
+                # NEW: Capture classification in meta for historical search enrichment
+                classification = detail.get("classification", {})
+                
                 meta = json.dumps({
                     "callsign": callsign,
                     "how": data.get("how"),
                     "ce": point.get("ce"),
-                    "le": point.get("le")
+                    "le": point.get("le"),
+                    "classification": classification
                 })
                 
                 batch.append((ts, uid, etype, lat, lon, alt, speed, heading, meta))
@@ -405,10 +409,27 @@ async def websocket_endpoint(websocket: WebSocket):
                 src_track = src_detail.get("track", {})
                 cot.detail.track.course = to_float(src_track.get("course"))
                 cot.detail.track.speed = to_float(src_track.get("speed"))
+                cot.detail.track.vspeed = to_float(src_track.get("vspeed"))
                 
                 # Contact
                 src_contact = src_detail.get("contact", {})
                 cot.detail.contact.callsign = str(src_contact.get("callsign", cot.uid))
+                
+                # Classification
+                src_class = src_detail.get("classification", {})
+                if src_class:
+                    cls = cot.detail.classification
+                    cls.affiliation = str(src_class.get("affiliation", ""))
+                    cls.platform = str(src_class.get("platform", ""))
+                    cls.size_class = str(src_class.get("size", "")) # size in JSON, size_class in Proto
+                    cls.icao_type = str(src_class.get("icaoType", ""))
+                    cls.category = str(src_class.get("category", ""))
+                    cls.db_flags = int(src_class.get("dbFlags") or 0)
+                    cls.operator = str(src_class.get("operator", ""))
+                    cls.registration = str(src_class.get("registration", ""))
+                    cls.description = str(src_class.get("description", ""))
+                    cls.squawk = str(src_class.get("squawk", ""))
+                    cls.emergency = str(src_class.get("emergency", ""))
                 
                 # Serialize
                 payload = tak_msg.SerializeToString()
@@ -494,10 +515,13 @@ async def search_tracks(q: str, limit: int = 10):
                 try:
                     meta = json.loads(meta_json)
                     d['callsign'] = meta.get('callsign')
+                    d['classification'] = meta.get('classification')
                 except:
                     d['callsign'] = None
+                    d['classification'] = None
             else:
                 d['callsign'] = None
+                d['classification'] = None
             
             # Clean up response
             d.pop('meta', None)

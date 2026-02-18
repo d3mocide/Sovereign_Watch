@@ -1,14 +1,58 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Radio, Bell, TrendingDown, TrendingUp, Filter } from 'lucide-react';
-import { CoTEntity, MapActions, IntelEvent } from '../../types';
+import { CoTEntity, MapActions, IntelEvent, MapFilters } from '../../types';
 
 interface IntelFeedProps {
   events: IntelEvent[];
   onEntitySelect?: (entity: CoTEntity) => void;
   mapActions?: MapActions;
+  filters?: MapFilters;
 }
 
-export const IntelFeed: React.FC<IntelFeedProps> = ({ events, onEntitySelect, mapActions }) => {
+export const IntelFeed = ({ events, onEntitySelect, mapActions, filters }: IntelFeedProps) => {
+  // 1. Memoize filtered events to avoid recalculating on every render
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+        if (!filters) return true;
+        
+        // Root filters
+        if (event.entityType === 'air' && !filters.showAir) return false;
+        if (event.entityType === 'sea' && !filters.showSea) return false;
+        
+        // Affiliation filters (only if air is on)
+        if (event.entityType === 'air' && event.classification) {
+            const aff = event.classification.affiliation;
+            if (aff === 'military' && filters.showMilitary === false) return false;
+            if (aff === 'government' && filters.showGovernment === false) return false;
+            if (aff === 'commercial' && filters.showCommercial === false) return false;
+            if (aff === 'general_aviation' && filters.showPrivate === false) return false;
+            
+            // Platform filter
+            if (event.classification.platform === 'helicopter' && filters.showHelicopter === false) return false;
+        }
+        
+        return true;
+    });
+  }, [events, filters]);
+
+  // 2. stable callback for click handling
+  const handleItemClick = useCallback((event: IntelEvent) => {
+    if (onEntitySelect && mapActions) {
+        const words = event.message.split(' ').map((w: string) => w.replace(/[^a-zA-Z0-9]/g, ''));
+        
+        for (const word of words) {
+            if (word.length < 3) continue;
+            const matches = mapActions.searchLocal(word);
+            const exact = matches.find((e: CoTEntity) => e.callsign === word || e.uid === word);
+            if (exact) {
+                onEntitySelect(exact);
+                mapActions.flyTo(exact.lat, exact.lon, 12);
+                return;
+            }
+        }
+    }
+  }, [onEntitySelect, mapActions]);
+
   return (
     <div className="flex flex-1 flex-col min-h-0 rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-inner overflow-hidden">
       <div className="flex items-center justify-between border-b border-tactical-border bg-white/5 px-3 py-2">
@@ -29,83 +73,91 @@ export const IntelFeed: React.FC<IntelFeedProps> = ({ events, onEntitySelect, ma
           </div>
         ) : (
           <div className="space-y-2">
-            {events.map((event) => {
-              const isAir = event.entityType === 'air';
-              const isLost = event.type === 'lost';
-              const isAlert = event.type === 'alert';
-              
-              const accentColor = isAlert ? 'bg-alert-red' : 
-                                 isLost ? 'bg-alert-amber' : 
-                                 isAir ? 'bg-air-accent' : 'bg-sea-accent';
-              
-              const borderLight = isAlert ? 'border-alert-red/30' : 
-                                 isLost ? 'border-alert-amber/30' : 
-                                 isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
-
-              return (
-                <div 
-                  key={event.id}
-                  onClick={() => {
-                      if (onEntitySelect && mapActions) {
-                          // Attempt to extract callsign/ID from message
-                          // Formats: "New Track: ASA19", "Alert: ASA19 entered..."
-                          // Simple heuristic: match alphanumeric words > 3 chars?
-                          // Or just try to match the known entities.
-                          // Let's try to extract typical callsign pattern (uppercase, alphanumeric).
-                          const words = event.message.split(' ').map((w: string) => w.replace(/[^a-zA-Z0-9]/g, ''));
-                          
-                          for (const word of words) {
-                              if (word.length < 3) continue;
-                              const matches = mapActions.searchLocal(word);
-                              // Exact match preferred
-                              const exact = matches.find((e: CoTEntity) => e.callsign === word || e.uid === word);
-                              if (exact) {
-                                  onEntitySelect(exact);
-                                  mapActions.flyTo(exact.lat, exact.lon, 12);
-                                  return;
-                              }
-                          }
-                          // Fallback: click does nothing if not found.
-                      }
-                  }}
-                  className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
-                >
-                  {/* Event Marker Bar */}
-                  <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
-                  
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-0.5">
-                       <div className="flex items-center gap-2">
-                          {isAlert ? <Bell size={10} className="text-alert-red" /> : 
-                           isLost ? <TrendingDown size={10} className="text-alert-amber" /> : 
-                           <TrendingUp size={10} className={isAir ? 'text-air-accent' : 'text-sea-accent'} />}
-                          
-                          <span className={`text-[10px] font-bold tracking-widest uppercase ${isAlert ? 'text-alert-red' : isLost ? 'text-alert-amber' : isAir ? 'text-air-accent' : 'text-sea-accent'}`}>
-                             {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
-                          </span>
-                       </div>
-                       <p className="text-mono-sm font-medium leading-tight text-white/80 group-hover:text-white">
-                          {event.message}
-                       </p>
-                    </div>
-                    <span className="text-[8px] font-mono text-white/30 whitespace-nowrap">
-                       {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
-                  
-                  {/* Subtle Background Icon */}
-                  <div className="absolute -bottom-2 -right-2 opacity-[0.03] transition-opacity group-hover:opacity-[0.08]">
-                     {isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
-                  </div>
-                </div>
-              );
-            })}
+            {filteredEvents.map((event) => (
+                <IntelEventItem 
+                    key={event.id} 
+                    event={event} 
+                    onClick={handleItemClick} 
+                />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+// 3. Isolated sub-component with React.memo to prevent unnecessary re-renders
+const IntelEventItem = React.memo(({ 
+    event, 
+    onClick 
+}: { 
+    event: IntelEvent; 
+    onClick: (event: IntelEvent) => void; 
+}) => {
+    const isAir = event.entityType === 'air';
+    const isLost = event.type === 'lost';
+    const isAlert = event.type === 'alert';
+    
+    const isMil = event.classification?.affiliation === 'military';
+    const isGov = event.classification?.affiliation === 'government';
+    
+    const accentColor = isAlert ? 'bg-alert-red' : 
+                       isLost ? 'bg-alert-amber' : 
+                       isMil ? 'bg-amber-500' :
+                       isGov ? 'bg-blue-400' :
+                       isAir ? 'bg-air-accent' : 'bg-sea-accent';
+    
+    const textColor = isAlert ? 'text-alert-red' : 
+                     isLost ? 'text-alert-amber' : 
+                     isMil ? 'text-amber-500' :
+                     isGov ? 'text-blue-400' :
+                     isAir ? 'text-air-accent' : 'text-sea-accent';
+
+    const borderLight = isAlert ? 'border-alert-red/30' : 
+                       isLost ? 'border-alert-amber/30' : 
+                       isMil ? 'border-amber-500/30' :
+                       isGov ? 'border-blue-400/30' :
+                       isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
+
+    return (
+      <div 
+        onClick={() => onClick(event)}
+        className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
+      >
+        <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
+        
+        <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-0.5">
+             <div className="flex items-center gap-2">
+                {isAlert ? <Bell size={10} className="text-alert-red" /> : 
+                 isLost ? <TrendingDown size={10} className="text-alert-amber" /> : 
+                 <TrendingUp size={10} className={isAir ? 'text-air-accent' : 'text-sea-accent'} />}
+                
+                 <span className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}>
+                    {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
+                 </span>
+                 {event.classification?.platform && (
+                      <span className={`text-[9px] px-1 rounded border ${borderLight} ${textColor} opacity-80`}>
+                          {event.classification.platform.toUpperCase()}
+                      </span>
+                 )}
+             </div>
+             <p className="text-mono-sm font-medium leading-tight text-white/80 group-hover:text-white">
+                {event.message}
+             </p>
+          </div>
+          <span className="text-[8px] font-mono text-white/30 whitespace-nowrap">
+             {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        </div>
+        
+        <div className="absolute -bottom-2 -right-2 opacity-[0.03] transition-opacity group-hover:opacity-[0.08]">
+           {isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
+        </div>
+      </div>
+    );
+});
 
 // Internal utility icons
 const ActivityIndicator = () => (

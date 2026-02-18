@@ -10,8 +10,8 @@ import { IntelEvent, MissionProps } from '../../types';
 
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number };
-  filters: { showAir: boolean; showSea: boolean };
-  onFilterChange: (key: 'showAir' | 'showSea', value: boolean) => void;
+  filters: import('../../types').MapFilters;
+  onFilterChange: (key: string, value: boolean) => void;
   events: IntelEvent[];
   missionProps: MissionProps | null;
   health?: SystemHealth;
@@ -57,7 +57,12 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       )}
 
       {/* 2. System Intelligence Feed */}
-      <IntelFeed events={events} onEntitySelect={onEntitySelect} mapActions={mapActions} />
+      <IntelFeed 
+        events={events} 
+        onEntitySelect={onEntitySelect} 
+        mapActions={mapActions} 
+        filters={filters}
+      />
 
       {/* 3. Metrics & Analytics */}
       <SystemStatus trackCounts={trackCounts} />

@@ -8,6 +8,7 @@ export type CoTEntity = {
     type: string;
     course: number;
     speed: number;
+    vspeed?: number;
     callsign: string;
     time?: number; // Source Timestamp
     lastSeen: number; // Timestamp for staleness check
@@ -16,7 +17,22 @@ export type CoTEntity = {
     detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
     lastSourceTime?: number; // Latest timestamp from source (for ordering)
     raw?: string; // Hex-encoded raw payload for inspection
+    classification?: EntityClassification;
 };
+
+export interface EntityClassification {
+    affiliation?: string;
+    platform?: string;
+    sizeClass?: string;
+    icaoType?: string;
+    category?: string;
+    dbFlags?: number;
+    operator?: string;
+    registration?: string;
+    description?: string;
+    squawk?: string;
+    emergency?: string;
+}
 
 export interface IntelEvent {
     id: string;
@@ -24,6 +40,7 @@ export interface IntelEvent {
     type: 'new' | 'lost' | 'alert';
     message: string;
     entityType?: 'air' | 'sea';
+    classification?: EntityClassification;
 }
 
 export interface MissionLocation {
@@ -47,4 +64,15 @@ export interface MapActions {
     flyTo: (lat: number, lon: number, zoom?: number) => void;
     fitBounds: (bounds: [[number, number], [number, number]]) => void;
     searchLocal: (query: string) => CoTEntity[];
+}
+
+export interface MapFilters {
+    showAir: boolean;
+    showSea: boolean;
+    showHelicopter: boolean;
+    showMilitary: boolean;
+    showGovernment: boolean;
+    showCommercial: boolean;
+    showPrivate: boolean;
+    [key: string]: boolean | undefined;
 }
