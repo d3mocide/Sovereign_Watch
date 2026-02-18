@@ -97,15 +97,42 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
         };
 
         performSearch();
+        performSearch();
     }, [debouncedQuery, mapActions]);
+
+    // Live Refresh Effect
+    useEffect(() => {
+       if (!debouncedQuery || debouncedQuery.length < 2 || results.length === 0) return;
+
+       const refreshInterval = setInterval(() => {
+           const localMatches = mapActions.searchLocal(debouncedQuery);
+
+           setResults(prev => prev.map(result => {
+               if (!result.isLive) return result;
+               const updated = localMatches.find(e => e.uid === result.uid);
+               if (updated) {
+                   return {
+                       ...result,
+                       lat: updated.lat,
+                       lon: updated.lon,
+                       lastSeen: updated.lastSeen,
+                       entity: updated,
+                   };
+               }
+               return result;
+           }));
+       }, 2000);
+
+       return () => clearInterval(refreshInterval);
+    }, [debouncedQuery, results.length > 0, mapActions]);
 
     const handleSelect = (result: SearchResult) => {
         if (result.isLive && result.entity) {
             onEntitySelect(result.entity);
-            mapActions.flyTo(result.lat, result.lon, 14);
+            mapActions.flyTo(result.lat, result.lon, 12);
         } else {
             // For historical, just fly to location
-            mapActions.flyTo(result.lat, result.lon, 14);
+            mapActions.flyTo(result.lat, result.lon, 12);
         }
         // Optional: clear search on select?
         // setQuery(''); 
@@ -176,7 +203,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
-                                    <span>{result.uid}</span>
+                                    <span>{result.lat.toFixed(4)}° {result.lon.toFixed(4)}°</span>
                                     <span>•</span>
                                     <div className="flex items-center gap-1">
                                         {result.isLive ? <Clock size={8} /> : <History size={8} />}

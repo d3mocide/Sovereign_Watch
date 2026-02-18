@@ -8,7 +8,7 @@ import { PayloadInspector } from '../widgets/PayloadInspector';
 interface SidebarRightProps {
   entity: CoTEntity | null;
   onClose: () => void;
-  onCenterMap?: (lat: number, lon: number) => void;
+  onCenterMap?: () => void;
 }
 
 export const SidebarRight: React.FC<SidebarRightProps> = ({ 
@@ -78,7 +78,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         {/* Actions Bar */}
         <div className="mt-2 flex gap-2">
             <button 
-                onClick={() => onCenterMap?.(entity.lat, entity.lon)}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onCenterMap?.();
+                }}
                 className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-hud-green/30 to-hud-green/10 hover:from-hud-green/40 hover:to-hud-green/20 border border-hud-green/50 py-1.5 rounded text-[10px] font-bold tracking-widest text-hud-green transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(0,255,65,0.1)]"
             >
                 <Crosshair size={12} />

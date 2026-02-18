@@ -338,10 +338,15 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
     const historyTailsRef = useRef(showHistoryTails ?? true); // Default to true as per user preference
     const replayEntitiesRef = useRef<Map<string, CoTEntity>>(new Map());
     const followModeRef = useRef(followMode ?? false);
+    const lastFollowEnableRef = useRef<number>(0);
     const selectedEntityRef = useRef<CoTEntity | null>(selectedEntity);
     
     // Sync followMode ref
     useEffect(() => {
+        console.log("FollowMode prop changed:", followMode);
+        if (followMode && !followModeRef.current) {
+             lastFollowEnableRef.current = Date.now();
+        }
         followModeRef.current = followMode ?? false;
     }, [followMode]);
 
@@ -982,34 +987,50 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             // Preventing "rubber banding" or jitter.
             // Executed ONCE per frame, not per entity.
             const currentSelected = selectedEntityRef.current;
-            if (followModeRef.current && currentSelected && mapRef.current) {
-                const visual = visualStateRef.current.get(currentSelected.uid);
-                if (visual) {
-                    try {
-                        const map = mapRef.current.getMap();
-                        
-                        // Use unified compensation helper
-                        const [centerLon, centerLat] = getCompensatedCenter(visual.lat, visual.lon, visual.alt, map);
+            if (mapRef.current) {
+                const map = mapRef.current.getMap();
+                const isUserInteracting = map.dragPan.isActive() || 
+                                        map.scrollZoom.isActive() || 
+                                        map.touchZoomRotate.isActive() || 
+                                        map.dragRotate.isActive();
 
-                        // Use a more lenient movement check:
-                        // Only block jump if the user is explicitly manipulating the view (rot/zoom/drag)
-                        // This prevents fighting user input without blocking the follow logic.
-                        const isUserInteracting = map.dragPan.isActive() || 
-                                                map.scrollZoom.isActive() || 
-                                                map.touchZoomRotate.isActive() || 
-                                                map.dragRotate.isActive();
+                // 1. Auto-disable follow mode if user enters interaction
+                // Grace period: 3 seconds to allow FlyTo to finish
+                const gracePeriodActive = (Date.now() - lastFollowEnableRef.current) < 3000;
+                
+                if (isUserInteracting && followModeRef.current && !gracePeriodActive) {
+                    // console.log("User interaction detected - Disabling Follow Mode", ...);
+                    followModeRef.current = false;
+                    onFollowModeChange?.(false);
+                }
+
+                // 2. Execute Follow Mode (if valid)
+                if (followModeRef.current) {
+                    if (currentSelected) {
+                        const visual = visualStateRef.current.get(currentSelected.uid);
                         
-                        if (!isUserInteracting && !map.isEasing()) {
-                            map.jumpTo({ 
-                                center: [centerLon, centerLat],
-                                animate: false 
-                            });
+                        if (visual) {
+                             if (isUserInteracting && !gracePeriodActive) {
+                                 // User is panning/zooming intentionally.
+                             } else if (map.isEasing()) {
+                                 // Wait for ease
+                             } else {
+                                // DO IT
+                                try {
+                                     const [centerLon, centerLat] = getCompensatedCenter(visual.lat, visual.lon, visual.alt, map);
+                                     map.jumpTo({ 
+                                         center: [centerLon, centerLat],
+                                         animate: false 
+                                     });
+                                } catch (e) {
+                                     console.error("FollowMode jumpTo failed:", e);
+                                }
+                             }
                         }
-                    } catch (e) {
-                        // Map instance might not be ready
                     }
                 }
             }
+
 
             // Deferred stale cleanup (don't delete during iteration)
             for (const uid of staleUids) {

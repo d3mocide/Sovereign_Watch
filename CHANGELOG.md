@@ -1,3 +1,23 @@
+## [0.6.1] - 2026-02-17
+
+### Added
+
+- **Live Search Tracking:** Search results now refresh every 2 seconds to show real-time Lat/Lon coordinates for moving entities.
+
+### Changed
+
+- **Tactical Zoom Defaults:**
+  - Search Result Zoom: Adjusted from 14 to **12**.
+  - Intel Stream Zoom: Adjusted from 14 to **12**.
+- **Entity Selection:** Standardized selection handlers to strictly disable "Follow Mode" effectively when context switching.
+
+### Fixed
+
+- **Follow Mode:**
+  - Fixed "soft lock" issues where manual interaction wouldn't reliably break the camera lock.
+  - Restored `isEasing` checks to prevent camera conflicts during fly-to operations.
+  - Increased grace period to 3s to improve lock-on reliability for distant targets.
+
 ## [0.6.0] - 2026-02-17
 
 ### Added

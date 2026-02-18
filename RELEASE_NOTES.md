@@ -1,29 +1,18 @@
-# Release - v0.6.0 - "Kinetic Harmony"
+# Sovereign Watch Release Notes
 
-## Summary
+## Version 0.6.1
 
-This release introduces **Projective Velocity Blending (PVB)**, a significant upgrade to the entity rendering engine that eliminates the "rubber-banding" artifacts observed in previous versions. By combining physics-based forward projection with intelligent arbitration, **Sovereign Watch** now delivers silky-smooth tracking for high-speed aerial assets without sacrificing data integrity.
+**Date:** February 17, 2026
 
-## Key Features
+### 🚀 Improvements
 
-- **Velocimetric Rendering**: Aircraft now move based on their velocity vector, not just point-to-point interpolation, ensuring smooth arcs during turns.
-- **Latency-Aware Backend**: The ingestion service now intelligently bypasses rate limits for high-G maneuvers (spatial bypass), ensuring you never miss a hard bank.
-- **CPU Optimization**: The main tactical display loop has been refactored to reduce CPU usage by ~30% during heavy interaction.
+- **Live Search Tracking:** The Search Widget now updates entity positions in real-time, displaying live coordinates (Lat/Lon) to help operators track moving targets directly from the dropdown.
+- **Enhanced Context Zoom:** Clicking a result in the Search Widget or Intelligence Stream now zooms to level **12** (previously 14), providing better tactical context of the surrounding area.
 
-## Technical Details
+### 🐛 Bug Fixes
 
-- **Engine**: `TacticalMap` now uses a 3-stage PVB algorithm (Server State -> Client Blend -> Visualization).
-- **Protocol**: No changes to `tak.proto`, fully compatible with existing ingestors.
-- **Config**: Lowered default arbitration delay to 0.5s (down from 0.8s).
-
-## Upgrade Instructions
-
-1.  **Pull & Rebuild**:
-    ```bash
-    git pull
-    docker compose up -d --build frontend
-    docker compose restart poller
-    ```
-2.  **Verify**:
-    - Check `frontend` logs for successful build.
-    - Watch for smooth aircraft motion in the Tactical Map.
+- **Entity Selection Logic:** Fixed sticky "Follow Mode" behavior. Selecting a new entity from the sidebar now reliably disengages tracking of the previous target.
+- **Follow Mode Stability:**
+  - Re-enabled auto-disable on user interaction (with a 3-second grace period) to prevent fighting against manual map pan/zoom operations.
+  - Restored `isEasing` checks to prevent camera conflicts during fly-to operations.
+  - Increased grace period to 3s to improve lock-on reliability for distant targets.

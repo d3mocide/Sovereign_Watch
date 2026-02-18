@@ -61,7 +61,7 @@ export const IntelFeed: React.FC<IntelFeedProps> = ({ events, onEntitySelect, ma
                               const exact = matches.find((e: CoTEntity) => e.callsign === word || e.uid === word);
                               if (exact) {
                                   onEntitySelect(exact);
-                                  mapActions.flyTo(exact.lat, exact.lon, 14);
+                                  mapActions.flyTo(exact.lat, exact.lon, 12);
                                   return;
                               }
                           }

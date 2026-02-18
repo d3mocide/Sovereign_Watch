@@ -238,8 +238,8 @@ function App() {
 
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {
       setSelectedEntity(e);
-      // If deselected, stop following
-      if (!e) setFollowMode(false);
+      // Always stop following when selection changes (user must re-engage)
+      setFollowMode(false);
   }, []);
 
   return (
@@ -269,7 +269,7 @@ function App() {
           missionProps={missionProps}
           health={health}
           mapActions={mapActions}
-          onEntitySelect={setSelectedEntity}
+          onEntitySelect={handleEntitySelect}
         />
       }
       rightSidebar={
@@ -279,11 +279,10 @@ function App() {
               setSelectedEntity(null);
               setFollowMode(false); // Stop following on close
           }} 
-          onCenterMap={(lat, lon) => {
-            if (mapActions) {
-                // Toggle follow mode or just enable? User said "continue to follow".
-                setFollowMode(true);
-                mapActions.flyTo(lat, lon); // Let TacticalMap handle intelligent zoom
+          onCenterMap={() => {
+            setFollowMode(true);
+            if (selectedEntity && mapActions) {
+                 mapActions.flyTo(selectedEntity.lat, selectedEntity.lon);
             }
           }}
         />
