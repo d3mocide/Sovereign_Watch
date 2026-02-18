@@ -12,7 +12,7 @@ To install a new package (e.g. `axios` or `lodash`), you MUST run the command in
 2.  **Run the install command via Docker**:
 
     ```powershell
-    docker exec meshrf_dev npm install <package_name>
+    docker exec sovereign-frontend npm install <package_name>
     ```
 
     _Append flags like `-D` or `--save` as needed._
@@ -20,5 +20,5 @@ To install a new package (e.g. `axios` or `lodash`), you MUST run the command in
 3.  **Restart the container** (Optional but recommended for build plugins):
 
     ```powershell
-    docker restart meshrf_dev
+    docker restart sovereign-frontend
     ```

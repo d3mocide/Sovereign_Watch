@@ -31,11 +31,13 @@ logger = logging.getLogger("poller_service")
 # Minimum elapsed source-time before the same hex will be re-published.
 # Increased to 0.8s to prevent "bursting" where multiple sources report
 # the same aircraft nearly simultaneously, creating interpolation jitter.
-ARBI_MIN_DELTA_S = 0.8
+# Reduced to 0.5s. PVB handles the micro-interpolation.
+ARBI_MIN_DELTA_S = 0.5
 
 # Minimum spatial displacement (metres) that always bypasses the time gate.
 # Handles the edge case where an aircraft's position changes significantly
 # within the same 500ms window (very fast, low-altitude targets).
+ARBI_MIN_SPATIAL_M = 30.0
 
 
 # How long (seconds) to retain an entry in the cache after last publish.
@@ -114,6 +116,9 @@ class PollerService:
         """Calculate polling coverage points based on current mission area."""
         # Optimization: For small tactical areas (< 50nm), a single point is sufficient
         # and allows for higher update frequency (1.0s vs 3.0s latency).
+        if self.radius_nm < 50:
+            return [(self.center_lat, self.center_lon, self.radius_nm)]
+
         return [
             (self.center_lat, self.center_lon, self.radius_nm),           # Center
             (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset
@@ -163,7 +168,7 @@ class PollerService:
         for hex_id in stale:
             del self._arbi_cache[hex_id]
 
-    def _should_publish(self, hex_id: str, source_ts: float) -> bool:
+    def _should_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> bool:
         """
         Arbitration gate: return True only if this position update is worth
         publishing to Kafka.
@@ -171,16 +176,22 @@ class PollerService:
         Rules:
           1. No prior entry for this hex.
           2. source_ts is at least ARBI_MIN_DELTA_S newer than last published ts.
-             Distance bypass is disabled as it allowed multi-source jitter to
-             trigger instantaneous "backwards" snaps.
+          3. OR spatial displacement > ARBI_MIN_SPATIAL_M (fast mover bypass).
         """
         entry = self._arbi_cache.get(hex_id)
         if entry is None:
             return True
 
+        # Temporal Check
         delta_ts = source_ts - entry["ts"]
         if delta_ts >= ARBI_MIN_DELTA_S:
             return True
+
+        # Spatial Bypass (only if time check failed but it's a new packet)
+        if delta_ts > 0:
+            dist = _haversine_m(entry["lat"], entry["lon"], lat, lon)
+            if dist > ARBI_MIN_SPATIAL_M:
+                return True
 
         return False
 
@@ -285,7 +296,7 @@ class PollerService:
             msg_lat = tak_msg["point"]["lat"]
             msg_lon = tak_msg["point"]["lon"]
 
-            if not self._should_publish(hex_id, source_ts):
+            if not self._should_publish(hex_id, source_ts, msg_lat, msg_lon):
                 continue
 
             self._record_publish(hex_id, source_ts, msg_lat, msg_lon)

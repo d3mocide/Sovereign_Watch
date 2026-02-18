@@ -1,3 +1,26 @@
+## [0.6.0] - 2026-02-17
+
+### Added
+
+- **Projective Velocity Blending (PVB):**
+  - **Rendering Engine Upgrade:** Replaced legacy dead reckoning with a physics-based velocity projection system.
+  - **Zero Rubber-Banding:** Algorithms now project _forward_ from the last known visual state, eliminating backward correction jumps.
+  - **Smooth Transitions:** 3-step interpolation (Server Projection -> Client Projection -> Blend) ensures fluid motion for high-speed assets.
+
+### Changed
+
+- **Performance Tuning:**
+  - **Animation Loop:** Optimized `TacticalMap` render loop to use refs, eliminating ~30Hz cleanup/setup cycles during selection updates.
+  - **Backend Arbitration:**
+    - Reduced `ARBI_MIN_DELTA_S` from 0.8s to 0.5s for lower latency.
+    - Added 30m spatial bypass to instantly capture fast maneuvers (high-G turns) that would otherwise be rate-limited.
+
+### Fixed
+
+- **Motion Artifacts:**
+  - Fixed "backward snapping" when new packets arrived with slightly older timestamps or different latency profiles.
+  - Fixed stationary entity drift by implementing strict speed clamping (< 0.5 m/s).
+
 ## [0.5.0] - 2026-02-16
 
 ### Added

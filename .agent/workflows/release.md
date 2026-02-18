@@ -1,5 +1,5 @@
 ---
-description: Standardized release process: version bump, changelog, release notes, and documentation updates.
+description: Release management workflow for version bumping, changelogs, and release notes.
 ---
 
 # /release - Release Management
@@ -63,7 +63,7 @@ Standardized release process: version bump, changelog, release notes, and docume
 
 - [ ] Create or Overwrite `RELEASE_NOTES.md`.
 - [ ] Include:
-  - **Title**: `# Sovereign Watch vX.Y.Z Release Notes`
+  - **Title**: `# Release - vX.Y.Z - Release Name`
   - **High-Level Summary**: A paragraph for operators/stakeholders describing the _value_ of the update.
   - **Key Features**: Bullet points highlighting major additions.
   - **Technical Details**: Breaking changes, new dependencies, or performance metrics.

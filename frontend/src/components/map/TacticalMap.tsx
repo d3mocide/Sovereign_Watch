@@ -263,6 +263,19 @@ interface TacticalMapProps {
     onFollowModeChange?: (enabled: boolean) => void;
 }
 
+interface DeadReckoningState {
+    serverLat: number;
+    serverLon: number;
+    serverSpeed: number;
+    serverCourseRad: number;
+    serverTime: number;
+    blendLat: number;
+    blendLon: number;
+    blendSpeed: number;
+    blendCourseRad: number;
+    expectedInterval: number;
+}
+
 // Adaptive Zoom Calculation
 const calculateZoom = (radiusNm: number) => {
     const r = Math.max(1, radiusNm);
@@ -317,8 +330,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
     const knownUidsRef = useRef<Set<string>>(new Set());
     const currentMissionRef = useRef<{ lat: number; lon: number; radius_nm: number } | null>(null);
     const prevCourseRef = useRef<Map<string, number>>(new Map());
-    const prevSnapshotsRef = useRef<Map<string, { lon: number; lat: number; ts: number }>>(new Map());
-    const currSnapshotsRef = useRef<Map<string, { lon: number; lat: number; ts: number }>>(new Map());
+    const drStateRef = useRef<Map<string, DeadReckoningState>>(new Map());
     const visualStateRef = useRef<Map<string, { lon: number; lat: number; alt: number }>>(new Map());
 
     // Velocity Vector Toggle - use ref for reactivity in animation loop
@@ -511,8 +523,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             entitiesRef.current.clear();
             knownUidsRef.current.clear();
             prevCourseRef.current.clear();
-            prevSnapshotsRef.current.clear();
-            currSnapshotsRef.current.clear();
+            drStateRef.current.clear();
             lastFrameTimeRef.current = Date.now();
             countsRef.current = { air: 0, sea: 0 };
             onCountsUpdate?.({ air: 0, sea: 0 });
@@ -617,11 +628,33 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     }
 
                     // Snapshot for interpolation (BEFORE updating the entity)
-                    const currSnap = currSnapshotsRef.current.get(entity.uid);
-                    if (currSnap && (currSnap.lon !== newLon || currSnap.lat !== newLat)) {
-                        prevSnapshotsRef.current.set(entity.uid, { ...currSnap });
-                    }
-                    currSnapshotsRef.current.set(entity.uid, { lon: newLon, lat: newLat, ts: Date.now() });
+
+                    // PVB State Update
+                    const now = Date.now();
+                    const currentDr = drStateRef.current.get(entity.uid);
+                    
+                    // Capture current visual state as blend origin
+                    const visual = visualStateRef.current.get(entity.uid);
+                    const blendLat = visual ? visual.lat : newLat;
+                    const blendLon = visual ? visual.lon : newLon;
+
+                    // Calculate interval (clamped to avoid jitter from rapid updates)
+                    const lastServerTime = currentDr ? currentDr.serverTime : now - 1000;
+                    const timeSinceLast = Math.max(now - lastServerTime, 800); // Minimum 800ms
+                    
+                    // Prepare new DR state
+                    drStateRef.current.set(entity.uid, {
+                        serverLat: newLat,
+                        serverLon: newLon,
+                        serverSpeed: entity.detail?.track?.speed || 0,
+                        serverCourseRad: ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+                        serverTime: now,
+                        blendLat,
+                        blendLon,
+                        blendSpeed: currentDr ? currentDr.serverSpeed : (entity.detail?.track?.speed || 0),
+                        blendCourseRad: currentDr ? currentDr.serverCourseRad : ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+                        expectedInterval: timeSinceLast
+                    });
                     
                     entitiesRef.current.set(entity.uid, {
                         uid: entity.uid,
@@ -655,7 +688,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     // crabbed due to wind, or a false zero), we calculate the actual Ground Track
                     // from the history trail. This guarantees the Icon and Velocity Vector
                     // align perfectly with the visual line segment.
-                    const prevPos = prevSnapshotsRef.current.get(entity.uid);
+                    const prevPos = drStateRef.current.get(entity.uid);
                     const rawCourse = entity.detail?.track?.course ?? 0;
                     let computedCourse = rawCourse;
                     
@@ -670,9 +703,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         }
                     } else if (prevPos) {
                         // Fallback to snapshot history if trail is empty
-                        const dist = getDistanceMeters(prevPos.lat, prevPos.lon, newLat, newLon);
+                        const dist = getDistanceMeters(prevPos.serverLat, prevPos.serverLon, newLat, newLon);
                         if (dist > 2.0) {
-                            computedCourse = getBearing(prevPos.lat, prevPos.lon, newLat, newLon);
+                            computedCourse = getBearing(prevPos.serverLat, prevPos.serverLon, newLat, newLon);
                         }
                     }
 
@@ -852,35 +885,47 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                   if (!isShip && !filters?.showAir) continue;
 
                   // Interpolate
-                  const prev = prevSnapshotsRef.current.get(uid);
-                  const curr = currSnapshotsRef.current.get(uid);
-
-                  let targetLon = entity.lon;
+                  // Projective Velocity Blending (PVB)
+                  const dr = drStateRef.current.get(uid);
+                  
                   let targetLat = entity.lat;
+                  let targetLon = entity.lon;
 
-                  if (prev && curr && curr.ts > prev.ts) {
-                    const elapsed = now - curr.ts;
-                    const rawDuration = curr.ts - prev.ts;
-                    const stableDuration = Math.max(rawDuration, 1000);
+                  if (dr && entity.speed > 0.5) {
+                      const timeSinceUpdate = now - dr.serverTime;
+                      const alpha = Math.min(Math.max(timeSinceUpdate / dr.expectedInterval, 0), 1);
+                      const dtSec = timeSinceUpdate / 1000;
 
-                    const t_geom = Math.min(elapsed / stableDuration, 1.0);
-                    targetLon = prev.lon + (curr.lon - prev.lon) * t_geom;
-                    targetLat = prev.lat + (curr.lat - prev.lat) * t_geom;
+                      // 1. Server Projection (Where it should be now based on latest report)
+                      const R = 6371000;
+                      const distServer = dr.serverSpeed * dtSec;
+                      const dLatServer = (distServer * Math.cos(dr.serverCourseRad)) / R * (180 / Math.PI);
+                      const dLonServer = (distServer * Math.sin(dr.serverCourseRad)) / (R * Math.cos(dr.serverLat * Math.PI / 180)) * (180 / Math.PI);
+                      
+                      const serverProjLat = dr.serverLat + dLatServer;
+                      const serverProjLon = dr.serverLon + dLonServer;
 
-                    // DEAD RECKONING (EXTRAPOLATION)
-                    // Configurable: Re-enabled with 2.5s cap to smooth over data gaps
-                    // without causing massive rubber-banding.
-                    if (elapsed > stableDuration && entity.speed > 1.0) {
-                      const overrun = Math.min(elapsed - stableDuration, 2500) / 1000;
-                      const courseRad = ((entity.course || 0) * Math.PI) / 180;
-                      const R = 6_371_000;
-                      const latRad = (curr.lat * Math.PI) / 180;
-                      const distM = entity.speed * overrun;
-                      const dLat = (distM * Math.cos(courseRad)) / R;
-                      const dLon = (distM * Math.sin(courseRad)) / (R * Math.cos(latRad));
-                      targetLat = curr.lat + dLat * (180 / Math.PI);
-                      targetLon = curr.lon + dLon * (180 / Math.PI);
-                    }
+                      // 2. Client Projection (Where we were going visually)
+                      // Blend the velocities for smooth transition
+                      const blendSpeed = dr.blendSpeed + (dr.serverSpeed - dr.blendSpeed) * alpha;
+                      
+                      // Angle blending (taking shortest path)
+                      let dAngle = dr.serverCourseRad - dr.blendCourseRad;
+                      while (dAngle <= -Math.PI) dAngle += 2*Math.PI;
+                      while (dAngle > Math.PI) dAngle -= 2*Math.PI;
+                      const blendCourse = dr.blendCourseRad + dAngle * alpha;
+
+                      const distClient = blendSpeed * dtSec;
+                      const dLatClient = (distClient * Math.cos(blendCourse)) / R * (180 / Math.PI);
+                      const dLonClient = (distClient * Math.sin(blendCourse)) / (R * Math.cos(dr.blendLat * Math.PI / 180)) * (180 / Math.PI);
+
+                      const clientProjLat = dr.blendLat + dLatClient;
+                      const clientProjLon = dr.blendLon + dLonClient;
+
+                      // 3. Final Target (Blend projections)
+                      // As alpha -> 1, we rely fully on the server projection
+                      targetLat = clientProjLat + (serverProjLat - clientProjLat) * alpha;
+                      targetLon = clientProjLon + (serverProjLon - clientProjLon) * alpha;
                   }
 
                   let visual = visualStateRef.current.get(uid);
@@ -890,7 +935,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     visualStateRef.current.set(uid, visual);
                   } else {
                     const speedKts = entity.speed * 1.94384;
-                    const BASE_ALPHA = speedKts > 200 ? 0.1 : speedKts > 50 ? 0.07 : 0.04;
+                    // PVB handles smoothness, just filter micro-jitter
+                    const BASE_ALPHA = 0.25;
                     const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, dt / 16.67);
                     visual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
                     visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
@@ -979,8 +1025,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
               entities.delete(uid);
               knownUidsRef.current.delete(uid);
               prevCourseRef.current.delete(uid);
-              prevSnapshotsRef.current.delete(uid);
-              currSnapshotsRef.current.delete(uid);
+              drStateRef.current.delete(uid);
               visualStateRef.current.delete(uid);
             }
 
@@ -1026,9 +1071,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 ] : []),
 
                 // 2. Selected Entity Highlight Trail
-                ...(selectedEntity && interpolated.find(e => e.uid === selectedEntity.uid)
+                ...(currentSelected && interpolated.find(e => e.uid === currentSelected.uid)
                     ? (() => {
-                        const entity = interpolated.find(e => e.uid === selectedEntity.uid)!;
+                        const entity = interpolated.find(e => e.uid === currentSelected.uid)!;
                         if (!entity.trail || entity.trail.length < 2) return [];
                         
                         // Sync tail with head for highlight too
@@ -1041,7 +1086,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                             : altitudeToColor(entity.altitude, 255);
 
                         return [new PathLayer({
-                            id: `selected-trail-${selectedEntity.uid}`,
+                            id: `selected-trail-${currentSelected.uid}`,
                             data: [{ path: trailPath }],
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             getPath: (d: any) => d.path,
@@ -1092,7 +1137,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     getPosition: (d: any) => [d.lon, d.lat, (d.altitude || 0) + 2], // 2m offset to prevent ground clipping
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     getSize: (d: any) => {
-                        const isSelected = selectedEntity?.uid === d.uid;
+                        const isSelected = currentSelected?.uid === d.uid;
                         const isVessel = d.type.includes('S');
                         // Bumping marine size from 24 -> 32 to match aircraft prominence
                         const baseSize = isVessel ? 32 : 32;
@@ -1126,7 +1171,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         }
                     },
                     updateTriggers: {
-                        getSize: [selectedEntity?.uid],
+                        getSize: [currentSelected?.uid],
                         getAngle: [now], // Only update on data change, not view bearing
                     }
                 }),
@@ -1136,14 +1181,14 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     data: interpolated,
                     getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
                     getRadius: (d: CoTEntity) => {
-                        const isSelected = selectedEntity?.uid === d.uid;
+                        const isSelected = currentSelected?.uid === d.uid;
                         const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
                         const base = isSelected ? 20 : 6;
                         return base * (1 + (pulse * 0.1));
                     },
                     radiusUnits: 'pixels' as const,
                     getFillColor: (d: CoTEntity) => {
-                        const isSelected = selectedEntity?.uid === d.uid;
+                        const isSelected = currentSelected?.uid === d.uid;
                         const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
                         const baseAlpha = isSelected ? 60 : 10;
                         const a = baseAlpha * (0.8 + pulse * 0.2);
@@ -1153,10 +1198,10 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     updateTriggers: { getRadius: [now], getFillColor: [now] }
                 }),
 
-                ...(selectedEntity ? [
+                ...(currentSelected ? [
                     new ScatterplotLayer({
-                        id: `selection-ring-${selectedEntity.uid}`,
-                        data: interpolated.filter(e => e.uid === selectedEntity.uid),
+                        id: `selection-ring-${currentSelected.uid}`,
+                        data: interpolated.filter(e => e.uid === currentSelected.uid),
                         getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
                         getRadius: () => {
                             const cycle = (now % 2000) / 2000; // Faster pulse (2s)
@@ -1167,7 +1212,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         getLineColor: () => {
                             const cycle = (now % 2000) / 2000;
                             const alpha = Math.round(255 * (1 - Math.pow(cycle, 2))); // Brighter start
-                            return entityColor(selectedEntity, alpha);
+                            return entityColor(currentSelected, alpha);
                         },
                         getLineWidth: 3, // Thicker line
                         stroked: true,
@@ -1221,7 +1266,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 cancelAnimationFrame(rafRef.current);
             }
         };
-    }, [selectedEntity, onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, viewState, replayMode]);
+    }, [onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, replayMode]);
 
 
 
