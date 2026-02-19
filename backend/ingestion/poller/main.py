@@ -34,10 +34,12 @@ logger = logging.getLogger("poller_service")
 # Reduced to 0.5s. PVB handles the micro-interpolation.
 ARBI_MIN_DELTA_S = 0.5
 
-# Minimum spatial displacement (metres) that always bypasses the time gate.
-# Handles the edge case where an aircraft's position changes significantly
-# within the same 500ms window (very fast, low-altitude targets).
-ARBI_MIN_SPATIAL_M = 30.0
+# Minimum spatial displacement (metres) that bypasses the temporal gate.
+# Raised from 30m → 100m. MLAT multilateration noise across ground station
+# networks is typically 50–150m, which was causing the old 30m threshold to
+# let duplicate same-aircraft reports from different sources bypass the gate,
+# producing double position-snap packets on the frontend.
+ARBI_MIN_SPATIAL_M = 100.0
 
 
 # How long (seconds) to retain an entry in the cache after last publish.

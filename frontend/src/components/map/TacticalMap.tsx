@@ -269,6 +269,7 @@ interface TacticalMapProps {
     replayEntities?: Map<string, CoTEntity>;
     followMode?: boolean;
     onFollowModeChange?: (enabled: boolean) => void;
+    onEntityLiveUpdate?: (entity: CoTEntity) => void;
 }
 
 interface DeadReckoningState {
@@ -290,7 +291,7 @@ const calculateZoom = (radiusNm: number) => {
     return Math.max(2, 14 - Math.log2(r));
 };
 
-export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, replayMode, replayEntities, followMode, onFollowModeChange }: TacticalMapProps) {
+export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, replayMode, replayEntities, followMode, onFollowModeChange, onEntityLiveUpdate }: TacticalMapProps) {
 
     const lastFrameTimeRef = useRef<number>(Date.now());
     
@@ -623,16 +624,25 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                    // Build trail from existing positions (max 100 points for rich history).
                    // Minimum distance gate (30m) prevents multilateration noise between
                    // ADS-B source networks from accumulating as zigzag artefacts in the trail.
-                    // Minimum distance gate (50m) prevents multilateration noise
+                    // Minimum distance gate (50m) and temporal gate (3s) prevent multilateration noise
                     const MIN_TRAIL_DIST_M = 50;
+                    const MIN_TRAIL_INTERVAL_MS = 3000;
+
                    let trail: TrailPoint[] = existing?.trail || [];
                    const lastTrail = trail[trail.length - 1];
                    const distFromLastTrail = lastTrail
                        ? getDistanceMeters(lastTrail[1], lastTrail[0], newLat, newLon)
                        : Infinity;
-                   if (distFromLastTrail > MIN_TRAIL_DIST_M) {
+                   
+                   const timeSinceLastTrail = (lastTrail && lastTrail[4] != null)
+                        ? (Date.now() - lastTrail[4])
+                        : Infinity;
+
+                   // console.log(`Trail check: d=${distFromLastTrail.toFixed(1)}m, t=${timeSinceLastTrail}ms`);
+
+                   if (distFromLastTrail > MIN_TRAIL_DIST_M && timeSinceLastTrail > MIN_TRAIL_INTERVAL_MS) {
                        const speed = entity.detail?.track?.speed || 0;
-                       trail = [...trail, [newLon, newLat, entity.hae || 0, speed] as TrailPoint].slice(-100);
+                       trail = [...trail, [newLon, newLat, entity.hae || 0, speed, Date.now()] as TrailPoint].slice(-100);
                    }
                    
                     const callsign = entity.detail?.contact?.callsign?.trim() || entity.uid;
@@ -651,22 +661,29 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     // Snapshot for interpolation (BEFORE updating the entity)
 
                     // PVB State Update
-                    const now = Date.now();
-                    const currentDr = drStateRef.current.get(entity.uid);
-                    
-                    // Capture current visual state as blend origin
-                    const visual = visualStateRef.current.get(entity.uid);
-                    const blendLat = visual ? visual.lat : newLat;
-                    const blendLon = visual ? visual.lon : newLon;
-                    
-                    const classification = entity.detail?.classification as import('../../types').EntityClassification | undefined;
+                     const now = Date.now();
+                     const currentDr = drStateRef.current.get(entity.uid);
+                     
+                     // FIX #1: Capture previous DR state BEFORE overwriting it.
+                     // The course-fallback branch below reads drStateRef to get the
+                     // "previous" position for bearing calculation. If we write first
+                     // and read second, prevPos.serverLat === newLat (distance = 0)
+                     // and the fallback bearing is never computed.
+                     const previousDr = drStateRef.current.get(entity.uid);
 
-                    // Calculate interval (clamped to avoid jitter from rapid updates)
-                    const lastServerTime = currentDr ? currentDr.serverTime : now - 1000;
-                    const timeSinceLast = Math.max(now - lastServerTime, 800); // Minimum 800ms
-                    
-                    // Prepare new DR state
-                    drStateRef.current.set(entity.uid, {
+                     // Capture current visual state as blend origin
+                     const visual = visualStateRef.current.get(entity.uid);
+                     const blendLat = visual ? visual.lat : newLat;
+                     const blendLon = visual ? visual.lon : newLon;
+                     
+                     const classification = entity.detail?.classification as import('../../types').EntityClassification | undefined;
+
+                     // Calculate interval (clamped to avoid jitter from rapid updates)
+                     const lastServerTime = currentDr ? currentDr.serverTime : now - 1000;
+                     const timeSinceLast = Math.max(now - lastServerTime, 800); // Minimum 800ms
+                     
+                     // Prepare new DR state
+                     drStateRef.current.set(entity.uid, {
                         serverLat: newLat,
                         serverLon: newLon,
                         serverSpeed: entity.detail?.track?.speed || 0,
@@ -720,26 +737,26 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     // crabbed due to wind, or a false zero), we calculate the actual Ground Track
                     // from the history trail. This guarantees the Icon and Velocity Vector
                     // align perfectly with the visual line segment.
-                    const prevPos = drStateRef.current.get(entity.uid);
-                    const rawCourse = entity.detail?.track?.course ?? 0;
-                    let computedCourse = rawCourse;
+                     const rawCourse = entity.detail?.track?.course ?? 0;
+                     let computedCourse = rawCourse;
                     
-                    // Use the last segment of the trail if available (most accurate visual alignment)
-                    if (trail && trail.length >= 2) {
-                        const last = trail[trail.length - 1];
-                        const prev = trail[trail.length - 2];
-                        const dist = getDistanceMeters(prev[1], prev[0], last[1], last[0]);
-                        // Only override if the segment is significant (> 2m)
-                        if (dist > 2.0) {
-                             computedCourse = getBearing(prev[1], prev[0], last[1], last[0]);
-                        }
-                    } else if (prevPos) {
-                        // Fallback to snapshot history if trail is empty
-                        const dist = getDistanceMeters(prevPos.serverLat, prevPos.serverLon, newLat, newLon);
-                        if (dist > 2.0) {
-                            computedCourse = getBearing(prevPos.serverLat, prevPos.serverLon, newLat, newLon);
-                        }
-                    }
+                     // Use the last segment of the trail if available (most accurate visual alignment)
+                     if (trail && trail.length >= 2) {
+                         const last = trail[trail.length - 1];
+                         const prev = trail[trail.length - 2];
+                         const dist = getDistanceMeters(prev[1], prev[0], last[1], last[0]);
+                         // Only override if the segment is significant (> 2m)
+                         if (dist > 2.0) {
+                              computedCourse = getBearing(prev[1], prev[0], last[1], last[0]);
+                         }
+                     } else if (previousDr) {
+                         // FIX #1 (cont): Use the CAPTURED previous state, not a fresh
+                         // read of drStateRef which was already overwritten above.
+                         const dist = getDistanceMeters(previousDr.serverLat, previousDr.serverLon, newLat, newLon);
+                         if (dist > 2.0) {
+                             computedCourse = getBearing(previousDr.serverLat, previousDr.serverLon, newLat, newLon);
+                         }
+                     }
 
                     // Directly use the computed course. No smoothing (to avoid lag).
                     const smoothedCourse = computedCourse;
@@ -977,6 +994,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                       // As alpha -> 1, we rely fully on the server projection
                       targetLat = clientProjLat + (serverProjLat - clientProjLat) * alpha;
                       targetLon = clientProjLon + (serverProjLon - clientProjLon) * alpha;
+
                   }
 
                   let visual = visualStateRef.current.get(uid);
@@ -986,12 +1004,20 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     visualStateRef.current.set(uid, visual);
                   } else {
                     const speedKts = entity.speed * 1.94384;
-                    // PVB handles smoothness, just filter micro-jitter
-                    const BASE_ALPHA = 0.25;
-                    const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, dt / 16.67);
-                    visual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
-                    visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
-                    visual.alt = visual.alt + (entity.altitude - visual.alt) * smoothFactor;
+                     // PVB handles smoothness, just filter micro-jitter.
+                     // FIX #3: Cap smoothDt to 2 frames (33ms). The outer `dt` is
+                     // already capped at 100ms (to prevent physics explosions after
+                     // tab-switch), but at dt=100ms the smoothFactor becomes ~0.73,
+                     // jumping the visual position 73% toward the target in one frame.
+                     // Using a tighter 33ms cap keeps the lerp gradual regardless of
+                     // how long the RAF loop was paused.
+                     const BASE_ALPHA = 0.25;
+                     const smoothDt = Math.min(dt, 33);
+                     const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, smoothDt / 16.67);
+                     visual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
+                     visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
+                     visual.alt = visual.alt + (entity.altitude - visual.alt) * smoothFactor;
+                     void speedKts; // unused after speed-based smoothing removed — keep for future
                   }
                   
                   // Clamp to target if very close (prevent micro-jitter)
@@ -1007,7 +1033,11 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     lon: visual.lon,
                     lat: visual.lat,
                     altitude: visual.alt,
-                    course: dr ? (dr.blendCourseRad * 180 / Math.PI) : entity.course
+                    // FIX #4: Normalize to [0, 360]. blendCourseRad can go negative
+                    // during 0°/360° wraparound (the dAngle normalization keeps it in
+                    // [-π, π] which maps to [-180°, 180°]). A negative course value
+                    // passed to getAngle causes incorrect icon rotation direction.
+                    course: dr ? ((dr.blendCourseRad * 180 / Math.PI) + 360) % 360 : entity.course
                   };
 
                   interpolated.push(interpolatedEntity);
@@ -1015,11 +1045,11 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                   // Update Selected Entity Data (Live Sidebar) - Sync with interpolation
                   // This ensures the numbers in the sidebar move in perfect lockstep with the map
                   const currentSelected = selectedEntityRef.current;
-                  if (currentSelected && uid === currentSelected.uid && onEntitySelect) {
+                  if (currentSelected && uid === currentSelected.uid && onEntityLiveUpdate) {
                       // Throttle to ~30Hz (every 2nd frame) to prevent React render saturation
                       // while providing silky smooth numerical updates.
                       if (Math.floor(now / 33) % 2 === 0) {
-                          onEntitySelect(interpolatedEntity);
+                          onEntityLiveUpdate(interpolatedEntity);
                       }
                   }
                 }
@@ -1114,9 +1144,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         data: interpolated.filter(e => e.trail.length >= 2 && (!currentSelected || e.uid !== currentSelected.uid)),
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getPath: (d: any) => {
-                            if (!d.trail || d.trail.length === 0) return [];
-                            // Append visual head as an extra point for smooth growth
-                            return [...d.trail.map((p: any) => [p[0], p[1], p[2]]), [d.lon, d.lat, d.altitude]];
+                            if (!d.trail || d.trail.length < 2) return [];
+                            return d.trail.map((p: any) => [p[0], p[1], p[2]]);
                         },
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getColor: (d: any) => {
@@ -1134,33 +1163,73 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     })
                 ] : []),
 
+                // 1.5. Gap Bridge (Connects last history point to current interpolated position)
+                ...(historyTailsRef.current ? [
+                    new LineLayer({
+                        id: 'history-gap-bridge',
+                        data: interpolated.filter(d => {
+                             if (!d.trail || d.trail.length === 0) return false;
+                             // Don't draw for selected entity if it has its own gap bridge
+                             if (currentSelected && d.uid === currentSelected.uid) return false; 
+                             
+                             const last = d.trail[d.trail.length - 1];
+                             const dist = getDistanceMeters(last[1], last[0], d.lat, d.lon);
+                             return dist > 5; // Only draw if gap is visible (>5m)
+                        }),
+                        getSourcePosition: (d: CoTEntity) => {
+                            const last = d.trail![d.trail!.length - 1];
+                            return [last[0], last[1], last[2]];
+                        },
+                        getTargetPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
+                        getColor: (d: CoTEntity) => entityColor(d, 180),
+                        getWidth: 2.5,
+                        widthMinPixels: 1.5,
+                        pickable: false,
+                    })
+                ] : []),
+
                 // 2. Selected Entity Highlight Trail
                 ...(currentSelected && interpolated.find(e => e.uid === currentSelected.uid)
                     ? (() => {
                         const entity = interpolated.find(e => e.uid === currentSelected.uid)!;
                         if (!entity.trail || entity.trail.length < 2) return [];
                         
-                        // Append head
-                        const trailPath = [...entity.trail.map(p => [p[0], p[1], p[2]]), [entity.lon, entity.lat, entity.altitude]];
+                        const trailPath = entity.trail.map(p => [p[0], p[1], p[2]]);
 
                         const isShip = entity.type.includes('S');
                         const trailColor = isShip
                             ? speedToColor(entity.speed, 255)
                             : altitudeToColor(entity.altitude, 255);
 
-                        return [new PathLayer({
-                            id: `selected-trail-${currentSelected.uid}`,
-                            data: [{ path: trailPath }],
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            getPath: (d: any) => d.path,
-                            getColor: trailColor,
-                            getWidth: 3.5,
-                            widthMinPixels: 2.5,
-                            pickable: false,
-                            jointRounded: true,
-                            capRounded: true,
-                            opacity: 1.0,
-                        })];
+                        return [
+                            new PathLayer({
+                                id: `selected-trail-${currentSelected.uid}`,
+                                data: [{ path: trailPath }],
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                getPath: (d: any) => d.path,
+                                getColor: trailColor,
+                                getWidth: 3.5,
+                                widthMinPixels: 2.5,
+                                pickable: false,
+                                jointRounded: true,
+                                capRounded: true,
+                                opacity: 1.0,
+                            }),
+                            // Gap bridge for selection
+                            new LineLayer({
+                                id: `selected-gap-bridge-${currentSelected.uid}`,
+                                data: [entity],
+                                getSourcePosition: () => {
+                                    const last = entity.trail![entity.trail!.length - 1];
+                                    return [last[0], last[1], last[2]];
+                                },
+                                getTargetPosition: () => [entity.lon, entity.lat, entity.altitude || 0],
+                                getColor: trailColor,
+                                getWidth: 3.5, 
+                                widthMinPixels: 2.5,
+                                pickable: false,
+                            })
+                        ];
                     })()
                     : []),
 
@@ -1332,7 +1401,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 cancelAnimationFrame(rafRef.current);
             }
         };
-    }, [onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, replayMode]);
+    }, [onCountsUpdate, filters, onEvent, onEntitySelect, mapLoaded, enable3d, mapToken, mapStyle, replayMode, onEntityLiveUpdate]);
 
 
 
