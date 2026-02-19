@@ -1,3 +1,19 @@
+## [0.7.1] - 2026-02-18
+
+### Fixed
+
+- **History Trail Artifacts:**
+  - **Zigzag Elimination:** Implemented temporal (3s) and spatial (50m) gating to prevent noisy ADS-B updates from creating sawtooth patterns in history trails.
+  - **Detached Head Fix:** Added a dynamic "Gap Bridge" render layer that visually connects the last confirmed history point to the live interpolated entity, ensuring trails look continuous without corruption.
+- **Intelligence Stream Performance:**
+  - **Memory Cap:** Limited client-side event retention to 500 items to prevent heap bloat.
+  - **Render Limit:** Restricted simultaneous DOM nodes in the Intel Feed to the latest 50 events to maintain 60fps UI performance.
+
+### Added
+
+- **Trail Visualization:**
+  - **Selected Entity Bridge:** High-priority gap bridging for the currently selected target to ensure immediate visual feedback during tracking.
+
 ## [0.7.0] - 2026-02-18
 
 ### Added

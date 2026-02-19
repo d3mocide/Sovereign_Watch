@@ -1,39 +1,30 @@
-# Release Notes - v0.7.0 - "Kinematic Intelligence"
+# Release - v0.7.1 - "Smooth Operator"
 
-**Date:** February 18, 2026
+## Summary
 
-## 🛰️ High-Level Summary
+This patch release focuses on **visual stability** and **frontend performance**. We've eliminated the distraction of "zigzag" artifacts in history trails caused by noisy ADS-B multilateration and fixed the "detached head" effect where trails appeared disconnected from their aircraft. Additionally, the Intelligence Stream has been optimized to handle high-volume feeds without degrading UI responsiveness.
 
-The **v0.7.0 "Kinematic Intelligence"** release marks a significant upgrade to the Sovereign Watch tactical engine and cognition layer. This update transforms the tactical map from a collection of points into a high-fidelity situational awareness tool. By integrating advanced aircraft classification directly into the data stream and implementing smooth kinematic movement, operators can now distinguish between commercial, military, and private assets at a glance with zero visual jitter.
+## Key Changes
 
----
+### 🎨 Visual Fidelity
 
-## ✨ Key Features
+- **Zigzag Fix**: Implemented smart temporal (3s) and spatial (50m) gating. Trails now only commit points that are statistically significant, smoothing out the noise from raw ADS-B feeds.
+- **Gap Bridge**: Introduced a new dynamic rendering layer that connects the static history tail to the live moving aircraft. This eliminates the "floating icon" effect while preserving data integrity.
 
-### 🔍 Advanced Data Fusion
+### ⚡ Performance
 
-- **Classification Engine**: Automatically extracts and displays Affiliation (Military/Civilian), Platform Type (Boeing 737, C-17, etc.), and Squawk intent.
-- **Granular HUD Filtering**: New tactical filter groups allow one-click isolation of Military, Government, Cargo, and Regional fleets.
+- **Intel Feed Optimization**:
+  - **Capped Retention**: Client now stores a max of 500 events (rolling window).
+  - **Render efficiency**: Only the most recent 50 events are rendered to the DOM, ensuring the Sidebar remains snappy even during event surges.
 
-### 🎨 Sovereign Glass Enhancements
+## Upgrade Instructions
 
-- **Smooth Kinematics**: Implemented 30Hz rotation interpolation—aircraft icons now glide naturally through turns.
-- **Stable Trails**: Improved history trail logic with "Lead-in" vertices and a 50m noise gate to eliminate jagged edges and sensor jitter.
+No backend changes. Only a frontend rebuild is required.
 
-### ⚡ Performance & Stability
+```bash
+# 1. Pull latest code
+git pull origin main
 
-- **Intelligence Stream Memoization**: 40% reduction in main-thread CPU usage during high-velocity data ingestion.
-- **Robust Mission Sync**: Implemented coordinate tolerance to prevent accidental history clearing during mission area polling.
-- **Temporal Purging**: Auto-purging of stale telemetry and a 1-hour rolling window for intelligence events.
-
----
-
-## 🛠️ Upgrade Instructions
-
-1. **Pull Latest Changes**: `git pull origin main`
-2. **Rebuild UI**: `docker compose build frontend`
-3. **Restart Services**: `docker compose up -d`
-
----
-
-_Operational Status: v0.7.0 - STABLE_
+# 2. Rebuild Frontend
+docker compose up -d --build frontend
+```
