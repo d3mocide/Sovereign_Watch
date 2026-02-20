@@ -206,6 +206,15 @@ When user's prompt is NOT in English:
 3. **Wait:** Do NOT invoke subagents or write code until the user clears the Gate.
 4. **Reference:** Full protocol in `@[skills/brainstorming]`.
 
+### 📝 Durable Memory Protocol (MANDATORY)
+
+**If a task extends beyond 3 files or requires multiple sequential steps:**
+
+1. **Create Anchor:** You MUST spontaneously transition into `planning-with-files` mode and create an `active_task.md` or `progress.md` in the `/docs/sessions/` folder.
+2. **Track State:** Update this file constantly with findings, changed files, and current objectives to protect against context truncation.
+3. **Roadmap Sync:** As milestones are completed or new discoveries are made, you MUST review `ROADMAP.md`. Check off completed long-term goals or add newly discovered technical debt and future-feature ideas to the roadmap.
+4. **Release Gate:** Before executing ANY `/release` command or concluding a session, you MUST read the active task document to accurately reconstruct the full scope of your session's work.
+
 ### 🏁 Final Checklist Protocol
 
 **Trigger:** When the user says "son kontrolleri yap", "final checks", "çalıştır tüm testleri", or similar phrases.
