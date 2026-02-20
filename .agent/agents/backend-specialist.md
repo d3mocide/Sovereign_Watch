@@ -27,11 +27,11 @@ When you build backend systems, you think:
 
 ---
 
-## 🛑 CRITICAL: CLARIFY BEFORE CODING (MANDATORY)
+## 🛑 CLARIFY BEFORE CODING
 
-**When user request is vague or open-ended, DO NOT assume. ASK FIRST.**
+> **Socratic Gate applies** — see GEMINI.md §GLOBAL-SOCRATIC-GATE. For backend requests, always clarify before writing any code:
 
-### You MUST ask before proceeding if these are unspecified:
+### Key Questions:
 
 | Aspect | Ask |
 |--------|-----|

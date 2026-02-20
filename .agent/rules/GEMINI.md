@@ -77,14 +77,16 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 
 **Before ANY action, classify the request:**
 
-| Request Type     | Trigger Keywords                           | Active Tiers                   | Result                      |
-| ---------------- | ------------------------------------------ | ------------------------------ | --------------------------- |
-| **QUESTION**     | "what is", "how does", "explain"           | TIER 0 only                    | Text Response               |
-| **SURVEY/INTEL** | "analyze", "list files", "overview"        | TIER 0 + Explorer              | Session Intel (No File)     |
-| **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                 |
-| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **{task-slug}.md Required** |
-| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **{task-slug}.md Required** |
-| **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                    |
+| Request Type     | Trigger Keywords                           | Active Tiers                   | Result                                    |
+| ---------------- | ------------------------------------------ | ------------------------------ | ----------------------------------------- |
+| **QUESTION**     | "what is", "how does", "explain"           | TIER 0 only                    | Text Response                             |
+| **SURVEY/INTEL** | "analyze", "list files", "overview"        | TIER 0 + Explorer              | Session Intel (No File)                   |
+| **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                               |
+| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **docs/{task-slug}.md Required**          |
+| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **docs/{task-slug}.md Required**          |
+| **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                                  |
+
+> **Escalation Rule:** Any request touching 3+ files OR crossing domain boundaries (e.g., frontend + backend) automatically escalates to **COMPLEX CODE**, regardless of the verb used.
 
 ---
 
@@ -169,6 +171,25 @@ When user's prompt is NOT in English:
 2. What PRINCIPLES must I apply?
 3. How does this DIFFER from generic output?
 
+### 🛑 GLOBAL SOCRATIC GATE (Mandatory — All Requests)
+
+**STOP. Before ANY tool use or implementation, classify and gate the request:**
+
+| Request Type            | Strategy       | Required Action                                                   |
+| ----------------------- | -------------- | ----------------------------------------------------------------- |
+| **New Feature / Build** | Deep Discovery | ASK minimum 3 strategic questions                                 |
+| **Code Edit / Bug Fix** | Context Check  | Confirm understanding + ask impact questions                      |
+| **Vague / Simple**      | Clarification  | Ask Purpose, Users, and Scope                                     |
+| **Full Orchestration**  | Gatekeeper     | **STOP** subagents until user confirms plan details               |
+| **Direct "Proceed"**    | Validation     | **STOP** → Even if answers are given, ask 2 "Edge Case" questions |
+
+**Protocol:**
+
+1. **Never Assume:** If even 1% is unclear, ASK.
+2. **Spec-heavy Requests:** When user provides a list of answers, do NOT skip the gate. Ask about **Trade-offs** or **Edge Cases** before starting.
+3. **Wait:** Do NOT invoke subagents or write code until the user clears the Gate.
+4. **Reference:** Full protocol in `@[skills/brainstorming]`.
+
 ---
 
 ## TIER 1: CODE RULES (When Writing Code)
@@ -183,28 +204,7 @@ When user's prompt is NOT in English:
 
 > 🔴 **Mobile + frontend-specialist = WRONG.** Mobile = mobile-developer ONLY.
 
-### 🛑 Socratic Gate
-
-**For complex requests, STOP and ASK first:**
-
-### 🛑 GLOBAL SOCRATIC GATE (TIER 0)
-
-**MANDATORY: Every user request must pass through the Socratic Gate before ANY tool use or implementation.**
-
-| Request Type            | Strategy       | Required Action                                                   |
-| ----------------------- | -------------- | ----------------------------------------------------------------- |
-| **New Feature / Build** | Deep Discovery | ASK minimum 3 strategic questions                                 |
-| **Code Edit / Bug Fix** | Context Check  | Confirm understanding + ask impact questions                      |
-| **Vague / Simple**      | Clarification  | Ask Purpose, Users, and Scope                                     |
-| **Full Orchestration**  | Gatekeeper     | **STOP** subagents until user confirms plan details               |
-| **Direct "Proceed"**    | Validation     | **STOP** → Even if answers are given, ask 2 "Edge Case" questions |
-
-**Protocol:**
-
-1. **Never Assume:** If even 1% is unclear, ASK.
-2. **Handle Spec-heavy Requests:** When user gives a list (Answers 1, 2, 3...), do NOT skip the gate. Instead, ask about **Trade-offs** or **Edge Cases** (e.g., "LocalStorage confirmed, but should we handle data clearing or versioning?") before starting.
-3. **Wait:** Do NOT invoke subagents or write code until the user clears the Gate.
-4. **Reference:** Full protocol in `@[skills/brainstorming]`.
+> 🔴 **Socratic Gate is mandatory for all code tasks.** See TIER 0 §Global Socratic Gate above. Apply it before any implementation — no exceptions.
 
 ### 📝 Durable Memory Protocol (MANDATORY)
 
@@ -233,19 +233,17 @@ When user's prompt is NOT in English:
 - **Completion:** A task is NOT finished until `checklist.py` returns success.
 - **Reporting:** If it fails, fix the **Critical** blockers first (Security/Lint).
 
-**Available Scripts (12 total):**
+**Available Scripts (10 active):**
 
 | Script                     | Skill                 | When to Use         |
 | -------------------------- | --------------------- | ------------------- |
 | `security_scan.py`         | vulnerability-scanner | Always on deploy    |
-| `dependency_analyzer.py`   | vulnerability-scanner | Weekly / Deploy     |
 | `lint_runner.py`           | lint-and-validate     | Every code change   |
 | `test_runner.py`           | testing-patterns      | After logic change  |
 | `schema_validator.py`      | database-design       | After DB change     |
 | `ux_audit.py`              | frontend-design       | After UI change     |
 | `accessibility_checker.py` | frontend-design       | After UI change     |
 | `seo_checker.py`           | seo-fundamentals      | After page change   |
-| `bundle_analyzer.py`       | performance-profiling | Before deploy       |
 | `mobile_audit.py`          | mobile-design         | After mobile change |
 | `lighthouse_audit.py`      | performance-profiling | Before deploy       |
 | `playwright_runner.py`     | webapp-testing        | Before deploy       |
@@ -258,7 +256,7 @@ When user's prompt is NOT in English:
 | -------- | ----------------- | -------------------------------------------- |
 | **plan** | `project-planner` | 4-phase methodology. NO CODE before Phase 4. |
 | **ask**  | -                 | Focus on understanding. Ask questions.       |
-| **edit** | `orchestrator`    | Execute. Check `{task-slug}.md` first.       |
+| **edit** | `orchestrator`    | Execute. Check `docs/{task-slug}.md` first.  |
 
 **Plan Mode (4-Phase):**
 
@@ -275,10 +273,10 @@ When user's prompt is NOT in English:
 
 > **Design rules are in the specialist agents, NOT here.**
 
-| Task         | Read                            |
-| ------------ | ------------------------------- |
-| Web UI/UX    | `.agent/frontend-specialist.md` |
-| Mobile UI/UX | `.agent/mobile-developer.md`    |
+| Task         | Read                                    |
+| ------------ | --------------------------------------- |
+| Web UI/UX    | `.agent/agents/frontend-specialist.md`  |
+| Mobile UI/UX | `.agent/agents/mobile-developer.md`     |
 
 **These agents contain:**
 
@@ -295,13 +293,16 @@ When user's prompt is NOT in English:
 
 ### Agents & Skills
 
-- **Masters**: `orchestrator`, `project-planner`, `security-auditor` (Cyber/Audit), `backend-specialist` (API/DB), `frontend-specialist` (UI/UX), `mobile-developer`, `debugger`, `game-developer`
+- **Coordinators**: `orchestrator`, `project-planner`, `product-manager`, `product-owner`
+- **Technical**: `backend-specialist`, `frontend-specialist`, `mobile-developer`, `database-architect`, `debugger`
+- **Quality & Security**: `security-auditor`, `penetration-tester`, `test-engineer`, `qa-automation-engineer`, `performance-optimizer`
+- **Specialist**: `devops-engineer`, `seo-specialist`, `documentation-writer`, `code-archaeologist`, `explorer-agent`
 - **Key Skills**: `clean-code`, `brainstorming`, `app-builder`, `frontend-design`, `mobile-design`, `plan-writing`, `behavioral-modes`
 
 ### Key Scripts
 
 - **Verify**: `.agent/scripts/verify_all.py`, `.agent/scripts/checklist.py`
-- **Scanners**: `security_scan.py`, `dependency_analyzer.py`
+- **Scanners**: `security_scan.py`
 - **Audits**: `ux_audit.py`, `mobile_audit.py`, `lighthouse_audit.py`, `seo_checker.py`
 - **Test**: `playwright_runner.py`, `test_runner.py`
 

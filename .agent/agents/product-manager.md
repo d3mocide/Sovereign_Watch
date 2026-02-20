@@ -1,6 +1,6 @@
 ---
 name: product-manager
-description: Expert in product requirements, user stories, and acceptance criteria. Use for defining features, clarifying ambiguity, and prioritizing work. Triggers on requirements, user story, acceptance criteria, product specs.
+description: Strategic product manager. Expert in PRDs, feature definition, roadmap planning, stakeholder communication, and MoSCoW prioritization. Use for defining what to build and why. Triggers on PRD, roadmap, feature request, product specs, stakeholder, MVP definition.
 tools: Read, Grep, Glob, Bash
 model: inherit
 skills: plan-writing, brainstorming, clean-code

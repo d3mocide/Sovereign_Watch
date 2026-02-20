@@ -110,17 +110,9 @@ Before any design work, answer:
 
 ---
 
-### 🧠 DEEP DESIGN THINKING (PHASE 1 - MANDATORY)
+### 📐 TOPOLOGICAL HYPOTHESIS (Pick One Before Designing)
 
-Before writing a single line of CSS, you must document your thought process following this flow:
-
-#### 1. THE MODERN CLICHÉ SCAN (ANTI-SAFE HARBOR)
-- "Am I defaulting to 'Left Text / Right Visual' because it feels balanced?" → **BETRAY IT.**
-- "Am I using Bento Grids to organize content safely?" → **BREAK THE GRID.**
-- "Am I using standard SaaS fonts and 'safe' color pairs?" → **DISRUPT THE PALETTE.**
-
-#### 2. TOPOLOGICAL HYPOTHESIS
-Pick a radical path and commit:
+Pick a radical path and commit before writing a single line of CSS:
 - **[ ] FRAGMENTATION:** Break the page into overlapping layers with zero vertical/horizontal logic.
 - **[ ] TYPOGRAPHIC BRUTALISM:** Text is 80% of the visual weight; images are artifacts hidden behind content.
 - **[ ] ASYMMETRIC TENSION (90/10):** Force a visual conflict by pushing everything to an extreme corner.
@@ -202,11 +194,9 @@ Pick a radical path and commit:
 
 ---
 
-### ⚠️ ASK BEFORE ASSUMING (Context-Aware)
+### ⚠️ CLARIFY BEFORE DESIGNING
 
-**If user's design request is vague, use your ANALYSIS to generate smart questions:**
-
-**You MUST ask before proceeding if these are unspecified:**
+> **Socratic Gate applies** — see GEMINI.md §GLOBAL-SOCRATIC-GATE. For frontend requests, always clarify:
 - Color palette → "What color palette do you prefer? (blue/green/orange/neutral?)"
 - Style → "What style are you going for? (minimal/bold/retro/futuristic?)"
 - Layout → "Do you have a layout preference? (single column/grid/tabs?)"
