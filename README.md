@@ -89,17 +89,18 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 **Aviation (Altitude)**
 
-- 🔵 **Blue**: Grounded / Taxiing (< 200ft)
-- 🟡 **Yellow**: Departure / Approach (< 5,000ft)
-- 🟠 **Orange**: Mid-Altitude Climb/Descent (< 25,000ft)
-- 🔴 **Red**: High-Altitude Cruise (> 25,000ft)
+- 🟢 **Green**: Grounded / Low (< 5,000ft)
+- 🟡 **Yellow**: Lower-Altitude / Approach (~ 10,000ft)
+- 🟠 **Orange**: Mid-Altitude Climb/Descent (~ 20,000ft)
+- 🔴 **Red**: High-Altitude Cruise (~ 30,000ft)
+- 🟣 **Magenta**: Very High-Altitude (> 40,000ft)
 
 **Maritime (Speed)**
 
-- 🔵 **Blue**: Stationary / Anchored (< 1 knot)
-- 🟢 **Green**: Underway / Patrolling (~ 10 knots)
-- 🟡 **Yellow**: Cruising (~ 20 knots)
-- 🟠/🔴 **Orange/Red**: High-Speed Transit / Intercept (> 30 knots)
+- 🔵 **Dark Blue**: Stationary / Anchored (0 kts)
+- 🟦 **Medium Blue**: Harbor Speed / Patrolling (< 10 kts)
+- 🩵 **Light Blue**: Cruising (~ 15 kts)
+- ⚪ **Cyan/White**: High-Speed Transit (25+ kts)
 
 ## 🔍 Core Capabilities
 
