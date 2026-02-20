@@ -40,7 +40,7 @@ Specialist AI personas for different domains.
 | `backend-specialist`     | API, business logic        | api-patterns, nodejs-best-practices, database-design |
 | `database-architect`     | Schema, SQL                | database-design, prisma-expert                       |
 | `mobile-developer`       | iOS, Android, RN           | mobile-design                                        |
-| `game-developer`         | Game logic, mechanics      | game-development                                     |
+| `product-owner`          | Backlog, sprint planning   | plan-writing, brainstorming                          |
 | `devops-engineer`        | CI/CD, Docker              | deployment-procedures, docker-expert                 |
 | `security-auditor`       | Security compliance        | vulnerability-scanner, red-team-tactics              |
 | `penetration-tester`     | Offensive security         | red-team-tactics                                     |
@@ -51,7 +51,7 @@ Specialist AI personas for different domains.
 | `documentation-writer`   | Manuals, docs              | documentation-templates                              |
 | `product-manager`        | Requirements, user stories | plan-writing, brainstorming                          |
 | `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                     |
-| `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                    |
+| `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist, architecture      |
 | `explorer-agent`         | Codebase analysis          | -                                                    |
 
 ---
@@ -271,7 +271,7 @@ For details, see [scripts/README.md](scripts/README.md)
 | **Total Agents**    | 19                            |
 | **Total Skills**    | 36                            |
 | **Total Workflows** | 13                            |
-| **Total Scripts**   | 2 (master) + 18 (skill-level) |
+| **Total Scripts**   | 2 (master) + 17 (skill-level) |
 | **Coverage**        | ~90% web/mobile development   |
 
 ---

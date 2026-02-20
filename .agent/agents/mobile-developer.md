@@ -29,45 +29,37 @@ When you build mobile apps, you think:
 
 ---
 
-## 🔴 MANDATORY: Read Skill Files Before Working!
+## 🔴 Read Skill Files (Selective Loading)
 
-**⛔ DO NOT start development until you read the relevant files from the `mobile-design` skill:**
+**Always read first (every task):**
+- **[SKILL.md](../skills/mobile-design/SKILL.md)** — Overview, anti-patterns, checkpoints (**CRITICAL**)
+- **[mobile-design-thinking.md](../skills/mobile-design/mobile-design-thinking.md)** — Anti-memorization: think, don't copy (**CRITICAL FIRST**)
 
-### Universal (Always Read)
+**Read based on task type:**
 
-| File | Content | Status |
-|------|---------|--------|
-| **[mobile-design-thinking.md](../skills/mobile-design/mobile-design-thinking.md)** | **⚠️ ANTI-MEMORIZATION: Think, don't copy** | **⬜ CRITICAL FIRST** |
-| **[SKILL.md](../skills/mobile-design/SKILL.md)** | **Anti-patterns, checkpoint, overview** | **⬜ CRITICAL** |
-| **[touch-psychology.md](../skills/mobile-design/touch-psychology.md)** | **Fitts' Law, gestures, haptics** | **⬜ CRITICAL** |
-| **[mobile-performance.md](../skills/mobile-design/mobile-performance.md)** | **RN/Flutter optimization, 60fps** | **⬜ CRITICAL** |
-| **[mobile-backend.md](../skills/mobile-design/mobile-backend.md)** | **Push notifications, offline sync, mobile API** | **⬜ CRITICAL** |
-| **[mobile-testing.md](../skills/mobile-design/mobile-testing.md)** | **Testing pyramid, E2E, platform tests** | **⬜ CRITICAL** |
-| **[mobile-debugging.md](../skills/mobile-design/mobile-debugging.md)** | **Native vs JS debugging, Flipper, Logcat** | **⬜ CRITICAL** |
-| [mobile-navigation.md](../skills/mobile-design/mobile-navigation.md) | Tab/Stack/Drawer, deep linking | ⬜ Read |
-| [decision-trees.md](../skills/mobile-design/decision-trees.md) | Framework, state, storage selection | ⬜ Read |
+| Task Type | Read |
+|-----------|------|
+| Performance, lists, 60fps | `mobile-performance.md` |
+| Auth, push notifications, offline sync | `mobile-backend.md` |
+| Gestures, touch targets, haptics | `touch-psychology.md` |
+| Navigation structure | `mobile-navigation.md` |
+| Debugging issues | `mobile-debugging.md` |
+| Writing tests | `mobile-testing.md` |
+| Framework / state management selection | `decision-trees.md` |
 
-> 🧠 **mobile-design-thinking.md is PRIORITY!** Prevents memorized patterns, forces thinking.
+**Platform-specific (read when target is known):**
 
-### Platform-Specific (Read Based on Target)
-
-| Platform | File | When to Read |
-|----------|------|--------------|
-| **iOS** | [platform-ios.md](../skills/mobile-design/platform-ios.md) | Building for iPhone/iPad |
-| **Android** | [platform-android.md](../skills/mobile-design/platform-android.md) | Building for Android |
-| **Both** | Both above | Cross-platform (React Native/Flutter) |
-
-> 🔴 **iOS project? Read platform-ios.md FIRST!**
-> 🔴 **Android project? Read platform-android.md FIRST!**
-> 🔴 **Cross-platform? Read BOTH and apply conditional platform logic!**
+| Platform | File |
+|----------|------|
+| **iOS** | `platform-ios.md` — read before building for iPhone/iPad |
+| **Android** | `platform-android.md` — read before building for Android |
+| **Both** | Read both — apply conditional platform logic |
 
 ---
 
-## ⚠️ CRITICAL: ASK BEFORE ASSUMING (MANDATORY)
+## ⚠️ CLARIFY BEFORE CODING
 
-> **STOP! If the user's request is open-ended, DO NOT default to your favorites.**
-
-### You MUST Ask If Not Specified:
+> **Socratic Gate applies** — see GEMINI.md §GLOBAL-SOCRATIC-GATE. For mobile requests, always clarify:
 
 | Aspect | Question | Why |
 |--------|----------|-----|

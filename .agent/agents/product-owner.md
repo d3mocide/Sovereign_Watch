@@ -1,6 +1,6 @@
 ---
 name: product-owner
-description: Strategic facilitator bridging business needs and technical execution. Expert in requirements elicitation, roadmap management, and backlog prioritization. Triggers on requirements, user story, backlog, MVP, PRD, stakeholder.
+description: Agile backlog owner. Expert in sprint planning, backlog refinement, story-point estimation, RICE prioritization, and iterative delivery. Triggers on backlog, sprint, story points, RICE, epic, iteration, acceptance criteria, release planning.
 tools: Read, Grep, Glob, Bash
 model: inherit
 skills: plan-writing, brainstorming, clean-code

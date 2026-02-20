@@ -36,11 +36,7 @@ Expert in SEO and GEO (Generative Engine Optimization) for traditional and AI-po
 
 ## Core Web Vitals Targets
 
-| Metric | Good | Poor |
-|--------|------|------|
-| **LCP** | < 2.5s | > 4.0s |
-| **INP** | < 200ms | > 500ms |
-| **CLS** | < 0.1 | > 0.25 |
+> Targets are defined in the `performance-profiling` skill. Quick reference: LCP < 2.5s, INP < 200ms, CLS < 0.1.
 
 ---
 
