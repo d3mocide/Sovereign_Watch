@@ -1,3 +1,17 @@
+## [0.7.3] - 2026-02-19
+
+### Added
+
+- **Maritime Ingestion Payload Enhancement:** Extended the AIS poller to ingest `ShipStaticData` and `StandardClassBPositionReport`. Built specific ship cache handling with TTL cleanup for dynamic metadata enrichment.
+- **TAK Protocol Evolution:** Upgraded the TAK Protocol (`tak.proto`) to include granular `vesselClassification` attributes (ship category, nav status, flag, dimensions, etc).
+- **Expanded Filtering Matrix:** Added detailed sub-class toggles in `IntelFeed` and `TacticalMap` to separate sea traffic into 11 categories (Cargo, Tanker, Fishing, SAR, Military, Tug, etc) plus Drones for the air.
+- **Tactical Entity Selection:** Added tactical orange outline and text color highlighting for priority special entities (SAR, Military, Law enforcement vessels, helicopters, drones) across the map and HUD.
+
+### Changed
+
+- **UI Streamlining**: Reduced visual clutter in `LayerFilters.tsx` by eliminating redundant collection headers.
+- **Filter Harmonization**: Mapped "unknown" maritime objects intelligently to the `showSpecial` filter across both live intelligence and map replays.
+
 ## [0.7.2] - 2026-02-19
 
 ### Fixed

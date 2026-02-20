@@ -1,30 +1,32 @@
-# Release — v0.7.2 — "Steady State"
+# Release — v0.7.3 — "Deep Water Intel"
 
 ## Summary
 
-v0.7.2 is a targeted stability patch for the ADS-B tracking pipeline. It resolves four root-cause bugs identified during a deep-dive code review of the Dead Reckoning (DR) subsystem: two in the frontend PVB interpolation loop and two in the backend arbitration layer. Together, these fixes eliminate the remaining source of occasional icon heading snaps, post-tab-switch position jumps, north-boundary rotation glitches, and multilateration duplicate bursts that caused rubberbanding on multi-source ADS-B data.
+v0.7.3 is a major intelligence expansion patch that substantially upgrades Sovereign Watch's maritime data processing and tactical filtering capabilities. We've enhanced the backend ingestion poller to capture and cache rich vessel classification metadata, pushed those changes through the TAK protobuf pipeline, and overhauled the entire frontend to take advantage of these new capabilities.
 
-No new features. No breaking changes. No dependency updates.
+The update introduces granular display filtering for sea and air assets, unifies map and feed display logic, streamlines the UI, and highlights highest-priority tactical items with our new "Tactical Orange" visual language.
 
 ---
 
-## What's Fixed
+## What's New
 
-### Frontend — `TacticalMap.tsx`
+### Advanced Maritime Classification (Backend & Protocol)
 
-**DR Heading Fallback (read-after-write bug)**
-The kinematic heading fallback — which computes icon bearing from delta position when the trail is too short — was reading `drStateRef.current.get(uid)` _after_ `drStateRef.current.set(uid, ...)`. The returned state was always the freshly-written current position, making the distance calculation always zero and the fallback bearing always unused. New entities and entities recovering from a data gap now compute a real kinematic heading from their position delta.
+- **Extended AIS Subscriptions**: The Maritime Poller now listens for `ShipStaticData` and `StandardClassBPositionReport` in addition to basic position streams.
+- **Stateful Vessel Cache**: Implemented a memory-managed static data cache to join metadata (ship type, dimensions, destination, flag) onto fast-moving position reports, with automatic garbage collection for memory safety.
+- **TAK Protocol Extension**: Updated `tak.proto` with deep `vesselClassification` to carry the new enriched metadata downstream to clients.
 
-**Smoothing explosion on post-pause resume**
-The exponential lerp used a `dt` already capped at 100ms (physics guard), but `smoothFactor = 1 - (1 - 0.25)^(dt/16.67)` at `dt=100ms` evaluates to ~0.73 — a 73% position jump in a single frame. A separate 33ms cap on the smoothing input (`smoothDt`) keeps blending gradual after tab-switch, GC pause, or CPU spike.
+### Granular Filtering Matrix (Frontend)
 
-**Icon rotation at north boundary**
-`blendCourseRad` is interpolated in `[-π, π]` range and could be negative when crossing 0°/360°. The conversion to degrees was not clamped, allowing negative course values to be passed to `getAngle`, reversing the icon's rotation direction near north. Fixed with `(angle + 360) % 360`.
+- **Expanded Sea Categories**: Operators can now filter the tactical picture by specific vessel classifications including Cargo, Tanker, Passenger, Fishing, Military, Law Enforcement, SAR, Tug, Pleasure, HSC, and Pilot.
+- **Aerial Drones**: Added direct filter support for uncrewed platforms (Drones) distinct from general aviation and helicopters.
+- **Smart "Special" Fallback**: Entities categorized as 'unknown' or 'special' are now intelligently bundled into the "Show Special" filter, minimizing UI clutter while preserving full operational awareness.
+- **Unified Logic**: Both the `IntelFeed` and `TacticalMap` (including Live and Replay modes) have had their filtering algorithms completely harmonized to ensure identical behavior.
 
-### Backend — `main.py`
+### Tactical UI Polish
 
-**MLAT duplicate suppression threshold**
-`ARBI_MIN_SPATIAL_M` raised from **30m → 100m**. When two ground-station-based ADS-B feeders (e.g., adsb.fi + adsb.lol) triangulate the same aircraft, their MLAT positions routinely differ by 40–90m. The old 30m threshold allowed both reports to bypass the temporal arbitration gate and publish near-simultaneously to Kafka. The frontend received two near-identical packets within ~100ms and had to snap between them. At 100m, MLAT noise is correctly suppressed; genuine fast-mover position changes still pass the temporal gate normally.
+- **Special Entity Highlighting**: To rapidly direct operator attention, high-value assets (SAR, Military, Law Enforcement vessels + Helicopters and Drones) are now outlined on the tactical map with a glowing "Tactical Orange" (#FF8800) shadow, and their tags in the target inspector side-panel have been recolored to match.
+- **HUD Streamlining**: Removed the redundant "Active Collection Filters" header from the UI configuration panel to maximize map visibility.
 
 ---
 
@@ -32,8 +34,8 @@ The exponential lerp used a `dt` already capped at 100ms (physics guard), but `s
 
 ```bash
 git pull
-docker compose restart adsb-poller
-# Frontend updates via HMR — no rebuild required
+docker compose up -d --build
+# Due to protocol buffer changes, rebuild the backend and frontend entirely.
 ```
 
 ---
