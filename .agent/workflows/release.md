@@ -18,6 +18,7 @@ Standardized release process: version bump, changelog, release notes, and docume
 
 ## 1. Analysis & Preparation
 
+- [ ] **State Verification (Mandatory)**: Run `git status` to identify all modified files. If there are untracked or unstaged codebase changes (`.tsx`, `.py`, `.yaml`, `.proto`), you **must** stage and commit them as feat/fix/chore commits _before_ running this release sequence, or explicitly bundle them into the release commit.
 - [ ] **Review Changes**: Run `git log` or check recent work since the last tag.
 - [ ] **Determine Semantic Version**:
   - **Major (X.0.0)**: Breaking changes (API, Schema, Protocol).
