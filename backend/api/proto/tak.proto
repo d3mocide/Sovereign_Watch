@@ -45,6 +45,7 @@ message Detail {
   Status status = 4;
   PrecisionLocation precisionLocation = 5;
   Classification classification = 6;
+  VesselClassification vesselClassification = 7;
   // XML fallback for unmapped fields
   string xmlDetail = 100; 
 }
@@ -88,4 +89,19 @@ message Classification {
   string description = 9;
   string squawk = 10;
   string emergency = 11;
+}
+
+message VesselClassification {
+  string category = 1;
+  uint32 ship_type = 2;
+  uint32 nav_status = 3;
+  bool hazardous = 4;
+  string station_type = 5;
+  uint32 flag_mid = 6;
+  uint32 imo = 7;
+  string callsign = 8;
+  string destination = 9;
+  float draught = 10;
+  float length = 11;
+  float beam = 12;
 }

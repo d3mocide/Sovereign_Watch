@@ -1,15 +1,19 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { Radio, Bell, TrendingDown, TrendingUp, Filter } from 'lucide-react';
 import { CoTEntity, MapActions, IntelEvent, MapFilters } from '../../types';
+import { LayerFilters } from './LayerFilters';
 
 interface IntelFeedProps {
   events: IntelEvent[];
   onEntitySelect?: (entity: CoTEntity) => void;
   mapActions?: MapActions;
   filters?: MapFilters;
+  onFilterChange?: (key: string, value: boolean) => void;
 }
 
-export const IntelFeed = ({ events, onEntitySelect, mapActions, filters }: IntelFeedProps) => {
+export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilterChange }: IntelFeedProps) => {
+  const [showFilters, setShowFilters] = useState(false);
+
   // 1. Memoize filtered events to avoid recalculating on every render
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
@@ -29,6 +33,24 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters }: Intel
             
             // Platform filter
             if (event.classification.platform === 'helicopter' && filters.showHelicopter === false) return false;
+            if (event.classification.platform === 'drone' && filters.showDrone === false) return false;
+        }
+        
+        // Sea filters
+        if (event.entityType === 'sea' && event.classification) {
+            const cat = event.classification.category;
+            if (cat === 'cargo' && filters.showCargo === false) return false;
+            if (cat === 'tanker' && filters.showTanker === false) return false;
+            if (cat === 'passenger' && filters.showPassenger === false) return false;
+            if (cat === 'fishing' && filters.showFishing === false) return false;
+            if (cat === 'military' && filters.showSeaMilitary === false) return false;
+            if (cat === 'law_enforcement' && filters.showLawEnforcement === false) return false;
+            if (cat === 'sar' && filters.showSar === false) return false;
+            if (cat === 'tug' && filters.showTug === false) return false;
+            if (cat === 'pleasure' && filters.showPleasure === false) return false;
+            if (cat === 'hsc' && filters.showHsc === false) return false;
+            if (cat === 'pilot' && filters.showPilot === false) return false;
+            if ((cat === 'special' || cat === 'unknown') && filters.showSpecial === false) return false;
         }
         
         return true;
@@ -60,10 +82,19 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters }: Intel
             <Radio size={12} className="animate-pulse text-hud-green" />
             Intelligence Stream
         </h3>
-        <button className="text-white/30 hover:text-hud-green transition-colors">
+        <button 
+            className={`transition-colors p-1 rounded ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
+            onClick={() => setShowFilters(!showFilters)}
+        >
             <Filter size={12} />
         </button>
       </div>
+
+      {showFilters && filters && onFilterChange && (
+          <div className="border-b border-tactical-border bg-black/60 p-3 max-h-[50vh] overflow-y-auto">
+              <LayerFilters filters={filters} onFilterChange={onFilterChange} />
+          </div>
+      )}
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 scrollbar-thin scrollbar-thumb-hud-green/20">
         {events.length === 0 ? (
@@ -73,7 +104,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters }: Intel
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredEvents.map((event) => (
+            {filteredEvents.slice(0, 50).map((event) => (
                 <IntelEventItem 
                     key={event.id} 
                     event={event} 
@@ -137,9 +168,19 @@ const IntelEventItem = React.memo(({
                  <span className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}>
                     {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
                  </span>
-                 {event.classification?.platform && (
-                      <span className={`text-[9px] px-1 rounded border ${borderLight} ${textColor} opacity-80`}>
+                 {event.classification?.affiliation && ['military', 'government'].includes(event.classification.affiliation.toLowerCase()) && (
+                      <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.affiliation.toLowerCase() === 'military' ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
+                          {event.classification.affiliation.toUpperCase()}
+                      </span>
+                 )}
+                 {event.classification?.platform && event.classification.platform.toLowerCase() !== 'fixed_wing' && (
+                      <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.platform.toLowerCase() === 'helicopter' ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
                           {event.classification.platform.toUpperCase()}
+                      </span>
+                 )}
+                 {event.classification?.category && (
+                      <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${['sar', 'law_enforcement', 'military'].includes(event.classification.category.toLowerCase()) ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
+                          {event.classification.category.toUpperCase().replace(/_/g, ' ')}
                       </span>
                  )}
              </div>

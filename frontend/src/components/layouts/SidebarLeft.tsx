@@ -39,12 +39,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
           />
       )}
 
-      {/* 1. Global Controls Moved to Top */}
-      <LayerFilters 
-        filters={filters} 
-        onFilterChange={onFilterChange} 
-      />
-
       {/* Mission Navigator */}
       {missionProps && (
         <MissionNavigator
@@ -62,18 +56,11 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         onEntitySelect={onEntitySelect} 
         mapActions={mapActions} 
         filters={filters}
+        onFilterChange={onFilterChange}
       />
 
       {/* 3. Metrics & Analytics */}
       <SystemStatus trackCounts={trackCounts} />
-      
-      {/* Visual Tech Metadata */}
-      <div className="flex items-center justify-between px-1 opacity-20 hover:opacity-100 transition-opacity">
-          <span className="text-[8px] tracking-tighter"> </span>
-          <span className="text-[8px] tracking-tighter tabular-nums">
-              LATENCY: {health ? `${health.latency}MS` : '...'}
-          </span>
-      </div>
     </div>
   );
 };

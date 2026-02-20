@@ -38,7 +38,6 @@ services:
       - "28081:18081"
       - "28082:18082"
       - "29092:19092"
-      - "9644:9644"
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     networks:

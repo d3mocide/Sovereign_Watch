@@ -26,6 +26,19 @@ function App() {
     showGovernment: true,
     showCommercial: true,
     showPrivate: true,
+    showCargo: true,
+    showTanker: true,
+    showPassenger: true,
+    showFishing: true,
+    showSeaMilitary: true,
+    showLawEnforcement: true,
+    showSar: true,
+    showTug: true,
+    showPleasure: true,
+    showHsc: true,
+    showPilot: true,
+    showSpecial: true,
+    showDrone: true,
   });
   
   // Velocity Vector Toggle
@@ -235,7 +248,7 @@ function App() {
       ...event,
       id: crypto.randomUUID(),
       time: new Date(),
-    }, ...prev].filter(e => e.time.getTime() > oneHourAgo));
+    }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
   }, []);
 
   // Periodic cleanup for events older than 1 hour
@@ -264,6 +277,10 @@ function App() {
       setSelectedEntity(e);
       // Always stop following when selection changes (user must re-engage)
       setFollowMode(false);
+  }, []);
+
+  const handleEntityLiveUpdate = useCallback((e: CoTEntity) => {
+      setSelectedEntity(e);
   }, []);
 
   return (
@@ -326,6 +343,7 @@ function App() {
           replayEntities={replayEntities}
           followMode={followMode} // Pass follow mode
           onFollowModeChange={setFollowMode}
+          onEntityLiveUpdate={handleEntityLiveUpdate}
       />
 
       

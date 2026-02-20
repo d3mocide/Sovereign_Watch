@@ -257,6 +257,20 @@ interface TacticalMapProps {
         showGovernment?: boolean;
         showCommercial?: boolean;
         showPrivate?: boolean;
+        showDrone?: boolean;
+        showCargo?: boolean;
+        showTanker?: boolean;
+        showPassenger?: boolean;
+        showFishing?: boolean;
+        showSeaMilitary?: boolean;
+        showLawEnforcement?: boolean;
+        showSar?: boolean;
+        showTug?: boolean;
+        showPleasure?: boolean;
+        showHsc?: boolean;
+        showPilot?: boolean;
+        showSpecial?: boolean;
+        [key: string]: boolean | undefined;
     };
     onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea', classification?: import('../../types').EntityClassification }) => void;
     selectedEntity: CoTEntity | null;
@@ -585,7 +599,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         // For now, we assume it's served from /tak.proto if we put it in public, 
         // OR we try to import it. Let's try the import method if configured, otherwise public.
         // Simplest for now: Assume we will move tak.proto to public folder for easy fetch.
-        worker.postMessage({ type: 'init', payload: '/tak.proto' });
+        worker.postMessage({ type: 'init', payload: '/tak.proto?v=' + Date.now() });
 
         const processEntityUpdate = (updateData: any) => {
                // Handle Decoded Data from Worker
@@ -677,6 +691,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                      const blendLon = visual ? visual.lon : newLon;
                      
                      const classification = entity.detail?.classification as import('../../types').EntityClassification | undefined;
+                     const vesselClassification = entity.detail?.vesselClassification as import('../../types').VesselClassification | undefined;
 
                      // Calculate interval (clamped to avoid jitter from rapid updates)
                      const lastServerTime = currentDr ? currentDr.serverTime : now - 1000;
@@ -724,6 +739,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                             operator: classification.operator || existingEntity?.classification?.operator || '',
                             registration: classification.registration || existingEntity?.classification?.registration || '',
                         } : existingEntity?.classification,
+                        vesselClassification: vesselClassification || existingEntity?.vesselClassification,
                     });
                     
                     // Pre-compute UID hash for glow animation (once per entity, not per frame)
@@ -766,11 +782,46 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                    // Track known UIDs and emit new entity event
                    if (isNew) {
                        knownUidsRef.current.add(entity.uid);
+                       
+                       let prefix = isShip ? '🚢' : '✈️';
+                       let tags = '';
+                       let dims = '';
+                       
+                        if (isShip && vesselClassification) {
+                            const cat = vesselClassification.category;
+                            if (cat === 'tanker') { prefix = '⛽'; }
+                            else if (cat === 'fishing') { prefix = '🎣'; }
+                            else if (cat === 'pleasure') { prefix = '⛵'; }
+                            else if (cat === 'military') { prefix = '⚓'; }
+                            else if (cat === 'cargo') { prefix = '🚢'; }
+                            else if (cat === 'passenger') { prefix = '🚢'; }
+                            else if (cat === 'law_enforcement') { prefix = '⚓'; }
+                            else if (cat === 'tug') { prefix = '⛴️'; }
+                            
+                            if (vesselClassification.length && vesselClassification.length > 0) {
+                                dims = ` — ${vesselClassification.length}m`;
+                            }
+                        } else if (!isShip && classification) {
+                            if (classification.platform === 'helicopter') { prefix = '🚁'; }
+                            else if (classification.platform === 'drone' || classification.platform === 'uav') { prefix = '🛸'; }
+                            else if (classification.affiliation === 'military') { prefix = '🦅'; }
+                            else if (classification.affiliation === 'government') { prefix = '🏛️'; }
+                            else { prefix = '✈️'; }
+                            
+                            if (classification.icaoType) {
+                                tags += `[${classification.icaoType}] `;
+                            } else if (classification.operator) {
+                                tags += `[${classification.operator.slice(0, 10).toUpperCase()}] `;
+                            }
+                        }
+                       
                        onEvent?.({
                            type: 'new',
-                           message: `${isShip ? '🚢' : '✈️'} ${callsign}`,
+                           message: `${prefix} ${tags}${callsign}${dims}`,
                            entityType: isShip ? 'sea' : 'air',
-                           classification
+                           classification: isShip && vesselClassification 
+                                ? { ...classification, category: vesselClassification.category } 
+                                : classification
                        });
                    }
                }
@@ -892,14 +943,33 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                      const isShip = entity.type?.includes("S");
                      
                      // Filter
-                     if (isShip && !filters?.showSea) continue;
-                     if (!isShip) {
+                     if (isShip) {
+                         if (!filters?.showSea) continue;
+                         if (entity.vesselClassification) {
+                             const cat = entity.vesselClassification.category;
+                             if (cat === 'cargo' && filters?.showCargo === false) continue;
+                             if (cat === 'tanker' && filters?.showTanker === false) continue;
+                             if (cat === 'passenger' && filters?.showPassenger === false) continue;
+                             if (cat === 'fishing' && filters?.showFishing === false) continue;
+                             if (cat === 'military' && filters?.showSeaMilitary === false) continue;
+                             if (cat === 'law_enforcement' && filters?.showLawEnforcement === false) continue;
+                             if (cat === 'sar' && filters?.showSar === false) continue;
+                             if (cat === 'tug' && filters?.showTug === false) continue;
+                             if (cat === 'pleasure' && filters?.showPleasure === false) continue;
+                             if (cat === 'hsc' && filters?.showHsc === false) continue;
+                             if (cat === 'pilot' && filters?.showPilot === false) continue;
+                             if ((cat === 'special' || cat === 'unknown') && filters?.showSpecial === false) continue;
+                         }
+                     } else {
                          if (!filters?.showAir) continue;
                          if (entity.classification) {
                              const cls = entity.classification;
                              if (cls.platform === 'helicopter' && filters?.showHelicopter === false) continue;
+                             if (cls.platform === 'drone' && filters?.showDrone === false) continue;
                              if (cls.affiliation === 'military' && filters?.showMilitary === false) continue;
                              if (cls.affiliation === 'government' && filters?.showGovernment === false) continue;
+                             if (cls.affiliation === 'commercial' && filters?.showCommercial === false) continue;
+                             if (cls.affiliation === 'general_aviation' && filters?.showPrivate === false) continue;
                          }
                      }
                      
@@ -939,12 +1009,29 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                   }
 
                   // Filter
-                  if (isShip && !filters?.showSea) continue;
-                  if (!isShip) {
+                  if (isShip) {
+                      if (!filters?.showSea) continue;
+                      if (entity.vesselClassification) {
+                          const cat = entity.vesselClassification.category;
+                          if (cat === 'cargo' && filters?.showCargo === false) continue;
+                          if (cat === 'tanker' && filters?.showTanker === false) continue;
+                          if (cat === 'passenger' && filters?.showPassenger === false) continue;
+                          if (cat === 'fishing' && filters?.showFishing === false) continue;
+                          if (cat === 'military' && filters?.showSeaMilitary === false) continue;
+                          if (cat === 'law_enforcement' && filters?.showLawEnforcement === false) continue;
+                          if (cat === 'sar' && filters?.showSar === false) continue;
+                          if (cat === 'tug' && filters?.showTug === false) continue;
+                          if (cat === 'pleasure' && filters?.showPleasure === false) continue;
+                          if (cat === 'hsc' && filters?.showHsc === false) continue;
+                          if (cat === 'pilot' && filters?.showPilot === false) continue;
+                          if ((cat === 'special' || cat === 'unknown') && filters?.showSpecial === false) continue;
+                      }
+                  } else {
                       if (!filters?.showAir) continue;
                       if (entity.classification) {
                           const cls = entity.classification;
                           if (cls.platform === 'helicopter' && filters?.showHelicopter === false) continue;
+                          if (cls.platform === 'drone' && filters?.showDrone === false) continue;
                           if (cls.affiliation === 'military' && filters?.showMilitary === false) continue;
                           if (cls.affiliation === 'government' && filters?.showGovernment === false) continue;
                           if (cls.affiliation === 'commercial' && filters?.showCommercial === false) continue;
@@ -1114,9 +1201,43 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
               const entity = entities.get(uid);
               if (entity) {
                 const isShip = entity.type?.includes("S");
+                const vc = entity.vesselClassification;
+                let prefix = isShip ? "🚢" : "✈️";
+                let tags = "";
+                let dims = "";
+                
+                if (isShip && vc) {
+                    const cat = vc?.category;
+                    if (cat === 'tanker') { prefix = '⛽'; }
+                    else if (cat === 'fishing') { prefix = '🎣'; }
+                    else if (cat === 'pleasure') { prefix = '⛵'; }
+                    else if (cat === 'military') { prefix = '⚓'; }
+                    else if (cat === 'cargo') { prefix = '🚢'; }
+                    else if (cat === 'passenger') { prefix = '🚢'; }
+                    else if (cat === 'law_enforcement') { prefix = '⚓'; }
+                    else if (cat === 'tug') { prefix = '⛴️'; }
+                    
+                    if (vc.length && vc.length > 0) {
+                        dims = ` — ${vc.length}m`;
+                    }
+                } else if (!isShip && entity.classification) {
+                    const ac = entity.classification;
+                    if (ac.platform === 'helicopter') { prefix = '🚁'; }
+                    else if (ac.platform === 'drone' || ac.platform === 'uav') { prefix = '🛸'; }
+                    else if (ac.affiliation === 'military') { prefix = '🦅'; }
+                    else if (ac.affiliation === 'government') { prefix = '🏛️'; }
+                    else { prefix = '✈️'; }
+                    
+                    if (ac.icaoType) {
+                        tags += `[${ac.icaoType}] `;
+                    } else if (ac.operator) {
+                        tags += `[${ac.operator.slice(0, 10).toUpperCase()}] `;
+                    }
+                }
+                
                 onEvent?.({
                   type: "lost",
-                  message: `${isShip ? "🚢" : "✈️"} ${entity.callsign}`,
+                  message: `${prefix} ${tags}${entity.callsign || uid}${dims}`,
                   entityType: isShip ? "sea" : "air",
                 });
               }
@@ -1255,6 +1376,41 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         pickable: false,
                     })
                 ] : []),
+
+                // Special Entities Outline/Glow
+                new IconLayer({
+                    id: 'heading-arrows-special-outline',
+                    data: interpolated.filter(d => {
+                        const isVessel = d.type.includes('S');
+                        if (isVessel) {
+                            return ['sar', 'military', 'law_enforcement'].includes(d.vesselClassification?.category || '');
+                        } else {
+                            return ['helicopter', 'drone'].includes(d.classification?.platform || '') || 
+                                   ['military', 'government'].includes(d.classification?.affiliation || '');
+                        }
+                    }),
+                    getIcon: (d: CoTEntity) => d.type.includes('S') ? 'vessel' : 'aircraft',
+                    iconAtlas: ICON_ATLAS.url,
+                    iconMapping: ICON_ATLAS.mapping,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    getPosition: (d: any) => [d.lon, d.lat, (d.altitude || 0) + 1.8], // Slightly below the main icon
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    getSize: (d: any) => {
+                        const isSelected = currentSelected?.uid === d.uid;
+                        const baseSize = 32;
+                        // +6px padding creates an ~3px stroke outline
+                        return (isSelected ? baseSize * 1.3 : baseSize) + 6; 
+                    },
+                    sizeUnits: 'pixels' as const,
+                    billboard: false, 
+                    getAngle: (d: any) => -(d.course || 0),
+                    getColor: [255, 136, 0], // Tactical Orange
+                    pickable: false,
+                    updateTriggers: {
+                        getSize: [currentSelected?.uid],
+                        getAngle: [now]
+                    }
+                }),
 
                 new IconLayer({
                     id: 'heading-arrows',

@@ -88,8 +88,13 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
                 <div className="h-4 w-[1px] bg-white/5" />
                 <div className="flex flex-col items-center">
-                    <span className="text-[8px] text-white/20 uppercase tracking-tighter">Network Integrity</span>
-                    <div className="flex gap-0.5">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[8px] text-white/20 uppercase tracking-tighter">Network Integrity</span>
+                        <span className="text-[8px] text-hud-green/50 tabular-nums tracking-tighter">
+                            {health ? `${health.latency}MS` : '---'}
+                        </span>
+                    </div>
+                    <div className="flex gap-0.5 mt-0.5">
                         {[1, 2, 3, 4, 5, 6].map(i => (
                             <div 
                                 key={i} 

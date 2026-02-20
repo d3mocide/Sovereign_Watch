@@ -1,4 +1,4 @@
-export type TrailPoint = [number, number, number, number]; // [lon, lat, altitude, speed]
+export type TrailPoint = [number, number, number, number, number?]; // [lon, lat, altitude, speed, timestamp?]
 
 export type CoTEntity = {
     uid: string;
@@ -16,9 +16,24 @@ export type CoTEntity = {
     uidHash: number; // Pre-computed phase offset for glow animation (avoids per-frame string ops)
     detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
     lastSourceTime?: number; // Latest timestamp from source (for ordering)
-    raw?: string; // Hex-encoded raw payload for inspection
     classification?: EntityClassification;
+    vesselClassification?: VesselClassification;
 };
+
+export interface VesselClassification {
+    category?: string;
+    shipType?: number;
+    navStatus?: number;
+    hazardous?: boolean;
+    stationType?: string;
+    flagMid?: number;
+    imo?: number;
+    callsign?: string;
+    destination?: string;
+    draught?: number;
+    length?: number;
+    beam?: number;
+}
 
 export interface EntityClassification {
     affiliation?: string;
@@ -64,6 +79,7 @@ export interface MapActions {
     flyTo: (lat: number, lon: number, zoom?: number) => void;
     fitBounds: (bounds: [[number, number], [number, number]]) => void;
     searchLocal: (query: string) => CoTEntity[];
+    onEntityLiveUpdate?: (entity: CoTEntity) => void;
 }
 
 export interface MapFilters {

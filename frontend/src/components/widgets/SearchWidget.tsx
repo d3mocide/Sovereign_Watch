@@ -17,7 +17,19 @@ interface SearchResult {
     lastSeen: number;
     entity?: CoTEntity; // For live entities
     classification?: { affiliation?: string; platform?: string; operator?: string; icaoType?: string };
+    vesselClassification?: import('../../types').VesselClassification;
 }
+
+export const SHIP_TYPE_MAP: Record<number, string> = {
+    30: 'Fishing vessel',
+    35: 'Military operations',
+    37: 'Pleasure craft',
+    52: 'Tug',
+    55: 'Law enforcement',
+    60: 'Passenger ship',
+    70: 'Cargo ship',
+    80: 'Tanker'
+};
 
 export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntitySelect }) => {
     const [query, setQuery] = useState('');
@@ -57,7 +69,8 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                     isLive: true,
                     lastSeen: entity.lastSeen,
                     entity: entity,
-                    classification: entity.classification
+                    classification: entity.classification,
+                    vesselClassification: entity.vesselClassification
                 });
                 seenUids.add(entity.uid);
             });
@@ -86,7 +99,8 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                  lon: item.lon,
                                  isLive: false,
                                  lastSeen: ts,
-                                 classification: item.classification
+                                 classification: item.classification,
+                                 vesselClassification: item.vesselClassification
                              });
                         }
                     });
@@ -99,7 +113,6 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
             setLoading(false);
         };
 
-        performSearch();
         performSearch();
     }, [debouncedQuery, mapActions]);
 
@@ -127,7 +140,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
        }, 2000);
 
        return () => clearInterval(refreshInterval);
-    }, [debouncedQuery, results.length > 0, mapActions]);
+    }, [debouncedQuery, results.length, mapActions]);
 
     const handleSelect = (result: SearchResult) => {
         if (result.isLive && result.entity) {
@@ -204,7 +217,16 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                             HIST
                                         </span>
                                     )}
-                                    {result.classification?.affiliation && (
+                                    {result.type.includes('S') && result.vesselClassification?.category && (
+                                        <span className={`w-2 h-2 rounded-full ${
+                                            result.vesselClassification.category === 'cargo' ? 'bg-green-500' :
+                                            result.vesselClassification.category === 'tanker' ? 'bg-red-500' :
+                                            result.vesselClassification.category === 'passenger' ? 'bg-purple-500' :
+                                            result.vesselClassification.category === 'military' ? 'bg-amber-500' :
+                                            'bg-blue-400'
+                                        }`} title={result.vesselClassification.category.toUpperCase()}></span>
+                                    )}
+                                    {!result.type.includes('S') && result.classification?.affiliation && (
                                         <span className={`text-[9px] px-1 rounded font-bold ${
                                             result.classification.affiliation === 'military' ? 'text-amber-500 bg-amber-500/10' :
                                             result.classification.affiliation === 'government' ? 'text-blue-400 bg-blue-400/10' :
@@ -214,12 +236,26 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
-                                    {result.classification?.operator && (
-                                        <span className="text-white/60 truncate max-w-[80px]">{result.classification.operator}</span>
-                                    )}
-                                    {result.classification?.icaoType && (
-                                        <span>{result.classification.icaoType}</span>
+                                <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono mt-0.5">
+                                    {result.type.includes('S') && result.vesselClassification ? (
+                                        <>
+                                            <span className="text-white/60 truncate max-w-[100px]">{SHIP_TYPE_MAP[result.vesselClassification.shipType || 0] || 'Vessel'}</span>
+                                            {result.vesselClassification.length !== undefined && result.vesselClassification.length > 0 && (
+                                                <span>{result.vesselClassification.length}m × {result.vesselClassification.beam}m</span>
+                                            )}
+                                            {result.vesselClassification.flagMid && (
+                                                <span>MID: {result.vesselClassification.flagMid}</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {result.classification?.operator && (
+                                                <span className="text-white/60 truncate max-w-[80px]">{result.classification.operator}</span>
+                                            )}
+                                            {result.classification?.icaoType && (
+                                                <span>{result.classification.icaoType}</span>
+                                            )}
+                                        </>
                                     )}
                                     <span>{result.lat.toFixed(4)}° {result.lon.toFixed(4)}°</span>
                                     <span>•</span>

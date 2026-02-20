@@ -240,7 +240,6 @@ async def get_mission_location():
     }
     
     return default_mission
-    return {"status": "ok"}
 
 @app.post("/api/analyze/{uid}")
 async def analyze_track(uid: str, req: AnalyzeRequest):
@@ -430,6 +429,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     cls.description = str(src_class.get("description", ""))
                     cls.squawk = str(src_class.get("squawk", ""))
                     cls.emergency = str(src_class.get("emergency", ""))
+                
+                # Vessel Classification
+                src_vessel = src_detail.get("vesselClassification", {})
+                if src_vessel:
+                    vc = cot.detail.vesselClassification
+                    vc.category = str(src_vessel.get("category", ""))
+                    vc.ship_type = int(src_vessel.get("shipType", 0))
+                    vc.nav_status = int(src_vessel.get("navStatus", 15))
+                    vc.hazardous = bool(src_vessel.get("hazardous", False))
+                    vc.station_type = str(src_vessel.get("stationType", ""))
+                    vc.flag_mid = int(src_vessel.get("flagMid", 0))
+                    vc.imo = int(src_vessel.get("imo", 0))
+                    vc.callsign = str(src_vessel.get("callsign", ""))
+                    vc.destination = str(src_vessel.get("destination", ""))
+                    vc.draught = to_float(src_vessel.get("draught"))
+                    vc.length = to_float(src_vessel.get("length"))
+                    vc.beam = to_float(src_vessel.get("beam"))
                 
                 # Serialize
                 payload = tak_msg.SerializeToString()

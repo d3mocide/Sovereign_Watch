@@ -10,6 +10,10 @@ interface LayerFiltersProps {
       showGovernment?: boolean;
       showCommercial?: boolean;
       showPrivate?: boolean;
+      showCargo?: boolean;
+      showTanker?: boolean;
+      showPassenger?: boolean;
+      showFishing?: boolean;
       [key: string]: boolean | undefined;
   };
   onFilterChange: (key: string, value: boolean) => void;
@@ -21,13 +25,6 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
 
   return (
     <div className="flex flex-col rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden relative">
-      <div className="flex items-center justify-between border-b border-tactical-border bg-white/[0.03] px-3 py-2 relative z-10">
-        <h3 className="text-mono-xs font-bold uppercase tracking-[0.2em] text-hud-green/70 flex items-center gap-2">
-            <Activity size={12} className="text-hud-green" />
-            Active Collection Filters
-        </h3>
-      </div>
-      
       <div className="flex flex-col gap-2 p-3">
         {/* Aircraft Filter Group */}
         <div className="flex flex-col gap-1">
@@ -138,6 +135,23 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
                             <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPrivate !== false ? 'left-2.5' : 'left-0.5'}`} />
                         </div>
                     </label>
+
+                    {/* Drone Sub-filter */}
+                    <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showDrone !== false ? 'border-rose-400/20 bg-rose-400/5' : 'border-white/5 bg-white/5'}`}>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px]">🛸</span>
+                            <span className={`text-[9px] font-bold tracking-wide ${filters.showDrone !== false ? 'text-rose-400/80' : 'text-white/30'}`}>DRONE</span>
+                        </div>
+                        <input 
+                            type="checkbox" 
+                            className="sr-only"
+                            checked={filters.showDrone !== false}
+                            onChange={(e) => onFilterChange('showDrone', e.target.checked)}
+                        />
+                         <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showDrone !== false ? 'bg-rose-400/80' : 'bg-white/10'}`}>
+                            <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showDrone !== false ? 'left-2.5' : 'left-0.5'}`} />
+                        </div>
+                    </label>
                 </div>
             )}
         </div>
@@ -164,10 +178,156 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
             </div>
           </div>
           
-          {/* Sub-filters for Sea (Placeholder for future use) */}
+          {/* Sub-filters for Sea */}
           {filters.showSea && seaExpanded && (
-            <div className="pl-6 py-2 text-[9px] text-white/20 italic tracking-wider">
-              No marine sub-filters available
+            <div className="grid grid-cols-2 gap-1.5 pl-6 mt-1">
+                {/* Cargo */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showCargo !== false ? 'border-sea-accent/20 bg-sea-accent/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🚢</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showCargo !== false ? 'text-sea-accent/80' : 'text-white/30'}`}>CARGO</span>
+                    </div>
+                    <input 
+                        type="checkbox" 
+                        className="sr-only"
+                        checked={filters.showCargo !== false}
+                        onChange={(e) => onFilterChange('showCargo', e.target.checked)}
+                    />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showCargo !== false ? 'bg-sea-accent/80' : 'bg-white/10'}`}>
+                        <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showCargo !== false ? 'left-2.5' : 'left-0.5'}`} />
+                    </div>
+                </label>
+
+                {/* Tanker */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTanker !== false ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⛽</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showTanker !== false ? 'text-amber-500/80' : 'text-white/30'}`}>TANKER</span>
+                    </div>
+                    <input 
+                        type="checkbox" 
+                        className="sr-only"
+                        checked={filters.showTanker !== false}
+                        onChange={(e) => onFilterChange('showTanker', e.target.checked)}
+                    />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showTanker !== false ? 'bg-amber-500/80' : 'bg-white/10'}`}>
+                        <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showTanker !== false ? 'left-2.5' : 'left-0.5'}`} />
+                    </div>
+                </label>
+
+                {/* Passenger */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPassenger !== false ? 'border-sky-400/20 bg-sky-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🛳️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showPassenger !== false ? 'text-sky-400/80' : 'text-white/30'}`}>PASSENGER</span>
+                    </div>
+                    <input 
+                        type="checkbox" 
+                        className="sr-only"
+                        checked={filters.showPassenger !== false}
+                        onChange={(e) => onFilterChange('showPassenger', e.target.checked)}
+                    />
+                     <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showPassenger !== false ? 'bg-sky-400/80' : 'bg-white/10'}`}>
+                        <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPassenger !== false ? 'left-2.5' : 'left-0.5'}`} />
+                    </div>
+                </label>
+
+                 {/* Fishing */}
+                 <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showFishing !== false ? 'border-hud-green/20 bg-hud-green/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🎣</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showFishing !== false ? 'text-hud-green/80' : 'text-white/30'}`}>FISHING</span>
+                    </div>
+                    <input 
+                        type="checkbox" 
+                        className="sr-only"
+                        checked={filters.showFishing !== false}
+                        onChange={(e) => onFilterChange('showFishing', e.target.checked)}
+                    />
+                     <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFishing !== false ? 'bg-hud-green/80' : 'bg-white/10'}`}>
+                        <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFishing !== false ? 'left-2.5' : 'left-0.5'}`} />
+                    </div>
+                </label>
+
+                {/* MILITARY */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSeaMilitary !== false ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⚓</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSeaMilitary !== false ? 'text-amber-500/80' : 'text-white/30'}`}>MIL</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSeaMilitary !== false} onChange={(e) => onFilterChange('showSeaMilitary', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSeaMilitary !== false ? 'bg-amber-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSeaMilitary !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* LAW ENFORCEMENT */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showLawEnforcement !== false ? 'border-sky-500/20 bg-sky-500/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🚓</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showLawEnforcement !== false ? 'text-sky-500/80' : 'text-white/30'}`}>LAW ENF</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showLawEnforcement !== false} onChange={(e) => onFilterChange('showLawEnforcement', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showLawEnforcement !== false ? 'bg-sky-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showLawEnforcement !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* SAR */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSar !== false ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⛑️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSar !== false ? 'text-amber-500/80' : 'text-white/30'}`}>SAR</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSar !== false} onChange={(e) => onFilterChange('showSar', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSar !== false ? 'bg-amber-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSar !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* TUG */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTug !== false ? 'border-gray-400/20 bg-gray-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⛴️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showTug !== false ? 'text-gray-400/80' : 'text-white/30'}`}>TUG</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showTug !== false} onChange={(e) => onFilterChange('showTug', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showTug !== false ? 'bg-gray-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showTug !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* PLEASURE */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPleasure !== false ? 'border-pink-300/20 bg-pink-300/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⛵</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showPleasure !== false ? 'text-pink-300/80' : 'text-white/30'}`}>PLEASURE</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showPleasure !== false} onChange={(e) => onFilterChange('showPleasure', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showPleasure !== false ? 'bg-pink-300/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPleasure !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* HSC */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showHsc !== false ? 'border-emerald-300/20 bg-emerald-300/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🚤</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showHsc !== false ? 'text-emerald-300/80' : 'text-white/30'}`}>HSC</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showHsc !== false} onChange={(e) => onFilterChange('showHsc', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showHsc !== false ? 'bg-emerald-300/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showHsc !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* PILOT */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPilot !== false ? 'border-teal-400/20 bg-teal-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🧭</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showPilot !== false ? 'text-teal-400/80' : 'text-white/30'}`}>PILOT</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showPilot !== false} onChange={(e) => onFilterChange('showPilot', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showPilot !== false ? 'bg-teal-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPilot !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* SPECIAL */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSpecial !== false ? 'border-zinc-400/20 bg-zinc-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⚙️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSpecial !== false ? 'text-zinc-400/80' : 'text-white/30'}`}>SPECIAL</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSpecial !== false} onChange={(e) => onFilterChange('showSpecial', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSpecial !== false ? 'bg-zinc-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSpecial !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
             </div>
           )}
         </div>
