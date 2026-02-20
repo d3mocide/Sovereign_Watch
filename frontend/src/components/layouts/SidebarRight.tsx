@@ -5,6 +5,31 @@ import { Crosshair, Map as MapIcon, Shield, Terminal } from 'lucide-react';
 import { TimeTracked } from './TimeTracked';
 import { PayloadInspector } from '../widgets/PayloadInspector';
 
+export const NAV_STATUS_MAP: Record<number, string> = {
+    0: 'Under way using engine',
+    1: 'At anchor',
+    2: 'Not under command',
+    3: 'Restricted maneuverability',
+    4: 'Constrained by draught',
+    5: 'Moored',
+    6: 'Aground',
+    7: 'Engaged in fishing',
+    8: 'Under way sailing',
+    14: 'AIS-SART active',
+    15: 'Not defined'
+};
+
+export const SHIP_TYPE_MAP: Record<number, string> = {
+    30: 'Fishing vessel',
+    35: 'Military operations',
+    37: 'Pleasure craft',
+    52: 'Tug',
+    55: 'Law enforcement',
+    60: 'Passenger ship',
+    70: 'Cargo ship',
+    80: 'Tanker'
+};
+
 interface SidebarRightProps {
   entity: CoTEntity | null;
   onClose: () => void;
@@ -50,13 +75,32 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
              <div className="flex items-center gap-2 mb-1">
                 <Shield size={14} className={accentColor} />
                 <span className="text-[10px] font-bold tracking-[.3em] text-white/40">IDENTIFIED_TARGET</span>
-                {entity.classification?.affiliation && (
+                {entity.classification && !isShip && (
+                    <div className="flex gap-1.5">
+                        {entity.classification.affiliation && (
+                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
+                                ['military', 'government'].includes(entity.classification.affiliation) ? 'bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30' :
+                                'bg-white/10 text-white/60 border border-white/20'
+                            }`}>
+                                {entity.classification.affiliation.toUpperCase()}
+                            </span>
+                        )}
+                        {['helicopter', 'drone'].includes(entity.classification.platform || '') && (
+                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30">
+                                {entity.classification.platform!.toUpperCase()}
+                            </span>
+                        )}
+                    </div>
+                )}
+                {isShip && entity.vesselClassification?.category && (
                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
-                        entity.classification.affiliation === 'military' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' :
-                        entity.classification.affiliation === 'government' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                        'bg-white/10 text-white/60 border border-white/20'
+                        ['sar', 'military', 'law_enforcement'].includes(entity.vesselClassification.category) ? 'bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30' :
+                        entity.vesselClassification.category === 'cargo' ? 'bg-green-500/20 text-green-500 border border-green-500/30' :
+                        entity.vesselClassification.category === 'tanker' ? 'bg-red-500/20 text-red-500 border border-red-500/30' :
+                        entity.vesselClassification.category === 'passenger' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                        'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                     }`}>
-                        {entity.classification.affiliation.toUpperCase()}
+                        {entity.vesselClassification.category.toUpperCase()}
                     </span>
                 )}
              </div>
@@ -65,7 +109,31 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
              </h2>
 
              {/* Aircraft Info Box */}
-             {entity.classification && (
+             {/* Vessel Info Box */}
+             {isShip && entity.vesselClassification ? (
+                <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
+                    <h3 className="text-mono-sm font-bold text-white/90">
+                        {SHIP_TYPE_MAP[entity.vesselClassification.shipType || 0] || 'UNKNOWN VESSEL'}
+                    </h3>
+                    <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">IMO:</span>
+                            <span className="text-white/80">{entity.vesselClassification.imo || 'UNKNOWN'}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">Flag MID:</span>
+                            <span className="text-white/80">{entity.vesselClassification.flagMid || 'UNKNOWN'}</span>
+                        </div>
+                        {entity.vesselClassification.length !== undefined && entity.vesselClassification.length > 0 && (
+                            <div className="flex gap-2">
+                                <span className="text-white/30 w-16">Dimensions:</span>
+                                <span className="text-white/80">{entity.vesselClassification.length}m × {entity.vesselClassification.beam}m</span>
+                            </div>
+                        )}
+                    </div>
+                </section>
+             ) : entity.classification && (
+                 /* Aircraft Info Box */
                 <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
                     <h3 className="text-mono-sm font-bold text-white/90">
                         {entity.classification.description || entity.classification.icaoType || 'UNKNOWN_MODEL'}
@@ -154,17 +222,53 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               {/* Row 1: Speed / Hdg */}
               <div className="grid grid-cols-2 gap-4">
                   <div className="flex justify-between border-b border-white/5 pb-1">
-                      <span className="text-white/30">SPEED:</span>
+                      <span className="text-white/30">SOG:</span>
                       <span className={`${accentColor} tabular-nums`}>{(entity.speed * 1.94384).toFixed(1)} kts</span>
                   </div>
                   <div className="flex justify-between border-b border-white/5 pb-1">
-                      <span className="text-white/30">HDG:</span>
+                      <span className="text-white/30">COG:</span>
                       <span className={`${accentColor} tabular-nums`}>{Math.round(entity.course)}°</span>
                   </div>
               </div>
 
-              {/* Row 2: Alt / VS */}
-              <div className="grid grid-cols-2 gap-4">
+              {isShip ? (
+                <>
+                  {/* Row 2: Nav Status / Dest */}
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">STAT:</span>
+                          <span className="text-white tabular-nums truncate max-w-[120px]" title={NAV_STATUS_MAP[entity.vesselClassification?.navStatus ?? 15] || 'Unknown'}>
+                              {NAV_STATUS_MAP[entity.vesselClassification?.navStatus ?? 15] || 'UNKNOWN'}
+                          </span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">DEST:</span>
+                          <span className="text-white tabular-nums truncate max-w-[100px]">
+                              {entity.vesselClassification?.destination || 'UNKNOWN'}
+                          </span>
+                      </div>
+                  </div>
+                  
+                  {/* Row 3: Draught / Hazardous */}
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">DRGT:</span>
+                          <span className="text-white tabular-nums">
+                              {entity.vesselClassification?.draught ? `${entity.vesselClassification.draught}m` : '---'}
+                          </span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">HAZ:</span>
+                          <span className={`${entity.vesselClassification?.hazardous ? 'text-red-500 animate-pulse font-bold' : 'text-white/40'} tabular-nums`}>
+                              {entity.vesselClassification?.hazardous ? 'YES' : 'NONE'}
+                          </span>
+                      </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Row 2: Alt / VS */}
+                  <div className="grid grid-cols-2 gap-4">
                   <div className="flex justify-between border-b border-white/5 pb-1">
                       <span className="text-white/30">ALT:</span>
                       <span className="text-white tabular-nums">
@@ -192,6 +296,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       </span>
                   </div>
               </div>
+              </>
+              )}
           </div>
           
           {/* Linked Compass Widget */}
@@ -212,7 +318,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               </div>
               <div className="grid grid-cols-[100px_1fr]">
                  <span className="text-white/30">Signal_Source:</span>
-                 <span className="text-hud-green/80">{isShip ? 'AIS_BENTHOS' : 'ADSB_DIRECT'}</span>
+                 <span className="text-hud-green/80">{isShip ? 'AIS_Poller' : 'ADSB_Poller'}</span>
               </div>
               <div className="grid grid-cols-[100px_1fr]">
                  <span className="text-white/30">Classification:</span>
