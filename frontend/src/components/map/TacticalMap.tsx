@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Map as GLMap, useControl, MapRef } from 'react-map-gl';
-// @ts-expect-error: deck.gl layers missing types
+import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import type { MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-// @ts-expect-error: deck.gl layers missing types
 import { ScatterplotLayer, PathLayer, IconLayer, LineLayer } from '@deck.gl/layers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -15,6 +13,15 @@ import { SpeedLegend } from './SpeedLegend';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
 import { getOrbitalLayers } from '../../layers/OrbitalLayer';
+
+// Pick the map adapter at module init time based on the build-time env var.
+// react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
+// the correct adapter rather than using the removed `mapLib` prop.
+const _hasMapboxToken = !!import.meta.env.VITE_MAPBOX_TOKEN;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MapComponent: React.ComponentType<any> = _hasMapboxToken
+    ? lazy(() => import('./MapboxAdapter'))
+    : lazy(() => import('./MapLibreAdapter'));
 
 // ============================================================================
 // ICON ATLAS — Simple chevron markers
@@ -64,42 +71,8 @@ const createIconAtlas = () => {
 const ICON_ATLAS = createIconAtlas();
 
 
-// DeckGL Overlay Control
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DeckGLOverlay(props: any) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  
-  const isDeadRef = useRef(false);
-  useEffect(() => {
-    isDeadRef.current = false;
-    return () => { isDeadRef.current = true; };
-  }, []);
-
-  // Sync props in an effect to avoid calling setProps during render
-  useEffect(() => {
-    if (overlay && overlay.setProps && !isDeadRef.current) {
-        try {
-            overlay.setProps(props);
-        } catch (e) {
-            // Expected during style changes, just log briefly if needed
-            console.debug("[DeckGLOverlay] Transitioning props...");
-        }
-    }
-  }, [props, overlay]);
-  
-  const { onOverlayLoaded } = props;
-
-  useEffect(() => {
-      if (onOverlayLoaded && overlay) {
-          onOverlayLoaded(overlay);
-      }
-      return () => {
-          if (onOverlayLoaded) onOverlayLoaded(null);
-      };
-  }, [overlay, onOverlayLoaded]);
-
-  return null;
-}
+// DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
+// so that useControl is always called within the correct react-map-gl endpoint context.
 
 // Helper: Simple Haversine Distance in Meters
 function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -1961,47 +1934,34 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
     return (
     <>
-        <GLMap
-            ref={mapRef}
-            onLoad={handleMapLoad}
-            {...viewState}
-            onMove={(evt: any) => {
-                // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
-                if (evt.originalEvent && followModeRef.current && onFollowModeChange) {
-                    followModeRef.current = false; // Instant kill before next frame
-                    onFollowModeChange(false);
-                }
-                setViewState(evt.viewState as any);
-            }}
-            mapStyle={mapStyle}
-            mapboxAccessToken={mapToken}
-            config={{
-                basemap: {
-                    lightPreset: 'night',
-                    theme: 'monochrome',
-                    showPointOfInterestLabels: false,
-                    showRoadLabels: false,
-                    showPedestrianRoads: false,
-                    showPlaceLabels: true,
-                    showTransitLabels: true
-                }
-            }}
-            // @ts-expect-error: maplibre-gl type incompatibility with react-map-gl
-            mapLib={mapToken ? undefined : import('maplibre-gl')}
-            style={{width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none'}}
-            onContextMenu={handleContextMenu}
-            onClick={() => {
-                setContextMenuPos(null);
-                setContextMenuCoords(null);
-            }}
-        >
-             <DeckGLOverlay 
-                id="tactical-overlay"
-                interleaved={false} 
-                onOverlayLoaded={handleOverlayLoaded}
+        <Suspense fallback={null}>
+            <MapComponent
+                ref={mapRef as any}
+                viewState={viewState}
+                onLoad={handleMapLoad}
+                onMove={(evt: any) => {
+                    // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
+                    if (evt.originalEvent && followModeRef.current && onFollowModeChange) {
+                        followModeRef.current = false; // Instant kill before next frame
+                        onFollowModeChange(false);
+                    }
+                    setViewState(evt.viewState as any);
+                }}
+                mapStyle={mapStyle}
+                {...(_hasMapboxToken ? { mapboxAccessToken: mapToken } : {})}
+                style={{ width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none' }}
+                onContextMenu={handleContextMenu}
+                onClick={() => {
+                    setContextMenuPos(null);
+                    setContextMenuCoords(null);
+                }}
+                deckProps={{
+                    id: 'tactical-overlay',
+                    interleaved: false,
+                    onOverlayLoaded: handleOverlayLoaded,
+                }}
             />
-
-        </GLMap>
+        </Suspense>
             
         {/* View Controls */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-[100] pointer-events-auto">
