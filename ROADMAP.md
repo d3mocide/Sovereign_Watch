@@ -137,22 +137,28 @@ The frontend is the "Single Pane of Glass" for the analyst.
 
 ### Next Priority (P0–P1)
 
-| ID           | Task Name        | Component | Description                                                   |
-| :----------- | :--------------- | :-------- | :------------------------------------------------------------ |
-| **Audit-01** | **Code Review**  | Security  | **(P1)**. Full codebase audit, linting, and security scan.    |
-| **Fix-01**   | **CoT Tracking** | Frontend  | **(P1)**. Restore functional Cursor-on-Target event tracking. |
+| ID             | Task Name               | Component | Description                                                                                                                                                             |
+| :------------- | :---------------------- | :-------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Audit-01**   | **Code Review**         | Security  | **(P1)**. Full codebase audit, linting, and security scan.                                                                                                              |
+| **Fix-01**     | **CoT Tracking**        | Frontend  | **(P1)**. Restore functional Cursor-on-Target event tracking.                                                                                                           |
+| **Ingest-03**  | Orbital Pulse           | Data Eng  | **(P0)**. Celestrak TLE fetch → SGP4 propagation → `orbital_raw` Kafka topic. 6h TLE refresh, 30s position update cycle.                                                |
+| **FE-20**      | Orbital Visualization   | Frontend  | **(P0)**. `OrbitalLayer.tsx`: satellite icons by category (GPS/Weather/Comms/Surveillance), ground track lines, footprint circles, sidebar telemetry, AOR pass alerts.  |
+| **FE-21**      | Undersea Cable Layer    | Frontend  | **(P1)**. `CableLayer.tsx`: animated fiber routes (TeleGeography GeoJSON), landing station markers, cable metadata popup, INFRA toggle in LayerFilters.                 |
+| **Ingest-07a** | ADS-B Drone Enhancement | Data Eng  | **(P1)**. Expand drone ICAO type-code detection, squawk 7400 forced classification, drone sub-type (`MILITARY_UAS`/`COMMERCIAL_UAS`/`CIVIL_UAS`) tagging in TAK detail. |
+| **FE-22**      | Drone Tactical Layer    | Frontend  | **(P1)**. Dedicated drone rotor-icon layer, operator position link line (Remote ID), DroneDetail sidebar panel.                                                         |
 
 ### Backlog (P2)
 
-| ID             | Task Name        | Component | Description                                              |
-| :------------- | :--------------- | :-------- | :------------------------------------------------------- |
-| **FE-09**      | Coverage Viz     | Frontend  | H3 polling fidelity visualization.                       |
-| **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                      |
-| **FE-12**      | Settings UI      | Frontend  | Configure API keys/Pollers via UI (no more ENV editing). |
-| **FE-13**      | Mission Labels   | Frontend  | Floating text labels for coverage areas.                 |
-| **FE-14**      | Deep Linking     | Frontend  | Shareable URLs with encoded mission state.               |
-| **FE-15**      | Data Portability | Frontend  | Import/Export Mission Presets (JSON).                    |
-| **Backend-04** | Auth/RBAC        | Backend   | User management & Role-Based Access Control.             |
+| ID             | Task Name        | Component | Description                                                                                    |
+| :------------- | :--------------- | :-------- | :--------------------------------------------------------------------------------------------- |
+| **FE-09**      | Coverage Viz     | Frontend  | H3 polling fidelity visualization.                                                             |
+| **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                                                            |
+| **FE-12**      | Settings UI      | Frontend  | Configure API keys/Pollers via UI (no more ENV editing).                                       |
+| **FE-13**      | Mission Labels   | Frontend  | Floating text labels for coverage areas.                                                       |
+| **FE-14**      | Deep Linking     | Frontend  | Shareable URLs with encoded mission state.                                                     |
+| **FE-15**      | Data Portability | Frontend  | Import/Export Mission Presets (JSON).                                                          |
+| **Backend-04** | Auth/RBAC        | Backend   | User management & Role-Based Access Control.                                                   |
+| **Ingest-07**  | Drone Remote ID  | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline → `drone_raw` Kafka topic. Requires RTL-SDR hardware. |
 
 ### Future (P3 — Phase 6+)
 
@@ -161,7 +167,6 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Backend-05** | Multi-Area     | Backend   | Concurrent polling engine for multiple surveillance zones. |
 | **FE-16**      | Analytics Dash | Frontend  | Mission heatmaps & metrics.                                |
 | **FE-17**      | Collab Sync    | Frontend  | Multi-user WebSocket mission sync.                         |
-| **Ingest-03**  | Orbital Pulse  | Data Eng  | Space-Track TLE pipeline (Cron-based).                     |
 | **Ingest-04**  | SIGINT/Jamming | Data Eng  | H3 Integrity aggregation (NIC/NACp).                       |
 | **Ingest-05**  | Spectrum       | Data Eng  | SatNOGS integration.                                       |
 | **FE-18**      | WebGPU Physics | Frontend  | Headless compute worker for Boids/SGP4.                    |
@@ -169,4 +174,4 @@ The frontend is the "Single Pane of Glass" for the analyst.
 
 ---
 
-_Updated 2026-02-16. Verified against running codebase (v0.5.0)._
+_Updated 2026-02-20. Phase 8 feature plan added (Orbital, Undersea Cable, Drone). See `docs/FEATURE-ROADMAP-PHASE-8.md` for full architecture and agent prompts._
