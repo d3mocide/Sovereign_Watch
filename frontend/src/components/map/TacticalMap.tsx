@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Map as GLMap, useControl, MapRef } from 'react-map-gl';
-// @ts-expect-error: deck.gl layers missing types
+import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import type { MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-// @ts-expect-error: deck.gl layers missing types
 import { ScatterplotLayer, PathLayer, IconLayer, LineLayer } from '@deck.gl/layers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -15,6 +13,15 @@ import { SpeedLegend } from './SpeedLegend';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
 import { getOrbitalLayers } from '../../layers/OrbitalLayer';
+
+// Pick the map adapter at module init time based on the build-time env var.
+// react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
+// the correct adapter rather than using the removed `mapLib` prop.
+const _hasMapboxToken = !!import.meta.env.VITE_MAPBOX_TOKEN;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MapComponent: React.ComponentType<any> = _hasMapboxToken
+    ? lazy(() => import('./MapboxAdapter'))
+    : lazy(() => import('./MapLibreAdapter'));
 
 // ============================================================================
 // ICON ATLAS — Simple chevron markers
@@ -64,42 +71,8 @@ const createIconAtlas = () => {
 const ICON_ATLAS = createIconAtlas();
 
 
-// DeckGL Overlay Control
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DeckGLOverlay(props: any) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  
-  const isDeadRef = useRef(false);
-  useEffect(() => {
-    isDeadRef.current = false;
-    return () => { isDeadRef.current = true; };
-  }, []);
-
-  // Sync props in an effect to avoid calling setProps during render
-  useEffect(() => {
-    if (overlay && overlay.setProps && !isDeadRef.current) {
-        try {
-            overlay.setProps(props);
-        } catch (e) {
-            // Expected during style changes, just log briefly if needed
-            console.debug("[DeckGLOverlay] Transitioning props...");
-        }
-    }
-  }, [props, overlay]);
-  
-  const { onOverlayLoaded } = props;
-
-  useEffect(() => {
-      if (onOverlayLoaded && overlay) {
-          onOverlayLoaded(overlay);
-      }
-      return () => {
-          if (onOverlayLoaded) onOverlayLoaded(null);
-      };
-  }, [overlay, onOverlayLoaded]);
-
-  return null;
-}
+// DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
+// so that useControl is always called within the correct react-map-gl endpoint context.
 
 // Helper: Simple Haversine Distance in Meters
 function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -1484,7 +1457,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         return (isSelected ? baseSize * 1.3 : baseSize) + 6; 
                     },
                     sizeUnits: 'pixels' as const,
-                    billboard: false, 
+                    // In globe mode, billboard:true keeps icons facing the camera.
+                    // In Mercator mode, billboard:false locks rotation to the map surface.
+                    billboard: !!globeMode,
                     getAngle: (d: any) => -(d.course || 0),
                     getColor: [255, 136, 0], // Tactical Orange
                     pickable: false,
@@ -1514,7 +1489,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         return isSelected ? baseSize * 1.3 : baseSize;
                     },
                     sizeUnits: 'pixels' as const,
-                    billboard: false, 
+                    billboard: !!globeMode,
                     // Smoothly interpolate course for rotation (CCW -> CW conversion)
                     getAngle: (d: any) => {
                         const course = (d.course || 0);
@@ -1650,7 +1625,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         if (mode === '2d') {
             setEnable3d(false);
             // Reset projection to flat mercator
-            try { (map as any).setProjection({ name: 'mercator' }); } catch (_) {}
+            try {
+                (map as any).setProjection(mapToken ? 'mercator' : { type: 'mercator' });
+            } catch (_) {}
             mapRef.current.flyTo({
                 pitch: 0,
                 bearing: 0,
@@ -1668,35 +1645,31 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         }
     };
 
-    // Globe projection: requires Mapbox GL JS (VITE_MAPBOX_TOKEN set) or MapLibre GL v5+
-    // MapLibre GL v3.x does not expose setProjection(); style-spec injection is attempted as fallback
+    // Globe projection: Mapbox GL JS uses a string argument; MapLibre GL JS v5 uses { type }.
+    // MapLibre v5 also requires the style to be loaded before setProjection can be called.
     useEffect(() => {
         if (!mapLoaded) return;
         const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as any);
-        if (!map) return;
+        if (!map || typeof map.setProjection !== 'function') return;
 
-        if (globeMode) {
-            if (typeof map.setProjection === 'function') {
-                map.setProjection({ name: 'globe' });
+        const applyProjection = () => {
+            const isMapbox = !!mapToken;
+            if (globeMode) {
+                map.setProjection(isMapbox ? 'globe' : { type: 'globe' });
+                const z = map.getZoom?.() ?? 5;
+                if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
             } else {
-                const style = map.getStyle?.();
-                if (style) map.setStyle({ ...style, projection: { name: 'globe' } } as any);
+                map.setProjection(isMapbox ? 'mercator' : { type: 'mercator' });
             }
-            const z = map.getZoom?.() ?? 5;
-            if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
+        };
+
+        // MapLibre v5 requires style to be fully loaded before setProjection can be called
+        if (map.isStyleLoaded?.()) {
+            applyProjection();
         } else {
-            if (typeof map.setProjection === 'function') {
-                map.setProjection({ name: 'mercator' });
-            } else {
-                const style = map.getStyle?.();
-                if (style) {
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                    const { projection: _p, ...restStyle } = style as any;
-                    map.setStyle(restStyle);
-                }
-            }
+            map.once('style.load', applyProjection);
         }
-    }, [globeMode, mapLoaded]);
+    }, [globeMode, mapLoaded, mapToken]);
 
     const handleAdjustCamera = (type: 'pitch' | 'bearing', delta: number) => {
         const map = mapRef.current?.getMap();
@@ -1889,22 +1862,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                      }
                  }
 
-                 // 3. Sky - Mapbox GL v2+ Only
-                 if (isMapbox && !map.getLayer('sky') && map.getStyle().layers.every((l: any) => l.type !== 'sky')) {
-                     try {
-                         map.addLayer({ 
-                            id: 'sky', 
-                            type: 'sky', 
-                            paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0.0, 0.0], 'sky-atmosphere-sun-intensity': 15 }
-                         });
-                     } catch (e) {
-                         console.debug("[TacticalMap] Sky layer not supported by this engine.");
-                     }
-                 }
              } else {
                  if (map.getTerrain?.()) map.setTerrain(null);
                  if (map.setFog) map.setFog(null);
-                 if (map.getLayer('sky')) map.removeLayer('sky');
              }
         };
 
@@ -1961,47 +1921,35 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
     return (
     <>
-        <GLMap
-            ref={mapRef}
-            onLoad={handleMapLoad}
-            {...viewState}
-            onMove={(evt: any) => {
-                // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
-                if (evt.originalEvent && followModeRef.current && onFollowModeChange) {
-                    followModeRef.current = false; // Instant kill before next frame
-                    onFollowModeChange(false);
-                }
-                setViewState(evt.viewState as any);
-            }}
-            mapStyle={mapStyle}
-            mapboxAccessToken={mapToken}
-            config={{
-                basemap: {
-                    lightPreset: 'night',
-                    theme: 'monochrome',
-                    showPointOfInterestLabels: false,
-                    showRoadLabels: false,
-                    showPedestrianRoads: false,
-                    showPlaceLabels: true,
-                    showTransitLabels: true
-                }
-            }}
-            // @ts-expect-error: maplibre-gl type incompatibility with react-map-gl
-            mapLib={mapToken ? undefined : import('maplibre-gl')}
-            style={{width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none'}}
-            onContextMenu={handleContextMenu}
-            onClick={() => {
-                setContextMenuPos(null);
-                setContextMenuCoords(null);
-            }}
-        >
-             <DeckGLOverlay 
-                id="tactical-overlay"
-                interleaved={false} 
-                onOverlayLoaded={handleOverlayLoaded}
+        <Suspense fallback={null}>
+            <MapComponent
+                ref={mapRef as any}
+                viewState={viewState}
+                onLoad={handleMapLoad}
+                onMove={(evt: any) => {
+                    // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
+                    if (evt.originalEvent && followModeRef.current && onFollowModeChange) {
+                        followModeRef.current = false; // Instant kill before next frame
+                        onFollowModeChange(false);
+                    }
+                    setViewState(evt.viewState as any);
+                }}
+                mapStyle={mapStyle}
+                {...(_hasMapboxToken ? { mapboxAccessToken: mapToken } : {})}
+                globeMode={globeMode}
+                style={{ width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none' }}
+                onContextMenu={handleContextMenu}
+                onClick={() => {
+                    setContextMenuPos(null);
+                    setContextMenuCoords(null);
+                }}
+                deckProps={{
+                    id: 'tactical-overlay',
+                    interleaved: false,
+                    onOverlayLoaded: handleOverlayLoaded,
+                }}
             />
-
-        </GLMap>
+        </Suspense>
             
         {/* View Controls */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-[100] pointer-events-auto">

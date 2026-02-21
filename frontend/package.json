@@ -10,19 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@deck.gl/core": "^8.9.0",
-    "@deck.gl/layers": "^8.9.0",
-    "@deck.gl/mapbox": "^8.9.0",
-    "@deck.gl/react": "^8.9.0",
-    "@types/mapbox-gl": "^3.4.1",
-    "deck.gl": "^8.9.0",
+    "@deck.gl/core": "^9.0.0",
+    "@deck.gl/layers": "^9.0.0",
+    "@deck.gl/mapbox": "^9.0.0",
+    "@deck.gl/react": "^9.0.0",
+    "deck.gl": "^9.0.0",
     "lucide-react": "^0.300.0",
     "mapbox-gl": "^3.18.1",
-    "maplibre-gl": "^3.0.0",
+    "maplibre-gl": "^5.0.0",
     "protobufjs": "^7.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-map-gl": "^7.1.0"
+    "react-map-gl": "^8.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
