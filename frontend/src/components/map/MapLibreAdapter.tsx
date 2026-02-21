@@ -36,7 +36,7 @@ function DeckGLOverlay(props: any) {
 }
 
 const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, style, onContextMenu, onClick, deckProps } = props;
+    const { viewState, onMove, onLoad, mapStyle, style, onContextMenu, onClick, globeMode, deckProps } = props;
     return (
         <Map
             ref={ref}
@@ -48,7 +48,8 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
             onContextMenu={onContextMenu}
             onClick={onClick}
         >
-            <DeckGLOverlay {...deckProps} />
+            {/* deck.gl coordinate transforms are Mercator-only; suppress overlay in globe mode */}
+            {!globeMode && <DeckGLOverlay {...deckProps} />}
         </Map>
     );
 });

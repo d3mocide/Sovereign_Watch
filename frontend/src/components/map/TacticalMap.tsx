@@ -1623,7 +1623,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         if (mode === '2d') {
             setEnable3d(false);
             // Reset projection to flat mercator
-            try { (map as any).setProjection({ name: 'mercator' }); } catch (_) {}
+            try {
+                (map as any).setProjection(mapToken ? 'mercator' : { type: 'mercator' });
+            } catch (_) {}
             mapRef.current.flyTo({
                 pitch: 0,
                 bearing: 0,
@@ -1641,35 +1643,31 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         }
     };
 
-    // Globe projection: requires Mapbox GL JS (VITE_MAPBOX_TOKEN set) or MapLibre GL v5+
-    // MapLibre GL v3.x does not expose setProjection(); style-spec injection is attempted as fallback
+    // Globe projection: Mapbox GL JS uses a string argument; MapLibre GL JS v5 uses { type }.
+    // MapLibre v5 also requires the style to be loaded before setProjection can be called.
     useEffect(() => {
         if (!mapLoaded) return;
         const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as any);
-        if (!map) return;
+        if (!map || typeof map.setProjection !== 'function') return;
 
-        if (globeMode) {
-            if (typeof map.setProjection === 'function') {
-                map.setProjection({ name: 'globe' });
+        const applyProjection = () => {
+            const isMapbox = !!mapToken;
+            if (globeMode) {
+                map.setProjection(isMapbox ? 'globe' : { type: 'globe' });
+                const z = map.getZoom?.() ?? 5;
+                if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
             } else {
-                const style = map.getStyle?.();
-                if (style) map.setStyle({ ...style, projection: { name: 'globe' } } as any);
+                map.setProjection(isMapbox ? 'mercator' : { type: 'mercator' });
             }
-            const z = map.getZoom?.() ?? 5;
-            if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
+        };
+
+        // MapLibre v5 requires style to be fully loaded before setProjection can be called
+        if (map.isStyleLoaded?.()) {
+            applyProjection();
         } else {
-            if (typeof map.setProjection === 'function') {
-                map.setProjection({ name: 'mercator' });
-            } else {
-                const style = map.getStyle?.();
-                if (style) {
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                    const { projection: _p, ...restStyle } = style as any;
-                    map.setStyle(restStyle);
-                }
-            }
+            map.once('style.load', applyProjection);
         }
-    }, [globeMode, mapLoaded]);
+    }, [globeMode, mapLoaded, mapToken]);
 
     const handleAdjustCamera = (type: 'pitch' | 'bearing', delta: number) => {
         const map = mapRef.current?.getMap();
@@ -1862,22 +1860,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                      }
                  }
 
-                 // 3. Sky - Mapbox GL v2+ Only
-                 if (isMapbox && !map.getLayer('sky') && map.getStyle().layers.every((l: any) => l.type !== 'sky')) {
-                     try {
-                         map.addLayer({ 
-                            id: 'sky', 
-                            type: 'sky', 
-                            paint: { 'sky-type': 'atmosphere', 'sky-atmosphere-sun': [0.0, 0.0], 'sky-atmosphere-sun-intensity': 15 }
-                         });
-                     } catch (e) {
-                         console.debug("[TacticalMap] Sky layer not supported by this engine.");
-                     }
-                 }
              } else {
                  if (map.getTerrain?.()) map.setTerrain(null);
                  if (map.setFog) map.setFog(null);
-                 if (map.getLayer('sky')) map.removeLayer('sky');
              }
         };
 
@@ -1949,6 +1934,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 }}
                 mapStyle={mapStyle}
                 {...(_hasMapboxToken ? { mapboxAccessToken: mapToken } : {})}
+                globeMode={globeMode}
                 style={{ width: '100vw', height: '100vh', userSelect: 'none', WebkitUserSelect: 'none' }}
                 onContextMenu={handleContextMenu}
                 onClick={() => {

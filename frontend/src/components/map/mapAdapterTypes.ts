@@ -8,6 +8,7 @@ export interface MapAdapterProps {
     style: CSSProperties;
     onContextMenu: (evt: any) => void;
     onClick: () => void;
+    globeMode?: boolean;
     deckProps: {
         id: string;
         interleaved: boolean;

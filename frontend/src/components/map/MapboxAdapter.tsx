@@ -47,7 +47,7 @@ function DeckGLOverlay(props: any) {
 }
 
 const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?: string }>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, deckProps } = props;
+    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, deckProps } = props;
 
     const handleLoad = useCallback((evt: any) => {
         const map = evt.target?.getMap?.() ?? evt.target;
@@ -71,7 +71,8 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             onContextMenu={onContextMenu}
             onClick={onClick}
         >
-            <DeckGLOverlay {...deckProps} />
+            {/* deck.gl coordinate transforms are Mercator-only; suppress overlay in globe mode */}
+            {!globeMode && <DeckGLOverlay {...deckProps} />}
         </Map>
     );
 });
