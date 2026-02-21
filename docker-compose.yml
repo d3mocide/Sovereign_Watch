@@ -105,6 +105,23 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # --- Ingestion: Space TLE (via Python Poller) ---
+  orbital-pulse:
+    build:
+      context: ./backend/ingestion/orbital_pulse
+      dockerfile: Dockerfile
+    container_name: sovereign-orbital-pulse
+    environment:
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - REDIS_HOST=sovereign-redis
+      - REDIS_PORT=6379
+    networks:
+      - backend-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
 
   # --- Persistence ---
   timescaledb:

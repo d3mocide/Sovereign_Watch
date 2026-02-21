@@ -1,3 +1,29 @@
+## [0.8.1] - 2026-02-21
+
+### Added
+
+- **Orbital Pulse Ingestion (Backend):**
+  - **Celestrak Tracking:** New `sovereign-orbital-pulse` Python service continually fetching TLEs for active satellites across five categories (GPS, Weather, Active, Surveillance, Comms).
+  - **Live SGP4 Propagation:** In-memory numpy-accelerated 30s micro-batched positional resolution simulating live orbit characteristics.
+  - **Kafka Ingestion:** Produces `a-s-K` TAK Protocol messages to a new `orbital_raw` Redpanda topic.
+- **Orbital Visualization Layer (Frontend):**
+  - **Deck.gl Overlays:** Implemented `OrbitalLayer.tsx` featuring marker rendering, continuous ground-track projection, and orbital footprints.
+  - **Satellite Telemetry UI:** Enriched `SidebarRight.tsx` with orbital contact metadata — altitude (km), velocity (km/s), orbital period, NORAD ID, and category.
+  - **Layer Filtering:** Robust satellite-category filtering (`GPS`, `Weather`, `Comms`, `Surveillance`) integrated into global layer controls and `TacticalMap.tsx`.
+  - **AOR Intel Feeds:** Footprint-overlap detection emits categorized `orbital` INTEL events for satellites passing over the mission AOR.
+- **Orbital Layer TopBar Controls:** Added `Orb_Layer` and `Globe_View` toggle buttons to `TopBar.tsx`, state persisted to `localStorage`.
+- **Globe View Groundwork:** Full wiring implemented through `App.tsx`, `TopBar.tsx`, and `TacticalMap.tsx`. Dual-path projection logic ready — `map.setProjection()` (Mapbox GL v3+) with style-injection fallback (MapLibre GL). Pending MapLibre GL v5 upgrade to activate.
+
+### Fixed
+
+- **Satellite Category Filtering:** Corrected category extraction path `entity.detail?.category ?? entity.detail?.classification?.category` — sub-filters (GPS/Weather/Comms/Surveillance) were silently passing all satellites through.
+- **Satellite Color Synchronization:** `getSatColor()` in `OrbitalLayer.tsx` now exactly matches filter chip colors in `LayerFilters.tsx` (GPS→`sky-400`, Weather→`amber-400`, Comms→`emerald-400`, Surveillance→`rose-400`).
+- **Intel Stream Noise:** Suppressed per-frame `onEvent` calls from orbital footprint detections that flooded the intelligence feed.
+
+### Known Issues / Technical Debt
+
+- **Globe View Requires MapLibre GL v5:** `setProjection()` is not present in MapLibre GL JS v3.x. The button UI and code wiring are complete; activation requires upgrading `maplibre-gl` to v5 (see `FEATURE-ROADMAP-PHASE-8.md` for research checklist).
+
 ## [0.7.3] - 2026-02-19
 
 ### Added

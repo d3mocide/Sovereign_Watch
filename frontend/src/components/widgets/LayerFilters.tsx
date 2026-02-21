@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Ship, Activity, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plane, Ship, Activity, ChevronDown, ChevronRight, Satellite } from 'lucide-react';
 
 interface LayerFiltersProps {
   filters: { 
@@ -22,6 +22,7 @@ interface LayerFiltersProps {
 export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterChange }) => {
   const [airExpanded, setAirExpanded] = useState(false);
   const [seaExpanded, setSeaExpanded] = useState(false);
+  const [satExpanded, setSatExpanded] = useState(false);
 
   return (
     <div className="flex flex-col rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden relative">
@@ -327,6 +328,82 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
                     </div>
                     <input type="checkbox" className="sr-only" checked={filters.showSpecial !== false} onChange={(e) => onFilterChange('showSpecial', e.target.checked)} />
                     <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSpecial !== false ? 'bg-zinc-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSpecial !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+            </div>
+          )}
+        </div>
+
+        {/* Orbital Filter */}
+        <div className="flex flex-col gap-1">
+          <div className={`group flex items-center justify-between rounded border transition-all ${filters.showSatellites ? 'border-purple-400/30 bg-purple-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+            <div 
+              className="flex flex-1 items-center gap-2 p-2 cursor-pointer"
+              onClick={() => setSatExpanded(!satExpanded)}
+            >
+              <Satellite size={14} className={filters.showSatellites ? 'text-purple-400' : 'text-white/40 group-hover:text-white/60'} />
+              <span className={`text-[10px] font-medium tracking-widest transition-colors ${filters.showSatellites ? 'text-purple-400' : 'text-white/40 group-hover:text-white/60'}`}>
+                ORBITAL
+              </span>
+              <div className="ml-auto w-4 text-white/30 transition-transform duration-200" style={{ transform: satExpanded ? 'rotate(90deg)' : 'none' }}>
+                  <ChevronRight size={14} />
+              </div>
+            </div>
+            
+            <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
+              <input type="checkbox" className="sr-only" checked={filters.showSatellites} onChange={(e) => onFilterChange('showSatellites', e.target.checked)} />
+              <div 
+                className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showSatellites ? 'bg-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterChange('showSatellites', !filters.showSatellites);
+                }}
+              >
+                <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showSatellites ? 'left-3.5' : 'left-0.5'}`} />
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-filters for Satellites */}
+          {satExpanded && (
+            <div className="grid grid-cols-2 gap-1 px-1 opacity-90">
+                {/* GPS */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatGPS !== false ? 'border-sky-400/20 bg-sky-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">🛰️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSatGPS !== false ? 'text-sky-400/80' : 'text-white/30'}`}>GPS</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSatGPS !== false} onChange={(e) => onFilterChange('showSatGPS', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatGPS !== false ? 'bg-sky-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatGPS !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Weather */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatWeather !== false ? 'border-amber-400/20 bg-amber-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">⛅</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSatWeather !== false ? 'text-amber-400/80' : 'text-white/30'}`}>WEATHER</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSatWeather !== false} onChange={(e) => onFilterChange('showSatWeather', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatWeather !== false ? 'bg-amber-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatWeather !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Comms */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatComms !== false ? 'border-emerald-400/20 bg-emerald-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">📡</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSatComms !== false ? 'text-emerald-400/80' : 'text-white/30'}`}>COMMS</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSatComms !== false} onChange={(e) => onFilterChange('showSatComms', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatComms !== false ? 'bg-emerald-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatComms !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Surveillance */}
+                <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatSurveillance !== false ? 'border-rose-400/20 bg-rose-400/5' : 'border-white/5 bg-white/5'}`}>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px]">👁️</span>
+                        <span className={`text-[9px] font-bold tracking-wide ${filters.showSatSurveillance !== false ? 'text-rose-400/80' : 'text-white/30'}`}>INTEL</span>
+                    </div>
+                    <input type="checkbox" className="sr-only" checked={filters.showSatSurveillance !== false} onChange={(e) => onFilterChange('showSatSurveillance', e.target.checked)} />
+                    <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatSurveillance !== false ? 'bg-rose-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatSurveillance !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
                 </label>
             </div>
           )}

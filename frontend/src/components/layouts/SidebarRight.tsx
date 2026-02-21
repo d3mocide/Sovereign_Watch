@@ -51,9 +51,21 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (!entity) return null;
 
   const isShip = entity.type.includes('S');
-  const accentColor = isShip ? 'text-sea-accent' : 'text-air-accent';
-  const accentBg = isShip ? 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5' : 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
-  const accentBorder = isShip ? 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+  const isSat = entity.type === 'a-s-K' || entity.type.indexOf('K') === 4;
+  
+  let accentColor = 'text-air-accent';
+  let accentBg = 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
+  let accentBorder = 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+
+  if (isSat) {
+      accentColor = 'text-purple-400';
+      accentBg = 'bg-gradient-to-br from-purple-400/20 to-purple-400/5';
+      accentBorder = 'border-purple-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+  } else if (isShip) {
+      accentColor = 'text-sea-accent';
+      accentBg = 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5';
+      accentBorder = 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+  }
 
   if (showInspector) {
       return (
@@ -222,16 +234,36 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               {/* Row 1: Speed / Hdg */}
               <div className="grid grid-cols-2 gap-4">
                   <div className="flex justify-between border-b border-white/5 pb-1">
-                      <span className="text-white/30">SOG:</span>
-                      <span className={`${accentColor} tabular-nums`}>{(entity.speed * 1.94384).toFixed(1)} kts</span>
+                      <span className="text-white/30">{isSat ? 'VEL:' : 'SOG:'}</span>
+                      <span className={`${accentColor} tabular-nums`}>
+                          {isSat ? `${(entity.speed / 1000).toFixed(1)} km/s` : `${(entity.speed * 1.94384).toFixed(1)} kts`}
+                      </span>
                   </div>
                   <div className="flex justify-between border-b border-white/5 pb-1">
-                      <span className="text-white/30">COG:</span>
+                      <span className="text-white/30">{isSat ? 'TRK:' : 'COG:'}</span>
                       <span className={`${accentColor} tabular-nums`}>{Math.round(entity.course)}°</span>
                   </div>
               </div>
 
-              {isShip ? (
+              {isSat ? (
+                <>
+                  {/* Row 2: Alt */}
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">ALT:</span>
+                          <span className="text-white tabular-nums">
+                             {entity.altitude > 0 ? `${Math.round(entity.altitude / 1000).toLocaleString()} km` : '---'}
+                          </span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-white/30">PERIOD:</span>
+                          <span className="text-white/40 tabular-nums">
+                              {entity.detail?.period ? `${Math.round(entity.detail.period)}m` : '---'}
+                          </span>
+                      </div>
+                  </div>
+                </>
+              ) : isShip ? (
                 <>
                   {/* Row 2: Nav Status / Dest */}
                   <div className="grid grid-cols-2 gap-4">

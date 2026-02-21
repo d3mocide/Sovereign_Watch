@@ -49,7 +49,7 @@ async def historian_task():
     """
     logger.info("📜 Historian task started")
     consumer = AIOKafkaConsumer(
-        "adsb_raw", "ais_raw",
+        "adsb_raw", "ais_raw", "orbital_raw",
         bootstrap_servers='sovereign-redpanda:9092',
         group_id="historian-writer",
         auto_offset_reset="latest"
@@ -344,9 +344,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # and to prevent rebalancing loops when multiple clients connect.
     client_id = f"api-client-{uuid.uuid4().hex[:8]}"
     
-    # Subscribe to BOTH aviation and maritime topics
+    # Subscribe to aviation, maritime, and orbital topics
     consumer = AIOKafkaConsumer(
-        "adsb_raw", "ais_raw",  # Multi-topic subscription
+        "adsb_raw", "ais_raw", "orbital_raw",
         bootstrap_servers='sovereign-redpanda:9092',
         group_id=client_id,
         auto_offset_reset="latest"  # Only new data

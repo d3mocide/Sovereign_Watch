@@ -134,6 +134,8 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **FE-08**      | Search             | Frontend  | **DONE**. Callsign/UID search widget with autocomplete.                             |
 | **FE-11**      | Replay System      | Frontend  | **DONE**. Historic time-slider synchronized with Historian service.                 |
 | **FE-19**      | Refined Optics     | Frontend  | **DONE**. 3D Altitude centering, Synchronized Telemetry, Tactical Zoom (v0.5.0).    |
+| **Ingest-03**  | Orbital Pulse      | Data Eng  | **DONE**. Celestrak TLE fetch → SGP4 propagation → `orbital_raw` Kafka topic.       |
+| **FE-20**      | Orbital Viz        | Frontend  | **DONE**. `OrbitalLayer.tsx`: satellite icons, ground tracks, footprint circles.    |
 
 ### Next Priority (P0–P1)
 
@@ -141,8 +143,6 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | :------------- | :---------------------- | :-------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Audit-01**   | **Code Review**         | Security  | **(P1)**. Full codebase audit, linting, and security scan.                                                                                                              |
 | **Fix-01**     | **CoT Tracking**        | Frontend  | **(P1)**. Restore functional Cursor-on-Target event tracking.                                                                                                           |
-| **Ingest-03**  | Orbital Pulse           | Data Eng  | **(P0)**. Celestrak TLE fetch → SGP4 propagation → `orbital_raw` Kafka topic. 6h TLE refresh, 30s position update cycle.                                                |
-| **FE-20**      | Orbital Visualization   | Frontend  | **(P0)**. `OrbitalLayer.tsx`: satellite icons by category (GPS/Weather/Comms/Surveillance), ground track lines, footprint circles, sidebar telemetry, AOR pass alerts.  |
 | **FE-21**      | Undersea Cable Layer    | Frontend  | **(P1)**. `CableLayer.tsx`: animated fiber routes (TeleGeography GeoJSON), landing station markers, cable metadata popup, INFRA toggle in LayerFilters.                 |
 | **Ingest-07a** | ADS-B Drone Enhancement | Data Eng  | **(P1)**. Expand drone ICAO type-code detection, squawk 7400 forced classification, drone sub-type (`MILITARY_UAS`/`COMMERCIAL_UAS`/`CIVIL_UAS`) tagging in TAK detail. |
 | **FE-22**      | Drone Tactical Layer    | Frontend  | **(P1)**. Dedicated drone rotor-icon layer, operator position link line (Remote ID), DroneDetail sidebar panel.                                                         |

@@ -39,6 +39,12 @@ function App() {
     showPilot: true,
     showSpecial: true,
     showDrone: true,
+    showSatellites: false,
+    showSatGPS: true,
+    showSatWeather: true,
+    showSatComms: true,
+    showSatSurveillance: true,
+    showSatOther: true,
   });
   
   // Velocity Vector Toggle
@@ -69,7 +75,20 @@ function App() {
     });
   }, []);
   
-  // Intelligence feed events
+  // Globe Mode Toggle
+  const [globeMode, setGlobeMode] = useState(() => {
+    const saved = localStorage.getItem('globeMode');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
+  const handleGlobeModeToggle = useCallback(() => {
+    setGlobeMode((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem('globeMode', JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
+  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [events, setEvents] = useState<IntelEvent[]>([]);
   
@@ -294,6 +313,10 @@ function App() {
           onToggleVelocityVectors={handleVelocityVectorToggle}
           showHistoryTails={showHistoryTails}
           onToggleHistoryTails={handleHistoryTailsToggle}
+          showSatellites={filters.showSatellites}
+          onToggleSatellites={() => handleFilterChange('showSatellites', !filters.showSatellites)}
+          globeMode={globeMode}
+          onToggleGlobe={handleGlobeModeToggle}
           onToggleReplay={() => {
               if (replayMode) setReplayMode(false);
               else loadReplayData();
@@ -339,6 +362,7 @@ function App() {
           onMapActionsReady={setMapActions}
           showVelocityVectors={showVelocityVectors}
           showHistoryTails={showHistoryTails}
+          globeMode={globeMode}
           replayMode={replayMode}
           replayEntities={replayEntities}
           followMode={followMode} // Pass follow mode

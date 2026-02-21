@@ -14,6 +14,7 @@ import { AltitudeLegend } from './AltitudeLegend';
 import { SpeedLegend } from './SpeedLegend';
 import { useMissionLocations } from '../../hooks/useMissionLocations';
 import { setMissionArea, getMissionArea } from '../../api/missionArea';
+import { getOrbitalLayers } from '../../layers/OrbitalLayer';
 
 // ============================================================================
 // ICON ATLAS — Simple chevron markers
@@ -272,13 +273,14 @@ interface TacticalMapProps {
         showSpecial?: boolean;
         [key: string]: boolean | undefined;
     };
-    onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea', classification?: import('../../types').EntityClassification }) => void;
+    onEvent?: (event: { type: 'new' | 'lost' | 'alert'; message: string; entityType?: 'air' | 'sea' | 'orbital', classification?: import('../../types').EntityClassification }) => void;
     selectedEntity: CoTEntity | null;
     onEntitySelect: (entity: CoTEntity | null) => void;
     onMissionPropsReady?: (props: MissionProps) => void;
     onMapActionsReady?: (actions: import('../../types').MapActions) => void;
     showVelocityVectors?: boolean;
     showHistoryTails?: boolean;
+    globeMode?: boolean;
     replayMode?: boolean;
     replayEntities?: Map<string, CoTEntity>;
     followMode?: boolean;
@@ -305,7 +307,7 @@ const calculateZoom = (radiusNm: number) => {
     return Math.max(2, 14 - Math.log2(r));
 };
 
-export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, replayMode, replayEntities, followMode, onFollowModeChange, onEntityLiveUpdate }: TacticalMapProps) {
+export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, globeMode, replayMode, replayEntities, followMode, onFollowModeChange, onEntityLiveUpdate }: TacticalMapProps) {
 
     const lastFrameTimeRef = useRef<number>(Date.now());
     
@@ -329,6 +331,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
     const mapRef = useRef<MapRef>(null);
     const overlayRef = useRef<MapboxOverlay | null>(null);
     const rafRef = useRef<number>();
+    // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
+    const mapInstanceRef = useRef<any>(null);
     
     // Environment Fallbacks
     const envLat = import.meta.env.VITE_CENTER_LAT;
@@ -349,7 +353,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
     // State Variables (Already moved to top)
     // Refs for transient state
     const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
-    const countsRef = useRef({ air: 0, sea: 0 });
+    const satellitesRef = useRef<Map<string, CoTEntity>>(new Map());
+    const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
     const knownUidsRef = useRef<Set<string>>(new Set());
     const currentMissionRef = useRef<{ lat: number; lon: number; radius_nm: number } | null>(null);
     const prevCourseRef = useRef<Map<string, number>>(new Map());
@@ -614,6 +619,64 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                    // Spatial Filter: Drop entities outside active mission area
                    // (Backend should filter, but this cleanup prevents stale data artifacts)
                    const mission = currentMissionRef.current;
+                   
+                   // Check if Satellite
+                   const isSat = entity.type === 'a-s-K' || (typeof entity.type === 'string' && entity.type.indexOf('K') === 4);
+                   
+                   if (isSat) {
+                       const existing = satellitesRef.current.get(entity.uid);
+                       const isNew = !existing && !knownUidsRef.current.has(entity.uid);
+                       
+                       const norad_id = entity.detail?.norad_id ?? entity.detail?.classification?.norad_id;
+                       // Category can come from entity.detail.category (direct) OR
+                       // entity.detail.classification.category (current: API maps classification: meta which contains all sat fields)
+                       const category = entity.detail?.category ?? (entity.detail?.classification as any)?.category;
+                       const period_min = entity.detail?.period_min ?? (entity.detail?.classification as any)?.period_min;
+                       const inclination_deg = entity.detail?.inclination_deg ?? (entity.detail?.classification as any)?.inclination_deg;
+
+                       // Minimal trail for satellite if needed, but we don't need PVB here for MVP
+                       // We can just rely on the 30s updates and let it snap.
+                       let trail: TrailPoint[] = existing?.trail || [];
+                       const newLat = entity.lat;
+                       const newLon = entity.lon;
+                       
+                       // Dist check for trail so it doesn't just pile up if it hasn't moved 
+                       const lastTrail = trail[trail.length - 1];
+                       const distFromLastTrail = lastTrail
+                           ? getDistanceMeters(lastTrail[1], lastTrail[0], newLat, newLon)
+                           : Infinity;
+                           
+                       if (distFromLastTrail > 1000) { // Only if moved 1km
+                           trail = [...trail, [newLon, newLat, entity.hae || 0, entity.detail?.track?.speed || 0, Date.now()] as TrailPoint].slice(-100);
+                       }
+                       
+                       const newSat: CoTEntity = {
+                           ...entity,
+                           lon: newLon,
+                           lat: newLat,
+                           altitude: entity.hae || 0,
+                           course: entity.detail?.track?.course || 0,
+                           speed: entity.detail?.track?.speed || 0,
+                           callsign: entity.detail?.contact?.callsign?.trim() || entity.uid,
+                           detail: { ...entity.detail, norad_id, category, period_min, inclination_deg },
+                           lastSeen: Date.now(),
+                           time: entity.time,
+                           trail,
+                           uidHash: existing ? existing.uidHash : uidToHash(entity.uid)
+                       };
+                       
+                       satellitesRef.current.set(entity.uid, newSat);
+                       
+                       if (isNew) {
+                            knownUidsRef.current.add(entity.uid);
+                            // Satellites are too numerous to emit Intel Feed events per new track.
+                            // With thousands of sats and huge footprints, virtually all would match,
+                            // flooding the Intelligence Stream. Suppressed by design.
+                       }
+                       // DO NOT CONTINUE TO AIR/SEA processing
+                       return;
+                   }
+
                    if (mission) {
                        const distToCenter = getDistanceMeters(newLat, newLon, mission.lat, mission.lon);
                        const maxRadiusM = mission.radius_nm * 1852;
@@ -1248,15 +1311,34 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
               visualStateRef.current.delete(uid);
             }
 
-            if (countsRef.current.air !== airCount || countsRef.current.sea !== seaCount) {
-              countsRef.current = { air: airCount, sea: seaCount };
-              onCountsUpdate?.({ air: airCount, sea: seaCount });
+            if (countsRef.current.air !== airCount || countsRef.current.sea !== seaCount || countsRef.current.orbital !== satellitesRef.current.size) {
+              countsRef.current = { air: airCount, sea: seaCount, orbital: satellitesRef.current.size };
+              onCountsUpdate?.({ air: airCount, sea: seaCount, orbital: satellitesRef.current.size } as any);
             }
             
             // 4. Update Layers
 
+            const allSats: CoTEntity[] = Array.from(satellitesRef.current.values() as any);
+            const filteredSatellites = allSats.filter((sat) => {
+                if (!filters?.showSatellites) return false;
+                const cat = (sat.detail?.category as string)?.toLowerCase() || '';
+                // Match against user-facing category names from the orbital pulse service.
+                // Note: 'active' is a Celestrak *group* name, NOT a category filter keyword.
+                if (cat.includes('gps') || cat.includes('gnss') || cat.includes('galileo') || cat.includes('beidou') || cat.includes('glonass')) return filters.showSatGPS !== false;
+                if (cat.includes('weather') || cat.includes('noaa') || cat.includes('meteosat') || cat.includes('fengYun')) return filters.showSatWeather !== false;
+                if (cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') || cat.includes('iridium') || cat.includes('oneweb') || cat.includes('intelsat')) return filters.showSatComms !== false;
+                if (cat.includes('surveillance') || cat.includes('military') || cat.includes('isr')) return filters.showSatSurveillance !== false;
+                // Everything else (debris, active unclassified, etc.) falls to 'Other'
+                return filters.showSatOther !== false;
+            });
 
             const layers = [
+                ...getOrbitalLayers({
+                    satellites: filteredSatellites,
+                    selectedEntity: currentSelected,
+                    hoveredEntity: hoveredEntity,
+                    now
+                }),
                 // 1. All History Trails (Global Toggle)
                 // Filter out the selected entity's trail to avoid z-fighting/jaggedness
                 ...(historyTailsRef.current ? [
@@ -1563,9 +1645,12 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
     // View & Camera Handlers
     const setViewMode = (mode: '2d' | '3d') => {
-        if (!mapRef.current) return;
+        const map = mapRef.current?.getMap();
+        if (!mapRef.current || !map) return;
         if (mode === '2d') {
             setEnable3d(false);
+            // Reset projection to flat mercator
+            try { (map as any).setProjection({ name: 'mercator' }); } catch (_) {}
             mapRef.current.flyTo({
                 pitch: 0,
                 bearing: 0,
@@ -1582,6 +1667,36 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             });
         }
     };
+
+    // Globe projection: requires Mapbox GL JS (VITE_MAPBOX_TOKEN set) or MapLibre GL v5+
+    // MapLibre GL v3.x does not expose setProjection(); style-spec injection is attempted as fallback
+    useEffect(() => {
+        if (!mapLoaded) return;
+        const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as any);
+        if (!map) return;
+
+        if (globeMode) {
+            if (typeof map.setProjection === 'function') {
+                map.setProjection({ name: 'globe' });
+            } else {
+                const style = map.getStyle?.();
+                if (style) map.setStyle({ ...style, projection: { name: 'globe' } } as any);
+            }
+            const z = map.getZoom?.() ?? 5;
+            if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
+        } else {
+            if (typeof map.setProjection === 'function') {
+                map.setProjection({ name: 'mercator' });
+            } else {
+                const style = map.getStyle?.();
+                if (style) {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    const { projection: _p, ...restStyle } = style as any;
+                    map.setStyle(restStyle);
+                }
+            }
+        }
+    }, [globeMode, mapLoaded]);
 
     const handleAdjustCamera = (type: 'pitch' | 'bearing', delta: number) => {
         const map = mapRef.current?.getMap();
@@ -1636,10 +1751,14 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         overlayRef.current = overlay;
     }, []);
 
-    const handleMapLoad = useCallback(() => {
+    const handleMapLoad = useCallback((evt?: any) => {
         if (mapLoaded) return;
-        const map = mapRef.current?.getMap();
-        if (!map) return;
+        // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
+        if (evt?.target) {
+            mapInstanceRef.current = typeof evt.target.getMap === 'function'
+                ? evt.target.getMap()
+                : evt.target;
+        }
         console.log("[TacticalMap] Map Loaded Successfully");
         setMapLoaded(true);
     }, [mapLoaded]);
