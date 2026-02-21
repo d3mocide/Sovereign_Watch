@@ -1457,7 +1457,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         return (isSelected ? baseSize * 1.3 : baseSize) + 6; 
                     },
                     sizeUnits: 'pixels' as const,
-                    billboard: false, 
+                    // In globe mode, billboard:true keeps icons facing the camera.
+                    // In Mercator mode, billboard:false locks rotation to the map surface.
+                    billboard: !!globeMode,
                     getAngle: (d: any) => -(d.course || 0),
                     getColor: [255, 136, 0], // Tactical Orange
                     pickable: false,
@@ -1487,7 +1489,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         return isSelected ? baseSize * 1.3 : baseSize;
                     },
                     sizeUnits: 'pixels' as const,
-                    billboard: false, 
+                    billboard: !!globeMode,
                     // Smoothly interpolate course for rotation (CCW -> CW conversion)
                     getAngle: (d: any) => {
                         const course = (d.course || 0);

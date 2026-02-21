@@ -71,8 +71,7 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             onContextMenu={onContextMenu}
             onClick={onClick}
         >
-            {/* deck.gl coordinate transforms are Mercator-only; suppress overlay in globe mode */}
-            {!globeMode && <DeckGLOverlay {...deckProps} />}
+            <DeckGLOverlay {...deckProps} />
         </Map>
     );
 });
