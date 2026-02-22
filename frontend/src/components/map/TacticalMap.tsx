@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import { Compass, Maximize2, Layers, Search, PlusCircle, Target, Zap, Waves, History, Info, Clock, Save, Globe } from 'lucide-react';
 import type { MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, PathLayer, IconLayer, LineLayer } from '@deck.gl/layers';
@@ -30,13 +31,13 @@ const MapComponent: React.ComponentType<any> = _hasMapboxToken
 const createIconAtlas = () => {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
-    canvas.height = 64;
+    canvas.height = 128; // Expanded to accommodate halo sprite
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = 'white';
 
-    // Simple chevron/triangle for all entities (centered at 32, 32)
+    // 1. Simple chevron/triangle for aircraft (at 32, 32)
     ctx.save();
     ctx.translate(32, 32);
+    ctx.fillStyle = 'white';
     ctx.beginPath();
     ctx.moveTo(0, -16);      // Top point
     ctx.lineTo(12, 8);       // Bottom right
@@ -46,9 +47,10 @@ const createIconAtlas = () => {
     ctx.fill();
     ctx.restore();
 
-    // Same chevron for vessels (at 96, 32)
+    // 2. Same chevron for vessels (at 96, 32)
     ctx.save();
     ctx.translate(96, 32);
+    ctx.fillStyle = 'white';
     ctx.beginPath();
     ctx.moveTo(0, -16);
     ctx.lineTo(12, 8);
@@ -58,13 +60,29 @@ const createIconAtlas = () => {
     ctx.fill();
     ctx.restore();
 
+    // 3. Tactical Halo Sprite (at 32, 96) - A soft circular glow
+    ctx.save();
+    ctx.translate(32, 96);
+    // Radial gradient for a soft tactical glow
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 30);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');   // Core
+    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.6)'); // Inner glow
+    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.2)'); // Outer fade
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');     // Edge
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     return {
         url: canvas.toDataURL(),
         width: 128,
-        height: 64,
+        height: 128,
         mapping: {
             aircraft: { x: 0, y: 0, width: 64, height: 64, anchorY: 32, mask: true },
-            vessel: { x: 64, y: 0, width: 64, height: 64, anchorY: 32, mask: true }
+            vessel: { x: 64, y: 0, width: 64, height: 64, anchorY: 32, mask: true },
+            halo: { x: 0, y: 64, width: 64, height: 64, anchorY: 32, mask: true }
         }
     };
 };
@@ -254,6 +272,7 @@ interface TacticalMapProps {
     showVelocityVectors?: boolean;
     showHistoryTails?: boolean;
     globeMode?: boolean;
+    onToggleGlobe?: () => void; // Added prop for Globe toggle
     replayMode?: boolean;
     replayEntities?: Map<string, CoTEntity>;
     followMode?: boolean;
@@ -280,7 +299,7 @@ const calculateZoom = (radiusNm: number) => {
     return Math.max(2, 14 - Math.log2(r));
 };
 
-export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, globeMode, replayMode, replayEntities, followMode, onFollowModeChange, onEntityLiveUpdate }: TacticalMapProps) {
+export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, onEntitySelect, onMissionPropsReady, onMapActionsReady, showVelocityVectors, showHistoryTails, globeMode, onToggleGlobe, replayMode, replayEntities, followMode, onFollowModeChange, onEntityLiveUpdate }: TacticalMapProps) {
 
     const lastFrameTimeRef = useRef<number>(Date.now());
     
@@ -1335,32 +1354,34 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         pickable: false,
                         jointRounded: true,
                         capRounded: true,
-                        opacity: 0.8,
+                        wrapLongitude: true,
+                        parameters: { depthTest: true, depthBias: -100.0 }
                     })
                 ] : []),
 
                 // 1.5. Gap Bridge (Connects last history point to current interpolated position)
                 ...(historyTailsRef.current ? [
-                    new LineLayer({
+                    new PathLayer({
                         id: 'history-gap-bridge',
                         data: interpolated.filter(d => {
                              if (!d.trail || d.trail.length === 0) return false;
-                             // Don't draw for selected entity if it has its own gap bridge
                              if (currentSelected && d.uid === currentSelected.uid) return false; 
-                             
                              const last = d.trail[d.trail.length - 1];
                              const dist = getDistanceMeters(last[1], last[0], d.lat, d.lon);
-                             return dist > 5; // Only draw if gap is visible (>5m)
-                        }),
-                        getSourcePosition: (d: CoTEntity) => {
+                             return dist > 5;
+                        }).map(d => {
                             const last = d.trail![d.trail!.length - 1];
-                            return [last[0], last[1], last[2]];
-                        },
-                        getTargetPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-                        getColor: (d: CoTEntity) => entityColor(d, 180),
+                            return { path: [[last[0], last[1], last[2]], [d.lon, d.lat, d.altitude || 0]], entity: d };
+                        }),
+                        getPath: (d: any) => d.path,
+                        getColor: (d: any) => entityColor(d.entity, 180),
                         getWidth: 2.5,
                         widthMinPixels: 1.5,
+                        jointRounded: true,
+                        capRounded: true,
                         pickable: false,
+                        wrapLongitude: true,
+                        parameters: { depthTest: true, depthBias: -100.0 }
                     })
                 ] : []),
 
@@ -1390,6 +1411,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                                 jointRounded: true,
                                 capRounded: true,
                                 opacity: 1.0,
+                                wrapLongitude: true,
+                                parameters: { depthTest: true, depthBias: -101.0 }
                             }),
                             // Gap bridge for selection
                             new LineLayer({
@@ -1404,6 +1427,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                                 getWidth: 3.5, 
                                 widthMinPixels: 2.5,
                                 pickable: false,
+                                wrapLongitude: true,
+                                parameters: { depthTest: true, depthBias: -101.0 }
                             })
                         ];
                     })()
@@ -1417,24 +1442,27 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         getSourcePosition: (d: CoTEntity) => [d.lon, d.lat, 0],
                         getTargetPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude],
                         getColor: (d: CoTEntity) => entityColor(d, 80), // Faint line
-                        getWidth: 1,
-                        widthMinPixels: 0.5,
+                        getWidth: 1.5,
+                        widthMinPixels: 1.5,
                         pickable: false,
+                        parameters: { depthTest: true, depthBias: -100.0 }
                     }),
                     new ScatterplotLayer({
                         id: 'ground-shadows',
                         data: interpolated.filter(e => e.altitude > 10),
                         getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
-                        getRadius: 2,
+                        getRadius: 3,
                         radiusUnits: 'pixels' as const,
-                        getFillColor: (d: CoTEntity) => entityColor(d, 150),
+                        getFillColor: (d: CoTEntity) => entityColor(d, 120),
                         pickable: false,
+                        wrapLongitude: true,
+                        parameters: { depthTest: true, depthBias: -300.0 }
                     })
                 ] : []),
 
                 // Special Entities Outline/Glow
                 new IconLayer({
-                    id: 'heading-arrows-special-outline',
+                    id: 'entity-tactical-halo',
                     data: interpolated.filter(d => {
                         const isVessel = d.type.includes('S');
                         if (isVessel) {
@@ -1444,28 +1472,26 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                                    ['military', 'government'].includes(d.classification?.affiliation || '');
                         }
                     }),
-                    getIcon: (d: CoTEntity) => d.type.includes('S') ? 'vessel' : 'aircraft',
+                    getIcon: () => 'halo',
                     iconAtlas: ICON_ATLAS.url,
                     iconMapping: ICON_ATLAS.mapping,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    getPosition: (d: any) => [d.lon, d.lat, (d.altitude || 0) + 1.8], // Slightly below the main icon
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    // Offset by exactly +2m to match the primary icon's plane for billboarding consistency
+                    getPosition: (d: CoTEntity) => [d.lon, d.lat, (d.altitude || 0) + 2], 
                     getSize: (d: any) => {
                         const isSelected = currentSelected?.uid === d.uid;
-                        const baseSize = 32;
-                        // +6px padding creates an ~3px stroke outline
-                        return (isSelected ? baseSize * 1.3 : baseSize) + 6; 
+                        const baseSize = 32; // Reduced from 64 to 32 (50% reduction)
+                        return isSelected ? baseSize * 1.3 : baseSize;
                     },
                     sizeUnits: 'pixels' as const,
-                    // In globe mode, billboard:true keeps icons facing the camera.
-                    // In Mercator mode, billboard:false locks rotation to the map surface.
                     billboard: !!globeMode,
-                    getAngle: (d: any) => -(d.course || 0),
-                    getColor: [255, 136, 0], // Tactical Orange
+                    getColor: [255, 136, 0, 140], // Softer alpha for the redesigned glow
                     pickable: false,
+                    wrapLongitude: true,
+                    // depthBias -209 stays just behind the icon (-210) but ahead of the selection ring (-203)
+                    parameters: { depthTest: true, depthBias: -209.0 },
                     updateTriggers: {
                         getSize: [currentSelected?.uid],
-                        getAngle: [now]
+                        getColor: [now]
                     }
                 }),
 
@@ -1489,6 +1515,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         return isSelected ? baseSize * 1.3 : baseSize;
                     },
                     sizeUnits: 'pixels' as const,
+                    sizeMinPixels: 14,
                     billboard: !!globeMode,
                     // Smoothly interpolate course for rotation (CCW -> CW conversion)
                     getAngle: (d: any) => {
@@ -1498,6 +1525,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     getColor: (d: any) => entityColor(d as CoTEntity),
                     pickable: true,
+                    wrapLongitude: true,
+                    parameters: { depthTest: true, depthBias: -210.0 },
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onHover: (info: { object?: any; x: number; y: number }) => {
                         if (info.object) {
@@ -1526,23 +1555,22 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
                 new ScatterplotLayer({
                     id: 'entity-glow',
-                    data: interpolated,
+                    data: currentSelected ? interpolated.filter(e => e.uid === currentSelected.uid) : [],
                     getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
                     getRadius: (d: CoTEntity) => {
-                        const isSelected = currentSelected?.uid === d.uid;
                         const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
-                        const base = isSelected ? 20 : 6;
-                        return base * (1 + (pulse * 0.1));
+                        return 20 * (1 + (pulse * 0.1));
                     },
                     radiusUnits: 'pixels' as const,
                     getFillColor: (d: CoTEntity) => {
-                        const isSelected = currentSelected?.uid === d.uid;
                         const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
-                        const baseAlpha = isSelected ? 60 : 10;
-                        const a = baseAlpha * (0.8 + pulse * 0.2);
+                        const baseAlpha = 80;
+                        const a = baseAlpha * (0.7 + pulse * 0.3);
                         return entityColor(d, a);
                     },
                     pickable: false,
+                    wrapLongitude: true,
+                    parameters: { depthTest: true, depthBias: -212.0 },
                     updateTriggers: { getRadius: [now], getFillColor: [now] }
                 }),
 
@@ -1566,16 +1594,16 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         stroked: true,
                         filled: false,
                         pickable: false,
+                        wrapLongitude: true,
+                        parameters: { depthTest: true, depthBias: -215.0 },
                         updateTriggers: { getRadius: [now], getLineColor: [now] }
                     })
                 ] : []),
 
                 ...(velocityVectorsRef.current ? [
-                    new LineLayer({
+                    new PathLayer({
                         id: 'velocity-vectors',
-                        data: interpolated.filter(e => e.speed > 0.5),
-                        getSourcePosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-                        getTargetPosition: (d: CoTEntity) => {
+                        data: interpolated.filter(e => e.speed > 0.5).map(d => {
                             const projectionSeconds = 45;
                             const distMeters = d.speed * projectionSeconds;
                             const courseRad = (d.course || 0) * Math.PI / 180;
@@ -1583,16 +1611,22 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                             const latRad = d.lat * Math.PI / 180;
                             const dLat = (distMeters * Math.cos(courseRad)) / R;
                             const dLon = (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
-                            return [
+                            const target = [
                                 d.lon + dLon * (180 / Math.PI),
                                 d.lat + dLat * (180 / Math.PI),
                                 d.altitude || 0,
                             ];
-                        },
-                        getColor: (d: CoTEntity) => entityColor(d, 120),
-                        getWidth: 1.5,
-                        widthMinPixels: 1,
+                            return { path: [[d.lon, d.lat, d.altitude || 0], target], entity: d };
+                        }),
+                        getPath: (d: any) => d.path,
+                        getColor: (d: any) => entityColor(d.entity, 120),
+                        getWidth: 2.2,
+                        widthMinPixels: 1.5,
+                        jointRounded: true,
+                        capRounded: true,
                         pickable: false,
+                        wrapLongitude: true,
+                        parameters: { depthTest: true, depthBias: -220.0 }
                     })
                 ] : []),
 
@@ -1655,9 +1689,24 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
         const applyProjection = () => {
             const isMapbox = !!mapToken;
             if (globeMode) {
+                // Globe and 3D terrain/fog often conflict visually or performance-wise.
+                // Force 2D mode when entering Globe view.
+                setEnable3d(false);
+                
                 map.setProjection(isMapbox ? 'globe' : { type: 'globe' });
+                
                 const z = map.getZoom?.() ?? 5;
-                if (z > 3) map.flyTo({ center: map.getCenter?.(), zoom: 2.5, duration: 1500 });
+                const center = map.getCenter?.();
+                
+                // Unified flyTo handles centering, zoom, and resetting 3D orientation in one smooth movement
+                map.flyTo({ 
+                    center,
+                    zoom: z > 3 ? 2.5 : z, 
+                    pitch: 0, 
+                    bearing: 0, 
+                    duration: 1500,
+                    easing: (t: number) => 1 - Math.pow(1 - t, 3)
+                });
             } else {
                 map.setProjection(isMapbox ? 'mercator' : { type: 'mercator' });
             }
@@ -1945,7 +1994,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                 }}
                 deckProps={{
                     id: 'tactical-overlay',
-                    interleaved: false,
+                    interleaved: true,
                     onOverlayLoaded: handleOverlayLoaded,
                 }}
             />
@@ -1953,22 +2002,47 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
             
         {/* View Controls */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 z-[100] pointer-events-auto">
-            <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/5 shadow-2xl">
-                <button 
-                    onClick={() => setViewMode('2d')}
-                    className={`p-2 rounded transition-all active:scale-95 flex flex-col items-center justify-center w-10 h-10 border ${!enable3d ? 'bg-cyan-500/20 border-cyan-400 text-cyan-400 font-bold' : 'bg-transparent border-white/10 text-white/50 hover:text-white'}`}
-                    title="Top Down (2D)"
-                >
-                    <span className="text-[10px] uppercase font-mono tracking-tighter">2D</span>
-                </button>
-                <button 
-                    onClick={() => setViewMode('3d')}
-                    className={`p-2 rounded transition-all active:scale-95 flex flex-col items-center justify-center w-10 h-10 border ${enable3d ? 'bg-cyan-500/20 border-cyan-400 text-cyan-400 font-bold' : 'bg-transparent border-white/10 text-white/50 hover:text-white'}`}
-                    title="Perspective (3D)"
-                >
-                    <span className="text-[10px] uppercase font-mono tracking-tighter">3D</span>
-                </button>
-            </div>
+                <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1">
+                    <button
+                        onClick={() => {
+                            if (globeMode) onToggleGlobe?.();
+                            setViewMode('2d');
+                        }}
+                        className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
+                            !enable3d && !globeMode
+                                ? 'bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]' 
+                                : 'text-white/40 hover:text-white/60'
+                        }`}
+                    >
+                        2D
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (globeMode) onToggleGlobe?.();
+                            setViewMode('3d');
+                        }}
+                        className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
+                            enable3d && !globeMode
+                                ? 'bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]' 
+                                : 'text-white/40 hover:text-white/60'
+                        }`}
+                    >
+                        3D
+                    </button>
+                    <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+                    <button
+                        onClick={() => onToggleGlobe?.()}
+                        className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
+                            globeMode 
+                                ? 'bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]' 
+                                : 'text-white/40 hover:text-white/60'
+                        }`}
+                        title="Toggle Globe View"
+                    >
+                        <Globe size={12} className={globeMode ? 'animate-pulse' : ''} />
+                        GLOBE
+                    </button>
+                </div>
 
             {enable3d && (
                 <>

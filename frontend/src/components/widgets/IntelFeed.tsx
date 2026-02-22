@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState } from 'react';
-import { Radio, Bell, TrendingDown, TrendingUp, Filter } from 'lucide-react';
+import { Radio, Bell, TrendingDown, TrendingUp, Filter, Plane, Ship, Satellite } from 'lucide-react';
 import { CoTEntity, MapActions, IntelEvent, MapFilters } from '../../types';
 import { LayerFilters } from './LayerFilters';
 
@@ -78,16 +78,45 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
   return (
     <div className="flex flex-1 flex-col min-h-0 rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-inner overflow-hidden">
       <div className="flex items-center justify-between border-b border-tactical-border bg-white/5 px-3 py-2">
-        <h3 className="text-mono-xs font-bold uppercase tracking-[0.2em] text-hud-green/70 flex items-center gap-2">
+        <h3 className="text-mono-xs font-bold uppercase tracking-[0.2em] text-hud-green/70 flex items-center gap-2 mr-auto">
             <Radio size={12} className="animate-pulse text-hud-green" />
             Intelligence Stream
         </h3>
-        <button 
-            className={`transition-colors p-1 rounded ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
-            onClick={() => setShowFilters(!showFilters)}
-        >
-            <Filter size={12} />
-        </button>
+        
+        <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+                <button 
+                    title="Toggle Air"
+                    className={`p-1 rounded transition-all active:scale-95 ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                    onClick={() => onFilterChange?.('showAir', !filters?.showAir)}
+                >
+                    <Plane size={12} />
+                </button>
+                <button 
+                    title="Toggle Sea"
+                    className={`p-1 rounded transition-all active:scale-95 ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                    onClick={() => onFilterChange?.('showSea', !filters?.showSea)}
+                >
+                    <Ship size={12} />
+                </button>
+                <button 
+                    title="Toggle Orbital"
+                    className={`p-1 rounded transition-all active:scale-95 ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                    onClick={() => onFilterChange?.('showSatellites', !filters?.showSatellites)}
+                >
+                    <Satellite size={12} />
+                </button>
+            </div>
+
+            <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
+            <button 
+                className={`transition-colors p-1 rounded ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
+                onClick={() => setShowFilters(!showFilters)}
+            >
+                <Filter size={12} />
+            </button>
+        </div>
       </div>
 
       {showFilters && filters && onFilterChange && (

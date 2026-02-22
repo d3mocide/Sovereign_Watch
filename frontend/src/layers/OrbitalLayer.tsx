@@ -79,6 +79,8 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
             stroked: true,
             filled: true,
             pickable: false,
+            wrapLongitude: true,
+            parameters: { depthTest: true, depthBias: -300.0 }, // Flush with other ground shadows
             updateTriggers: {
                 getRadius: [selectedEntity?.uid, hoveredEntity?.uid],
                 getFillColor: [selectedEntity?.uid, hoveredEntity?.uid]
@@ -95,9 +97,13 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 return d.trail.map((p: any) => [p[0], p[1], p[2]]);
             },
             getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, Math.floor(255 * 0.3)), // Opacity 0.3
-            getWidth: 1,
-            widthMinPixels: 1,
+            getWidth: 1.5,
+            widthMinPixels: 1.5,
+            jointRounded: true,
+            capRounded: true,
             pickable: false,
+            wrapLongitude: true,
+            parameters: { depthTest: true, depthBias: -50.0 } // Keep trails below everything but footprints
         }),
 
         // 3. Satellite Markers
@@ -113,9 +119,12 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 return isSelected ? 16 : 12; // 12px default
             },
             sizeUnits: 'pixels',
+            sizeMinPixels: 6,
             billboard: true, // Face camera
             getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 255),
             pickable: true,
+            wrapLongitude: true,
+            parameters: { depthTest: true, depthBias: -200.0 },
             updateTriggers: {
                 getSize: [selectedEntity?.uid]
             }
@@ -142,6 +151,8 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 stroked: true,
                 filled: false,
                 pickable: false,
+                wrapLongitude: true,
+                parameters: { depthTest: true, depthBias: -201.0 },
                 updateTriggers: { getRadius: [now], getLineColor: [now] }
             })
         ] : []),

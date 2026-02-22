@@ -94,10 +94,10 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
               </div>
               <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
                 {savedMissions.map((mission) => (
-                  <button
+                  <div
                     key={mission.id}
                     onClick={() => onSwitchMission(mission)}
-                    className="w-full bg-white/5 hover:bg-hud-green/10 border border-white/10 hover:border-hud-green/30 rounded p-2 transition-all group text-left relative"
+                    className="w-full bg-white/5 hover:bg-hud-green/10 border border-white/10 hover:border-hud-green/30 rounded p-2 transition-all group text-left relative cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -121,7 +121,7 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
                         <Trash2 size={10} />
                       </button>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>

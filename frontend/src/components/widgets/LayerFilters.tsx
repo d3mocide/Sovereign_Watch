@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Ship, Activity, ChevronDown, ChevronRight, Satellite } from 'lucide-react';
+import { Plane, Ship, ChevronRight, Satellite } from 'lucide-react';
 
 interface LayerFiltersProps {
   filters: { 
@@ -31,19 +31,26 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
         <div className="flex flex-col gap-1">
             <div className={`group flex items-center justify-between rounded border transition-all ${filters.showAir ? 'border-air-accent/30 bg-air-accent/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
               <div 
-                className="flex flex-1 items-center gap-2 p-2 cursor-pointer"
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer"
                 onClick={() => setAirExpanded(!airExpanded)}
               >
-                {airExpanded ? <ChevronDown size={14} className="text-white/40" /> : <ChevronRight size={14} className="text-white/40" />}
-                <Plane size={14} className={filters.showAir ? 'text-air-accent' : 'text-white/20'} />
-                <span className={`text-[10px] font-bold tracking-widest ${filters.showAir ? 'text-white' : 'text-white/40'}`}>AIR</span>
+                <div className="flex items-center gap-2">
+                  <Plane size={14} className={filters.showAir ? 'text-air-accent' : 'text-white/20'} />
+                  <span className={`text-[10px] font-bold tracking-widest ${filters.showAir ? 'text-white' : 'text-white/40'}`}>AIR</span>
+                </div>
+                <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: airExpanded ? 'rotate(90deg)' : 'none' }}>
+                    <ChevronRight size={14} className="text-white/40" />
+                </div>
               </div>
               
               <div 
-                className="p-2 cursor-pointer flex items-center"
-                onClick={() => onFilterChange('showAir', !filters.showAir)}
+                className="border-l border-white/10 p-2 cursor-pointer flex items-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterChange('showAir', !filters.showAir);
+                }}
               >
-                <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showAir ? 'bg-air-accent' : 'bg-white/10'}`}>
+                <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showAir ? 'bg-air-accent' : 'bg-white/10 hover:bg-white/20'}`}>
                   <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showAir ? 'left-3.5' : 'left-0.5'}`} />
                 </div>
               </div>
@@ -161,19 +168,26 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
         <div className="flex flex-col gap-1">
           <div className={`group flex items-center justify-between rounded border transition-all ${filters.showSea ? 'border-sea-accent/30 bg-sea-accent/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
             <div 
-              className="flex flex-1 items-center gap-2 p-2 cursor-pointer"
+              className="flex flex-1 items-center justify-between p-2 cursor-pointer"
               onClick={() => setSeaExpanded(!seaExpanded)}
             >
-              {seaExpanded ? <ChevronDown size={14} className="text-white/40" /> : <ChevronRight size={14} className="text-white/40" />}
-              <Ship size={14} className={filters.showSea ? 'text-sea-accent' : 'text-white/20'} />
-              <span className={`text-[10px] font-bold tracking-widest ${filters.showSea ? 'text-white' : 'text-white/40'}`}>SEA</span>
+              <div className="flex items-center gap-2">
+                <Ship size={14} className={filters.showSea ? 'text-sea-accent' : 'text-white/20'} />
+                <span className={`text-[10px] font-bold tracking-widest ${filters.showSea ? 'text-white' : 'text-white/40'}`}>SEA</span>
+              </div>
+              <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: seaExpanded ? 'rotate(90deg)' : 'none' }}>
+                  <ChevronRight size={14} className="text-white/40" />
+              </div>
             </div>
             
             <div 
-              className="p-2 cursor-pointer flex items-center"
-              onClick={() => onFilterChange('showSea', !filters.showSea)}
+              className="border-l border-white/10 p-2 cursor-pointer flex items-center"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFilterChange('showSea', !filters.showSea);
+              }}
             >
-              <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showSea ? 'bg-sea-accent' : 'bg-white/10'}`}>
+              <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showSea ? 'bg-sea-accent' : 'bg-white/10 hover:bg-white/20'}`}>
                 <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showSea ? 'left-3.5' : 'left-0.5'}`} />
               </div>
             </div>
@@ -337,15 +351,15 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
         <div className="flex flex-col gap-1">
           <div className={`group flex items-center justify-between rounded border transition-all ${filters.showSatellites ? 'border-purple-400/30 bg-purple-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
             <div 
-              className="flex flex-1 items-center gap-2 p-2 cursor-pointer"
+              className="flex flex-1 items-center justify-between p-2 cursor-pointer"
               onClick={() => setSatExpanded(!satExpanded)}
             >
-              <Satellite size={14} className={filters.showSatellites ? 'text-purple-400' : 'text-white/40 group-hover:text-white/60'} />
-              <span className={`text-[10px] font-medium tracking-widest transition-colors ${filters.showSatellites ? 'text-purple-400' : 'text-white/40 group-hover:text-white/60'}`}>
-                ORBITAL
-              </span>
-              <div className="ml-auto w-4 text-white/30 transition-transform duration-200" style={{ transform: satExpanded ? 'rotate(90deg)' : 'none' }}>
-                  <ChevronRight size={14} />
+              <div className="flex items-center gap-2">
+                <Satellite size={14} className={filters.showSatellites ? 'text-purple-400' : 'text-white/20'} />
+                <span className={`text-[10px] font-bold tracking-widest ${filters.showSatellites ? 'text-white' : 'text-white/40'}`}>ORBITAL</span>
+              </div>
+              <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: satExpanded ? 'rotate(90deg)' : 'none' }}>
+                  <ChevronRight size={14} className="text-white/40" />
               </div>
             </div>
             

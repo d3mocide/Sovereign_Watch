@@ -15,7 +15,7 @@ const BASEMAP_CONFIG: Record<string, boolean | string> = {
 };
 
 function DeckGLOverlay(props: any) {
-    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
+    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, interleaved: true }));
 
     const isDeadRef = useRef(false);
     useEffect(() => {

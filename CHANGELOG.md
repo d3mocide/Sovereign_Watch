@@ -1,3 +1,38 @@
+## [0.9.0] - 2026-02-21
+
+### Added
+
+- **Tactical Halo System (Sovereign Glass refinement):**
+  - **Locked-to-Icon Highlighting:** Replaced redundant amber icon outlines with a procedural "Tactical Halo" sprite.
+  - **Concentric Rendering:** Redesigned as a soft 32px radial glow that perfectly tracks icon billboarding, rotation, and projection in Globe/3D views.
+- **Globe View Activation:**
+  - **Spherical Projection:** Enabled native globe rendering in `TacticalMap.tsx`, supported by Mapbox v3+ or the newly verified MapLibre v5 upgrade.
+  - **Projection Stabilization:** Re-aligned all tactical overlays (trails, footprints, stems) to track accurately on spherical surfaces with zero terrestrial clipping.
+- **Unified Tactical UI:**
+  - **Map View Control Relocation:** Moved the 2D/3D and Globe View toggles from the global `TopBar.tsx` directly onto the `TacticalMap.tsx` map surface for localized, context-aware interaction.
+  - **Topbar Cleanup:** Removed the redundant `Orb_Layer` and map projection buttons from the Topbar to maximize HUD space for mission-critical intelligence.
+  - **Layer Filter Header Refinement:** Relocated the expansion chevrons (AIR, SEA, ORBITAL) to the right-side gutter for cleaner visual alignment with toggle switches.
+  - **Orbital Header Unification:** Standardized the ORBITAL filter group to match the AIR and SEA tactical styles.
+
+### Changed
+
+- **Tactical Depth Matrix:** Standardized `depthBias` across the entire map stack:
+  1. Velocity Vectors (`-220.0`)
+  2. Selection Ring (`-215.0`)
+  3. Primary Icon (`-210.0`)
+  4. Tactical Halo (`-209.0`)
+  5. Trails / Footprints (`-101.0`)
+  6. Altitude Stems (`-100.0`)
+- **Visual Stylization:** Upgraded velocity vectors and ground tracks to `jointRounded` and `capRounded` PathLayers for professional tactical aesthetics.
+
+### Fixed
+
+- **Tactical Map Stability:**
+  - **Z-Fighting Resolution:** Eliminated flickering between halo highlights and elevation stems through sprite-based concentric layering.
+  - **Mode Transition Repair:** Fixed a `TypeError` in Mapbox/MapLibre adapters by standardizing interleaved rendering modes.
+- **Orbital Depth Repair:** Fixed Z-layer ordering in `OrbitalLayer.tsx` where satellites were being occluded by their own ground tracks.
+- **Special Entity Metadata:** Suppressed redundant `GENERAL_AVIATION` tags for specialized assets (Drones, Helicopters) in the HUD.
+
 ## [0.8.1] - 2026-02-21
 
 ### Added
