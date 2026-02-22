@@ -9,7 +9,7 @@ import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 
 function App() {
-  const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0 });
+  const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
   const health = useSystemHealth();
@@ -296,7 +296,19 @@ function App() {
       setSelectedEntity(e);
       // Always stop following when selection changes (user must re-engage)
       setFollowMode(false);
-  }, []);
+
+      if (e && (e.type === 'a-s-K' || e.detail?.category)) {
+          addEvent({
+              type: 'new',
+              message: `${(e.callsign || e.uid).replace(/\s*\(.*?\)/g, '')}`,
+              entityType: 'orbital',
+              classification: {
+                  ...e.classification,
+                  category: String(e.detail?.category || 'Orbital Asset')
+              }
+          });
+      }
+  }, [addEvent]);
 
   const handleEntityLiveUpdate = useCallback((e: CoTEntity) => {
       setSelectedEntity(e);
@@ -313,10 +325,6 @@ function App() {
           onToggleVelocityVectors={handleVelocityVectorToggle}
           showHistoryTails={showHistoryTails}
           onToggleHistoryTails={handleHistoryTailsToggle}
-          showSatellites={filters.showSatellites}
-          onToggleSatellites={() => handleFilterChange('showSatellites', !filters.showSatellites)}
-          globeMode={globeMode}
-          onToggleGlobe={handleGlobeModeToggle}
           onToggleReplay={() => {
               if (replayMode) setReplayMode(false);
               else loadReplayData();
@@ -363,6 +371,7 @@ function App() {
           showVelocityVectors={showVelocityVectors}
           showHistoryTails={showHistoryTails}
           globeMode={globeMode}
+          onToggleGlobe={handleGlobeModeToggle}
           replayMode={replayMode}
           replayEntities={replayEntities}
           followMode={followMode} // Pass follow mode

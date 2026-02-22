@@ -123,7 +123,7 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **FE-03**      | Containerization   | Frontend  | **DONE**. Dockerfile + Vite HMR for live development.                               |
 | **FE-04**      | Altitude Viz       | Frontend  | **DONE**. 10-stop altitude color gradient, 2D/3D toggle, floating icons.            |
 | **FE-05**      | TAK Decoder        | Frontend  | **DONE**. Client-side Protobuf Web Worker with magic bytes validation.              |
-| **FE-06**      | Track Summary      | Frontend  | **DONE**. Real-time AIR/SEA counts with color-coded indicators.                     |
+| **FE-06**      | Track Summary      | Frontend  | **DONE**. Real-time AIR/SEA/ORBITAL counts with color-coded indicators.             |
 | **FE-07**      | Dynamic Area (DAM) | Frontend  | **DONE**. Mission pivot, saved locations, adaptive zoom, Haversine cleanup.         |
 | **Ingest-01**  | Aviation ADS-B     | Data Eng  | **DONE**. Multi-source Python poller (adsb.fi/lol/airplanes.live) with arbitration. |
 | **Ingest-02**  | Maritime AIS       | Data Eng  | **DONE**. Python WebSocket poller (AISStream.io) with DAM integration.              |

@@ -9,7 +9,7 @@ import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent, MissionProps } from '../../types';
 
 interface SidebarLeftProps {
-  trackCounts: { air: number; sea: number };
+  trackCounts: { air: number; sea: number; orbital: number };
   filters: import('../../types').MapFilters;
   onFilterChange: (key: string, value: boolean) => void;
   events: IntelEvent[];

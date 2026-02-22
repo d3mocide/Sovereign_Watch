@@ -54,15 +54,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const isSat = entity.type === 'a-s-K' || entity.type.indexOf('K') === 4;
   
   let accentColor = 'text-air-accent';
+  let accentBase = 'air-accent';
   let accentBg = 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
   let accentBorder = 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
 
-  if (isSat) {
-      accentColor = 'text-purple-400';
-      accentBg = 'bg-gradient-to-br from-purple-400/20 to-purple-400/5';
-      accentBorder = 'border-purple-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
-  } else if (isShip) {
+    if (isSat) {
+        accentColor = 'text-purple-400';
+        accentBase = 'purple-400';
+        accentBg = 'bg-gradient-to-br from-purple-400/20 to-purple-400/5';
+        accentBorder = 'border-purple-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+    } else if (isShip) {
       accentColor = 'text-sea-accent';
+      accentBase = 'sea-accent';
       accentBg = 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5';
       accentBorder = 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
   }
@@ -90,12 +93,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 {entity.classification && !isShip && (
                     <div className="flex gap-1.5">
                         {entity.classification.affiliation && (
-                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
-                                ['military', 'government'].includes(entity.classification.affiliation) ? 'bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30' :
-                                'bg-white/10 text-white/60 border border-white/20'
-                            }`}>
-                                {entity.classification.affiliation.toUpperCase()}
-                            </span>
+                            // Suppress 'general_aviation' affiliation if platform is helicopter/drone to avoid clutter
+                            !(entity.classification.affiliation === 'general_aviation' && 
+                              ['helicopter', 'drone'].includes(entity.classification.platform || '')) && (
+                                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
+                                    ['military', 'government'].includes(entity.classification.affiliation) ? 'bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30' :
+                                    'bg-white/10 text-white/60 border border-white/20'
+                                }`}>
+                                    {entity.classification.affiliation.toUpperCase()}
+                                </span>
+                            )
                         )}
                         {['helicopter', 'drone'].includes(entity.classification.platform || '') && (
                             <span className="text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30">
@@ -122,7 +129,24 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
              {/* Aircraft Info Box */}
              {/* Vessel Info Box */}
-             {isShip && entity.vesselClassification ? (
+             {/* Satellite Info Box */}
+             {isSat && entity.detail ? (
+                <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
+                    <h3 className="text-mono-sm font-bold text-white/90">
+                        {String(entity.detail.category || 'ORBITAL ASSET').toUpperCase()}
+                    </h3>
+                    <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">NORAD ID:</span>
+                            <span className="text-white/80">{String(entity.detail.norad_id || 'UNKNOWN')}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <span className="text-white/30 w-16">Intl Des:</span>
+                            <span className="text-white/80">{String(entity.detail.intl_des || 'UNKNOWN')}</span>
+                        </div>
+                    </div>
+                </section>
+             ) : isShip && entity.vesselClassification ? (
                 <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
                     <h3 className="text-mono-sm font-bold text-white/90">
                         {SHIP_TYPE_MAP[entity.vesselClassification.shipType || 0] || 'UNKNOWN VESSEL'}
@@ -139,7 +163,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         {entity.vesselClassification.length !== undefined && entity.vesselClassification.length > 0 && (
                             <div className="flex gap-2">
                                 <span className="text-white/30 w-16">Dimensions:</span>
-                                <span className="text-white/80">{entity.vesselClassification.length}m × {entity.vesselClassification.beam}m</span>
+                                <span className="text-white/80">{entity.vesselClassification.length}m Ã— {entity.vesselClassification.beam}m</span>
                             </div>
                         )}
                     </div>
@@ -167,7 +191,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             onClick={onClose}
             className="p-1 text-white/30 hover:text-white transition-colors"
           >
-            ✕
+            x
           </button>
         </div>
 
@@ -187,16 +211,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
         {/* Actions Bar */}
         <div className="flex gap-2">
-            <button 
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onCenterMap?.();
-                }}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-hud-green/30 to-hud-green/10 hover:from-hud-green/40 hover:to-hud-green/20 border border-hud-green/50 py-1.5 rounded text-[10px] font-bold tracking-widest text-hud-green transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(0,255,65,0.1)]"
-            >
-                <Crosshair size={12} />
-                CENTER_VIEW
-            </button>
+            {!isSat && (
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCenterMap?.();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-hud-green/30 to-hud-green/10 hover:from-hud-green/40 hover:to-hud-green/20 border border-hud-green/50 py-1.5 rounded text-[10px] font-bold tracking-widest text-hud-green transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(0,255,65,0.1)]"
+                >
+                    <Crosshair size={12} />
+                    CENTER_VIEW
+                </button>
+            )}
             <button className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-white/10 to-transparent hover:from-white/20 hover:to-white/5 border border-white/10 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]">
                 <MapIcon size={12} />
                 TRACK_LOG
@@ -258,7 +284,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       <div className="flex justify-between border-b border-white/5 pb-1">
                           <span className="text-white/30">PERIOD:</span>
                           <span className="text-white/40 tabular-nums">
-                              {entity.detail?.period ? `${Math.round(entity.detail.period)}m` : '---'}
+                              {entity.detail?.period_min ? `${Number(entity.detail.period_min).toFixed(1)}m` : '---'}
                           </span>
                       </div>
                   </div>
@@ -333,8 +359,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           </div>
           
           {/* Linked Compass Widget */}
-          <div className="pt-1 flex justify-center opacity-80 scale-90">
-             <Compass heading={entity.course} size={140} />
+          <div className="pt-1 flex justify-center opacity-80 scale-100">
+             <Compass heading={entity.course} size={180} accentColor={accentBase} />
           </div>
         </section>
 
@@ -350,17 +376,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               </div>
               <div className="grid grid-cols-[100px_1fr]">
                  <span className="text-white/30">Signal_Source:</span>
-                 <span className="text-hud-green/80">{isShip ? 'AIS_Poller' : 'ADSB_Poller'}</span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr]">
-                 <span className="text-white/30">Classification:</span>
-                 <span className={`${
-                     entity.classification?.affiliation === 'military' ? 'text-amber-500' :
-                     entity.classification?.affiliation === 'government' ? 'text-blue-400' :
-                     'text-white/60'
-                 } uppercase`}>
-                     {entity.classification?.affiliation || 'UNKNOWN'}
-                 </span>
+                 <span className="text-hud-green/80">{isSat ? 'ORBITAL_Poller' : isShip ? 'AIS_Poller' : 'ADSB_Poller'}</span>
               </div>
             </div>
          </section>

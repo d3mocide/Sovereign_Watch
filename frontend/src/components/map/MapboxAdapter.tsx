@@ -15,7 +15,7 @@ const BASEMAP_CONFIG: Record<string, boolean | string> = {
 };
 
 function DeckGLOverlay(props: any) {
-    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, interleaved: true }));
+    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, interleaved: false }));
 
     const isDeadRef = useRef(false);
     useEffect(() => {
@@ -70,6 +70,7 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             style={style}
             onContextMenu={onContextMenu}
             onClick={onClick}
+            antialias={true}
         >
             <DeckGLOverlay {...deckProps} />
         </Map>

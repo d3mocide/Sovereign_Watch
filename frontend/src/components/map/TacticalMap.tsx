@@ -205,6 +205,36 @@ function entityColor(entity: CoTEntity, alpha: number = 220): [number, number, n
     return altitudeToColor(entity.altitude, alpha);
 }
 
+/** Chaikin's corner-cutting algorithm for smooth trail rendering.
+ * Runs `iterations` passes, each replacing every segment with 2 points
+ * at 1/4 and 3/4 of the way along it. 2 passes = 4x point density, smooth curves.
+ * Altitude (z) is linearly interpolated to match. First/last points are preserved.
+ */
+function chaikinSmooth(pts: number[][], iterations = 2): number[][] {
+    if (pts.length < 3) return pts; // Can't smooth fewer than 3 points
+    let result = pts;
+    for (let iter = 0; iter < iterations; iter++) {
+        const smoothed: number[][] = [result[0]]; // Keep first point sharp
+        for (let i = 0; i < result.length - 1; i++) {
+            const p0 = result[i];
+            const p1 = result[i + 1];
+            smoothed.push([
+                0.75 * p0[0] + 0.25 * p1[0],
+                0.75 * p0[1] + 0.25 * p1[1],
+                0.75 * p0[2] + 0.25 * p1[2],
+            ]);
+            smoothed.push([
+                0.25 * p0[0] + 0.75 * p1[0],
+                0.25 * p0[1] + 0.75 * p1[1],
+                0.25 * p0[2] + 0.75 * p1[2],
+            ]);
+        }
+        smoothed.push(result[result.length - 1]); // Keep last point sharp
+        result = smoothed;
+    }
+    return result;
+}
+
 /** Deterministic hash from UID for animation phase offset */
 function uidToHash(uid: string): number {
     if (!uid) return 0;
@@ -989,6 +1019,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
 
             let airCount = 0;
             let seaCount = 0;
+            let orbitalCount = 0;
             const staleUids: string[] = [];
             const interpolated: CoTEntity[] = [];
 
@@ -1015,6 +1046,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                              if (cat === 'pilot' && filters?.showPilot === false) continue;
                              if ((cat === 'special' || cat === 'unknown') && filters?.showSpecial === false) continue;
                          }
+                         seaCount++;
                      } else {
                          if (!filters?.showAir) continue;
                          if (entity.classification) {
@@ -1026,10 +1058,9 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                              if (cls.affiliation === 'commercial' && filters?.showCommercial === false) continue;
                              if (cls.affiliation === 'general_aviation' && filters?.showPrivate === false) continue;
                          }
+                         airCount++;
                      }
                      
-                     if (isShip) seaCount++; else airCount++;
-
                      interpolated.push(entity);
                 }
             } else {
@@ -1056,13 +1087,6 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     continue;
                   }
 
-                  // Count
-                  if (isShip) {
-                    seaCount++;
-                  } else {
-                    airCount++;
-                  }
-
                   // Filter
                   if (isShip) {
                       if (!filters?.showSea) continue;
@@ -1081,6 +1105,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                           if (cat === 'pilot' && filters?.showPilot === false) continue;
                           if ((cat === 'special' || cat === 'unknown') && filters?.showSpecial === false) continue;
                       }
+                      seaCount++;
                   } else {
                       if (!filters?.showAir) continue;
                       if (entity.classification) {
@@ -1092,6 +1117,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                           if (cls.affiliation === 'commercial' && filters?.showCommercial === false) continue;
                           if (cls.affiliation === 'general_aviation' && filters?.showPrivate === false) continue;
                       }
+                      airCount++;
                   }
 
                   // Interpolate
@@ -1303,9 +1329,30 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
               visualStateRef.current.delete(uid);
             }
 
-            if (countsRef.current.air !== airCount || countsRef.current.sea !== seaCount || countsRef.current.orbital !== satellitesRef.current.size) {
-              countsRef.current = { air: airCount, sea: seaCount, orbital: satellitesRef.current.size };
-              onCountsUpdate?.({ air: airCount, sea: seaCount, orbital: satellitesRef.current.size } as any);
+            // Count Orbitals (Satellites)
+            for (const [, sat] of satellitesRef.current) {
+                if (!filters?.showSatellites) continue;
+                
+                const cat = (sat.detail?.category as string)?.toLowerCase() || '';
+                if (cat.includes('gps') || cat.includes('gnss') || cat.includes('galileo') || cat.includes('beidou') || cat.includes('glonass')) {
+                    if (filters?.showSatGPS === false) continue;
+                } else if (cat.includes('weather') || cat.includes('noaa') || cat.includes('meteosat') || cat.includes('fengYun')) {
+                    if (filters?.showSatWeather === false) continue;
+                } else if (cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') || cat.includes('iridium') || cat.includes('oneweb') || cat.includes('intelsat')) {
+                    if (filters?.showSatComms === false) continue;
+                } else if (cat.includes('surveillance') || cat.includes('military') || cat.includes('isr')) {
+                    if (filters?.showSatSurveillance === false) continue;
+                } else { // Everything else (debris, active unclassified, etc.) falls to 'Other'
+                    if (filters?.showSatOther === false) continue;
+                }
+                
+                orbitalCount++;
+            }
+
+            if (countsRef.current.air !== airCount || countsRef.current.sea !== seaCount || countsRef.current.orbital !== orbitalCount) {
+
+              countsRef.current = { air: airCount, sea: seaCount, orbital: orbitalCount };
+              onCountsUpdate?.({ air: airCount, sea: seaCount, orbital: orbitalCount } as any);
             }
             
             // 4. Update Layers
@@ -1329,7 +1376,18 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                     satellites: filteredSatellites,
                     selectedEntity: currentSelected,
                     hoveredEntity: hoveredEntity,
-                    now
+                    now,
+                    showHistoryTails: historyTailsRef.current,
+                    onEntitySelect,
+                    onHover: (entity, x, y) => {
+                        if (entity) {
+                            setHoveredEntity(entity);
+                            setHoverPosition({ x, y });
+                        } else {
+                            setHoveredEntity(null);
+                            setHoverPosition(null);
+                        }
+                    }
                 }),
                 // 1. All History Trails (Global Toggle)
                 // Filter out the selected entity's trail to avoid z-fighting/jaggedness
@@ -1340,7 +1398,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getPath: (d: any) => {
                             if (!d.trail || d.trail.length < 2) return [];
-                            return d.trail.map((p: any) => [p[0], p[1], p[2]]);
+                            const raw = d.trail.map((p: any) => [p[0], p[1], p[2]]);
+                            return chaikinSmooth(raw);
                         },
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         getColor: (d: any) => {
@@ -1375,8 +1434,8 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         }),
                         getPath: (d: any) => d.path,
                         getColor: (d: any) => entityColor(d.entity, 180),
-                        getWidth: 2.5,
-                        widthMinPixels: 1.5,
+                        getWidth: 3.5,
+                        widthMinPixels: 2.5,
                         jointRounded: true,
                         capRounded: true,
                         pickable: false,
@@ -1391,7 +1450,7 @@ export function TacticalMap({ onCountsUpdate, filters, onEvent, selectedEntity, 
                         const entity = interpolated.find(e => e.uid === currentSelected.uid)!;
                         if (!entity.trail || entity.trail.length < 2) return [];
                         
-                        const trailPath = entity.trail.map(p => [p[0], p[1], p[2]]);
+                        const trailPath = chaikinSmooth(entity.trail.map(p => [p[0], p[1], p[2]]));
 
                         const isShip = entity.type.includes('S');
                         const trailColor = isShip

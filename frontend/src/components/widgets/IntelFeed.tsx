@@ -22,6 +22,24 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
         // Root filters
         if (event.entityType === 'air' && !filters.showAir) return false;
         if (event.entityType === 'sea' && !filters.showSea) return false;
+        if (event.entityType === 'orbital') {
+            if (!filters.showSatellites) return false;
+            const msg = event.message?.toLowerCase() || '';
+            const classification = (event.classification?.category || '').toLowerCase();
+            
+            // Check sub-filters based on message content or classification if available
+            if (msg.includes('gps') || msg.includes('gnss') || classification.includes('gps')) {
+                if (filters.showSatGPS === false) return false;
+            } else if (msg.includes('weather') || msg.includes('noaa') || classification.includes('weather')) {
+                if (filters.showSatWeather === false) return false;
+            } else if (msg.includes('comms') || msg.includes('communications') || msg.includes('starlink') || classification.includes('comms')) {
+                if (filters.showSatComms === false) return false;
+            } else if (msg.includes('intel') || msg.includes('surveillance') || msg.includes('military') || classification.includes('surveillance')) {
+                if (filters.showSatSurveillance === false) return false;
+            } else { // Everything else (debris, active unclassified, etc.) falls to 'Other'
+                if (filters.showSatOther === false) return false;
+            }
+        }
         
         // Affiliation filters (only if air is on)
         if (event.entityType === 'air' && event.classification) {
@@ -138,6 +156,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                     key={event.id} 
                     event={event} 
                     onClick={handleItemClick} 
+                    filters={filters}
                 />
             ))}
           </div>
@@ -150,12 +169,16 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
 // 3. Isolated sub-component with React.memo to prevent unnecessary re-renders
 const IntelEventItem = React.memo(({ 
     event, 
-    onClick 
+    onClick,
+    filters
 }: { 
     event: IntelEvent; 
     onClick: (event: IntelEvent) => void; 
+    filters?: MapFilters;
 }) => {
     const isAir = event.entityType === 'air';
+    const isSea = event.entityType === 'sea';
+    const isOrbital = event.entityType === 'orbital';
     const isLost = event.type === 'lost';
     const isAlert = event.type === 'alert';
     
@@ -166,18 +189,21 @@ const IntelEventItem = React.memo(({
                        isLost ? 'bg-alert-amber' : 
                        isMil ? 'bg-amber-500' :
                        isGov ? 'bg-blue-400' :
+                       isOrbital ? 'bg-purple-400' :
                        isAir ? 'bg-air-accent' : 'bg-sea-accent';
     
     const textColor = isAlert ? 'text-alert-red' : 
                      isLost ? 'text-alert-amber' : 
                      isMil ? 'text-amber-500' :
                      isGov ? 'text-blue-400' :
+                     isOrbital ? 'text-purple-400' :
                      isAir ? 'text-air-accent' : 'text-sea-accent';
 
     const borderLight = isAlert ? 'border-alert-red/30' : 
                        isLost ? 'border-alert-amber/30' : 
                        isMil ? 'border-amber-500/30' :
                        isGov ? 'border-blue-400/30' :
+                       isOrbital ? 'border-purple-400/30' :
                        isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
 
     return (
@@ -192,11 +218,11 @@ const IntelEventItem = React.memo(({
              <div className="flex items-center gap-2">
                 {isAlert ? <Bell size={10} className="text-alert-red" /> : 
                  isLost ? <TrendingDown size={10} className="text-alert-amber" /> : 
-                 <TrendingUp size={10} className={isAir ? 'text-air-accent' : 'text-sea-accent'} />}
+                 <TrendingUp size={10} className={textColor} />}
                 
-                 <span className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}>
-                    {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
-                 </span>
+                  <span className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}>
+                     {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
+                  </span>
                  {event.classification?.affiliation && ['military', 'government'].includes(event.classification.affiliation.toLowerCase()) && (
                       <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.affiliation.toLowerCase() === 'military' ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
                           {event.classification.affiliation.toUpperCase()}
@@ -223,7 +249,7 @@ const IntelEventItem = React.memo(({
         </div>
         
         <div className="absolute -bottom-2 -right-2 opacity-[0.03] transition-opacity group-hover:opacity-[0.08]">
-           {isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
+           {isOrbital ? <Satellite size={40} className="text-purple-400" /> : isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
         </div>
       </div>
     );

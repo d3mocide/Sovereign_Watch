@@ -4,7 +4,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapAdapterProps } from './mapAdapterTypes';
 
 function DeckGLOverlay(props: any) {
-    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, interleaved: true }));
+    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, interleaved: false }));
 
     const isDeadRef = useRef(false);
     useEffect(() => {
@@ -47,6 +47,7 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
             style={style}
             onContextMenu={onContextMenu}
             onClick={onClick}
+            antialias={true}
         >
             <DeckGLOverlay {...deckProps} />
         </Map>

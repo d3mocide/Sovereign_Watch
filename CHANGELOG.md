@@ -1,3 +1,37 @@
+## [0.9.2] - 2026-02-21
+
+### Added
+
+- **Tactical Compass Restoration:**
+  - **HUD HUD Restoration:** Restored internal tactical crosshairs and degree ticks to the `Compass.tsx` component.
+  - **Dynamic Scaling:** Implemented full dynamic scaling for all compass elements (needle, tail, glow) to support any `size` prop.
+  - **Structural Alignment:** Refactored the internal rendering structure to ensure background glow effects remain perfectly centered during layout shifts.
+- **Enhanced Entity Tracking:**
+  - **Sidebar Size Increase:** Upscaled the tracking compass to 180px in the right sidebar for maximum legibility.
+
+### Changed
+
+- **UI Streamlining:**
+  - **Sidebar Cleanup:** Removed the redundant "Classification" row from the Metadata Source section to reduce visual clutter.
+  - **Intel Feed Refinement:** Stripped redundant category info from orbital event messages, relying on dedicated tactical badges instead.
+
+### Fixed
+
+- **Compass Aesthetics:** Fixed a bug where cardinal labels (N, E, S, W) were hardcoded to green; they now correctly inherit the target's theme-matched accent color.
+
+## [0.9.1] - 2026-02-21
+
+### Added
+
+- **Satellite-First Intelligence Integration:**
+  - **Orbital Object Counter:** Integrated satellites into the `SystemStatus` widget. The "Total Objects" calculation now includes Aviation, Maritime, and Orbital assets with a dedicated purple visual metric.
+  - **Selected Satellite Events:** Selecting a satellite on the map now triggers a categorized event in the `IntelFeed`, complete with specialized satellite icons and purple accenting.
+  - **Orbital Feed Filtering:** Users can now toggle orbital-specific intelligence events independently within the stream.
+
+### Changed
+
+- **Signal Source Nomenclature:** Standardized the satellite signal source label to `ORBITAL_Poller` in the detailed sidebar.
+
 ## [0.9.0] - 2026-02-21
 
 ### Added
@@ -123,6 +157,7 @@
 ### Added
 
 - **Live Search Tracking:** Search results now refresh every 2 seconds to show real-time Lat/Lon coordinates for moving entities.
+- **FE-06** | Track Summary | Frontend | **DONE**. Real-time AIR/SEA/ORBITAL counts with color-coded indicators.
 
 ### Changed
 
