@@ -194,28 +194,10 @@ class OrbitalPulseService:
             jd_ago, fr_ago = jday(ago.year, ago.month, ago.day, ago.hour, ago.minute, ago.second + ago.microsecond / 1e6)
 
             n_sats = len(self.satrecs)
-            logger.info(f"Propagation: running python loops for {n_sats} sats...")
+            logger.info(f"Propagation: running vectorized sgp4 for {n_sats} sats...")
 
-            e = np.zeros(n_sats, dtype=int)
-            r = np.zeros((n_sats, 3), dtype=float)
-            v = np.zeros((n_sats, 3), dtype=float)
-
-            e_ago = np.zeros(n_sats, dtype=int)
-            r_ago = np.zeros((n_sats, 3), dtype=float)
-            v_ago = np.zeros((n_sats, 3), dtype=float)
-
-            for i, sat in enumerate(self.satrecs):
-                err, pos, vel = sat.sgp4(jd, fr)
-                e[i] = err
-                if err == 0:
-                    r[i] = pos
-                    v[i] = vel
-
-                err_ago, pos_ago, vel_ago = sat.sgp4(jd_ago, fr_ago)
-                e_ago[i] = err_ago
-                if err_ago == 0:
-                    r_ago[i] = pos_ago
-                    v_ago[i] = vel_ago
+            e, r, v = self.sat_array.sgp4(jd, fr)
+            e_ago, r_ago, v_ago = self.sat_array.sgp4(jd_ago, fr_ago)
 
             # Filter errors
             valid_idx = np.where(e == 0)[0]

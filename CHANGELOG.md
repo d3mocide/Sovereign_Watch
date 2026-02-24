@@ -1,3 +1,25 @@
+
+## [0.9.8] - 2026-02-24
+
+### Fixed
+
+- **Critical System Stability:**
+  - **API Startup:** Fixed a critical `NameError` crash in `backend/api/main.py` by adding a missing `import os`.
+  - **Redis Key Mismatch:** Corrected `backend/ingestion/maritime_poller/service.py` to use the standardized `mission:active` Redis key, ensuring the maritime poller respects the active mission area.
+  - **Memory Leaks & Stale State:** Fixed critical stale closures in `frontend/src/hooks/useAnimationLoop.ts` by correctly managing `aotShapes`, `hoveredEntity`, and `selectedEntity` dependencies, preventing UI state drift.
+  - **Kafka Consumer Cleanup:** Removed `group_id` from the API track consumer to enable true "Broadcast Mode" and prevent the accumulation of thousands of orphaned consumer groups on the Redpanda broker.
+
+- **Data Integrity & Visualization:**
+  - **Mission Switching Teleport Glitch:** Implemented `visualStateRef` clearing in `useMissionArea.ts` to prevent entity "teleportation" artifacts when switching mission areas.
+  - **Ground Vehicle Classification:** Correctly mapped ADS-B categories C1 (Emergency), C2 (Service), and C3 (Obstacle) to Ground Vehicle types (`a-f-G-E-V-C`) to prevent them from appearing as ships.
+  - **Orbital Count in HUD:** Updated `onCountsUpdate` to include orbital asset counts, fixing the "0" satellite count bug in the sidebar.
+
+- **Performance & Reliability:**
+  - **Orbital Propagation:** Vectorized the SGP4 satellite propagation loop in `backend/ingestion/orbital_pulse/service.py`, replacing slow iterative Python loops with optimized `sgp4_array` calls for a massive performance boost.
+  - **Maritime Poller Resilience:** Implemented a robust connection retry loop in the maritime `navigation_listener` to recover automatically from Redis outages.
+  - **Graceful Shutdown:** Added `SIGTERM` handling to the maritime poller and modernized `asyncio` loop management in the aviation poller to ensure clean container shutdowns.
+  - **Redis Compatibility:** Updated Redis connection closing logic to support `aclose()` for compatibility with redis-py 5.x.
+
 ## [0.9.7] - 2026-02-24
 
 ### Added
@@ -9,7 +31,6 @@
 ### Refactored
 
 - **Code Deduplication:** Removed duplicate `chaikinSmooth` implementation from `OrbitalLayer.tsx` and centralized usage to `utils/map/geoUtils.ts`.
-=======
 
 ## [0.9.6] - 2026-02-24
 
@@ -41,7 +62,6 @@
     - `utils/map/iconAtlas.ts` (60L) — canvas icon-atlas singleton
   - **Lazy-loaded adapter selection:** `TacticalMap.tsx` now dynamically picks Mapbox vs. MapLibre adapter via `VITE_MAPBOX_TOKEN` using `React.lazy`.
   - **TypeScript health:** Pre-existing error count reduced from **56 → 33**; zero new errors introduced.
-=======
 
 ## [0.9.4] - 2026-02-23
 

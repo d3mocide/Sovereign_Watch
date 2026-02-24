@@ -1,8 +1,14 @@
 import asyncio
+import signal
 from service import MaritimePollerService
 
 async def main():
     service = MaritimePollerService()
+    loop = asyncio.get_running_loop()
+
+    # Graceful Shutdown
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(service.shutdown()))
     
     try:
         await service.setup()
@@ -14,7 +20,7 @@ async def main():
             service.cleanup_cache()
         )
     
-    except KeyboardInterrupt:
+    except asyncio.CancelledError:
         pass
     
     finally:

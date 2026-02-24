@@ -37,7 +37,7 @@ const MapComponent: React.ComponentType<any> = _hasMapboxToken
 
 // Props for TacticalMap
 interface TacticalMapProps {
-  onCountsUpdate?: (counts: { air: number; sea: number }) => void;
+  onCountsUpdate?: (counts: { air: number; sea: number; orbital: number }) => void;
   filters?: {
     showAir: boolean;
     showSea: boolean;
@@ -227,6 +227,7 @@ export function TacticalMap({
     knownUidsRef,
     prevCourseRef,
     drStateRef,
+    visualStateRef,
     countsRef,
     onCountsUpdate,
     onEntitySelect,
