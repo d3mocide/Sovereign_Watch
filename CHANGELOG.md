@@ -1,3 +1,16 @@
+## [0.9.7] - 2026-02-24
+
+### Added
+
+- **Frontend Testing Infrastructure:**
+  - **Vitest Integration:** Added `vitest` and test scripts to the frontend project for unit testing.
+  - **GeoUtils Testing:** Implemented comprehensive unit tests for `chaikinSmooth` geometric algorithm in `utils/map/geoUtils.test.ts`.
+
+### Refactored
+
+- **Code Deduplication:** Removed duplicate `chaikinSmooth` implementation from `OrbitalLayer.tsx` and centralized usage to `utils/map/geoUtils.ts`.
+=======
+
 ## [0.9.6] - 2026-02-24
 
 ### Optimized

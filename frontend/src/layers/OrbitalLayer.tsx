@@ -1,5 +1,6 @@
 import { ScatterplotLayer, PathLayer, IconLayer, TextLayer } from '@deck.gl/layers';
-import { CoTEntity } from '../../types';
+import { CoTEntity } from '../types';
+import { chaikinSmooth } from '../utils/map/geoUtils';
 
 const createSatIconAtlas = () => {
     const canvas = document.createElement('canvas');
@@ -44,24 +45,6 @@ const getSatColor = (category?: string, alpha: number = 255): [number, number, n
     if (cat === 'surveillance' || cat.includes('surveillance') || cat.includes('military') || cat.includes('isr'))                            return [251, 113, 133, alpha];
     return [156, 163, 175, alpha];
 };
-
-/** Chaikin smoothing — mirrors TacticalMap for consistent trail aesthetics */
-function chaikinSmooth(pts: number[][], iterations = 2): number[][] {
-    if (pts.length < 3) return pts;
-    let result = pts;
-    for (let iter = 0; iter < iterations; iter++) {
-        const smoothed: number[][] = [result[0]];
-        for (let i = 0; i < result.length - 1; i++) {
-            const p0 = result[i];
-            const p1 = result[i + 1];
-            smoothed.push([0.75 * p0[0] + 0.25 * p1[0], 0.75 * p0[1] + 0.25 * p1[1], 0.75 * p0[2] + 0.25 * p1[2]]);
-            smoothed.push([0.25 * p0[0] + 0.75 * p1[0], 0.25 * p0[1] + 0.75 * p1[1], 0.25 * p0[2] + 0.75 * p1[2]]);
-        }
-        smoothed.push(result[result.length - 1]);
-        result = smoothed;
-    }
-    return result;
-}
 
 interface OrbitalLayerProps {
     satellites: CoTEntity[];
@@ -148,7 +131,8 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 getPath: (d: any) => {
                     if (!d.trail || d.trail.length < 2) return [];
                     const raw = d.trail.map((p: any) => [p[0], p[1], p[2]]);
-                    return chaikinSmooth(raw);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    return chaikinSmooth(raw) as any;
                 },
                 getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, Math.floor(255 * 0.3)),
                 getWidth: 3.5,
