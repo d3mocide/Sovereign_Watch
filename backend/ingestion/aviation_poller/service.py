@@ -1,16 +1,16 @@
-
 import asyncio
 import logging
 import json
-import math
 import os
-import signal
 import time
-
 from typing import Dict, List, Optional
 from aiokafka import AIOKafkaProducer
-from multi_source_poller import MultiSourcePoller
 import redis.asyncio as redis
+
+from multi_source_poller import MultiSourcePoller
+from classification import classify_aircraft
+from arbitration import Arbitrator
+from utils import safe_float, parse_altitude
 
 # Config - Read from ENV (set in docker-compose.yml)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
@@ -22,136 +22,7 @@ CENTER_LAT = float(os.getenv("CENTER_LAT", "45.5152"))
 CENTER_LON = float(os.getenv("CENTER_LON", "-122.6784"))
 COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("poller_service")
-
-# ---------------------------------------------------------------------------
-# Arbitration cache constants
-# ---------------------------------------------------------------------------
-# Minimum elapsed source-time before the same hex will be re-published.
-# Increased to 0.8s to prevent "bursting" where multiple sources report
-# the same aircraft nearly simultaneously, creating interpolation jitter.
-# Reduced to 0.5s. PVB handles the micro-interpolation.
-ARBI_MIN_DELTA_S = 0.5
-
-# Minimum spatial displacement (metres) that bypasses the temporal gate.
-# Raised from 30m → 100m. MLAT multilateration noise across ground station
-# networks is typically 50–150m, which was causing the old 30m threshold to
-# let duplicate same-aircraft reports from different sources bypass the gate,
-# producing double position-snap packets on the frontend.
-ARBI_MIN_SPATIAL_M = 100.0
-
-
-# How long (seconds) to retain an entry in the cache after last publish.
-# Entries older than this are evicted to reclaim memory for departed aircraft.
-ARBI_TTL_S = 30.0
-
-
-# ---------------------------------------------------------------------------
-# Classification Constants
-# ---------------------------------------------------------------------------
-# Known Military Operators (User-defined + common variants)
-MILITARY_OPERATORS = {
-    "United States Air Force", "United States Army", "United States Navy",
-    "United States Marine Corps", "US Coast Guard", "Royal Air Force",
-    "Royal Canadian Air Force", "Luftwaffe", "USAF", "US Navy", "US Army"
-}
-
-# Known Government Operators
-GOV_OPERATORS = {
-    "US Customs and Border Protection", "FBI", "Department of Homeland Security",
-    "NASA", "State Police", "DHS", "CBP", "National Police"
-}
-
-def classify_aircraft(ac: Dict) -> Dict:
-    """
-    Derive a rich classification from raw ADS-B fields.
-    Returns a dict with affiliation, platform, size, and raw fields.
-    """
-    # Extract raw fields safely
-    category = ac.get("category", "")
-    t_field = ac.get("t", "")
-    db_flags = int(ac.get("dbFlags") or 0)
-    operator = (ac.get("ownOp") or "").strip()
-    hex_id = (ac.get("hex") or "").upper()
-    callsign = (ac.get("flight") or "").strip()
-
-    # 1. Determine Affiliation
-    affiliation = "general_aviation"  # Default
-    
-    # Logic Priority:
-    # 1. dbFlags & 1 -> Military
-    if db_flags & 1:
-        affiliation = "military"
-    # 2. Operator match -> Military
-    elif operator in MILITARY_OPERATORS:
-        affiliation = "military"
-    # 3. Operator match -> Government
-    elif operator in GOV_OPERATORS:
-        affiliation = "government"
-    # 4. Hex range AE0000-AFFFFF -> Military (US)
-    elif "AE0000" <= hex_id <= "AFFFFF":
-        affiliation = "military"
-    # 5. Commercial patterns
-    # - Callsign 3-letter ICAO prefix (e.g., AAL123, UAL456)
-    # - Category A3 (Large), A4 (Heavy), A5 (High Performance) typically commercial
-    elif (len(callsign) > 3 and callsign[:3].isalpha() and callsign[3].isdigit()) or \
-         category in ("A3", "A4", "A5"):
-        affiliation = "commercial"
-
-    # 2. Determine Platform
-    platform = "fixed_wing"  # Default
-    
-    if category == "A7" or t_field.startswith("H"):
-        platform = "helicopter"
-    elif category == "B6":
-        platform = "drone"
-    elif category == "B2":
-        platform = "balloon"
-    elif category == "B1":
-        platform = "glider"
-    elif category == "A6":
-        platform = "high_performance"
-
-    # 3. Determine Size (Approximate mapping from Category)
-    # A0: No info, A1: Light < 15500lbs, A2: Small < 75000lbs, A3: Large < 300000lbs
-    # A4: Heavy > 300000lbs, A5: High Performance, A6: Amphibious, A7: Helicopter
-    size = "unknown"
-    if category == "A1":
-        size = "light"
-    elif category == "A2":
-        size = "small"
-    elif category == "A3":
-        size = "large"
-    elif category == "A4":
-        size = "heavy"
-    elif category == "A5":
-        size = "high_performance"
-
-    return {
-        "affiliation": affiliation,
-        "platform": platform,
-        "size": size,
-        "icaoType": t_field,
-        "category": category,
-        "dbFlags": db_flags,
-        "operator": operator,
-        "registration": ac.get("r", ""),
-        "description": ac.get("desc", ""),
-        "squawk": ac.get("squawk", ""),
-        "emergency": ac.get("emergency", "")
-    }
-
-
-def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Return distance in metres between two WGS-84 coordinates."""
-    R = 6_371_000.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
 
 class PollerService:
     def __init__(self):
@@ -160,16 +31,12 @@ class PollerService:
         self.producer = None
         self.redis_client = None
         self.pubsub = None
+        self.arbitrator = Arbitrator()
 
         # Dynamic mission area (can be updated via Redis)
         self.center_lat = CENTER_LAT
         self.center_lon = CENTER_LON
         self.radius_nm = COVERAGE_RADIUS_NM
-
-        # Per-hex arbitration cache: hex → {"ts": float, "lat": float, "lon": float, "wall": float}
-        # "ts" is the source_ts of the last published message for this hex.
-        # "wall" is the local wall-clock time of that publish (for TTL eviction).
-        self._arbi_cache: Dict[str, Dict] = {}
 
     async def setup(self):
         await self.poller.start()
@@ -258,51 +125,6 @@ class PollerService:
                 else:
                     break
 
-    def _evict_stale_arbi_entries(self) -> None:
-        """Remove cache entries for aircraft not seen recently to reclaim memory."""
-        now = time.time()
-        stale = [hex_id for hex_id, entry in self._arbi_cache.items()
-                 if now - entry["wall"] > ARBI_TTL_S]
-        for hex_id in stale:
-            del self._arbi_cache[hex_id]
-
-    def _should_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> bool:
-        """
-        Arbitration gate: return True only if this position update is worth
-        publishing to Kafka.
-
-        Rules:
-          1. No prior entry for this hex.
-          2. source_ts is at least ARBI_MIN_DELTA_S newer than last published ts.
-          3. OR spatial displacement > ARBI_MIN_SPATIAL_M (fast mover bypass).
-        """
-        entry = self._arbi_cache.get(hex_id)
-        if entry is None:
-            return True
-
-        # Temporal Check
-        delta_ts = source_ts - entry["ts"]
-        if delta_ts >= ARBI_MIN_DELTA_S:
-            return True
-
-        # Spatial Bypass (only if time check failed but it's a new packet)
-        if delta_ts > 0:
-            dist = _haversine_m(entry["lat"], entry["lon"], lat, lon)
-            if dist > ARBI_MIN_SPATIAL_M:
-                return True
-
-        return False
-
-
-    def _record_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> None:
-        """Update the arbitration cache after a successful publish."""
-        self._arbi_cache[hex_id] = {
-            "ts": source_ts,
-            "lat": lat,
-            "lon": lon,
-            "wall": time.time(),
-        }
-
     async def source_loop(self, source_idx: int):
         """Independent loop for a specific aviation source."""
         source = self.poller.sources[source_idx]
@@ -381,7 +203,7 @@ class PollerService:
         logger.info(f"Received {len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
 
         # Evict stale arbitration entries periodically
-        self._evict_stale_arbi_entries()
+        self.arbitrator.evict_stale_entries()
 
         published = 0
         for ac in aircraft:
@@ -394,10 +216,10 @@ class PollerService:
             msg_lat = tak_msg["point"]["lat"]
             msg_lon = tak_msg["point"]["lon"]
 
-            if not self._should_publish(hex_id, source_ts, msg_lat, msg_lon):
+            if not self.arbitrator.should_publish(hex_id, source_ts, msg_lat, msg_lon):
                 continue
 
-            self._record_publish(hex_id, source_ts, msg_lat, msg_lon)
+            self.arbitrator.record_publish(hex_id, source_ts, msg_lat, msg_lon)
 
             key = hex_id.encode("utf-8")
             val = json.dumps(tak_msg).encode("utf-8")
@@ -466,15 +288,15 @@ class PollerService:
             "point": {
                 "lat": ac.get("lat"),
                 "lon": ac.get("lon"),
-                "hae": self._parse_altitude(ac),
+                "hae": parse_altitude(ac),
                 "ce": 10.0,
                 "le": 10.0
             },
             "detail": {
                 "track": {
                     "course": ac.get("track") or 0,
-                    "speed": self._safe_float(ac.get("gs")) * 0.514444,  # Knots to m/s
-                    "vspeed": self._safe_float(ac.get("baro_rate") or ac.get("geom_rate") or 0)
+                    "speed": safe_float(ac.get("gs")) * 0.514444,  # Knots to m/s
+                    "vspeed": safe_float(ac.get("baro_rate") or ac.get("geom_rate") or 0)
                 },
                 "contact": {
                     "callsign": (ac.get("flight", "") or ac.get("hex", "")).strip()
@@ -482,50 +304,3 @@ class PollerService:
                 "classification": target_class
             }
         }
-
-    def _parse_altitude(self, ac: Dict) -> float:
-        """Safely parse altitude from multiple possible keys (baro, geom, alt)."""
-        # Try keys in order of preference
-        val = ac.get("alt_baro")
-        if val is None or val == "ground":
-            val = ac.get("alt_geom")
-        if val is None or val == "ground":
-            val = ac.get("alt")
-            
-        if val is None or val == "ground":
-            return 0.0
-        
-        try:
-            return float(val) * 0.3048  # Feet to Meters
-        except (TypeError, ValueError):
-            return 0.0
-
-
-    def _safe_float(self, val, default: float = 0.0) -> float:
-        """Safely convert any value to float."""
-        if val is None:
-            return default
-        try:
-            return float(val)
-        except (TypeError, ValueError):
-            return default
-
-if __name__ == "__main__":
-    service = PollerService()
-    
-    # Graceful Shutdown
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(service.shutdown()))
-        
-    loop.run_until_complete(service.setup())
-    try:
-        # Run both the polling loop and the navigation listener concurrently
-        loop.run_until_complete(asyncio.gather(
-            service.loop(),
-            service.navigation_listener()
-        ))
-    except asyncio.CancelledError:
-        pass
-    finally:
-        loop.run_until_complete(service.shutdown())
