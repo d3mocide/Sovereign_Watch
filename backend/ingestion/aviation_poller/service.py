@@ -292,9 +292,10 @@ class PollerService:
             
         cot_type = f"a-f-A-{affil_code}-{plat_code}"
         
-        # Special case: Maritime (unchanged per spec)
+        # Special case: Ground Vehicles (C1=Emergency, C2=Service, C3=Obstacle)
+        # Mapping to Friendly - Ground - Equipment - Vehicle - Civil
         if category == "C1" or category == "C2" or category == "C3":
-             cot_type = "a-f-S-C-M"
+             cot_type = "a-f-G-E-V-C"
 
         # Special case: Drone
         if target_class["platform"] == "drone":

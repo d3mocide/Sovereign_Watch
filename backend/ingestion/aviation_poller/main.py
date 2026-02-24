@@ -6,7 +6,8 @@ if __name__ == "__main__":
     service = PollerService()
 
     # Graceful Shutdown
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(service.shutdown()))
 

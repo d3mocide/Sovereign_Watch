@@ -72,7 +72,7 @@ interface UseAnimationLoopOptions {
   mapStyle: string;
   mapLoaded: boolean;
   replayMode: boolean | undefined;
-  onCountsUpdate: ((counts: { air: number; sea: number }) => void) | undefined;
+  onCountsUpdate: ((counts: { air: number; sea: number; orbital: number }) => void) | undefined;
   onEvent:
     | ((event: {
         type: "new" | "lost" | "alert";
@@ -609,7 +609,7 @@ export function useAnimationLoop({
           air: airCount,
           sea: seaCount,
           orbital: orbitalCount,
-        } as any);
+        });
       }
 
       // 4. Update Layers
@@ -729,5 +729,9 @@ export function useAnimationLoop({
     replayMode,
     onEntityLiveUpdate,
     globeMode,
+    aotShapes,
+    hoveredEntity,
+    selectedEntity,
+    onFollowModeChange,
   ]);
 }

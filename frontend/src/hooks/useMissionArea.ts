@@ -18,8 +18,11 @@ interface UseMissionAreaOptions {
   prevCourseRef: React.MutableRefObject<Map<string, any>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   drStateRef: React.MutableRefObject<Map<string, any>>;
+  visualStateRef: React.MutableRefObject<
+    Map<string, { lon: number; lat: number; alt: number }>
+  >;
   countsRef: React.MutableRefObject<{ air: number; sea: number; orbital: number }>;
-  onCountsUpdate: ((counts: { air: number; sea: number }) => void) | undefined;
+  onCountsUpdate: ((counts: { air: number; sea: number; orbital: number }) => void) | undefined;
   onEntitySelect: (entity: CoTEntity | null) => void;
   onMissionPropsReady: ((props: MissionProps) => void) | undefined;
   initialLat: number;
@@ -33,6 +36,7 @@ export function useMissionArea({
   knownUidsRef,
   prevCourseRef,
   drStateRef,
+  visualStateRef,
   countsRef,
   onCountsUpdate,
   onEntitySelect,
@@ -243,8 +247,9 @@ export function useMissionArea({
       knownUidsRef.current.clear();
       prevCourseRef.current.clear();
       drStateRef.current.clear();
+      visualStateRef.current.clear();
       countsRef.current = { air: 0, sea: 0, orbital: 0 };
-      onCountsUpdate?.({ air: 0, sea: 0 });
+      onCountsUpdate?.({ air: 0, sea: 0, orbital: 0 });
 
       // Clear selection to avoid ghost trails
       onEntitySelect(null);

@@ -70,7 +70,7 @@ class MaritimePollerService:
     async def load_active_mission(self):
         """Load the active mission area from Redis on startup."""
         try:
-            mission_json = await self.redis_client.get("active_mission_area")
+            mission_json = await self.redis_client.get("mission:active")
             if mission_json:
                 mission = json.loads(mission_json)
                 self.center_lat = mission["lat"]
@@ -90,34 +90,49 @@ class MaritimePollerService:
             await self.kafka_producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
-            await self.pubsub.close()
+            await self.pubsub.aclose() if hasattr(self.pubsub, 'aclose') else await self.pubsub.close()
         if self.redis_client:
-            await self.redis_client.close()
+            await self.redis_client.aclose() if hasattr(self.redis_client, 'aclose') else await self.redis_client.close()
 
         logger.info("🛑 Maritime poller shutdown complete")
 
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""
-        try:
-            async for message in self.pubsub.listen():
-                if message["type"] == "message":
-                    try:
-                        mission = json.loads(message["data"])
-                        old_center = (self.center_lat, self.center_lon, self.radius_nm)
+        while self.running:
+            try:
+                # Re-subscribe if connection was lost
+                if not self.pubsub.connection:
+                     await self.pubsub.subscribe("navigation-updates")
 
-                        self.center_lat = mission["lat"]
-                        self.center_lon = mission["lon"]
-                        self.radius_nm = mission["radius_nm"]
+                async for message in self.pubsub.listen():
+                    if not self.running:
+                        break
 
-                        logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                    if message["type"] == "message":
+                        try:
+                            mission = json.loads(message["data"])
+                            old_center = (self.center_lat, self.center_lon, self.radius_nm)
 
-                        # Flag that we need to update the AISStream subscription
-                        self.bbox_update_needed = True
+                            self.center_lat = mission["lat"]
+                            self.center_lon = mission["lon"]
+                            self.radius_nm = mission["radius_nm"]
 
-                    except Exception as e:
-                        logger.error(f"Failed to parse mission update: {e}")
-        except asyncio.CancelledError:
-            logger.info("Navigation listener cancelled")
+                            logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+
+                            # Flag that we need to update the AISStream subscription
+                            self.bbox_update_needed = True
+
+                        except Exception as e:
+                            logger.error(f"Failed to parse mission update: {e}")
+            except asyncio.CancelledError:
+                logger.info("Navigation listener cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in navigation listener: {e}")
+                if self.running:
+                    await asyncio.sleep(5)
+                else:
+                    break
 
     async def connect_aisstream(self):
         """Connect to AISStream.io WebSocket and subscribe with current bbox."""
