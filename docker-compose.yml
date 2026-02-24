@@ -87,7 +87,7 @@ services:
   # --- Ingestion: Aviation ADS-B (via Python Poller) ---
   adsb-poller:
     build:
-      context: ./backend/ingestion/poller
+      context: ./backend/ingestion/aviation_poller
       dockerfile: Dockerfile
     container_name: sovereign-adsb-poller
     environment:

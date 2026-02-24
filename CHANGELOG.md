@@ -1,3 +1,21 @@
+## [0.9.4] - 2026-02-23
+
+### Refactored
+
+- **Backend Architecture:**
+  - **Modular API Structure:** Decomposed the monolithic `backend/api/main.py` into a scalable package structure with `routers`, `services`, `core`, and `models`.
+  - **Core Logic Migration:** Centralized configuration (`config.py`) and database management (`database.py`) in the `core` module.
+  - **Service Extraction:** Moved background tasks (`historian`) and protocol helpers (`tak`) to dedicated `services` modules.
+  - **Route Separation:** Split API endpoints into `system`, `tracks`, and `analysis` routers for better organization.
+- **Aviation Poller:**
+  - **Renaming:** Renamed `backend/ingestion/poller` to `backend/ingestion/aviation_poller` to clearly distinguish it from other ingestion sources.
+  - **Code Modularization:** Refactored the aviation poller into `service.py`, `classification.py`, `arbitration.py`, and `utils.py`, with a clean `main.py` entry point.
+  - **Docker Configuration:** Updated `docker-compose.yml` to reflect the new build context for the `adsb-poller` service.
+- **Maritime Poller:**
+  - **Code Modularization:** Refactored `backend/ingestion/maritime_poller` into `service.py`, `classification.py`, and `utils.py` for consistency and maintainability.
+- **Orbital Pulse:**
+  - **Code Modularization:** Refactored `backend/ingestion/orbital_pulse` into `service.py` and `utils.py` to decouple SGP4 propagation and TLE fetching logic from the main entry point.
+
 ## [0.9.3] - 2026-02-23
 
 ### Fixed
@@ -178,9 +196,9 @@
 ### Fixed
 
 - **Follow Mode:**
-  - Fixed "soft lock" issues where manual interaction wouldn't reliably break the camera lock.
-  - Restored `isEasing` checks to prevent camera conflicts during fly-to operations.
-  - Increased grace period to 3s to improve lock-on reliability for distant targets.
+  - **Soft Lock Fix:** Fixed "soft lock" issues where manual interaction wouldn't reliably break the camera lock.
+  - **Easing Conflict:** Restored `isEasing` checks to prevent camera conflicts during fly-to operations.
+  - **Grace Period:** Increased grace period to 3s to improve lock-on reliability for distant targets.
 
 ## [0.6.0] - 2026-02-17
 
