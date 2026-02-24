@@ -124,6 +124,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 | Path                 | Purpose                                             | Git Status  |
 | :------------------- | :-------------------------------------------------- | :---------- |
+| `/AGENTS.md`         | **Master Guide for AI Developers (Read This First)**| **Tracked** |
 | `/.agent`            | Agent memory, skills, and global project rules.     | **Tracked** |
 | `/backend/ingestion` | Python and Benthos multi-source polling frameworks. | **Tracked** |
 | `/backend/db`        | Database schema (`init.sql`) and migration scripts. | **Tracked** |
@@ -135,7 +136,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 This repository is **Agent-Aware**. If you are an AI assistant contributing to this project:
 
-1.  **Read Rules**: You **MUST** read `.agent/GEMINI.md` at the start of your session.
+1.  **Read Rules**: You **MUST** read `AGENTS.md` at the start of your session. It is the authoritative entry point.
 2.  **Environment Protocol**: Never run commands (npm, pip, python) directly on the host. Always use the **Docker Compose** commands defined in the rules.
 3.  **Communication**: All inter-service data must adhere to the **TAK Protocol (Protobuf)** as defined in `tak.proto`.
 4.  **Aesthetics**: Follow the "Sovereign Glass" design principles for all UI modifications.
