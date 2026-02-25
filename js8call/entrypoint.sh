@@ -146,6 +146,8 @@ log "STEP 3: Starting PulseAudio daemon..."
 unset PULSE_SERVER
 
 # Set PULSE_RUNTIME_PATH so the socket lands inside XDG_RUNTIME_DIR
+mkdir -p "${XDG_RUNTIME_DIR:-/run/user/1000}"
+chmod 0700 "${XDG_RUNTIME_DIR:-/run/user/1000}"
 export PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR:-/run/user/1000}/pulse"
 mkdir -p "${PULSE_RUNTIME_PATH}"
 
@@ -223,15 +225,26 @@ export QT_QPA_PLATFORM=xcb
 export QT_LOGGING_RULES="*.debug=false"
 export PULSE_PROP="media.role=phone"  # Hint to PulseAudio for priority routing
 
-js8call \
-    --rig-name="KiwiSDR-Virtual" \
-    2>/tmp/js8call.log \
-&
+export QT_QPA_PLATFORM=offscreen
+
+js8call --rig-name=KiwiSDR-Virtual > /tmp/js8call.log 2>&1 &
 JS8CALL_PID=$!
 log "JS8Call PID: ${JS8CALL_PID}"
 
-# Give JS8Call time to start its TCP API server before the bridge connects
-sleep 3
+# Give JS8Call time to fully map its GUI window in Xvfb.
+# If pyjs8call connects too early before the Qt event loop is fully settled,
+# the QTcpServer crashes with a QObject thread violation.
+log "Waiting for JS8Call window to appear..."
+for i in $(seq 1 30); do
+    if xwininfo -display :99 -root -tree | grep -i "js8call" >/dev/null 2>&1; then
+        log "JS8Call window detected after ${i} seconds"
+        break
+    fi
+    sleep 1
+done
+# One final buffer to let internal Qt threads settle
+sleep 2
+
 
 # =============================================================================
 # STEP 6 – Start FastAPI WebSocket Bridge

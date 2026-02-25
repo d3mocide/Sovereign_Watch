@@ -465,7 +465,7 @@ export default function RadioTerminal() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-200 font-mono text-sm selection:bg-indigo-500/30 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-950 text-slate-200 font-mono text-sm selection:bg-indigo-500/30 overflow-hidden">
 
       {/* ── HEADER ── */}
       <header className="flex items-center justify-between px-4 h-14 bg-slate-900 border-b border-slate-800 shrink-0">

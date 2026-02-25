@@ -47,14 +47,8 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-# pyjs8call: Python client for the JS8Call TCP API
-# https://pypi.org/project/pyjs8call/
-try:
-    import pyjs8call
-    PYJS8CALL_AVAILABLE = True
-except ImportError:
-    PYJS8CALL_AVAILABLE = False
-    logging.warning("pyjs8call not installed – running in stub mode")
+# pyjs8call has been removed and replaced with a native AsyncIO DatagramProtocol 
+# to mitigate the Qt headless socket thread crash bug on the TCP API.
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,7 +60,8 @@ logger = logging.getLogger("js8bridge")
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
 JS8CALL_HOST = os.getenv("JS8CALL_HOST", "127.0.0.1")
-JS8CALL_PORT = int(os.getenv("JS8CALL_PORT", "2442"))
+JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
+JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))
 MY_GRID = os.getenv("MY_GRID", "CN85")  # Operator's Maidenhead locator
 
@@ -79,8 +74,8 @@ KIWI_MODE = os.getenv("KIWI_MODE", "usb")
 # Global state
 # ---------------------------------------------------------------------------
 
-# The single pyjs8call client instance (initialized in lifespan)
-js8_client: Optional[object] = None
+# The single JS8Call UDP transport instance (initialized in lifespan)
+js8_client_udp_transport: Optional[asyncio.DatagramTransport] = None
 
 # Reference to the running asyncio event loop.
 # Captured in lifespan() after the loop is confirmed running.
@@ -330,21 +325,17 @@ async def _queue_broadcaster() -> None:
 # All data is forwarded via _enqueue_from_thread().
 # ===========================================================================
 
-def on_rx_directed(message) -> None:
-    """
-    Callback for RX.DIRECTED events – messages addressed to a specific
-    callsign (e.g., "W1AW DE KD9TFA SNR -10 HELLO WORLD").
-
-    Called from pyjs8call background thread.
-    """
+def on_rx_directed(message: dict) -> None:
+    logger.info("RX DIRECTED: %s", message)
     try:
+        params = message.get("params", {})
         payload = {
             "type": "RX.DIRECTED",
-            "from": getattr(message, "origin", str(message.get("from", ""))),
-            "to": getattr(message, "destination", str(message.get("to", ""))),
-            "text": getattr(message, "text", str(message.get("text", ""))),
-            "snr": getattr(message, "snr", message.get("snr", 0)),
-            "freq": getattr(message, "freq", message.get("freq", 0)),
+            "from": params.get("FROM", ""),
+            "to": params.get("TO", ""),
+            "text": params.get("TEXT", ""),
+            "snr": params.get("SNR", 0),
+            "freq": params.get("FREQ", 0),
             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
             "ts_unix": int(time.time()),
         }
@@ -353,23 +344,19 @@ def on_rx_directed(message) -> None:
         logger.warning("on_rx_directed error: %s", exc)
 
 
-def on_rx_spot(message) -> None:
-    """
-    Callback for RX.SPOT events – beacon-style station spots heard on frequency.
-    Used to populate the "Heard Stations" sidebar on the frontend.
-
-    Called from pyjs8call background thread.
-    """
+def on_rx_spot(message: dict) -> None:
+    logger.info("RX SPOT: %s", message)
     try:
-        callsign = getattr(message, "origin", str(message.get("from", "")))
-        grid = getattr(message, "grid", str(message.get("grid", "")))
+        params = message.get("params", {})
+        callsign = params.get("CALL", "")
+        grid = params.get("GRID", "")
         geo = grid_distance_bearing(grid) if grid else {}
         payload = {
             "type": "RX.SPOT",
             "callsign": callsign,
             "grid": grid,
-            "snr": getattr(message, "snr", message.get("snr", 0)),
-            "freq": getattr(message, "freq", message.get("freq", 0)),
+            "snr": params.get("SNR", 0),
+            "freq": params.get("FREQ", 0),
             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
             "ts_unix": int(time.time()),
             **geo,
@@ -379,20 +366,16 @@ def on_rx_spot(message) -> None:
         logger.warning("on_rx_spot error: %s", exc)
 
 
-def on_station_status(message) -> None:
-    """
-    Callback for STATION.STATUS events – periodic heartbeats from the local
-    JS8Call instance reporting its current frequency, mode, and status.
-
-    Called from pyjs8call background thread.
-    """
+def on_station_status(message: dict) -> None:
+    logger.info("STATION STATUS: %s", message)
     try:
+        params = message.get("params", {})
         payload = {
             "type": "STATION.STATUS",
-            "callsign": getattr(message, "callsign", str(message.get("callsign", ""))),
-            "grid": getattr(message, "grid", str(message.get("grid", MY_GRID))),
-            "freq": getattr(message, "freq", message.get("freq", 0)),
-            "status": getattr(message, "status", str(message.get("status", ""))),
+            "callsign": params.get("CALL", ""),
+            "grid": params.get("GRID", MY_GRID),
+            "freq": params.get("FREQ", 0),
+            "status": message.get("value", ""),
             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
             "ts_unix": int(time.time()),
         }
@@ -401,62 +384,61 @@ def on_station_status(message) -> None:
         logger.warning("on_station_status error: %s", exc)
 
 
+class JS8CallUDPProtocol(asyncio.DatagramProtocol):
+    def connection_made(self, transport):
+        self.transport = transport
+        logger.info("JS8Call UDP API listener active on port %d", JS8CALL_UDP_CLIENT_PORT)
+
+    def datagram_received(self, data, addr):
+        try:
+            line = data.decode("utf-8").strip()
+            if not line:
+                return
+            message = json.loads(line)
+            m_type = message.get("type", "")
+            if m_type == "RX.DIRECTED":
+                on_rx_directed(message)
+            elif m_type == "RX.SPOT":
+                on_rx_spot(message)
+            elif m_type == "STATION.STATUS":
+                on_station_status(message)
+        except Exception as e:
+            pass
+
+
 # ===========================================================================
 # Application Lifespan (startup / shutdown)
 # ===========================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan context manager: replaces deprecated @app.on_event handlers.
-    Runs startup code before the first request, cleanup on shutdown.
-    """
-    global js8_client, _event_loop, _message_queue
+    global _event_loop, _message_queue, js8_client_udp_transport
 
-    # Capture the running event loop reference BEFORE spawning any threads.
-    # This reference is passed to asyncio.run_coroutine_threadsafe() in the
-    # callback handlers so they can safely schedule coroutines.
     _event_loop = asyncio.get_event_loop()
-
-    # Initialize the inter-thread message queue
     _message_queue = asyncio.Queue(maxsize=500)
-
-    # Start the background broadcast task
     broadcaster = asyncio.create_task(_queue_broadcaster())
 
-    # Start KiwiSDR → PulseAudio pipeline with env-var defaults
     try:
         _start_kiwi_pipeline(KIWI_HOST, KIWI_PORT, KIWI_FREQ, KIWI_MODE)
     except Exception as exc:
         logger.warning("KiwiSDR pipeline startup failed (will retry via UI): %s", exc)
 
-    # Connect pyjs8call to the local JS8Call TCP API
-    if PYJS8CALL_AVAILABLE:
-        try:
-            js8_client = pyjs8call.Client(host=JS8CALL_HOST, port=JS8CALL_PORT)
-            js8_client.start()
+    try:
+        transport, protocol = await _event_loop.create_datagram_endpoint(
+            lambda: JS8CallUDPProtocol(),
+            local_addr=("127.0.0.1", JS8CALL_UDP_CLIENT_PORT)
+        )
+        js8_client_udp_transport = transport
+    except Exception as exc:
+        logger.error("Failed to start UDP listener on port %d: %s", JS8CALL_UDP_CLIENT_PORT, exc)
+        js8_client_udp_transport = None
 
-            # Register event callbacks using pyjs8call's 0.2.3 API.
-            js8_client.callback.register_incoming(on_rx_directed)
-            js8_client.callback.register_spots(on_rx_spot)
-            js8_client.callback.register_station_spot(on_station_status)
-            logger.info("pyjs8call connected to JS8Call at %s:%d", JS8CALL_HOST, JS8CALL_PORT)
-        except Exception as exc:
-            logger.error("Failed to connect to JS8Call: %s", exc)
-            js8_client = None
-    else:
-        logger.warning("Running without pyjs8call – WebSocket will only echo commands")
+    yield
 
-    yield  # Server is running
-
-    # --- Shutdown ---
     broadcaster.cancel()
     _stop_kiwi_pipeline()
-    if js8_client is not None:
-        try:
-            js8_client.stop()
-        except Exception:
-            pass
+    if js8_client_udp_transport:
+        js8_client_udp_transport.close()
     logger.info("Bridge server shutdown complete")
 
 
@@ -509,20 +491,14 @@ async def ws_js8(websocket: WebSocket) -> None:
     grid = "----"
     freq = "0"
     
-    if js8_client is not None:
-        try:
-            # Use current settings if already connected; fall back to env vars if None
-            callsign = js8_client.settings.get_station_callsign() or "N0CALL"
-            grid = js8_client.settings.get_station_grid() or MY_GRID
-            freq_raw = js8_client.settings.get_freq()
-            freq = str(freq_raw) if freq_raw is not None else "--"
-        except Exception:
-            pass
-
+    # Send immediate simulated connect message
+    callsign = os.getenv("JS8CALL_CALLSIGN", "N0CALL")
+    grid = MY_GRID
+    
     await websocket.send_json({
         "type": "CONNECTED",
         "message": "JS8Call bridge active",
-        "js8call_connected": js8_client is not None,
+        "js8call_connected": js8_client_udp_transport is not None,
         "kiwi_connected": _kiwi_is_running(),
         "kiwi_host": _kiwi_config.get("host", ""),
         "kiwi_port": _kiwi_config.get("port", 0),
@@ -533,17 +509,14 @@ async def ws_js8(websocket: WebSocket) -> None:
         "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
     })
 
-    # Also send an immediate status update to populate the "STATION" field in the UI
-    if js8_client is not None:
-        await websocket.send_json({
-            "type": "STATION.STATUS",
-            "callsign": callsign,
-            "grid": grid,
-            "freq": js8_client.settings.get_freq() or 0,
-            "status": "IDLE",
-            "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
-            "ts_unix": int(time.time()),
-        })
+    # Ask JS8Call to broadcast its STATUS via UDP immediately
+    try:
+        import socket
+        tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        tx.sendto(b'{"TYPE": "STATION.GET_STATUS","VALUE":"","PARAMS":{}}\n', ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
+        tx.close()
+    except Exception:
+        pass
 
     try:
         # Receive loop – handle commands from the frontend
@@ -572,38 +545,27 @@ async def ws_js8(websocket: WebSocket) -> None:
                     await websocket.send_json({"type": "ERROR", "message": "Empty message"})
                     continue
 
-                if js8_client is not None:
+                if action == "SEND" and cmd.get("target") and cmd.get("message"):
+                    target = cmd["target"].upper()
+                    message = cmd["message"]
+                    tx_msg = f"{target} {message}"
+                    # Forward dynamically to JS8Call UDP port
                     try:
-                        # pyjs8call's send_directed_message is synchronous;
-                        # run it in a thread executor to avoid blocking the event loop.
-                        await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: js8_client.send_directed_message(target, text),
-                        )
-                        # Echo the sent message back so the UI can display it in the log
-                        _enqueue_from_thread({
-                            "type": "TX.SENT",
-                            "from": "LOCAL",
-                            "to": target,
-                            "text": text,
-                            "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
-                            "ts_unix": int(time.time()),
-                        })
-                    except Exception as exc:
-                        await websocket.send_json({
-                            "type": "ERROR",
-                            "message": f"Transmit failed: {exc}",
-                        })
-                else:
-                    # Stub mode: echo the command back for UI development
-                    await websocket.send_json({
+                        import socket
+                        tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        doc = {"TYPE": "TX.SEND_MESSAGE", "VALUE": tx_msg, "PARAMS": {}}
+                        tx.sendto(json.dumps(doc).encode("utf-8") + b"\n", ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
+                        tx.close()
+                    except Exception as e:
+                        logger.warning("TX error: %s", e)
+                    # Echo the sent message back so the UI can display it in the log
+                    _enqueue_from_thread({
                         "type": "TX.SENT",
                         "from": "LOCAL",
                         "to": target,
                         "text": text,
                         "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
                         "ts_unix": int(time.time()),
-                        "stub": True,
                     })
 
             # ------------------------------------------------------------------
@@ -612,17 +574,18 @@ async def ws_js8(websocket: WebSocket) -> None:
             # ------------------------------------------------------------------
             elif action == "SET_FREQ":
                 freq = int(cmd.get("freq", 14074000))
-                if js8_client is not None:
-                    try:
-                        await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: js8_client.set_dial_frequency(freq),
-                        )
-                    except Exception as exc:
-                        await websocket.send_json({
-                            "type": "ERROR",
-                            "message": f"SET_FREQ failed: {exc}",
-                        })
+                # Forward dynamically to JS8Call UDP port
+                try:
+                    import socket
+                    tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    doc = {"TYPE": "RIG.SET_FREQ", "VALUE": freq, "PARAMS": {}}
+                    tx.sendto(json.dumps(doc).encode("utf-8") + b"\n", ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
+                    tx.close()
+                except Exception as exc:
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": f"SET_FREQ failed: {exc}",
+                    })
 
             # ------------------------------------------------------------------
             # Action: GET_STATIONS – force a station list refresh
@@ -741,29 +704,7 @@ async def get_stations() -> dict:
     stations = _build_station_list()
 
     # If pyjs8call has a live station list, merge it in
-    if js8_client is not None:
-        try:
-            live = await asyncio.get_event_loop().run_in_executor(
-                None, js8_client.get_station_list
-            )
-            live_callsigns = {s.get("call", "") for s in (live or [])}
-            # Merge any callsigns from pyjs8call not in our registry
-            for entry in (live or []):
-                call = entry.get("call", "")
-                if call and call not in _station_registry:
-                    grid = entry.get("grid", "")
-                    geo = grid_distance_bearing(grid) if len(grid) >= 4 else {}
-                    stations.append({
-                        "callsign": call,
-                        "grid": grid,
-                        "snr": entry.get("snr", 0),
-                        "freq": entry.get("freq", 0),
-                        "last_heard": "",
-                        "age_seconds": 0,
-                        **geo,
-                    })
-        except Exception as exc:
-            logger.warning("get_station_list error: %s", exc)
+    # This block is removed as js8_client is no longer used.
 
     return {
         "count": len(stations),
@@ -792,13 +733,13 @@ async def get_kiwi() -> dict:
 async def health() -> dict:
     return {
         "status": "ok",
-        "js8call_connected": js8_client is not None,
+        "js8call_connected": js8_client_udp_transport is not None,
         "kiwi_connected": _kiwi_is_running(),
         "kiwi_config": _kiwi_config,
         "active_ws_clients": len(_ws_clients),
         "heard_stations": len(_station_registry),
         "bridge_port": BRIDGE_PORT,
-        "js8call_address": f"{JS8CALL_HOST}:{JS8CALL_PORT}",
+        "js8call_address": f"{JS8CALL_HOST}:{JS8CALL_UDP_CLIENT_PORT}", # Updated to use UDP client port
     }
 
 

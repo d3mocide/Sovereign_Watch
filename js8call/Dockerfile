@@ -1,6 +1,4 @@
-# Base: ubuntu:24.04 (required for JS8Call 2.3.1+ Qt6/Glibc dependencies)
-# =============================================================================
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
 # Prevent interactive prompts during apt operations
 ENV DEBIAN_FRONTEND=noninteractive
@@ -118,7 +116,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio \
     pulseaudio-utils \
-    libasound2t64 \
+    libasound2 \
     libasound2-plugins \
     alsa-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -138,7 +136,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   numpy  – fast array ops for PCM sample processing
 #   scipy  – DSP filters used by kiwirecorder's audio pipeline
 #   ws4py  – WebSocket client used by kiwiclient to stream from KiwiSDR nodes
-RUN pip3 install --no-cache-dir --break-system-packages numpy scipy ws4py
+RUN pip3 install --no-cache-dir ws4py numpy scipy
 
 # Clone kiwiclient to /opt so it is available system-wide
 RUN git clone --depth 1 https://github.com/jks-prv/kiwiclient /opt/kiwiclient
@@ -152,19 +150,20 @@ RUN git clone --depth 1 https://github.com/jks-prv/kiwiclient /opt/kiwiclient
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates libhamlib-utils libqt5svg5 libusb-1.0-0 libportaudio2 libpulse0 \
-    libfftw3-double3 libqt6widgets6t64 libqt6multimedia6 libqt6network6t64 libqt6gui6t64 libqt6core6t64 libqt6serialport6 libqt6opengl6t64
+    libfftw3-double3 libopengl0
 
-RUN wget -q -O /tmp/js8call.deb "https://github.com/js8call/js8call/releases/download/v2.3.1/js8call_2.3.1_amd64.deb" \
-    && dpkg -x /tmp/js8call.deb /opt/js8call_pkg \
-    && ln -s /opt/js8call_pkg/opt/js8call/bin/js8call /usr/bin/js8call \
-    && mkdir -p /root/.config && printf "[Main]\n[Configuration]\nTCPEnabled=true\nTCPServer=127.0.0.1\nTCPServerPort=2442\nAcceptTCPRequests=true\nMyCall=N0CALL\nMyGrid=CN85\n[MultiSettings]\n" > "/root/.config/JS8Call - KiwiSDR-Virtual.ini" \
+RUN wget -q -O /tmp/JS8Call-2.5.2-x86_64.AppImage "https://github.com/JS8Call-improved/JS8Call-improved/releases/download/release/2.5.2/JS8Call-2.5.2-x86_64.AppImage" \
+    && chmod +x /tmp/JS8Call-2.5.2-x86_64.AppImage \
+    && cd /opt && /tmp/JS8Call-2.5.2-x86_64.AppImage --appimage-extract \
+    && ln -s /opt/squashfs-root/AppRun /usr/bin/js8call \
+    && mkdir -p /root/.config && printf "[Main]\n[Configuration]\nTCPEnabled=false\nUDPEnabled=true\nUDPServer=127.0.0.1\nUDPServerPort=2242\nAcceptUDPRequests=true\nUDPClient2=127.0.0.1\nUDPClient2Port=2245\nMyCall=N0CALL\nMyGrid=CN85\n[MultiSettings]\n" > "/root/.config/JS8Call - KiwiSDR-Virtual.ini" \
     && cp "/root/.config/JS8Call - KiwiSDR-Virtual.ini" /root/.config/JS8Call.ini \
-    && rm /tmp/js8call.deb && rm -rf /var/lib/apt/lists/*
+    && rm /tmp/JS8Call-2.5.2-x86_64.AppImage && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # Layer 8: Python API middleware dependencies
 # -----------------------------------------------------------------------------
-RUN pip3 install --no-cache-dir --break-system-packages \
+RUN pip3 install --no-cache-dir \
     fastapi \
     "uvicorn[standard]" \
     pyjs8call \

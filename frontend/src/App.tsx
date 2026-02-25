@@ -432,7 +432,7 @@ function App() {
           )}
         </>
       ) : (
-        <div className="flex-1 overflow-hidden">
+        <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
           <RadioTerminal />
         </div>
       )}
