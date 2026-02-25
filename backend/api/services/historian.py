@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 from aiokafka import AIOKafkaConsumer
 from core.database import db
+from core.config import settings
 
 logger = logging.getLogger("SovereignWatch.Historian")
 
@@ -16,7 +17,7 @@ async def historian_task():
     logger.info("📜 Historian task started")
     consumer = AIOKafkaConsumer(
         "adsb_raw", "ais_raw", "orbital_raw",
-        bootstrap_servers='sovereign-redpanda:9092',
+        bootstrap_servers=settings.KAFKA_BROKERS,
         group_id="historian-writer",
         auto_offset_reset="latest"
     )
