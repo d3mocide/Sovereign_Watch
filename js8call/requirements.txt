@@ -1,0 +1,18 @@
+# Sovereign Watch – JS8Call Bridge Server dependencies
+# Install with: pip3 install -r requirements.txt
+
+# Web framework and async runtime
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# JS8Call TCP API client
+# https://pypi.org/project/pyjs8call/
+pyjs8call>=0.9.0
+
+# WebSocket support (used by uvicorn ws transport)
+websockets>=12.0
+
+# KiwiSDR client dependencies (also installed in Dockerfile layer)
+numpy>=1.24.0
+scipy>=1.11.0
+ws4py>=0.5.1

@@ -1,79 +1,39 @@
-# Release - v0.9.8 - Stability & Performance Fixes
+# Release Notes - Sovereign Watch v0.10.0
 
-## High-Level Summary
+## Tactical HF Communication & JS8Call Integration
 
-Version 0.9.8 is a critical stability and performance release addressing high-priority issues identified in the v0.9.5 bug report. It resolves API startup crashes, mission area synchronization issues, and significant performance bottlenecks in orbital propagation. It also hardens the ingestion services with robust retry logic and graceful shutdown handling.
+Version 0.10.0 introduces a major expansion to Sovereign Watch's signal intelligence capabilities with the deep integration of **JS8Call**. This update enables operators to monitor HF digital mode communications directly within the tactical interface, bridging the gap between global radio networks and our unified map display.
 
-## Key Fixes
+### Key Features
 
-### 🚀 Critical Stability
-- **API Startup Crash:** Fixed a `NameError` in `backend/api/main.py` ensuring reliable backend startup.
-- **Mission Area Sync:** Corrected Redis key mismatch in the Maritime Poller, ensuring it correctly tracks the active mission area.
-- **Orphaned Consumers:** Prevented infinite accumulation of Kafka consumer groups by switching the tracks API to broadcast mode.
+#### 📡 JS8Call Tactical Bridge
+A new specialized container orchestration allows `js8call` to run as a native service. It features a high-performance PulseAudio-based virtual audio pipeline, enabling seamless ingestion from networked KIWI-SDRs or local radio equipment.
 
-### ⚡ Performance
-- **Vectorized Orbital Propagation:** Replaced iterative satellite propagation with vectorized `sgp4` operations, drastically reducing CPU usage and latency for large constellations.
-- **Frontend Memory Management:** Fixed stale closures in the animation loop to prevent memory leaks and UI state drift.
+#### 💬 Real-Time HUD Widget
+The frontend now includes a dedicated **JS8 HUD Widget** in the sidebar. 
+- **Live Stream**: View incoming and outgoing JS8 messages in real-time.
+- **Frequency Control**: Monitor station offsets and drift directly from the UI.
+- **Station Discovery**: Automatic identification of active stations heard on the air.
 
-### 🛡️ Resilience
-- **Robust Poller Recovery:** Added exponential backoff and retry logic to the Maritime Poller's navigation listener.
-- **Graceful Shutdown:** Implemented `SIGTERM` handlers for containerized services to ensure clean teardown.
+#### 🗺️ Spatial Awareness
+Incoming JS8 signals are no longer just text. When a station provides grid coordinates or is identified by callsign, it is visualized as a specialized tactical entity on the **Map**.
+- **Live Status Icons**: See which stations are active and their relative signal strength.
+- **Entity Linking**: Click on a station on the map to instantly focus the JS8 widget on their recent traffic.
 
-## Upgrade Instructions
+#### 🎛️ TopBar Streamlining (V2)
+The HUD TopBar has been entirely redesigned for a cleaner, high-tech tactical feel.
+- **Compact View Switcher**: A sleek pill-button allows instant swapping between the 3D Globe Tactical view and the full-screen Radio Terminal.
+- **Icon-Based Status**: System indicators (Core, Replay, History, Vectors) are now consolidated into a high-density icon bar.
+- **Dynamic Alerts & Zulu Clock**: Replaced the static alerts text with a pulsing red tactical pill and upgraded the UTC clock to a segmented green ZULU HUD display.
+- **Map Zoom Controls**: Added floating "+" and "-" zoom controls directly on the tactical map for faster navigation.
 
-```bash
-# Pull latest changes and rebuild all services
-docker compose down
-docker compose up -d --build
-```
+### Infrastructure & Resilience
+- **Robust Audio Pipeline**: Re-engineered entrypoints for the `js8call` service ensure that virtual audio sinks are correctly initialized before the software starts, eliminating "no audio device" errors.
+- **Volume persistence**: Config and rig settings for JS8Call are now persisted across container restarts.
+
+### Setup Instructions
+1. Ensure your `.env` file contains the correct `KIWI_SDR_HOST` and `JS8_RIG_NAME` variables.
+2. Run `docker compose up -d js8call` to start the new service.
+3. Access the JS8 widget via the "Signal Intel" section in the left sidebar.
 
 ---
-
-## [0.9.6] - 2026-02-24
-
-### Optimized
-
-- **Aviation Poller Performance:**
-  - **Background Cache Eviction:** Moved the `evict_stale_entries` operation from the synchronous ingestion loop to a dedicated background task.
-  - **Reduced Latency:** Eliminated a ~4ms blocking call per aircraft batch, significantly improving throughput under high load.
-  - **Configurable Interval:** Added `ARBITRATION_CLEANUP_INTERVAL` (default: 30s) to control the frequency of cache cleanup.
-
-## [0.9.5] - 2026-02-24
-
-### Refactored
-
-- **TacticalMap Modularization (Structural — no behavioral changes):**
-  - **Decomposed monolith:** `TacticalMap.tsx` reduced from **2,762 lines → 556 lines** (80% reduction) by extracting all logic into purpose-scoped modules.
-  - **New hooks:**
-    - `hooks/useEntityWorker.ts` (561L) — TAK worker lifecycle, WebSocket management, dead-reckoning state
-    - `hooks/useAnimationLoop.ts` (733L) — RAF loop, PVB interpolation, per-frame layer assembly
-    - `hooks/useMapCamera.ts` (237L) — globe projection switching, graticule overlay, 3D terrain/fog
-    - `hooks/useMissionArea.ts` (303L) — mission area polling, AOT geometry calculation, entity clearing
-  - **New layer builders:**
-    - `layers/buildAOTLayers.ts` (52L) — maritime box + aviation circle `PathLayer`s
-    - `layers/buildTrailLayers.ts` (137L) — history trail + gap-bridge `PathLayer`/`LineLayer`
-    - `layers/buildEntityLayers.ts` (244L) — halos, glow sprites, altitude shadows, heading arrows, velocity vectors
-  - **New utilities:**
-    - `utils/map/colorUtils.ts` (86L) — altitude/speed color gradient functions
-    - `utils/map/geoUtils.ts` (142L) — haversine, bearing, Chaikin smoothing, graticule, zoom helpers
-    - `utils/map/iconAtlas.ts` (60L) — canvas icon-atlas singleton
-  - **Lazy-loaded adapter selection:** `TacticalMap.tsx` now dynamically picks Mapbox vs. MapLibre adapter via `VITE_MAPBOX_TOKEN` using `React.lazy`.
-  - **TypeScript health:** Pre-existing error count reduced from **56 → 33**; zero new errors introduced.
-
-## [0.9.4] - 2026-02-23
-
-### Refactored
-
-- **Backend Architecture:**
-  - **Modular API Structure:** Decomposed the monolithic `backend/api/main.py` into a scalable package structure with `routers`, `services`, `core`, and `models`.
-  - **Core Logic Migration:** Centralized configuration (`config.py`) and database management (`database.py`) in the `core` module.
-  - **Service Extraction:** Moved background tasks (`historian`) and protocol helpers (`tak`) to dedicated `services` modules.
-  - **Route Separation:** Split API endpoints into `system`, `tracks`, and `analysis` routers for better organization.
-- **Aviation Poller:**
-  - **Renaming:** Renamed `backend/ingestion/poller` to `backend/ingestion/aviation_poller` to clearly distinguish it from other ingestion sources.
-  - **Code Modularization:** Refactored the aviation poller into `service.py`, `classification.py`, `arbitration.py`, and `utils.py`, with a clean `main.py` entry point.
-  - **Docker Configuration:** Updated `docker-compose.yml` to reflect the new build context for the `adsb-poller` service.
-- **Maritime Poller:**
-  - **Code Modularization:** Refactored `backend/ingestion/maritime_poller` into `service.py`, `classification.py`, and `utils.py` for consistency and maintainability.
-- **Orbital Pulse:**
-  - **Code Modularization:** Refactored `backend/ingestion/orbital_pulse` into `service.py` and `utils.py` to decouple SGP4 propagation and TLE fetching logic from the main entry point.

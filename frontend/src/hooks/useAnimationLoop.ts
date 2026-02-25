@@ -1,10 +1,11 @@
 import { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity } from "../types";
-import { getCompensatedCenter } from "../utils/map/geoUtils";
+import { CoTEntity, JS8Station } from "../types";
+import { getCompensatedCenter, maidenheadToLatLon } from "../utils/map/geoUtils";
 import { getOrbitalLayers } from "../layers/OrbitalLayer";
 import { buildAOTLayers } from "../layers/buildAOTLayers";
 import { buildTrailLayers } from "../layers/buildTrailLayers";
 import { buildEntityLayers } from "../layers/buildEntityLayers";
+import { buildJS8Layers } from "../layers/buildJS8Layers";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -83,6 +84,8 @@ interface UseAnimationLoopOptions {
   onEntitySelect: (entity: CoTEntity | null) => void;
   onEntityLiveUpdate: ((entity: CoTEntity) => void) | undefined;
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
+  js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
+  ownGridRef?: MutableRefObject<string>;
 }
 
 export function useAnimationLoop({
@@ -118,6 +121,8 @@ export function useAnimationLoop({
   onEntitySelect,
   onEntityLiveUpdate,
   onFollowModeChange,
+  js8StationsRef,
+  ownGridRef,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
@@ -656,6 +661,30 @@ export function useAnimationLoop({
         return filters.showSatOther !== false;
       });
 
+      // JS8 station layers (bearing lines + dots + labels)
+      let js8Layers: any[] = [];
+      if (js8StationsRef && ownGridRef) {
+        const zoom = mapRef.current?.getMap()?.getZoom() ?? 0;
+        const ownGrid = ownGridRef.current;
+        let ownLat = 0, ownLon = 0;
+        if (ownGrid) [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
+        const selectedJS8Callsign =
+          selectedEntityRef.current?.type === "js8"
+            ? selectedEntityRef.current.callsign
+            : null;
+        js8Layers = buildJS8Layers(
+          Array.from(js8StationsRef.current.values()),
+          ownLat,
+          ownLon,
+          globeMode,
+          selectedJS8Callsign,
+          onEntitySelect,
+          setHoveredEntity,
+          setHoverPosition,
+          zoom,
+        );
+      }
+
       const layers = [
         ...getOrbitalLayers({
           satellites: filteredSatellites,
@@ -700,6 +729,9 @@ export function useAnimationLoop({
           setHoverPosition,
           selectedEntity,
         ),
+
+        // 4. JS8 station layers (rendered above entity icons)
+        ...js8Layers,
       ];
 
       if (mapLoaded && overlayRef.current?.setProps) {

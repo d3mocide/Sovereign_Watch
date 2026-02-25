@@ -3,7 +3,10 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { buildGraticule } from "../utils/map/geoUtils";
 
 // Detect Mapbox token presence at module level (same pattern as TacticalMap)
-const _hasMapboxToken = !!import.meta.env.VITE_MAPBOX_TOKEN;
+const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== 'false';
+const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith('pk.');
+const _isMapbox = _enableMapbox && _isValidToken;
 
 interface UseMapCameraOptions {
   mapRef: React.RefObject<MapRef>;
@@ -88,7 +91,7 @@ export function useMapCamera({
           type: "line",
           source: SOURCE_ID,
           // Safer: omit slot entirely for MapLibre, or use 'top' explicitly for Mapbox
-          ...(_hasMapboxToken ? { slot: "top" } : {}),
+          ...(_isMapbox ? { slot: "top" } : {}),
           layout: {
             "line-cap": "round",
           },
@@ -197,7 +200,7 @@ export function useMapCamera({
         (map as any).setProjection(
           mapToken ? "mercator" : { type: "mercator" },
         );
-      } catch (_) {}
+      } catch (_) { }
       mapRef.current.flyTo({
         pitch: 0,
         bearing: 0,

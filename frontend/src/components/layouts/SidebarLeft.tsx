@@ -4,9 +4,10 @@ import { SystemStatus } from '../widgets/SystemStatus';
 import { IntelFeed } from '../widgets/IntelFeed';
 import { MissionNavigator } from '../widgets/MissionNavigator';
 import { SearchWidget } from '../widgets/SearchWidget';
+import { JS8Widget } from '../widgets/JS8Widget';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
-import { IntelEvent, MissionProps } from '../../types';
+import { IntelEvent, MissionProps, JS8Station, JS8LogEntry, JS8StatusLine } from '../../types';
 
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number; orbital: number };
@@ -17,26 +18,38 @@ interface SidebarLeftProps {
   health?: SystemHealth;
   mapActions: import('../../types').MapActions | null;
   onEntitySelect: (entity: import('../../types').CoTEntity) => void;
+  js8Stations?: JS8Station[];
+  js8LogEntries?: JS8LogEntry[];
+  js8StatusLine?: JS8StatusLine;
+  js8BridgeConnected?: boolean;
+  js8Connected?: boolean;
+  sendMessage?: (target: string, message: string) => void;
 }
 
-export const SidebarLeft: React.FC<SidebarLeftProps> = ({ 
-  trackCounts, 
-  filters, 
-  onFilterChange, 
+export const SidebarLeft: React.FC<SidebarLeftProps> = ({
+  trackCounts,
+  filters,
+  onFilterChange,
   events,
   missionProps,
   health,
   mapActions,
-  onEntitySelect
+  onEntitySelect,
+  js8Stations = [],
+  js8LogEntries = [],
+  js8StatusLine = { callsign: '--', grid: '----', freq: '--' },
+  js8BridgeConnected = false,
+  js8Connected = false,
+  sendMessage = () => { },
 }) => {
   return (
     <div className="flex flex-col h-full gap-4 animate-in fade-in duration-1000">
       {/* Search Widget */}
       {mapActions && (
-          <SearchWidget 
-            mapActions={mapActions} 
-            onEntitySelect={onEntitySelect} 
-          />
+        <SearchWidget
+          mapActions={mapActions}
+          onEntitySelect={onEntitySelect}
+        />
       )}
 
       {/* Mission Navigator */}
@@ -51,15 +64,25 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       )}
 
       {/* 2. System Intelligence Feed */}
-      <IntelFeed 
-        events={events} 
-        onEntitySelect={onEntitySelect} 
-        mapActions={mapActions} 
+      <IntelFeed
+        events={events}
+        onEntitySelect={onEntitySelect}
+        mapActions={mapActions}
         filters={filters}
         onFilterChange={onFilterChange}
       />
 
-      {/* 3. Metrics & Analytics */}
+      {/* 3. JS8Call / HF Radio */}
+      <JS8Widget
+        stations={js8Stations}
+        logEntries={js8LogEntries}
+        statusLine={js8StatusLine}
+        connected={js8BridgeConnected}
+        js8Connected={js8Connected}
+        sendMessage={sendMessage}
+      />
+
+      {/* 4. Metrics & Analytics */}
       <SystemStatus trackCounts={trackCounts} />
     </div>
   );

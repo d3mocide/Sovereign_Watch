@@ -12,7 +12,7 @@ volumes:
   redpanda-data:
   postgres-data:
   redis-data:
-  # LiteLLM cache not strictly needed if in-memory default, but good for persistence if config'd
+    # LiteLLM cache not strictly needed if in-memory default, but good for persistence if config'd
 
 services:
   # --- Ingestion & Streaming ---
@@ -43,7 +43,7 @@ services:
     networks:
       - backend-net
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health"]
+      test: [ "CMD-SHELL", "rpk cluster health" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -123,7 +123,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-
   # --- Persistence ---
   timescaledb:
     image: timescale/timescaledb-ha:pg16
@@ -140,7 +139,7 @@ services:
       - backend-net
       - ai-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -157,14 +156,14 @@ services:
       - backend-net
       - ai-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
 
   # --- Backend & AI ---
   backend-api:
-    build: 
+    build:
       context: ./backend/api
       dockerfile: Dockerfile
     container_name: sovereign-backend
@@ -184,9 +183,47 @@ services:
       timescaledb:
         condition: service_healthy
 
+  # --- JS8Call Radio Terminal (Phase 1/2/3) ---
+  # Headless JS8Call instance with virtual PulseAudio routing from a KiwiSDR node.
+  # The FastAPI WebSocket bridge (server.py) runs inside this same container on
+  # port 8080 and is accessed by the frontend RadioTerminal component.
+  js8call:
+    build:
+      context: ./js8call
+      dockerfile: Dockerfile
+    container_name: sovereign-js8call
+    environment:
+      # KiwiSDR WebSDR source – override with your target node
+      - KIWI_HOST=${KIWI_HOST:-kiwisdr.example.com}
+      - KIWI_PORT=${KIWI_PORT:-8073}
+      - KIWI_FREQ=${KIWI_FREQ:-14074} # kHz – 20m JS8Call calling frequency
+      - KIWI_MODE=${KIWI_MODE:-usb}
+      # Operator Maidenhead grid for distance/bearing calculations
+      - MY_GRID=${MY_GRID:-CN85}
+      # JS8Call TCP API – internal to container
+      - JS8CALL_HOST=127.0.0.1
+      - JS8CALL_PORT=2442
+      # FastAPI bridge port (exposed below)
+      - BRIDGE_PORT=8080
+    ports:
+      - "8082:8080" # FastAPI WebSocket bridge (host:8082 → container:8080)
+    networks:
+      - backend-net
+    # IPC=host is not required; PulseAudio runs as a user daemon inside the container.
+    # SYS_ADMIN is not needed – we use a user-space PulseAudio null sink.
+    # Note: /dev/snd is intentionally NOT bind-mounted; audio is 100% virtual.
+    cap_add: []
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # --- Frontend ---
   frontend:
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: sovereign-frontend
@@ -200,8 +237,10 @@ services:
       - backend-net # To access API directly from server side if needed (SSR) or proxy
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_ENABLE_MAPBOX=${VITE_ENABLE_MAPBOX:-true}
       - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
       - VITE_CENTER_LAT=${CENTER_LAT:-45.5152}
       - VITE_CENTER_LON=${CENTER_LON:--122.6784}
       - VITE_COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
       - VITE_ENABLE_3D_TERRAIN=${VITE_ENABLE_3D_TERRAIN:-false}
+      - VITE_JS8_WS_URL=ws://localhost:8082/ws/js8

@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import {
+    Globe,
+    Radio,
+    Server,
+    PlayCircle,
+    History,
+    MoveVertical,
+    ShieldAlert,
+    ShieldCheck
+} from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
 
@@ -15,14 +25,17 @@ interface TopBarProps {
     onToggleSatellites?: () => void;
     isReplayMode?: boolean;
     onToggleReplay?: () => void;
+    viewMode?: 'TACTICAL' | 'RADIO';
+    onViewChange?: (mode: 'TACTICAL' | 'RADIO') => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ 
-    alertsCount, location, health, 
+export const TopBar: React.FC<TopBarProps> = ({
+    alertsCount, location, health,
     showVelocityVectors, onToggleVelocityVectors,
     showHistoryTails, onToggleHistoryTails,
     showSatellites, onToggleSatellites,
-    isReplayMode, onToggleReplay
+    isReplayMode, onToggleReplay,
+    viewMode = 'TACTICAL', onViewChange
 }) => {
     const [time, setTime] = useState(new Date());
 
@@ -32,8 +45,12 @@ export const TopBar: React.FC<TopBarProps> = ({
     }, []);
 
     const formatTime = (date: Date) => {
-        return date.toISOString().split('T')[1].split('.')[0] + 'Z';
+        const timeStr = date.toISOString().split('T')[1].split('.')[0];
+        const [hh, mm, ss] = timeStr.split(':');
+        return { hh, mm, ss };
     };
+
+    const { hh, mm, ss } = formatTime(time);
 
     // Calculate integrity bars based on latency
     // < 50ms: 6 bars
@@ -80,63 +97,73 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </div>
                 </div>
             </div>
-
-            {/* Center Area - System Stream (Filler for Aesthetic) */}
-            <div className="mx-12 hidden flex-1 items-center justify-center gap-8 xl:flex">
-                <div className="flex flex-col items-center">
-                    <span className="text-[8px] text-white/20 uppercase tracking-tighter">Lat / Lon Focus</span>
-                    <span className="text-[10px] text-hud-green/40 font-bold tabular-nums">
-                        {location ? `${location.lat.toFixed(4)}°N / ${location.lon.toFixed(4)}°W` : 'NO_SIGNAL'}
-                    </span>
-                </div>
-                <div className="h-4 w-[1px] bg-white/5" />
-                <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[8px] text-white/20 uppercase tracking-tighter">Network Integrity</span>
-                        <span className="text-[8px] text-hud-green/50 tabular-nums tracking-tighter">
-                            {health ? `${health.latency}MS` : '---'}
-                        </span>
-                    </div>
-                    <div className="flex gap-0.5 mt-0.5">
-                        {[1, 2, 3, 4, 5, 6].map(i => (
-                            <div 
-                                key={i} 
-                                className={`h-1.5 w-3 rounded-[1px] transition-all duration-300 ${
-                                    i <= activeBars 
-                                        ? (health?.status === 'offline' ? 'bg-alert-red' : 'bg-hud-green shadow-[0_0_4px_rgba(0,255,65,0.5)]') 
-                                        : 'bg-white/5'
-                                }`} 
-                            />
-                        ))}
-                    </div>
+            {/* Center Area - View Mode Toggle / Telemetry cluster */}
+            <div className="ml-12 mr-auto hidden items-center gap-6 xl:flex">
+                <div className="flex items-center gap-2 px-3 py-1">
+                    <button
+                        onClick={() => onViewChange?.('TACTICAL')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'TACTICAL'
+                            ? 'bg-hud-green text-black shadow-[0_0_15px_rgba(0,255,65,0.3)]'
+                            : 'text-white/30 hover:text-white/60'
+                            }`}
+                    >
+                        <Globe size={12} strokeWidth={3} />
+                        <span className={viewMode === 'TACTICAL' ? 'block' : 'hidden'}>TACTICAL</span>
+                    </button>
+                    <button
+                        onClick={() => onViewChange?.('RADIO')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
+                            ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.3)]'
+                            : 'text-white/30 hover:text-white/60'
+                            }`}
+                    >
+                        <Radio size={12} strokeWidth={3} />
+                        <span className={viewMode === 'RADIO' ? 'block' : 'hidden'}>RADIO</span>
+                    </button>
                 </div>
             </div>
 
             {/* Right Side - Status and Time */}
-            <div className="ml-auto flex items-center gap-10">
-                {/* Status Dots */}
-                <div className="flex gap-6">
-                    <div className="group flex flex-col items-end gap-1">
-                        <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-hud-green/50 transition-colors">Core_Sys</span>
-                        <div className="flex items-center gap-2">
-                             <span className="h-1.5 w-1.5 rounded-full bg-hud-green shadow-[0_0_5px_#00ff41] animate-pulse" />
-                             <span className="text-[10px] font-bold text-hud-green tracking-widest">ONLINE</span>
-                        </div>
+            <div className="ml-auto flex items-center gap-6">
+                {/* Latency Block */}
+                <div className="flex flex-col items-center mr-0">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[7px] text-white/30 uppercase tracking-tighter">Latency</span>
+                        <span className="text-[9px] text-hud-green/60 tabular-nums font-mono">
+                            {health ? `${health.latency}ms` : '---'}
+                        </span>
                     </div>
+                    <div className="flex gap-0.5 mt-0.5">
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                            <div
+                                key={i}
+                                className={`h-1 w-2.5 rounded-[0.5px] transition-all duration-300 ${i <= activeBars
+                                    ? (health?.status === 'offline' ? 'bg-alert-red' : 'bg-hud-green shadow-[0_0_3px_rgba(0,255,65,0.4)]')
+                                    : 'bg-white/5'
+                                    }`}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <div className="h-4 w-[1px] bg-white/10" />
+
+                {/* Status Icons Bar */}
+                <div className="flex items-center gap-4 px-0 py-1.5">
+                    {/* Core Status */}
+                    <div className="flex items-center gap-1.5" title="Core System: ONLINE">
+                        <Server size={14} className="text-hud-green" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-hud-green shadow-[0_0_5px_#00ff41] animate-pulse" />
+                    </div>
+
                     {/* Replay Mode Toggle */}
                     {onToggleReplay && (
                         <button
                             onClick={onToggleReplay}
-                            className="group flex flex-col items-end gap-1 transition-all hover:scale-105 active:scale-95"
-                            title="Toggle Replay Mode"
+                            className={`transition-all hover:scale-110 active:scale-90 ${isReplayMode ? 'text-amber-500' : 'text-white/20'}`}
+                            title={`Simulation Replay: ${isReplayMode ? 'RUNNING' : 'STANDBY'}`}
                         >
-                            <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-amber-500/50 transition-colors">Sim_Replay</span>
-                            <div className="flex items-center gap-2">
-                                <span className={`h-1.5 w-1.5 rounded-full transition-all ${isReplayMode ? 'bg-amber-500 shadow-[0_0_5px_#f59e0b] animate-pulse' : 'bg-white/20'}`} />
-                                <span className={`text-[10px] font-bold tracking-widest transition-colors ${isReplayMode ? 'text-amber-500' : 'text-white/40'}`}>
-                                    {isReplayMode ? 'RUNNING' : 'OFFLINE'}
-                                </span>
-                            </div>
+                            <PlayCircle size={15} className={isReplayMode ? 'animate-spin-slow' : ''} />
                         </button>
                     )}
 
@@ -144,62 +171,78 @@ export const TopBar: React.FC<TopBarProps> = ({
                     {onToggleHistoryTails && (
                         <button
                             onClick={onToggleHistoryTails}
-                            className="group flex flex-col items-end gap-1 transition-all hover:scale-105 active:scale-95"
-                            title="Toggle history trails"
+                            className={`transition-all hover:scale-110 active:scale-90 ${showHistoryTails ? 'text-hud-green' : 'text-white/20'}`}
+                            title={`History Trails: ${showHistoryTails ? 'ACTIVE' : 'STANDBY'}`}
                         >
-                            <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-hud-green/50 transition-colors">Hist_Tail</span>
-                            <div className="flex items-center gap-2">
-                                <span className={`h-1.5 w-1.5 rounded-full transition-all ${showHistoryTails ? 'bg-hud-green shadow-[0_0_5px_#00ff41]' : 'bg-white/20'}`} />
-                                <span className={`text-[10px] font-bold tracking-widest transition-colors ${showHistoryTails ? 'text-hud-green' : 'text-white/40'}`}>
-                                    {showHistoryTails ? 'ACTIVE' : 'STANDBY'}
-                                </span>
-                            </div>
+                            <History size={15} />
                         </button>
                     )}
-
-
-
 
                     {/* Velocity Vector Toggle */}
                     {onToggleVelocityVectors && (
                         <button
                             onClick={onToggleVelocityVectors}
-                            className="group flex flex-col items-end gap-1 transition-all hover:scale-105 active:scale-95"
-                            title="Toggle velocity vectors"
+                            className={`transition-all hover:scale-110 active:scale-90 ${showVelocityVectors ? 'text-hud-green' : 'text-white/20'}`}
+                            title={`Velocity Projections: ${showVelocityVectors ? 'ACTIVE' : 'STANDBY'}`}
                         >
-                            <span className="text-[8px] text-white/30 uppercase tracking-[0.2em] group-hover:text-hud-green/50 transition-colors">Vec_Proj</span>
-                            <div className="flex items-center gap-2">
-                                <span className={`h-1.5 w-1.5 rounded-full transition-all ${showVelocityVectors ? 'bg-hud-green shadow-[0_0_5px_#00ff41]' : 'bg-white/20'}`} />
-                                <span className={`text-[10px] font-bold tracking-widest transition-colors ${showVelocityVectors ? 'text-hud-green' : 'text-white/40'}`}>
-                                    {showVelocityVectors ? 'ACTIVE' : 'STANDBY'}
-                                </span>
-                            </div>
+                            <MoveVertical size={15} />
                         </button>
                     )}
                 </div>
 
-                {/* Alerts Indicator */}
-                <div className={`relative flex h-10 items-center px-4 border-l border-white/5 ${alertsCount > 0 ? 'bg-alert-red/5' : ''}`}>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[8px] text-white/30 uppercase tracking-[0.2em]">Active_Alerts</span>
-                        <span className={`text-sm font-bold tracking-widest ${alertsCount > 0 ? "text-alert-red drop-shadow-[0_0_10px_rgba(255,0,0,0.5)] animate-pulse" : "text-white/20"}`}>
-                            {alertsCount.toString().padStart(2, '0')}
+                {/* Alerts Pill */}
+                <div className="flex items-center px-2">
+                    <button
+                        className={`group relative flex items-center gap-2 rounded-full px-3 py-1.5 transition-all duration-300 ${alertsCount > 0
+                            ? 'bg-alert-red/10 shadow-[0_0_15px_rgba(255,0,0,0.2)] ring-1 ring-alert-red/50 hover:bg-alert-red/20'
+                            : 'bg-white/5 ring-1 ring-white/10 hover:bg-white/10'
+                            }`}
+                        title={alertsCount > 0 ? `${alertsCount} Active Alerts` : "No Active Alerts"}
+                    >
+                        {alertsCount > 0 ? (
+                            <ShieldAlert size={14} className="text-alert-red animate-pulse drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]" />
+                        ) : (
+                            <ShieldCheck size={14} className="text-white/30" />
+                        )}
+                        <span className={`font-mono text-[10px] font-bold tracking-widest ${alertsCount > 0 ? "text-alert-red drop-shadow-[0_0_5px_rgba(255,0,0,0.5)]" : "text-white/30"
+                            }`}>
+                            ALERTS [{alertsCount.toString().padStart(2, '0')}]
                         </span>
-                    </div>
-                    {alertsCount > 0 && (
-                        <div className="absolute -top-1 -right-1 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-alert-red opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-alert-red"></span>
-                        </div>
-                    )}
+
+                        {/* Ping indicator for active alerts */}
+                        {alertsCount > 0 && (
+                            <div className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-alert-red opacity-75"></span>
+                                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-alert-red"></span>
+                            </div>
+                        )}
+                    </button>
                 </div>
 
                 {/* Tactical Clock */}
-                <div className="flex flex-col items-end border-l border-white/5 pl-8">
-                    <span className="text-[8px] text-white/30 uppercase tracking-[0.3em]">Temporal_Reference</span>
-                    <span className="text-lg font-bold tabular-nums tracking-widest text-white/90 drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">
-                        {formatTime(time)}
-                    </span>
+                <div className="flex flex-col items-end border-l border-white/5 pl-3 justify-center">
+                    <div className="flex items-center gap-1">
+                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
+                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
+                                {hh}
+                            </span>
+                        </div>
+                        <span className={`text-hud-green/50 font-bold ${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity`}>:</span>
+                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
+                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
+                                {mm}
+                            </span>
+                        </div>
+                        <span className={`text-hud-green/50 font-bold ${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity`}>:</span>
+                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
+                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
+                                {ss}
+                            </span>
+                        </div>
+                        <div className="ml-2 bg-hud-green/20 text-hud-green border border-hud-green/30 px-1.5 py-0.5 rounded-[2px] flex items-center justify-center">
+                            <span className="text-[10px] font-black tracking-widest">ZULU</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

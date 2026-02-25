@@ -5,13 +5,14 @@ import React, {
   useCallback,
   lazy,
   Suspense,
+  MutableRefObject,
 } from "react";
-import { Globe, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
+import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, MissionProps } from "../../types";
+import { CoTEntity, JS8Station, MissionProps } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -26,9 +27,12 @@ import { getCompensatedCenter } from "../../utils/map/geoUtils";
 // Pick the map adapter at module init time based on the build-time env var.
 // react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
 // the correct adapter rather than using the removed `mapLib` prop.
-const _hasMapboxToken = !!import.meta.env.VITE_MAPBOX_TOKEN;
+const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== 'false';
+const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith('pk.');
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const MapComponent: React.ComponentType<any> = _hasMapboxToken
+const MapComponent: React.ComponentType<any> = (_enableMapbox && _isValidToken)
   ? lazy(() => import("./MapboxAdapter"))
   : lazy(() => import("./MapLibreAdapter"));
 
@@ -80,6 +84,8 @@ interface TacticalMapProps {
   followMode?: boolean;
   onFollowModeChange?: (enabled: boolean) => void;
   onEntityLiveUpdate?: (entity: CoTEntity) => void;
+  js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
+  ownGridRef?: MutableRefObject<string>;
 }
 
 export function TacticalMap({
@@ -99,6 +105,8 @@ export function TacticalMap({
   followMode,
   onFollowModeChange,
   onEntityLiveUpdate,
+  js8StationsRef,
+  ownGridRef,
 }: TacticalMapProps) {
   // State for UI interactions
   const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -118,7 +126,7 @@ export function TacticalMap({
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
   const [enable3d, setEnable3d] = useState(false);
-  const mapToken = import.meta.env.VITE_MAPBOX_TOKEN;
+  const mapToken = _enableMapbox && _isValidToken ? _mapboxToken : undefined;
   const mapStyle = mapToken
     ? "mapbox://styles/mapbox/standard"
     : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -271,6 +279,8 @@ export function TacticalMap({
     onEntitySelect,
     onEntityLiveUpdate,
     onFollowModeChange,
+    js8StationsRef,
+    ownGridRef,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
@@ -357,6 +367,12 @@ export function TacticalMap({
         fitBounds: (bounds) => {
           mapRef.current?.fitBounds(bounds, { padding: 50 });
         },
+        zoomIn: () => {
+          mapRef.current?.getMap().zoomIn();
+        },
+        zoomOut: () => {
+          mapRef.current?.getMap().zoomOut();
+        },
         searchLocal: (query: string) => {
           const results: CoTEntity[] = [];
           const q = query.toLowerCase();
@@ -404,7 +420,7 @@ export function TacticalMap({
             setViewState(nextViewState as any);
           }}
           mapStyle={mapStyle}
-          {...(_hasMapboxToken ? { mapboxAccessToken: mapToken } : {})}
+          {...(_enableMapbox && _isValidToken ? { mapboxAccessToken: mapToken } : {})}
           globeMode={globeMode}
           style={{
             width: "100vw",
@@ -442,21 +458,19 @@ export function TacticalMap({
             <>
               <button
                 onClick={() => setViewMode("2d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
-                  !enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
-                }`}
+                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${!enable3d
+                  ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
+                  : "text-white/40 hover:text-white/60"
+                  }`}
               >
                 2D
               </button>
               <button
                 onClick={() => setViewMode("3d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
-                  enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
-                }`}
+                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${enable3d
+                  ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
+                  : "text-white/40 hover:text-white/60"
+                  }`}
               >
                 3D
               </button>
@@ -465,11 +479,10 @@ export function TacticalMap({
           )}
           <button
             onClick={() => onToggleGlobe?.()}
-            className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${
-              globeMode
-                ? "bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]"
-                : "text-white/40 hover:text-white/60"
-            }`}
+            className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${globeMode
+              ? "bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              : "text-white/40 hover:text-white/60"
+              }`}
             title="Toggle Globe View"
           >
             <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
@@ -550,6 +563,26 @@ export function TacticalMap({
 
       <AltitudeLegend visible={filters?.showAir ?? true} />
       <SpeedLegend visible={filters?.showSea ?? true} />
+
+      {/* Map Zoom HUD - Floating anchored to bottom left */}
+      <div className="absolute left-[405px] bottom-4 z-10 flex flex-col gap-1 items-start select-none">
+        <div className="flex flex-col bg-black/40 backdrop-blur-md border border-white/10 rounded overflow-hidden shadow-2xl animate-in fade-in slide-in-from-left-4 duration-500">
+          <button
+            onClick={() => mapRef.current?.getMap().zoomIn()}
+            className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 transition-all active:scale-95 border-b border-white/5"
+            title="Zoom In"
+          >
+            <Plus size={14} strokeWidth={3} />
+          </button>
+          <button
+            onClick={() => mapRef.current?.getMap().zoomOut()}
+            className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 transition-all active:scale-95"
+            title="Zoom Out"
+          >
+            <Minus size={14} strokeWidth={3} />
+          </button>
+        </div>
+      </div>
     </>
   );
 }

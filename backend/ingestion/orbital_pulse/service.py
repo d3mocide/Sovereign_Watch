@@ -193,23 +193,35 @@ class OrbitalPulseService:
             ago = now - timedelta(seconds=1)
             jd_ago, fr_ago = jday(ago.year, ago.month, ago.day, ago.hour, ago.minute, ago.second + ago.microsecond / 1e6)
 
-            n_sats = len(self.satrecs)
-            logger.info(f"Propagation: running vectorized sgp4 for {n_sats} sats...")
+            # SatrecArray.sgp4 in recent versions requires jd/fr to be arrays.
+            # Passing a 1-element array results in (n_sats, 1, 3) output.
+            jd_arr = np.array([jd])
+            fr_arr = np.array([fr])
+            jd_ago_arr = np.array([jd_ago])
+            fr_ago_arr = np.array([fr_ago])
 
-            e, r, v = self.sat_array.sgp4(jd, fr)
-            e_ago, r_ago, v_ago = self.sat_array.sgp4(jd_ago, fr_ago)
+            e_raw, r_raw, v_raw = self.sat_array.sgp4(jd_arr, fr_arr)
+            e_ago_raw, r_ago_raw, v_ago_raw = self.sat_array.sgp4(jd_ago_arr, fr_ago_arr)
+
+            # Flatten from (n_sats, 1, 3) -> (n_sats, 3) and (n_sats, 1) -> (n_sats,)
+            e = e_raw.reshape(-1)
+            r = r_raw.reshape(-1, 3)
+            v = v_raw.reshape(-1, 3)
+            
+            e_ago = e_ago_raw.reshape(-1)
+            r_ago = r_ago_raw.reshape(-1, 3)
+            v_ago = v_ago_raw.reshape(-1, 3)
 
             # Filter errors
             valid_idx = np.where(e == 0)[0]
-            logger.info(f"Propagation: valid_idx found {len(valid_idx)}")
 
             if len(valid_idx) > 0:
-                logger.info("Propagation: running TEME arrays...")
-                # ECEF
+                # Subset to valid satellites
                 r_valid = r[valid_idx]
                 r_ago_valid = r_ago[valid_idx]
                 v_valid = v[valid_idx]
 
+                # ECEF - teme_to_ecef_vectorized handles r as (N, 3) and jd/fr as scalars
                 r_ecef = teme_to_ecef_vectorized(r_valid, jd, fr)
                 r_ago_ecef = teme_to_ecef_vectorized(r_ago_valid, jd_ago, fr_ago)
 

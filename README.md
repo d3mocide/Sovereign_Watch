@@ -1,4 +1,4 @@
-# Sovereign Watch v0.9.8: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.10.0: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 2 (Tactical Intelligence & Tracking) - _Active Development_
 
@@ -23,9 +23,11 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
 
     ```bash
     cp .env.example .env
-    # Edit .env with your keys:
+    # Edit .env with your keys & config:
     # - AISSTREAM_API_KEY (Maritime)
     # - VITE_MAPBOX_TOKEN (3D Terrain)
+    # - KIWI_HOST / KIWI_PORT (JS8Call SDR source)
+    # - MY_GRID (Your Maidenhead locator)
     ```
 
 2.  **Boot System**:
@@ -47,6 +49,7 @@ graph TD
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
         Z[Orbital TLE Feed] -->|TLE| B
+        J[JS8Call HF Radio] -->|TCP API| B
         B -->|TAK Protobuf| D(Redpanda Bus)
     end
 
@@ -65,6 +68,7 @@ graph TD
         K[MainHUD Shell] --> L[Intelligence Feed]
         K --> M[Projective Velocity Blending]
         M -->|WebGL 3D| N[Mapbox / CARTO Overlay]
+        K --> O[Radio Terminal]
     end
 ```
 
@@ -116,6 +120,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 - **Deep Vessel Classification**: Real-time parsing of Maritime ShipStaticData to classify tankers, cargo, military, SAR, and passenger vessels with absolute precision.
 - **Orbital Pulse Tracking**: End-to-end satellite tracking using Celestrak TLE ingestion and live SGP4 propagation (accuracy updated every 30s) to visualize LEO/MEO/GEO assets.
+- **JS8Call Signal Intelligence**: Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications and station tracking.
 - **Projective Velocity Blending (PVB)**: Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings, with zero "rubber-banding."
 - **Granular Filtering Matrix**: Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., hiding generic cargo and passenger jets, while highlighting Drones, Helicopters, and Military fast-movers).
 - **Time-Travel (Historian Service)**: All positional data is written to a TimescaleDB instance. Operators can search for past targets and "replay" tactical situations from hours or days ago directly within the WebGL interface.
@@ -129,6 +134,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 | `/backend/ingestion` | Python and Benthos multi-source polling frameworks. | **Tracked** |
 | `/backend/db`        | Database schema (`init.sql`) and migration scripts. | **Tracked** |
 | `/backend/api`       | Python FastAPI service for Fusion and Analysis.     | **Tracked** |
+| `/js8call`           | JS8Call HF Radio Terminal container and bridge.     | **Tracked** |
 | `/frontend`          | React + Vite application (Tactical Map + HUD).      | **Tracked** |
 | `/docs`              | Architecture plans, research, and progress logs.    | **Tracked** |
 

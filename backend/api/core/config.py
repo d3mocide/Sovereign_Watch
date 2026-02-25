@@ -6,7 +6,7 @@ class Settings:
     POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'password')
     POSTGRES_DB = os.getenv('POSTGRES_DB', 'sovereign_watch')
     POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'sovereign-timescaledb')
-    DB_DSN = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}"
+    DB_DSN = os.getenv('DB_DSN', f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}")
 
     # Redis
     REDIS_HOST = os.getenv('REDIS_HOST', 'sovereign-redis')

@@ -100,6 +100,30 @@ export function chaikinSmooth(pts: number[][], iterations = 2): number[][] {
   return result;
 }
 
+/**
+ * Convert a Maidenhead grid locator (4 or 6 chars) to [lat, lon] decimal degrees.
+ * Returns the center of the grid square.
+ */
+export function maidenheadToLatLon(grid: string): [number, number] {
+  if (!grid || grid.length < 4) return [0, 0];
+  const g = grid.toUpperCase();
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90;
+  lon += parseInt(g[2]) * 2;
+  lat += parseInt(g[3]);
+  if (grid.length >= 6) {
+    // Subsquare: a-x, each 5'×2.5'
+    lon += (g.charCodeAt(4) - 65) * (5 / 60);
+    lat += (g.charCodeAt(5) - 65) * (2.5 / 60);
+    lon += 5 / 120; // center of subsquare
+    lat += 2.5 / 120;
+  } else {
+    lon += 1;   // center of 2° square
+    lat += 0.5; // center of 1° square
+  }
+  return [lat, lon];
+}
+
 /** Deterministic hash from UID for animation phase offset */
 export function uidToHash(uid: string): number {
   if (!uid) return 0;
