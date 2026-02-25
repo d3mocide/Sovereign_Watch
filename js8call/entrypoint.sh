@@ -227,7 +227,7 @@ export PULSE_PROP="media.role=phone"  # Hint to PulseAudio for priority routing
 
 export QT_QPA_PLATFORM=offscreen
 
-js8call --rig-name=KiwiSDR-Virtual > /tmp/js8call.log 2>&1 &
+js8call --rig-name=KiwiSDR-Virtual &
 JS8CALL_PID=$!
 log "JS8Call PID: ${JS8CALL_PID}"
 
@@ -259,9 +259,7 @@ sleep 2
 # reconnect to different hosts/ports at runtime via the SET_KIWI WebSocket action.
 # =============================================================================
 log "STEP 6: Starting FastAPI bridge server on port 8080..."
-python3 /app/server.py \
-    2>/tmp/server.log \
-&
+python3 /app/server.py &
 SERVER_PID=$!
 log "FastAPI bridge PID: ${SERVER_PID}"
 
@@ -278,12 +276,7 @@ log "  PulseAudio:     system daemon           (KIWI_RX sink)"
 log "  JS8Call:        PID ${JS8CALL_PID}      (TCP API :2442)"
 log "  FastAPI bridge: PID ${SERVER_PID}       (:8080, owns KiwiSDR pipeline)"
 log ""
-log "Logs:"
-log "  /tmp/pulseaudio.log   – PulseAudio daemon"
-log "  /tmp/kiwirecorder.log – KiwiSDR stream client"
-log "  /tmp/pacat.log        – PulseAudio sink feed"
-log "  /tmp/js8call.log      – JS8Call application"
-log "  /tmp/server.log       – FastAPI bridge"
+log "Logs are now streaming to container stdout/stderr."
 
 # Trap signals for graceful shutdown
 cleanup() {

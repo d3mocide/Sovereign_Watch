@@ -59,7 +59,7 @@ logger = logging.getLogger("js8bridge")
 # ---------------------------------------------------------------------------
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
-JS8CALL_HOST = os.getenv("JS8CALL_HOST", "127.0.0.1")
+JS8CALL_HOST = os.getenv("JS8CALL_HOST", "0.0.0.0")
 JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
 JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))
@@ -423,15 +423,24 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("KiwiSDR pipeline startup failed (will retry via UI): %s", exc)
 
-    try:
-        transport, protocol = await _event_loop.create_datagram_endpoint(
-            lambda: JS8CallUDPProtocol(),
-            local_addr=("127.0.0.1", JS8CALL_UDP_CLIENT_PORT)
-        )
-        js8_client_udp_transport = transport
-    except Exception as exc:
-        logger.error("Failed to start UDP listener on port %d: %s", JS8CALL_UDP_CLIENT_PORT, exc)
-        js8_client_udp_transport = None
+    # Try to bind the UDP listener with retries
+    for attempt in range(1, 6):
+        try:
+            logger.info(f"Starting UDP listener on {JS8CALL_HOST}:{JS8CALL_UDP_CLIENT_PORT} (attempt {attempt}/5)...")
+            transport, protocol = await _event_loop.create_datagram_endpoint(
+                lambda: JS8CallUDPProtocol(),
+                local_addr=(JS8CALL_HOST, JS8CALL_UDP_CLIENT_PORT)
+            )
+            js8_client_udp_transport = transport
+            logger.info(f"UDP listener successfully bound to {JS8CALL_HOST}:{JS8CALL_UDP_CLIENT_PORT}")
+            break
+        except Exception as exc:
+            logger.warning(f"Failed to start UDP listener on port {JS8CALL_UDP_CLIENT_PORT}: {exc}")
+            if attempt < 5:
+                await asyncio.sleep(2)
+            else:
+                logger.error(f"Could not bind UDP listener after 5 attempts.")
+                js8_client_udp_transport = None
 
     yield
 

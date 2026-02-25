@@ -240,8 +240,19 @@ export default function RadioTerminal() {
     freq: KIWI_DEFAULT_FREQ,
     mode: 'usb',
   });
+  // Track the actual connected state to detect changes
+  const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
   const [kiwiConnected, setKiwiConnected] = useState(false);
   const [kiwiConnecting, setKiwiConnecting] = useState(false);
+
+  const configChanged = useMemo(() => {
+    if (!activeKiwiConfig) return false;
+    return (
+      kiwiConfig.host !== activeKiwiConfig.host ||
+      kiwiConfig.port !== activeKiwiConfig.port ||
+      kiwiConfig.freq !== activeKiwiConfig.freq
+    );
+  }, [kiwiConfig, activeKiwiConfig]);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null);
@@ -337,12 +348,16 @@ export default function RadioTerminal() {
         setKiwiConnected(payload.connected ?? false);
         setKiwiConnecting(false);
         if (payload.connected && payload.host) {
-          setKiwiConfig({
+          const newConfig = {
             host: payload.host,
             port: payload.port,
             freq: payload.freq,
             mode: payload.mode || 'usb',
-          });
+          };
+          setKiwiConfig(newConfig);
+          setActiveKiwiConfig(newConfig);
+        } else {
+          setActiveKiwiConfig(null);
         }
         appendSystem(
           payload.connected
@@ -488,61 +503,69 @@ export default function RadioTerminal() {
           {/* KiwiSDR inline config */}
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            {kiwiConnected ? (
-              /* Connected – read-only display */
-              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded font-mono">
-                <span className="text-cyan-400">{kiwiConfig.host}</span>
-                <span className="text-slate-700">:</span>
-                <span className="text-slate-400">{kiwiConfig.port}</span>
-                <span className="text-slate-700 px-0.5">@</span>
-                <span className="text-emerald-400">{kiwiConfig.freq} kHz</span>
-              </div>
-            ) : (
-              /* Disconnected – editable inputs */
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={kiwiConfig.host}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, host: e.target.value }))}
-                  placeholder="sdr.host.com"
-                  disabled={!connected || kiwiConnecting}
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-36 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-                />
-                <span className="text-slate-600">:</span>
-                <input
-                  type="number"
-                  value={kiwiConfig.port}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, port: Number(e.target.value) || 8073 }))}
-                  placeholder="8073"
-                  disabled={!connected || kiwiConnecting}
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-16 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-                />
-                <span className="text-slate-600 px-0.5">@</span>
-                <input
-                  type="number"
-                  value={kiwiConfig.freq}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, freq: Number(e.target.value) || 14074 }))}
-                  placeholder="14074"
-                  disabled={!connected || kiwiConnecting}
-                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-20 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-                />
-                <span className="text-slate-600 text-[10px]">kHz</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={kiwiConfig.host}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, host: e.target.value }))}
+                placeholder="sdr.host.com"
+                disabled={!connected || kiwiConnecting}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-36 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+              />
+              <span className="text-slate-600">:</span>
+              <input
+                type="number"
+                value={kiwiConfig.port}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, port: Number(e.target.value) || 8073 }))}
+                placeholder="8073"
+                disabled={!connected || kiwiConnecting}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-16 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+              />
+              <span className="text-slate-600 px-0.5">@</span>
+              <input
+                type="number"
+                value={kiwiConfig.freq}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKiwiConfig((p: any) => ({ ...p, freq: Number(e.target.value) || 14074 }))}
+                placeholder="14074"
+                disabled={!connected || kiwiConnecting}
+                className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-20 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+              />
+              <span className="text-slate-600 text-[10px]">kHz</span>
+            </div>
+
             <button
-              onClick={kiwiConnected ? handleKiwiDisconnect : handleKiwiConnect}
+              onClick={() => {
+                if (kiwiConnected) {
+                  if (configChanged) {
+                    handleKiwiConnect();
+                  } else {
+                    handleKiwiDisconnect();
+                  }
+                } else {
+                  handleKiwiConnect();
+                }
+              }}
               disabled={!connected || kiwiConnecting}
               className={`
                 px-3 py-1.5 rounded font-mono text-xs font-bold uppercase tracking-wider
                 transition-colors duration-150 focus:outline-none
                 ${kiwiConnected
-                  ? 'bg-rose-600/20 border border-rose-500/30 text-rose-400 hover:bg-rose-600/40'
+                  ? configChanged
+                    ? 'bg-amber-600/20 border border-amber-500/30 text-amber-400 hover:bg-amber-600/40' // Update/Retune
+                    : 'bg-rose-600/20 border border-rose-500/30 text-rose-400 hover:bg-rose-600/40'   // Disconnect
                   : kiwiConnecting
                     ? 'bg-slate-800 border border-slate-700 text-slate-500 cursor-wait'
                     : 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/40 disabled:opacity-40 disabled:cursor-not-allowed'}
               `}
             >
-              {kiwiConnected ? 'Disconnect SDR' : kiwiConnecting ? 'Connecting…' : 'Connect SDR'}
+              {kiwiConnected
+                ? configChanged
+                  ? 'Update SDR'
+                  : 'Disconnect'
+                : kiwiConnecting
+                  ? 'Connecting…'
+                  : 'Connect SDR'
+              }
             </button>
           </div>
 

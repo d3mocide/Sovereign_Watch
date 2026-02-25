@@ -240,6 +240,9 @@ ENV KIWI_MODE=usb
 ENV JS8CALL_HOST=127.0.0.1
 ENV JS8CALL_PORT=2442
 
+# Ensure Python logs are unbuffered
+ENV PYTHONUNBUFFERED=1
+
 # FastAPI bridge port
 EXPOSE 8080
 
