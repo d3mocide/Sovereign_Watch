@@ -8,6 +8,9 @@
 - **JS8Call HUD Widget:** New interactive sidebar widget for real-time tactical chat, frequency control, and station health monitoring.
 - **Tactical Map Integration:** JS8Call stations are now visualized on the map as specialized tactical entities with live status indicators.
 - **KIWI_RX Audio Pipeline:** Implemented a robust virtual audio pipeline for JS8Call using PulseAudio null-sinks, allowing seamless ingestion from network SDRs.
+- **TopBar Streamlining:** Redesigned the top navigation bar with a compact view switcher (Globe vs Radio), an icon-based status bar, and subtle UI animations.
+- **Dynamic Alerts & Tactical Clock:** Replaced the static alerts text with a pulsing red tactical pill and upgraded the UTC clock to a segmented green ZULU HUD display.
+- **Tactical Map Zoom Controls:** Integrated floating `+` and `-` zoom controls on the tactical map for precise view adjustments.
 
 ### Improved
 

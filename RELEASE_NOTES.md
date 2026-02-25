@@ -20,6 +20,13 @@ Incoming JS8 signals are no longer just text. When a station provides grid coord
 - **Live Status Icons**: See which stations are active and their relative signal strength.
 - **Entity Linking**: Click on a station on the map to instantly focus the JS8 widget on their recent traffic.
 
+#### 🎛️ TopBar Streamlining (V2)
+The HUD TopBar has been entirely redesigned for a cleaner, high-tech tactical feel.
+- **Compact View Switcher**: A sleek pill-button allows instant swapping between the 3D Globe Tactical view and the full-screen Radio Terminal.
+- **Icon-Based Status**: System indicators (Core, Replay, History, Vectors) are now consolidated into a high-density icon bar.
+- **Dynamic Alerts & Zulu Clock**: Replaced the static alerts text with a pulsing red tactical pill and upgraded the UTC clock to a segmented green ZULU HUD display.
+- **Map Zoom Controls**: Added floating "+" and "-" zoom controls directly on the tactical map for faster navigation.
+
 ### Infrastructure & Resilience
 - **Robust Audio Pipeline**: Re-engineered entrypoints for the `js8call` service ensure that virtual audio sinks are correctly initialized before the software starts, eliminating "no audio device" errors.
 - **Volume persistence**: Config and rig settings for JS8Call are now persisted across container restarts.
