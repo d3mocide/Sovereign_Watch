@@ -8,7 +8,7 @@ from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from uvicorn.protocols.utils import ClientDisconnected
 
 from core.config import settings
-from services.tak import transform_to_proto
+from .tak import transform_to_proto
 
 logger = logging.getLogger("SovereignWatch.Broadcast")
 
@@ -127,7 +127,7 @@ class BroadcastManager:
             for ws in list(self.active_connections):
                 try:
                     await ws.close(code=1011) # Internal Error
-                except:
+                except Exception:
                     pass
             self.active_connections.clear()
 

@@ -99,7 +99,7 @@ async def search_tracks(q: str, limit: int = 10):
                     meta = json.loads(meta_json)
                     d['callsign'] = meta.get('callsign')
                     d['classification'] = meta.get('classification')
-                except:
+                except Exception:
                     d['callsign'] = None
                     d['classification'] = None
             else:
