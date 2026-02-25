@@ -129,7 +129,7 @@ export function buildJS8Layers(
         fontWeight: "bold",
         billboard: true,
         pickable: false,
-        wrapLongitude: true,
+        wrapLongitude: !globeMode,
         parameters: depthParams,
       }),
     );

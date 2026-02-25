@@ -1,3 +1,4 @@
+
 # Jules Changes
 
 # Security Fix: Tracks History Validation
@@ -36,3 +37,21 @@ The Kafka broker address was hardcoded as `'sovereign-redpanda:9092'` in `backen
 ## Benefits
 -   **Configurability**: The application can now be deployed in different environments with different Kafka broker addresses without code changes.
 -   **Maintainability**: The Kafka broker address is defined in a single place (`backend/api/core/config.py`), reducing duplication and the risk of inconsistencies.
+
+## 2024-05-24: Fix Globe Mode Icon Rendering
+
+### Problem
+In Globe projection mode, entity icons (aircraft/vessel chevrons) and satellite markers (diamonds) were failing to render. This was caused by a conflict between Deck.gl's `IconLayer` properties when `billboard: true` is combined with `wrapLongitude: true` in the Globe view. Additionally, conflicting `depthTest` settings in the tactical halo and heading arrow layers exacerbated the issue.
+
+### Solution
+- **`frontend/src/layers/buildEntityLayers.ts`**:
+    - Disabled `wrapLongitude` for `heading-arrows` and `entity-tactical-halo` layers when `globeMode` is active.
+    - Forced `depthTest: false` for `heading-arrows` to ensure icons always render on top of the terrain, aligning with the inline comments.
+- **`frontend/src/layers/OrbitalLayer.tsx`**:
+    - Disabled `wrapLongitude` for `satellite-markers` when the projection mode is 'globe'.
+- **`frontend/src/layers/buildJS8Layers.ts`**:
+    - Disabled `wrapLongitude` for `js8-labels` in Globe mode to prevent billboarding conflicts.
+
+### Verification
+- **Scenario**: Switch to Globe view.
+- **Expected**: Aircraft chevrons, Vessel chevrons, and Satellite diamonds should now appear correctly on the globe surface, maintaining their billboard orientation towards the camera without z-fighting or disappearance.

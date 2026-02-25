@@ -76,10 +76,10 @@ export function buildEntityLayers(
       billboard: !!globeMode,
       getColor: [255, 136, 0, 140], // Softer alpha for the redesigned glow
       pickable: false,
-      wrapLongitude: true,
+      // Wrap longitude breaks billboarding in Globe View
+      wrapLongitude: !globeMode,
       // Use depthTest: false to stay on top regardless of terrain/zoom in 2D/3D.
-      // In globe mode, depthTest: true with a strong bias of -210 keeps icons on top.
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -210.0 : 0 },
+      parameters: { depthTest: false, depthBias: globeMode ? -210.0 : 0 },
       updateTriggers: {
         getSize: [currentSelected?.uid],
         getColor: [now],
@@ -118,9 +118,10 @@ export function buildEntityLayers(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getColor: (d: any) => entityColor(d as CoTEntity),
       pickable: true,
-      wrapLongitude: true,
+      // Wrap longitude breaks billboarding in Globe View
+      wrapLongitude: !globeMode,
       // Always disable depthTest for icons to ensure visibility atop terrain/buildings
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -210.0 : 0 },
+      parameters: { depthTest: false, depthBias: globeMode ? -210.0 : 0 },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onHover: (info: { object?: any; x: number; y: number }) => {
         if (info.object) {

@@ -169,7 +169,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
             billboard: true,
             getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 255),
             pickable: true,
-            wrapLongitude: true,
+            wrapLongitude: !projectionMode || projectionMode === 'mercator',
             parameters: { depthTest: false }, // Always on top — icon must never be occluded by its own trail
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onHover: (info: { object?: any; x: number; y: number }) => {
