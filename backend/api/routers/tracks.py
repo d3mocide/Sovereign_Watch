@@ -75,6 +75,13 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
+    # Security: Validate inputs to prevent DoS
+    if limit > settings.TRACK_HISTORY_MAX_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Limit exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_LIMIT})")
+
+    if hours > settings.TRACK_HISTORY_MAX_HOURS:
+        raise HTTPException(status_code=400, detail=f"Hours exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_HOURS})")
+
     query = """
         SELECT time, lat, lon, alt, speed, heading, meta
         FROM tracks
@@ -88,8 +95,9 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         # Convert to dict to handle non-serializable types if any (asyncpg returns Record)
         return [dict(row) for row in rows]
     except Exception as e:
+        # Security: Log the full error but return a generic message to prevent info leakage
         logger.error(f"History query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/api/tracks/search")
 async def search_tracks(q: str, limit: int = 10):
