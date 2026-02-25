@@ -1,4 +1,8 @@
+## [0.10.1] - 2026-02-24
 
+### Fixed
+
+- **JS8Call Headless Thread Crash:** Re-engineered the FastAPI bridge to use native AsyncIO Datagram (UDP) Protocol instead of TCP. This completely bypasses a fatal Qt `QNativeSocketEngine` thread collision that occurred when connecting to headless JS8Call over Xvfb, permanently restoring live telemetry to the Radio Terminal.
 
 ## [0.10.0] - 2026-02-24
 
