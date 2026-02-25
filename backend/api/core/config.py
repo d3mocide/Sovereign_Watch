@@ -12,6 +12,10 @@ class Settings:
     REDIS_HOST = os.getenv('REDIS_HOST', 'sovereign-redis')
     REDIS_URL = f"redis://{REDIS_HOST}:6379"
 
+    # Security Limits
+    TRACK_HISTORY_MAX_LIMIT = int(os.getenv('TRACK_HISTORY_MAX_LIMIT', '1000'))
+    TRACK_HISTORY_MAX_HOURS = int(os.getenv('TRACK_HISTORY_MAX_HOURS', '72'))
+    
     # Kafka
     KAFKA_BROKERS = os.getenv('KAFKA_BROKERS', 'sovereign-redpanda:9092')
 

@@ -72,6 +72,18 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     """
     Get raw track points for a specific entity.
     """
+    if limit > settings.TRACK_HISTORY_MAX_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_LIMIT})"
+        )
+
+    if hours > settings.TRACK_HISTORY_MAX_HOURS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hours exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_HOURS})"
+        )
+
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
