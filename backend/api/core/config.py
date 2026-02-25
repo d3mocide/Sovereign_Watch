@@ -12,6 +12,9 @@ class Settings:
     REDIS_HOST = os.getenv('REDIS_HOST', 'sovereign-redis')
     REDIS_URL = f"redis://{REDIS_HOST}:6379"
 
+    # Kafka
+    KAFKA_BROKERS = os.getenv('KAFKA_BROKERS', 'sovereign-redpanda:9092')
+
     # AI
     LITELLM_MODEL = "deep-reasoner"
 
