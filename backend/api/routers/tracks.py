@@ -1,15 +1,13 @@
 import json
 import logging
 import uuid
-import time
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from aiokafka import AIOKafkaConsumer
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
 from core.database import db
 from core.config import settings
-from services.tak import transform_to_proto
+from services.broadcast import broadcast_service
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Tracks")
@@ -17,55 +15,22 @@ logger = logging.getLogger("SovereignWatch.Tracks")
 @router.websocket("/api/tracks/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    # Initialize Kafka Consumer
-    # Use unique group_id per client so every user gets ALL data (Broadcast)
-    # and to prevent rebalancing loops when multiple clients connect.
     client_id = f"api-client-{uuid.uuid4().hex[:8]}"
 
-    # Subscribe to aviation, maritime, and orbital topics
-    consumer = AIOKafkaConsumer(
-        "adsb_raw", "ais_raw", "orbital_raw",
-        bootstrap_servers=settings.KAFKA_BROKERS,
-        # No group_id = Broadcast mode (unique random consumer group per instance)
-        # Prevents offset commit accumulation on the broker.
-        group_id=None,
-        auto_offset_reset="latest"  # Only new data
-    )
-
+    # Register with Broadcast Service
+    await broadcast_service.connect(websocket)
+    logger.info(f"Client {client_id} connected")
 
     try:
-        await consumer.start()
-        logger.info(f"Kafka Consumer started for {client_id}")
-
-        async for msg in consumer:
-            try:
-                data = json.loads(msg.value.decode('utf-8'))
-
-                # Transform JSON to TAK Proto
-                tak_bytes = transform_to_proto(data)
-
-                # Send Binary
-                await websocket.send_bytes(tak_bytes)
-
-                # Debug Log (Sampled)
-                # if int(time.time()) % 10 == 0:
-                #      logger.info(f"Sent TAK Message: {data.get('uid')}")
-
-            except (WebSocketDisconnect, ConnectionClosedOK, ClientDisconnected):
-                logger.info(f"Client {client_id} disconnected during send")
-                break
-            except Exception as e:
-                logger.error(f"Error processing message: {e}", exc_info=True)
-                logger.error(f"Faulty Payload: {msg.value}")
-                continue
-
+        while True:
+            # Wait for client to close connection or send a message (ignored)
+            await websocket.receive_text()
     except (WebSocketDisconnect, ConnectionClosedOK, ClientDisconnected):
         logger.info(f"Client {client_id} disconnected")
     except Exception as e:
-        logger.error(f"WebSocket Loop failed: {e}")
+        logger.error(f"WebSocket Loop failed for {client_id}: {e}")
     finally:
-        await consumer.stop()
+        await broadcast_service.disconnect(websocket)
 
 @router.get("/api/tracks/history/{entity_id}")
 async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
@@ -134,7 +99,7 @@ async def search_tracks(q: str, limit: int = 10):
                     meta = json.loads(meta_json)
                     d['callsign'] = meta.get('callsign')
                     d['classification'] = meta.get('classification')
-                except:
+                except Exception:
                     d['callsign'] = None
                     d['classification'] = None
             else:

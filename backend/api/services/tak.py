@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime
 from proto.tak_pb2 import TakMessage
@@ -6,8 +5,10 @@ from proto.tak_pb2 import TakMessage
 logger = logging.getLogger("SovereignWatch.TAK")
 
 def to_epoch(val):
-    if val is None: return 0
-    if isinstance(val, (int, float)): return int(val)
+    if val is None:
+        return 0
+    if isinstance(val, (int, float)):
+        return int(val)
     if isinstance(val, str):
         try:
             # Simple ISO check (Python 3.11+)
@@ -18,7 +19,8 @@ def to_epoch(val):
     return 0
 
 def to_float(val, default=0.0):
-    if val is None: return default
+    if val is None:
+        return default
     try:
         return float(val)
     except (ValueError, TypeError):

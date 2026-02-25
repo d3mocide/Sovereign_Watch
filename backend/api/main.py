@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import system, tracks, analysis
 from core.database import db
 from services.historian import historian_task
+from services.broadcast import broadcast_service
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -33,8 +34,11 @@ async def startup():
     
     # Start Historian
     historian_task_handle = asyncio.create_task(historian_task())
+
+    # Start Broadcast Service
+    await broadcast_service.start()
     
-    logger.info("Database, Redis, and Historian started")
+    logger.info("Database, Redis, Historian, and Broadcast Service started")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -45,6 +49,9 @@ async def shutdown():
             await historian_task_handle
         except asyncio.CancelledError:
             pass
+
+    # Stop Broadcast Service
+    await broadcast_service.stop()
             
     await db.disconnect()
 
