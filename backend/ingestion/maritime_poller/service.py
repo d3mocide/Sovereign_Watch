@@ -7,6 +7,7 @@ from typing import Optional, Dict
 
 import redis.asyncio as redis
 import websockets
+import websockets.exceptions
 from aiokafka import AIOKafkaProducer
 
 from classification import classify_vessel
@@ -323,6 +324,13 @@ class MaritimePollerService:
             logger.error(f"Failed to transform AIS message: {e}")
             return None
 
+    def on_send_error(self, future):
+        """Callback for Kafka send errors."""
+        try:
+            future.result()
+        except Exception as e:
+            logger.error(f"Failed to send to Kafka: {e}")
+
     async def stream_loop(self):
         """Main streaming loop - receives AIS messages and publishes to Kafka."""
         while self.running:
@@ -353,12 +361,13 @@ class MaritimePollerService:
                         tak_event = self.transform_to_tak(data)
 
                         if tak_event:
-                            # Send to Kafka
-                            await self.kafka_producer.send(
+                            # Send to Kafka (non-blocking)
+                            future = self.kafka_producer.send(
                                 "ais_raw",
                                 value=tak_event,
                                 key=tak_event["uid"].encode("utf-8")
                             )
+                            future.add_done_callback(self.on_send_error)
 
                             # Log sparingly (every 100th message)
                             if hash(tak_event["uid"]) % 100 == 0:
@@ -382,11 +391,14 @@ class MaritimePollerService:
                         tak_event = self.handle_class_b_position(data)
 
                         if tak_event:
-                            await self.kafka_producer.send(
+                            # Send to Kafka (non-blocking)
+                            future = self.kafka_producer.send(
                                 "ais_raw",
                                 value=tak_event,
                                 key=tak_event["uid"].encode("utf-8")
                             )
+                            future.add_done_callback(self.on_send_error)
+
                             if hash(tak_event["uid"]) % 100 == 0:
                                 logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")
 
