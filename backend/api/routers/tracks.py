@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
@@ -66,7 +66,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"History query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/api/tracks/search")
 async def search_tracks(q: str, limit: int = 10):
@@ -112,7 +112,7 @@ async def search_tracks(q: str, limit: int = 10):
         return results
     except Exception as e:
         logger.error(f"Search query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/api/tracks/replay")
 async def replay_tracks(start: str, end: str):
@@ -120,9 +120,6 @@ async def replay_tracks(start: str, end: str):
     Get all track points within a time window for replay.
     Timestamps must be ISO 8601.
     """
-    if not db.pool:
-        raise HTTPException(status_code=503, detail="Database not ready")
-
     try:
         # Pydantic/FastAPI handles some ISO parsing, but we need robust handling
         dt_start = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -130,15 +127,26 @@ async def replay_tracks(start: str, end: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid ISO8601 timestamp format")
 
+    # Validate range duration
+    if (dt_end - dt_start) > timedelta(hours=settings.TRACK_REPLAY_MAX_HOURS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Time range exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_HOURS} hours)"
+        )
+
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
     query = """
         SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
         FROM tracks
         WHERE time >= $1 AND time <= $2
         ORDER BY time ASC
+        LIMIT $3
     """
     try:
-        rows = await db.pool.fetch(query, dt_start, dt_end)
+        rows = await db.pool.fetch(query, dt_start, dt_end, settings.TRACK_REPLAY_MAX_LIMIT)
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"Replay query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
