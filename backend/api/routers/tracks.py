@@ -115,29 +115,44 @@ async def search_tracks(q: str, limit: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/tracks/replay")
-async def replay_tracks(start: str, end: str):
+async def replay_tracks(start: str, end: str, limit: int = 1000):
     """
     Get all track points within a time window for replay.
     Timestamps must be ISO 8601.
     """
-    if not db.pool:
-        raise HTTPException(status_code=503, detail="Database not ready")
+    if limit > settings.TRACK_REPLAY_MAX_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_LIMIT})"
+        )
 
     try:
         # Pydantic/FastAPI handles some ISO parsing, but we need robust handling
         dt_start = datetime.fromisoformat(start.replace('Z', '+00:00'))
         dt_end = datetime.fromisoformat(end.replace('Z', '+00:00'))
-    except ValueError:
+
+        # Validate time window
+        duration_hours = (dt_end - dt_start).total_seconds() / 3600
+        if duration_hours > settings.TRACK_REPLAY_MAX_HOURS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Time range exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_HOURS} hours)"
+            )
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid ISO8601 timestamp format")
+
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
 
     query = """
         SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
         FROM tracks
         WHERE time >= $1 AND time <= $2
         ORDER BY time ASC
+        LIMIT $3
     """
     try:
-        rows = await db.pool.fetch(query, dt_start, dt_end)
+        rows = await db.pool.fetch(query, dt_start, dt_end, limit)
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"Replay query failed: {e}")
