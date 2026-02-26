@@ -7,7 +7,9 @@
 - **Frontend**: React (Vite), Tailwind CSS.
   - **Mapping**: Hybrid Architecture supporting **Mapbox GL JS** OR **MapLibre GL JS** (dynamic import based on env), overlaid with **Deck.gl** v9.
   - Source: `frontend/src/components/map/TacticalMap.tsx`
-- **Backend**: FastAPI (Python), Redpanda Connect (in `backend/api/` and `backend/ingestion/`)
+- **Backend**: FastAPI (Python)
+  - **Ingestion**: Python-based pollers in `backend/ingestion/` (Aviation, Maritime, Satellite)
+  - **Streaming**: Redpanda (Kafka-compatible) for event bus.
 - **Infrastructure**: Docker Compose, localized dev environment.
 
 ## 2. Mandatory Rules (from `.agent/rules/GEMINI.md`)
@@ -21,11 +23,12 @@
 - **Communication**: All inter-service communication use **TAK Protocol V1 (Protobuf)**. No ad-hoc JSON.
 - **Rendering**: Hybrid Architecture (WebGL2 for visuals). Do not downgrade to Leaflet.
 - **State**: Backend uses `Redpanda` (Kafka-compatible) for event streaming.
+- **Ingestion**: Use Python pollers (`backend/ingestion/`). Do NOT use Redpanda Connect (Benthos).
 
 ### 📝 Documentation & Change Tracking
-- **File**: `docs/jules_changes.md`
-- **Requirement**: You **MUST** append a new entry for all significant features, bug fixes, and architectural changes.
-- **Format**: Include the **Date** and follow the existing structure:
+- **Requirement**: You **MUST** create a new file in `docs/tasks/` for all significant features, bug fixes, and architectural changes.
+- **Format**: Filename: `YYYY-MM-DD-{task-slug}.md`
+- **Content**:
   - **Issue**: Description of the problem or feature request.
   - **Solution**: High-level approach taken.
   - **Changes**: Specific files modified and logic implemented.
@@ -86,8 +89,16 @@ python3 .agent/skills/vulnerability-scanner/scripts/security_scan.py .
 │   └── package.json  # Frontend Dependencies
 ├── backend/          # Microservices Root
 │   ├── api/          # FastAPI Server (has requirements.txt)
-│   ├── ingestion/    # Data Ingestion Services
-│   └── database/     # Database Migrations
+│   ├── ingestion/    # Data Ingestion Services (Python Pollers)
+│   │   ├── aviation_poller/
+│   │   ├── maritime_poller/
+│   │   └── orbital_pulse/
+│   ├── ai/           # LLM Config (litellm_config.yaml)
+│   ├── database/     # Database Policies (Retention)
+│   ├── db/           # Database Initialization (init.sql)
+│   └── scripts/      # Utility Scripts
+├── docs/             # Documentation
+│   └── tasks/        # Task-specific change logs (YYYY-MM-DD-slug.md)
 ├── docker-compose.yml
 └── AGENTS.md         # This file
 ```

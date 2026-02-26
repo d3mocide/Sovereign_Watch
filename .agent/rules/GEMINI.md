@@ -25,7 +25,7 @@ trigger: always_on
 - **Communication**: All inter-service pipelines must use **TAK Protocol V1 (Protobuf)** via `tak.proto`. No ad-hoc JSON.
 - **Rendering**: Hybrid Architecture (WebGL2 for visuals, WebGPU/Workers for compute). Do not downgrade to Leaflet.
 - **Frontend Stack**: React (Vite) + **Mapbox GL JS** OR **MapLibre GL JS** (dynamic import based on env) + **Deck.gl v9**.
-- **Ingestion**: Use Redpanda Connect (Benthos) preferentially over custom Python scripts.
+- **Ingestion**: Use Python Pollers in `backend/ingestion/` (Aviation, Maritime, Satellite). Do not use Redpanda Connect.
 
 ### 3. Development Workflow (Live Code Updates)
 
@@ -35,7 +35,7 @@ Both frontend and backend have **Hot Module Replacement (HMR)** enabled:
 | ------------- | ---------------------------- | -------------------------------------------------------- | --------------------------------------------- |
 | **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                          | No restart needed. Changes reflect instantly. |
 | **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                          | No restart needed. Server auto-restarts.      |
-| **Ingestion** | Modify `.yaml` config        | **REQUIRES RESTART:** `docker compose restart ingestion` | Benthos doesn't support hot reload.           |
+| **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart.|
 
 **Quick Reference Commands:**
 
@@ -83,8 +83,8 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 | **QUESTION**     | "what is", "how does", "explain"           | TIER 0 only                    | Text Response                             |
 | **SURVEY/INTEL** | "analyze", "list files", "overview"        | TIER 0 + Explorer              | Session Intel (No File)                   |
 | **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                               |
-| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **docs/{task-slug}.md Required**          |
-| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **docs/{task-slug}.md Required**          |
+| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **docs/tasks/{task-slug}.md Required**    |
+| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **docs/tasks/{task-slug}.md Required**    |
 | **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                                  |
 
 > **Escalation Rule:** Any request touching 3+ files OR crossing domain boundaries (e.g., frontend + backend) automatically escalates to **COMPLEX CODE**, regardless of the verb used.
@@ -211,7 +211,7 @@ When user's prompt is NOT in English:
 
 **If a task extends beyond 3 files or requires multiple sequential steps:**
 
-1. **Create Anchor:** You MUST spontaneously transition into `planning-with-files` mode and create an `active_task.md` or `progress.md` in the `/docs/sessions/` folder.
+1. **Create Anchor:** You MUST spontaneously transition into `planning-with-files` mode and create a `docs/tasks/{date}-{task-slug}.md` file.
 2. **Track State:** Update this file constantly with findings, changed files, and current objectives to protect against context truncation.
 3. **Roadmap Sync:** As milestones are completed or new discoveries are made, you MUST review `ROADMAP.md`. Check off completed long-term goals or add newly discovered technical debt and future-feature ideas to the roadmap.
 4. **Release Gate:** Before executing ANY `/release` command or concluding a session, you MUST read the active task document to accurately reconstruct the full scope of your session's work.
@@ -258,7 +258,7 @@ When user's prompt is NOT in English:
 | -------- | ----------------- | -------------------------------------------- |
 | **plan** | `project-planner` | 4-phase methodology. NO CODE before Phase 4. |
 | **ask**  | -                 | Focus on understanding. Ask questions.       |
-| **edit** | `orchestrator`    | Execute. Check `docs/{task-slug}.md` first.  |
+| **edit** | `orchestrator`    | Execute. Check `docs/tasks/{task-slug}.md` first. |
 
 **Plan Mode (4-Phase):**
 
