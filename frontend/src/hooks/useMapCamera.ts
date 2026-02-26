@@ -120,16 +120,18 @@ export function useMapCamera({
     };
   }, [globeMode, mapLoaded]);
 
-  // Dedicated 3D visuals Effect
+  // Dedicated 3D visuals + atmosphere Effect
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!mapLoaded || !map) return;
 
+    const SKY_LAYER_ID = "tactical-sky-atmosphere";
+
     const sync3D = () => {
       const isMapbox = !!mapToken;
 
+      // ── Terrain (Mapbox only) ──────────────────────────────────────────
       if (enable3d) {
-        // 1. Terrain - Mapbox Only (URL is Mapbox-exclusive)
         if (isMapbox) {
           if (!map.getSource("mapbox-dem")) {
             map.addSource("mapbox-dem", {
@@ -145,50 +147,56 @@ export function useMapCamera({
             console.warn("[TacticalMap] Failed to set terrain:", e);
           }
         }
+      } else {
+        if (map.getTerrain?.()) map.setTerrain(null);
+      }
 
-        // 2. Fog - Mapbox GL v2+ Only
-        if (isMapbox && map.setFog) {
+      // ── Atmosphere ────────────────────────────────────────────────────
+      // MapLibre GL JS does NOT have setFog() — that's Mapbox-proprietary.
+      // MapLibre v5 uses a "sky" layer type for atmosphere/space effects.
+      if (globeMode) {
+        console.log("[TacticalMap] sync3D: adding sky layer, already exists:", !!map.getLayer(SKY_LAYER_ID));
+        if (!map.getLayer(SKY_LAYER_ID)) {
           try {
-            map.setFog({
-              range: [0.5, 10],
-              color: "rgba(10, 15, 25, 1)",
-              "high-color": "rgba(20, 30, 50, 1)",
-              "space-color": "rgba(5, 5, 15, 1)",
-              "horizon-blend": 0.1,
-            });
+            // Use ONLY atmosphere-type props — mixing gradient props with
+            // sky-type:atmosphere causes silent MapLibre validation failures.
+            map.addLayer({
+              id: SKY_LAYER_ID,
+              type: "sky",
+              paint: {
+                "sky-type": "atmosphere",
+                "sky-atmosphere-sun": [0, 90],           // Sun at horizon
+                "sky-atmosphere-sun-intensity": 5,        // Low glow (near night)
+                "sky-atmosphere-color": "#0c1e3a",        // Deep navy at horizon
+                "sky-atmosphere-halo-color": "#000d1f",   // Near-black upper atm
+                "sky-opacity": 1,
+              },
+            } as any);
+            console.log("[TacticalMap] Sky atmosphere layer added ✓");
           } catch (e) {
-            console.warn("[TacticalMap] Failed to set fog:", e);
-          }
-        }
-      } else if (globeMode) {
-        // Globe mode: apply space/atmosphere fog without terrain
-        // MapLibre v5 and Mapbox both support these properties
-        if (map.setFog) {
-          try {
-            map.setFog({
-              "space-color": "#000510",
-              "star-intensity": 0.55,
-              "horizon-blend": 0.15,
-              "high-color": "#1a3060",
-              color: "#0d1a30",
-              range: [0.5, 10],
-            });
-          } catch (e) {
-            console.warn("[TacticalMap] Globe fog not supported:", e);
+            console.warn("[TacticalMap] Sky layer failed:", e);
           }
         }
       } else {
-        if (map.getTerrain?.()) map.setTerrain(null);
-        if (map.setFog) map.setFog(null);
+        if (map.getLayer(SKY_LAYER_ID)) {
+          map.removeLayer(SKY_LAYER_ID);
+          console.log("[TacticalMap] Sky atmosphere layer removed");
+        }
       }
     };
 
-    if (map.isStyleLoaded()) sync3D();
-    else map.on("style.load", sync3D);
+    if (map.isStyleLoaded()) {
+      // Defer one tick so MapLibre v5 can commit any pending projection
+      // changes (e.g. globe) into the style before adding sky layer.
+      setTimeout(sync3D, 0);
+    } else {
+      map.once("style.load", sync3D);
+    }
     return () => {
       map.off("style.load", sync3D);
     };
   }, [mapLoaded, enable3d, mapToken, globeMode]);
+
 
   const setViewMode = (mode: "2d" | "3d") => {
     const map = mapRef.current?.getMap();

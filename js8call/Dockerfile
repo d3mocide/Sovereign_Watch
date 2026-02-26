@@ -142,15 +142,16 @@ RUN pip3 install --no-cache-dir ws4py numpy scipy
 RUN git clone --depth 1 https://github.com/jks-prv/kiwiclient /opt/kiwiclient
 
 # -----------------------------------------------------------------------------
-# Layer 7: Download and install JS8Call .deb package
+# Layer 7: Download and install JS8Call-improved .deb package
 #
-# JS8Call 2.2.0 is the latest stable release as of the image build date.
+# JS8Call 2.5.2 is the latest stable release as of the image build date.
 # The deb is installed via dpkg; apt-get install -f resolves any missing
 # runtime deps that dpkg itself cannot fetch (e.g. hamlib, libfftw3).
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates libhamlib-utils libqt5svg5 libusb-1.0-0 libportaudio2 libpulse0 \
-    libfftw3-double3 libopengl0
+    libfftw3-double3 libopengl0 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN wget -q -O /tmp/JS8Call-2.5.2-x86_64.AppImage "https://github.com/JS8Call-improved/JS8Call-improved/releases/download/release/2.5.2/JS8Call-2.5.2-x86_64.AppImage" \
     && chmod +x /tmp/JS8Call-2.5.2-x86_64.AppImage \
@@ -178,40 +179,36 @@ RUN pip3 install --no-cache-dir \
 # that may run in child processes with a different PID namespace.
 # -----------------------------------------------------------------------------
 RUN mkdir -p /etc/pulse && \
-    cat > /etc/pulse/default.pa << 'PULSE_CONFIG'
-# Sovereign Watch – PulseAudio virtual-only configuration
-# Hardware auto-detect is intentionally disabled; the container has no
-# physical audio devices. All audio is routed through null sinks.
-
-# Load the basic IPC primitives
-load-module module-native-protocol-unix
-load-module module-native-protocol-tcp auth-anonymous=1
-
-# Enable D-Bus protocol so pactl session commands work
-load-module module-dbus-protocol
-
-# Prevent PulseAudio from probing ALSA hardware (would fail in container)
-# Do NOT load module-detect or module-udev-detect
-
-# Create the static virtual sink for KiwiSDR audio.
-# JS8Call will read from the corresponding monitor source: KIWI_RX.monitor
-load-module module-null-sink sink_name=KIWI_RX sink_properties=device.description="KiwiSDR_Virtual_Sink"
-
-# Set the null sink as the default so JS8Call picks it up automatically
-set-default-sink KIWI_RX
-set-default-source KIWI_RX.monitor
-PULSE_CONFIG
+    printf '# Sovereign Watch – PulseAudio virtual-only configuration\n\
+    # Hardware auto-detect is intentionally disabled; the container has no\n\
+    # physical audio devices. All audio is routed through null sinks.\n\
+    \n\
+    # Load the basic IPC primitives\n\
+    load-module module-native-protocol-unix\n\
+    load-module module-native-protocol-tcp auth-anonymous=1\n\
+    \n\
+    # Enable D-Bus protocol so pactl session commands work\n\
+    load-module module-dbus-protocol\n\
+    \n\
+    # Prevent PulseAudio from probing ALSA hardware (would fail in container)\n\
+    # Do NOT load module-detect or module-udev-detect\n\
+    \n\
+    # Create the static virtual sink for KiwiSDR audio.\n\
+    # JS8Call will read from the corresponding monitor source: KIWI_RX.monitor\n\
+    load-module module-null-sink sink_name=KIWI_RX sink_properties=device.description="KiwiSDR_Virtual_Sink"\n\
+    \n\
+    # Set the null sink as the default so JS8Call picks it up automatically\n\
+    set-default-sink KIWI_RX\n\
+    set-default-source KIWI_RX.monitor\n' > /etc/pulse/default.pa
 
 # Daemon config: keep PA alive even when no clients are connected
-RUN cat > /etc/pulse/daemon.conf << 'DAEMON_CONFIG'
-# Sovereign Watch – PulseAudio daemon settings for headless container use
-exit-idle-time = -1
-# Disable shared memory transport (not supported between container namespaces)
-shm-size-bytes = 0
-flat-volumes = no
-# Reduce log noise
-log-level = warn
-DAEMON_CONFIG
+RUN printf '# Sovereign Watch – PulseAudio daemon settings for headless container use\n\
+    exit-idle-time = -1\n\
+    # Disable shared memory transport (not supported between container namespaces)\n\
+    shm-size-bytes = 0\n\
+    flat-volumes = no\n\
+    # Reduce log noise\n\
+    log-level = warn\n' > /etc/pulse/daemon.conf
 
 # -----------------------------------------------------------------------------
 # Application files

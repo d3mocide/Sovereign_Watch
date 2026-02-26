@@ -362,12 +362,13 @@ class MaritimePollerService:
 
                         if tak_event:
                             # Send to Kafka (non-blocking)
-                            future = self.kafka_producer.send(
-                                "ais_raw",
-                                value=tak_event,
-                                key=tak_event["uid"].encode("utf-8")
+                            asyncio.create_task(
+                                self.kafka_producer.send(
+                                    "ais_raw",
+                                    value=tak_event,
+                                    key=tak_event["uid"].encode("utf-8")
+                                )
                             )
-                            future.add_done_callback(self.on_send_error)
 
                             # Log sparingly (every 100th message)
                             if hash(tak_event["uid"]) % 100 == 0:
@@ -392,12 +393,13 @@ class MaritimePollerService:
 
                         if tak_event:
                             # Send to Kafka (non-blocking)
-                            future = self.kafka_producer.send(
-                                "ais_raw",
-                                value=tak_event,
-                                key=tak_event["uid"].encode("utf-8")
+                            asyncio.create_task(
+                                self.kafka_producer.send(
+                                    "ais_raw",
+                                    value=tak_event,
+                                    key=tak_event["uid"].encode("utf-8")
+                                )
                             )
-                            future.add_done_callback(self.on_send_error)
 
                             if hash(tak_event["uid"]) % 100 == 0:
                                 logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")

@@ -16,6 +16,7 @@ export interface UseJS8StationsResult {
   statusLine: JS8StatusLine;
   connected: boolean;
   js8Connected: boolean;
+  activeKiwiConfig: any;
   sendMessage: (target: string, message: string) => void;
 }
 
@@ -34,10 +35,11 @@ export function useJS8Stations(): UseJS8StationsResult {
   const [statusLine, setStatusLine] = useState<JS8StatusLine>({ callsign: '--', grid: '----', freq: '--' });
   const [connected, setConnected] = useState(false);
   const [js8Connected, setJs8Connected] = useState(false);
+  const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
 
   const syncStations = useCallback(() => {
     setStations(
-      Array.from(stationsRef.current.values()).sort((a, b) => b.ts_unix - a.ts_unix),
+      Array.from<JS8Station>(stationsRef.current.values()).sort((a, b) => b.ts_unix - a.ts_unix),
     );
   }, []);
 
@@ -71,6 +73,32 @@ export function useJS8Stations(): UseJS8StationsResult {
 
       if (type === 'CONNECTED') {
         setJs8Connected(payload.js8call_connected ?? false);
+        const c = payload.callsign || '--';
+        const g = payload.grid || '----';
+        ownGridRef.current = g;
+        setStatusLine((prev: JS8StatusLine) => ({ ...prev, callsign: c, grid: g }));
+        if (payload.kiwi_connected) {
+          setActiveKiwiConfig({
+            host: payload.kiwi_host,
+            port: payload.kiwi_port,
+            freq: payload.kiwi_freq,
+            mode: payload.kiwi_mode,
+          });
+        }
+        return;
+      }
+
+      if (type === 'KIWI.STATUS') {
+        if (payload.connected && payload.host) {
+          setActiveKiwiConfig({
+            host: payload.host,
+            port: payload.port,
+            freq: payload.freq,
+            mode: payload.mode || 'usb',
+          });
+        } else {
+          setActiveKiwiConfig(null);
+        }
         return;
       }
 
@@ -134,7 +162,7 @@ export function useJS8Stations(): UseJS8StationsResult {
           snr: payload.snr,
           timestamp: payload.timestamp,
         };
-        setLogEntries(prev => {
+        setLogEntries((prev: JS8LogEntry[]) => {
           const next = [entry, ...prev];
           return next.length > MAX_LOG ? next.slice(0, MAX_LOG) : next;
         });
@@ -156,5 +184,5 @@ export function useJS8Stations(): UseJS8StationsResult {
     };
   }, [connect]);
 
-  return { stationsRef, ownGridRef, stations, logEntries, statusLine, connected, js8Connected, sendMessage };
+  return { stationsRef, ownGridRef, stations, logEntries, statusLine, connected, js8Connected, activeKiwiConfig, sendMessage };
 }

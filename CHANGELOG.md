@@ -1,3 +1,50 @@
+## [0.10.3] - 2026-02-25
+
+### Added
+
+- **Sovereign Glass UI:**
+  - **Sky Atmosphere:** Enabled a native `sky` layer in MapLibre Globe mode, providing a deep navy horizon-to-space gradient and realistic solar orientation.
+
+### Changed
+
+- **Globe Rendering Overhaul:**
+  - **Polygon-Based Tactical Symbols:** Replaced `IconLayer` chevrons with geographic `PolygonLayer` triangles in Globe mode. This completely bypasses MapLibre v5 billboarding/depth-testing bugs, ensuring entities drape perfectly over the 3D sphere and scale/rotate with zero artifacts.
+  - **Optimized Zoom Fly-out:** Adjusted globe transition easing to prioritize stability at high altitudes.
+
+### Fixed
+
+- **MapLibre Logic Stability:**
+  - **Redundant Atmosphere Triggers:** Added protective guards and deferred one-tick execution (`setTimeout`) to prevent style-clobbering when simultaneously switching projection and adding sky layers.
+
+## [0.10.2] - 2026-02-25
+
+### Added
+
+- **Backend Architecture:**
+  - **Broadcast WebSocket Service:** Implemented a new `BroadcastManager` service for `/api/tracks/live`, shifting Kafka consumer overhead from O(N) to O(1) and drastically increasing throughput for concurrent clients.
+
+### Changed
+
+- **Tactical UI:**
+  - **JS8Widget Streamlining:** The JS8Call widget now defaults to a collapsed state to preserve screen real estate, keeping the critical station status bar (callsign, grid, frequency, online status) permanently visible.
+  - **Radio Terminal Cleanup:** Removed the redundant status footer from the Radio Terminal since the information is naturally represented elsewhere.
+
+### Optimized
+
+- **Maritime Poller Performance:**
+  - **Non-blocking Kafka Sends:** Switched to non-blocking Kafka sends in the maritime poller's ingestion loop, mitigating network latency blocks and boosting throughput by ~35x.
+
+### Fixed
+
+- **Data Integrity & Security:**
+  - **History Validation:** Added bounded input validation for `limit` and `hours` query parameters in the `get_track_history` endpoint to prevent resource exhaustion and potential DoS attacks.
+- **Code Health & Configuration:**
+  - **Dynamic Kafka Broker:** Replaced hardcoded broker references with the `KAFKA_BROKERS` environment variable in the API core configuration.
+- **Globe Rendering Architecture:**
+  - **Icon Visibility Issues:** Disabled `wrapLongitude` in Globe projection mode across multiple tactical layers (`entity-tactical-halo`, `satellite-markers`, `js8-labels`) to resolve Deck.gl billboarding conflicts that caused entity icons to disappear.
+- **JS8Call UI Synchronization:**
+  - **Frequency Sync:** Corrected an issue where the JS8Call widget and Radio Terminal would display stale frequency data. They now bind directly to the validated `activeKiwiConfig` payload via WebSocket.
+
 ## [0.10.1] - 2026-02-24
 
 ### Fixed

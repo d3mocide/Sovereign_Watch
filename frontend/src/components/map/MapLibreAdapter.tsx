@@ -6,11 +6,14 @@ import type { MapAdapterProps } from './mapAdapterTypes';
 function DeckGLOverlay(props: any) {
     const { globeMode, ...rest } = props;
     const projection = globeMode ? 'globe' : 'mercator';
-    
+
     // Key-based construction is handled by parent, but we ensure parameters are fresh
-    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ 
+    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({
         ...rest,
-        projection 
+        projection,
+        // _full3d is a DeckGL v9 experimental prop that builds an explicit depth buffer 
+        // to handle non-interleaved overlay occlusion properly on globes.
+        _full3d: true
     }));
 
     const isDeadRef = useRef(false);
@@ -28,7 +31,7 @@ function DeckGLOverlay(props: any) {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
         }
-    }, [rest, projection, overlay]);
+    }, [rest, overlay]);
 
     const { onOverlayLoaded } = props;
     useEffect(() => {

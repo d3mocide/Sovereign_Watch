@@ -1,13 +1,29 @@
-# Release Notes - Sovereign Watch v0.10.1
+# Release - v0.10.3 - Sovereign Glass: Globe Redux
 
-## UDP Bridge & Stability Hotfix
+This update marks a significant architectural shift in how Sovereign Watch handles spherical projections. By moving away from standard billboarding icons in favor of native geographic polygons, we have achieved absolute rendering stability in MapLibre Globe mode.
 
-Version 0.10.1 introduces a critical stability hotfix for the JS8Call tactical bridge.
+### 🌌 High-Fidelity Atmosphere
+We've introduced a dedicated **Sky Atmosphere** layer. In Globe mode, you'll now see a realistic deep-space gradient transitioning into a navy horizon glow. The system intelligently detects solar orientation to simulate tactical lighting conditions.
 
-### Fixed
+### 📐 Geometric Precision
+MapLibre v5's globe implementation has known conflicts with standard `IconLayer` depth testing. 
+- **The Solution**: We've replaced these icons with procedural `PolygonLayer` triangles that are mathematically calculated to drape perfectly across the Earth's curvature.
+- **The Result**: Zero flickering, zero "bleeding" through the planet, and perfect alignment with tactical headings at any zoom level.
 
-- **JS8Call Headless Qt Thread Crash:** Completely bypassed a fatal Qt `QNativeSocketEngine` threading violation that crashed the headless JS8Call instance when the API attempted to establish a TCP socket over Xvfb. Re-engineered the bridge server to parse native UDP JSON telemetry from JS8Call's broadcasting API, resulting in a flawless, connectionless integration that restores live frequency and station metadata to the HUD.
+### ⚙️ Under the Hood
+- Optimized `useMapCamera` to handle rapid projection transitions without style collisions.
+- Unified 3D visuals logic to ensure performance remains high even with complex atmosphere layers active.
 
-### Upgrade Instructions
-1. Run `git pull origin main` to fetch the latest changes.
-2. Run `docker compose up -d --build js8call` to apply the UDP bridge patches.
+---
+
+## 🚀 Upgrade Instructions
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild and restart the frontend for the new version
+docker compose up -d --build frontend
+```
+
+_Monitor. Analyze. Secure._

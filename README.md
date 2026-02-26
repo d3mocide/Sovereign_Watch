@@ -1,4 +1,4 @@
-# Sovereign Watch v0.10.1: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.10.3: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 2 (Tactical Intelligence & Tracking) - _Active Development_
 
@@ -24,8 +24,10 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
     ```bash
     cp .env.example .env
     # Edit .env with your keys & config:
-    # - AISSTREAM_API_KEY (Maritime)
-    # - VITE_MAPBOX_TOKEN (3D Terrain)
+    # - CENTER_LAT / CENTER_LON (Your monitoring area)
+    # - AISSTREAM_API_KEY (Maritime feed)
+    # - ANTHROPIC_API_KEY / GEMINI_API_KEY (LLM Cognition)
+    # - VITE_MAPBOX_TOKEN (3D Terrain & Maps)
     # - KIWI_HOST / KIWI_PORT (JS8Call SDR source)
     # - MY_GRID (Your Maidenhead locator)
     ```
@@ -41,11 +43,27 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
     - **Fusion API**: [http://localhost:8000/docs](http://localhost:8000/docs)
     - **Redpanda Console**: [http://localhost:8080](http://localhost:8080)
 
+## ⚠️ Disclaimer & Liability
+
+### 📡 Source Data and Open Intelligence
+Sovereign Watch ingests telemetry and intelligence from public, open-source networks (e.g., ADS-B, AIS, public API feeds). The positional data, classifications, and intelligence displayed within this platform are strictly derivative of these unencrypted, publicly broadcasted signals. 
+
+### 🛡️ Limited Liability
+**All data is provided "AS IS" without any warranty of accuracy, reliability, or completeness.**
+The developers and maintainers of Sovereign Watch assume **no responsibility or liability** for:
+- The accuracy of real-time or historical tracking information.
+- Decisions or actions taken based on the intelligence presented by this software.
+- Disruptions to the third-party networks providing the upstream data.
+
+Sovereign Watch is designed purely for research, educational, and hobbyist data fusion purposes.
+
+---
+
 ## 📂 Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph "Ingestion (Redpanda Connect & Python Pollers)"
+    subgraph "Ingestion (Python Pollers)"
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
         Z[Orbital TLE Feed] -->|TLE| B
@@ -131,7 +149,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 | :------------------- | :-------------------------------------------------- | :---------- |
 | `/AGENTS.md`         | **Master Guide for AI Developers (Read This First)**| **Tracked** |
 | `/.agent`            | Agent memory, skills, and global project rules.     | **Tracked** |
-| `/backend/ingestion` | Python and Benthos multi-source polling frameworks. | **Tracked** |
+| `/backend/ingestion` | Python multi-source polling frameworks.             | **Tracked** |
 | `/backend/db`        | Database schema (`init.sql`) and migration scripts. | **Tracked** |
 | `/backend/api`       | Python FastAPI service for Fusion and Analysis.     | **Tracked** |
 | `/js8call`           | JS8Call HF Radio Terminal container and bridge.     | **Tracked** |
@@ -149,31 +167,22 @@ This repository is **Agent-Aware**. If you are an AI assistant contributing to t
 
 ## 🧪 Development Workflow
 
-To add a new dependency (e.g., to Frontend):
+### 🐳 The "Container-First" Rule
 
-1.  **Edit** `frontend/package.json`.
-2.  **Rebuild**:
-    ```bash
-    docker compose up -d --build frontend
-    ```
+**Never** run commands (`npm`, `node`, `python`, `pip`, etc.) directly on the host. ALL interactions and execution must happen through **Docker Compose**. 
 
-To update the Database Schema:
-
-1.  **Edit** `backend/db/init.sql`.
-2.  **Reset** (Warning: Destructive):
-    ```bash
-    docker compose down -v
-    docker compose up -d db
-    ```
+- **Starting Services**: `docker compose up -d` (or `docker compose up -d --build <service>` after dependency changes)
+- **Running One-off Tasks**: `docker compose run --rm <service> <command>`
+- **Viewing Logs**: `docker compose logs -f <service>`
 
 ### ⚡ Live Updates (HMR)
 
-Both Frontend and Backend services are configured for **Hot Module Replacement**.
+Both Frontend and Backend services are configured for **Hot Module Replacement**:
+- **Frontend**: Save any `.tsx`/`.ts`/`.css` file. Vite automatically syncs changes instantly (polling, 1s interval). **No restart required.**
+- **Backend**: Save any `.py` file. Uvicorn reloads automatically. **No restart required.**
+- **Ingestion/Misc Services**: Sometimes require restarts (`docker compose restart <service>`) upon configuration changes.
 
-- **Frontend**: Vite automatically syncs changes. **No restart required.**
-- **Backend**: Uvicorn reloads on file save. **No restart required.**
-
-> **Note**: Only restart containers when adding dependencies or changing env vars.
+> **Note**: Only rebuild containers when altering `Dockerfile` configurations or modifying dependencies.
 
 ---
 

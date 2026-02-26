@@ -24,6 +24,7 @@ function App() {
     statusLine: js8StatusLine,
     connected: js8BridgeConnected,
     js8Connected,
+    activeKiwiConfig: js8ActiveKiwiConfig,
   } = useJS8Stations();
 
   // Map Actions (Search, FlyTo)
@@ -362,6 +363,7 @@ function App() {
             js8StatusLine={js8StatusLine}
             js8BridgeConnected={js8BridgeConnected}
             js8Connected={js8Connected}
+            js8ActiveKiwiConfig={js8ActiveKiwiConfig}
           />
         ) : null
       }

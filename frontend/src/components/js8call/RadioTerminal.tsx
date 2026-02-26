@@ -33,8 +33,6 @@ import {
   MapPin,
   Clock,
   Activity,
-  Globe,
-  Wifi,
   Server,
 } from 'lucide-react';
 
@@ -330,17 +328,26 @@ export default function RadioTerminal() {
 
       if (type === 'CONNECTED') {
         setJs8Connected(payload.js8call_connected ?? false);
+        const c = payload.callsign || '--';
+        const g = payload.grid || '----';
+        setStatusLine(prev => ({ ...prev, callsign: c, grid: g }));
         if (payload.kiwi_connected) {
           setKiwiConnected(true);
-          setKiwiConfig((prev: any) => ({
-            ...prev,
-            host: payload.kiwi_host || prev.host,
-            port: payload.kiwi_port || prev.port,
-            freq: payload.kiwi_freq || prev.freq,
-            mode: payload.kiwi_mode || prev.mode,
-          }));
+          setKiwiConfig((prev: any) => {
+            const next = {
+              ...prev,
+              host: payload.kiwi_host || prev.host,
+              port: payload.kiwi_port || prev.port,
+              freq: payload.kiwi_freq || prev.freq,
+              mode: payload.kiwi_mode || prev.mode,
+            };
+            setActiveKiwiConfig(next);
+            return next;
+          });
+          appendSystem(`SDR already connected: ${payload.kiwi_host}:${payload.kiwi_port} @ ${payload.kiwi_freq} kHz`);
+        } else {
+          appendSystem(payload.message || 'Bridge connected (No SDR)');
         }
-        appendSystem(payload.message || 'Bridge connected');
         return;
       }
 
@@ -575,7 +582,9 @@ export default function RadioTerminal() {
           {/* JS8Call frequency / station */}
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded">
             <Signal className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span className="font-semibold text-emerald-400 font-mono">{statusLine.freq}</span>
+            <span className="font-semibold text-emerald-400 font-mono">
+              {activeKiwiConfig ? `${activeKiwiConfig.freq} kHz` : '--'}
+            </span>
           </div>
           <div className="text-slate-400">
             <span className="text-slate-600">CALL </span>
@@ -705,30 +714,6 @@ export default function RadioTerminal() {
           </button>
         </form>
 
-        {/* Status bar */}
-        <div className="flex items-center justify-between px-4 pb-2 text-[10px] text-slate-600">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <Globe className="w-3 h-3" />
-              <span>KiwiSDR: <span className="text-slate-400">{statusLine.freq}</span></span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Wifi className="w-3 h-3" />
-              <span>
-                Bridge:{' '}
-                <span className={connected ? 'text-emerald-500' : 'text-rose-500'}>
-                  {connected ? 'Connected' : 'Reconnecting…'}
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {txPending && (
-              <span className="animate-pulse text-indigo-400">● Transmitting (~15s)</span>
-            )}
-            <span>{new Date().toISOString().slice(11, 19)} UTC</span>
-          </div>
-        </div>
       </footer>
     </div>
   );

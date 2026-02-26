@@ -1,5 +1,4 @@
 import React from 'react';
-import { LayerFilters } from '../widgets/LayerFilters';
 import { SystemStatus } from '../widgets/SystemStatus';
 import { IntelFeed } from '../widgets/IntelFeed';
 import { MissionNavigator } from '../widgets/MissionNavigator';
@@ -23,6 +22,7 @@ interface SidebarLeftProps {
   js8StatusLine?: JS8StatusLine;
   js8BridgeConnected?: boolean;
   js8Connected?: boolean;
+  js8ActiveKiwiConfig?: any;
   sendMessage?: (target: string, message: string) => void;
 }
 
@@ -32,7 +32,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onFilterChange,
   events,
   missionProps,
-  health,
   mapActions,
   onEntitySelect,
   js8Stations = [],
@@ -40,6 +39,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   js8StatusLine = { callsign: '--', grid: '----', freq: '--' },
   js8BridgeConnected = false,
   js8Connected = false,
+  js8ActiveKiwiConfig = null,
   sendMessage = () => { },
 }) => {
   return (
@@ -79,6 +79,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         statusLine={js8StatusLine}
         connected={js8BridgeConnected}
         js8Connected={js8Connected}
+        activeKiwiConfig={js8ActiveKiwiConfig}
         sendMessage={sendMessage}
       />
 

@@ -26,6 +26,7 @@ interface JS8WidgetProps {
   statusLine: JS8StatusLine;
   connected: boolean;
   js8Connected: boolean;
+  activeKiwiConfig?: any;
   sendMessage: (target: string, message: string) => void;
 }
 
@@ -35,9 +36,10 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
   statusLine,
   connected,
   js8Connected,
+  activeKiwiConfig,
   sendMessage,
 }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [activeTab, setActiveTab] = useState<'HEARD' | 'CHAT'>('HEARD');
   const [msgInput, setMsgInput] = useState('');
   const [msgTarget, setMsgTarget] = useState('@ALLCALL');
@@ -98,24 +100,26 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
         </div>
       </div>
 
+      {/* Own station status (Always visible) */}
+      <div className="px-3 py-1.5 flex items-center justify-between text-[9px] border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-2">
+          <span className="text-white/20 uppercase tracking-tighter">Station</span>
+          <span className="text-indigo-300 font-bold">{statusLine.callsign}</span>
+          <span className="text-white/20 ml-1">/</span>
+          <span className="text-slate-400">{statusLine.grid}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500">
+            {activeKiwiConfig ? `${activeKiwiConfig.freq} kHz` : '--'}
+          </span>
+          <span className={`font-bold ${js8Connected ? 'text-cyan-400' : 'text-red-500/50'}`}>
+            {js8Connected ? 'ONLINE' : 'OFFLINE'}
+          </span>
+        </div>
+      </div>
+
       {!collapsed && (
         <div className="flex flex-col">
-          {/* Own station status */}
-          <div className="px-3 py-1.5 flex items-center justify-between text-[9px] border-b border-white/5 bg-white/[0.02]">
-            <div className="flex items-center gap-2">
-              <span className="text-white/20 uppercase tracking-tighter">Station</span>
-              <span className="text-indigo-300 font-bold">{statusLine.callsign}</span>
-              <span className="text-white/20 ml-1">/</span>
-              <span className="text-slate-400">{statusLine.grid}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500">{statusLine.freq}</span>
-              <span className={`font-bold ${js8Connected ? 'text-cyan-400' : 'text-red-500/50'}`}>
-                {js8Connected ? 'ONLINE' : 'OFFLINE'}
-              </span>
-            </div>
-          </div>
-
           {/* Tab Content */}
           <div className="h-48 flex flex-col">
             {activeTab === 'HEARD' ? (

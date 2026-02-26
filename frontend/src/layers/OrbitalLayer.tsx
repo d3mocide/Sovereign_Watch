@@ -1,4 +1,4 @@
-import { ScatterplotLayer, PathLayer, IconLayer, TextLayer } from '@deck.gl/layers';
+import { ScatterplotLayer, PathLayer, IconLayer, TextLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import { CoTEntity } from '../types';
 
 const createSatIconAtlas = () => {
@@ -40,8 +40,8 @@ const getSatColor = (category?: string, alpha: number = 255): [number, number, n
     const cat = (category || '').toLowerCase();
     if (cat === 'gps' || cat.includes('gps') || cat.includes('gnss') || cat.includes('galileo') || cat.includes('beidou') || cat.includes('glonass')) return [56, 189, 248, alpha];
     if (cat === 'weather' || cat.includes('weather') || cat.includes('noaa') || cat.includes('meteosat')) return [251, 191, 36, alpha];
-    if (cat === 'comms' || cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') || cat.includes('iridium'))    return [52, 211, 153, alpha];
-    if (cat === 'surveillance' || cat.includes('surveillance') || cat.includes('military') || cat.includes('isr'))                            return [251, 113, 133, alpha];
+    if (cat === 'comms' || cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') || cat.includes('iridium')) return [52, 211, 153, alpha];
+    if (cat === 'surveillance' || cat.includes('surveillance') || cat.includes('military') || cat.includes('isr')) return [251, 113, 133, alpha];
     return [156, 163, 175, alpha];
 };
 
@@ -56,13 +56,55 @@ interface OrbitalLayerProps {
     onHover: (entity: CoTEntity | null, x: number, y: number) => void;
 }
 
+interface FaceDatum { polygon: number[][], entity: CoTEntity }
+
+function buildGemFaces(
+    satellites: CoTEntity[],
+    selectedUid: string | undefined
+): FaceDatum[] {
+    const faces: FaceDatum[] = [];
+    for (const d of satellites) {
+        const isSelected = selectedUid === d.uid;
+        const alt = d.altitude || 1000;
+
+        const altScaleFactor = Math.log10(1 + alt / 1000);
+        const baseDeg = isSelected ? 0.4 : 0.28;
+        const sizeDeg = baseDeg * altScaleFactor;
+
+        const latRad = (d.lat * Math.PI) / 180;
+        const lonScale = 1 / Math.cos(latRad);
+
+        // Vertical apex offset: 35% of equatorial footprint radius in metres
+        const gemH = sizeDeg * 111_000 * 0.35;
+
+        const apex = [d.lon, d.lat, alt + gemH];
+        const nadir = [d.lon, d.lat, alt - gemH];
+        const vN = [d.lon, d.lat + sizeDeg, alt];
+        const vE = [d.lon + sizeDeg * lonScale, d.lat, alt];
+        const vS = [d.lon, d.lat - sizeDeg, alt];
+        const vW = [d.lon - sizeDeg * lonScale, d.lat, alt];
+
+        // 8 triangular faces: 4 top cap + 4 bottom cap
+        const tris = [
+            [apex, vN, vE], [apex, vE, vS], [apex, vS, vW], [apex, vW, vN],
+            [nadir, vE, vN], [nadir, vS, vE], [nadir, vW, vS], [nadir, vN, vW],
+        ];
+        for (const tri of tris) faces.push({ polygon: tri, entity: d });
+    }
+    return faces;
+}
+
 export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, now, showHistoryTails, projectionMode, onEntitySelect, onHover }: OrbitalLayerProps) {
     const R_EARTH_KM = 6371;
     const sfx = projectionMode ? `-${projectionMode}` : '';
+    // Pre-build gem faces for globe mode (avoids IIFE inside array spread)
+    const gemFaces = projectionMode === 'globe'
+        ? buildGemFaces(satellites, selectedEntity?.uid)
+        : [];
 
     return [
-        // 1. Footprint Circle (underneath, only when selected/hovered)
-        new ScatterplotLayer({
+        // 1. Footprint Circle — skipped in Globe mode (flat projection artifact)
+        ...(projectionMode !== 'globe' ? [new ScatterplotLayer({
             id: `satellite-footprint${sfx}`,
             data: satellites.filter(s => s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
             getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
@@ -86,10 +128,10 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 getRadius: [selectedEntity?.uid, hoveredEntity?.uid],
                 getFillColor: [selectedEntity?.uid, hoveredEntity?.uid]
             }
-        }),
+        })] : []),
 
-        // 1b. Footprint Label — coverage diameter at north rim of circle
-        new TextLayer({
+        // 1b. Footprint Label — skipped in Globe mode
+        ...(projectionMode !== 'globe' ? [new TextLayer({
             id: `satellite-footprint-label${sfx}`,
             data: satellites.filter(s => s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
             getPosition: (d: CoTEntity) => {
@@ -119,77 +161,106 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 getPosition: [selectedEntity?.uid, hoveredEntity?.uid],
                 getText: [selectedEntity?.uid, hoveredEntity?.uid],
             }
-        }),
+        })] : []),
 
-        // 2. Ground Track (respects historyTails toggle, Chaikin-smoothed)
+        // 2. Orbital Trail (respects historyTails toggle, Chaikin-smoothed)
         ...(showHistoryTails ? [
             new PathLayer({
                 id: `satellite-ground-track${sfx}`,
                 data: satellites,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                getPath: (d: any) => d.smoothedTrail || [],
+                getPath: (d: any) => {
+                    const trail: number[][] = d.smoothedTrail || [];
+                    if (projectionMode === 'globe') {
+                        // Lift trail to orbital altitude so it arcs through 3D space
+                        // rather than dragging along the ground surface.
+                        const alt = d.altitude || 0;
+                        return trail.map((pt: number[]) => [pt[0], pt[1], alt]);
+                    }
+                    return trail;
+                },
                 getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, Math.floor(255 * 0.3)),
                 getWidth: 3.5,
                 widthMinPixels: 2.5,
                 jointRounded: true,
                 capRounded: true,
                 pickable: false,
-                wrapLongitude: true,
-                parameters: { depthTest: true, depthBias: -50.0 } // Ground track: behind CoT trails (-101) and icons (-210)
+                // wrapLongitude off in globe mode: conflicts with _full3d depth buffer and causes culling
+                wrapLongitude: projectionMode !== 'globe',
+                // Positive depthBias pushes geometry BEHIND the viewer — trail sits behind the diamond (bias 0)
+                parameters: { depthTest: true, depthBias: 50.0 }
             })
         ] : []),
 
-        // 3. Ground Dot (vertical projection of satellite to ground surface)
-        new ScatterplotLayer({
-            id: `satellite-ground-dot${sfx}`,
-            data: satellites,
-            getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
-            getRadius: 3,
-            radiusUnits: 'pixels',
-            getFillColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 120),
-            pickable: false,
-            wrapLongitude: true,
-            parameters: { depthTest: true, depthBias: 0.0 } // Ground dot: behind everything, at surface level
-        }),
+        // 3. Ground Dot — removed (surface projection dot was too noisy across all modes)
 
-        // 4. Satellite Markers (clickable — fires onEntitySelect for sidebar)
-        new IconLayer({
-            id: `satellite-markers${sfx}`,
-            data: satellites,
-            getIcon: () => 'satellite',
-            iconAtlas: SAT_ICON_ATLAS.url,
-            iconMapping: SAT_ICON_ATLAS.mapping,
-            getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-            getSize: (d: CoTEntity) => {
-                const isSelected = selectedEntity?.uid === d.uid;
-                return isSelected ? 16 : 12;
-            },
-            sizeUnits: 'pixels',
-            sizeMinPixels: 6,
-            billboard: true,
-            getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 255),
-            pickable: true,
-            wrapLongitude: !projectionMode || projectionMode === 'mercator',
-            parameters: { depthTest: false }, // Always on top — icon must never be occluded by its own trail
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onHover: (info: { object?: any; x: number; y: number }) => {
-                onHover(info.object as CoTEntity ?? null, info.x, info.y);
-            },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onClick: (info: { object?: any }) => {
-                if (info.object) {
-                    const entity = info.object as CoTEntity;
-                    const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
-                    onEntitySelect(newSelection);
-                } else {
-                    onEntitySelect(null);
+        // 4. Satellite Markers — Globe: 3D octahedron gems at orbital altitude
+        ...(projectionMode === 'globe' ? [
+            new SolidPolygonLayer({
+                id: `satellite-markers-globe${sfx}`,
+                data: gemFaces,
+                getPolygon: (d: FaceDatum) => d.polygon as any,
+                extruded: false, // Z is embedded in vertex coords; no ground extrusion needed
+                getFillColor: (d: FaceDatum) => getSatColor(d.entity.detail?.category as string, 220),
+                pickable: true,
+                // wrapLongitude off in globe mode: billboarding + wrapLongitude = render artifacts
+                wrapLongitude: false,
+                parameters: { depthTest: true },
+                onHover: (info: { object?: FaceDatum | null; x: number; y: number }) => {
+                    onHover((info.object?.entity ?? null) as CoTEntity | null, info.x, info.y);
+                },
+                onClick: (info: { object?: FaceDatum | null }) => {
+                    const entity = info.object?.entity ?? null;
+                    if (entity) {
+                        const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
+                        onEntitySelect(newSelection);
+                    } else {
+                        onEntitySelect(null);
+                    }
+                },
+                updateTriggers: {
+                    getPolygon: [selectedEntity?.uid],
+                    getFillColor: [selectedEntity?.uid],
                 }
-            },
-            updateTriggers: {
-                getSize: [selectedEntity?.uid],
-                getColor: [selectedEntity?.uid]
-            }
-        }),
+            })
+        ] : [
+            new IconLayer({
+                id: `satellite-markers-merc${sfx}`,
+                data: satellites,
+                getIcon: () => 'satellite',
+                iconAtlas: SAT_ICON_ATLAS.url,
+                iconMapping: SAT_ICON_ATLAS.mapping,
+                getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
+                getSize: (d: CoTEntity) => {
+                    const isSelected = selectedEntity?.uid === d.uid;
+                    return isSelected ? 16 : 12;
+                },
+                sizeUnits: 'pixels',
+                sizeMinPixels: 6,
+                billboard: true,
+                getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 255),
+                pickable: true,
+                wrapLongitude: true,
+                parameters: { depthTest: true, depthBias: 0 },
+                onHover: (info: { object?: any; x: number; y: number }) => {
+                    onHover(info.object as CoTEntity ?? null, info.x, info.y);
+                },
+                onClick: (info: { object?: any }) => {
+                    if (info.object) {
+                        const entity = info.object as CoTEntity;
+                        const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
+                        onEntitySelect(newSelection);
+                    } else {
+                        onEntitySelect(null);
+                    }
+                },
+                updateTriggers: {
+                    getSize: [selectedEntity?.uid],
+                    getColor: [selectedEntity?.uid]
+                }
+            })
+        ]),
+
 
         // 5. Glow / Highlight ring for selected satellite
         ...(selectedEntity && satellites.find(s => s.uid === selectedEntity.uid) ? [
@@ -212,7 +283,8 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 stroked: true,
                 filled: false,
                 pickable: false,
-                wrapLongitude: true,
+                // wrapLongitude off in globe mode — selection ring shares the gem's projection
+                wrapLongitude: projectionMode !== 'globe',
                 parameters: { depthTest: true, depthBias: -201.0 },
                 updateTriggers: { getRadius: [now], getLineColor: [now] }
             })

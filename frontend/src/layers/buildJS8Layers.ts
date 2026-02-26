@@ -129,8 +129,9 @@ export function buildJS8Layers(
         fontWeight: "bold",
         billboard: true,
         pickable: false,
-        wrapLongitude: !globeMode,
-        parameters: depthParams,
+        wrapLongitude: true,
+        // For MapLibre Globe, we need depthTest enabled to prevent bleeding through the Earth
+        parameters: { depthTest: true, depthBias: 0 },
       }),
     );
   }
