@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import system, tracks, analysis
 from core.database import db
@@ -13,6 +13,29 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("SovereignWatch")
 
 app = FastAPI(title="Sovereign Watch API")
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    # Base security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Relaxed CSP for Swagger UI / ReDoc
+    if request.url.path in ["/docs", "/redoc", "/openapi.json"]:
+        # Allow inline scripts/styles for Swagger UI
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+        # Allow framing for these if needed, or keep DENY
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    else:
+        # Strict CSP for API endpoints
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["X-Frame-Options"] = "DENY"
+
+    return response
 
 # CORS
 ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
