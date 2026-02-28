@@ -66,7 +66,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"History query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/api/tracks/search")
 async def search_tracks(q: str, limit: int = 10):
@@ -112,7 +112,7 @@ async def search_tracks(q: str, limit: int = 10):
         return results
     except Exception as e:
         logger.error(f"Search query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/api/tracks/replay")
 async def replay_tracks(start: str, end: str, limit: int = 1000):
@@ -156,4 +156,4 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"Replay query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
