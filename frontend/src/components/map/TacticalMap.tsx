@@ -12,7 +12,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps } from "../../types";
+import { CoTEntity, JS8Station, MissionProps, RepeaterStation } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -87,6 +87,8 @@ interface TacticalMapProps {
   onEntityLiveUpdate?: (entity: CoTEntity) => void;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
+  repeatersRef?: MutableRefObject<RepeaterStation[]>;
+  showRepeaters?: boolean;
 }
 
 export function TacticalMap({
@@ -108,6 +110,8 @@ export function TacticalMap({
   onEntityLiveUpdate,
   js8StationsRef,
   ownGridRef,
+  repeatersRef,
+  showRepeaters,
 }: TacticalMapProps) {
   // Fetch infra data (Submarine cables & landing stations)
   const { cablesData, stationsData } = useInfraData();
@@ -327,6 +331,8 @@ export function TacticalMap({
     onFollowModeChange,
     js8StationsRef,
     ownGridRef,
+    repeatersRef,
+    showRepeaters,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

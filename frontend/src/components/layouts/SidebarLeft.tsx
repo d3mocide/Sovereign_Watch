@@ -83,8 +83,12 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         sendMessage={sendMessage}
       />
 
-      {/* 4. Metrics & Analytics */}
-      <SystemStatus trackCounts={trackCounts} />
+      {/* 4. Metrics, Analytics & Map Layers */}
+      <SystemStatus
+        trackCounts={trackCounts}
+        filters={filters}
+        onFilterChange={onFilterChange}
+      />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
+import { useRepeaters } from './hooks/useRepeaters'
 import { processReplayData } from './utils/replayUtils'
 
 function App() {
@@ -59,6 +60,7 @@ function App() {
     showSatComms: true,
     showSatSurveillance: true,
     showSatOther: true,
+    showRepeaters: false,
   });
 
   // Velocity Vector Toggle
@@ -108,6 +110,13 @@ function App() {
 
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
+
+  // Repeater infrastructure layer
+  const { repeatersRef } = useRepeaters(
+    filters.showRepeaters,
+    missionProps?.currentMission?.lat ?? 45.5152,
+    missionProps?.currentMission?.lon ?? -122.6784,
+  );
 
   // Add new event to feed (max 50 events)
   // Replay System State
@@ -370,6 +379,8 @@ function App() {
             onEntityLiveUpdate={handleEntityLiveUpdate}
             js8StationsRef={js8StationsRef}
             ownGridRef={js8OwnGridRef}
+            repeatersRef={repeatersRef}
+            showRepeaters={filters.showRepeaters}
           />
 
           {/* Replay Controls Overlay */}

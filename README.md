@@ -1,4 +1,4 @@
-# Sovereign Watch v0.10.3: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.11.0: Distributed Multi-INT Fusion Center
 
 > **Operational Status**: Phase 2 (Tactical Intelligence & Tracking) - _Active Development_
 
@@ -138,6 +138,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 - **Deep Vessel Classification**: Real-time parsing of Maritime ShipStaticData to classify tankers, cargo, military, SAR, and passenger vessels with absolute precision.
 - **Orbital Pulse Tracking**: End-to-end satellite tracking using Celestrak TLE ingestion and live SGP4 propagation (accuracy updated every 30s) to visualize LEO/MEO/GEO assets.
+- **RF Infrastructure Awareness**: Comprehensive mapping of amateur radio repeater networks across the theater, providing operators with immediate access to vital communication relays, operational frequencies, and signal coverage radii.
 - **JS8Call Signal Intelligence**: Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications and station tracking.
 - **Projective Velocity Blending (PVB)**: Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings, with zero "rubber-banding."
 - **Granular Filtering Matrix**: Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., hiding generic cargo and passenger jets, while highlighting Drones, Helicopters, and Military fast-movers).

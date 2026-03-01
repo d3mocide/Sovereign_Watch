@@ -1,18 +1,11 @@
-# Release - v0.10.3 - Sovereign Glass: Globe Redux
+# Release - v0.11.0 - RF Infrastructure Awareness
 
-This update marks a significant architectural shift in how Sovereign Watch handles spherical projections. By moving away from standard billboarding icons in favor of native geographic polygons, we have achieved absolute rendering stability in MapLibre Globe mode.
+This minor release introduces comprehensive mapping and intelligence tracking for RF infrastructure, explicitly focusing on the Amateur Radio Repeater network. This enhancement provides operators with critical context regarding vital communication relays across the Area of Responsibility (AOR).
 
-### 🌌 High-Fidelity Atmosphere
-We've introduced a dedicated **Sky Atmosphere** layer. In Globe mode, you'll now see a realistic deep-space gradient transitioning into a navy horizon glow. The system intelligently detects solar orientation to simulate tactical lighting conditions.
-
-### 📐 Geometric Precision
-MapLibre v5's globe implementation has known conflicts with standard `IconLayer` depth testing. 
-- **The Solution**: We've replaced these icons with procedural `PolygonLayer` triangles that are mathematically calculated to drape perfectly across the Earth's curvature.
-- **The Result**: Zero flickering, zero "bleeding" through the planet, and perfect alignment with tactical headings at any zoom level.
-
-### ⚙️ Under the Hood
-- Optimized `useMapCamera` to handle rapid projection transitions without style collisions.
-- Unified 3D visuals logic to ensure performance remains high even with complex atmosphere layers active.
+### 📡 New Capabilities 
+- **RF Infrastructure Layer**: Visualize active radio repeaters directly on the tactical map alongside dynamic air, sea, and orbital traffic.
+- **Detailed Telemetry**: Clicking on a repeater reveals a tailored sidebar with essential signal intelligence, including operating frequencies, CTCSS tones, offsets, and operational status.
+- **Streamlined HUD**: Map layer filtering has been tightly integrated into the System Status widget header, simplifying layer management without sacrificing precious screen real estate.
 
 ---
 
@@ -22,8 +15,8 @@ MapLibre v5's globe implementation has known conflicts with standard `IconLayer`
 # Pull latest changes
 git pull origin main
 
-# Rebuild and restart the frontend for the new version
-docker compose up -d --build frontend
+# Rebuild and restart the frontend & backend for the new version
+docker compose up -d --build frontend backend
 ```
 
 _Monitor. Analyze. Secure._
