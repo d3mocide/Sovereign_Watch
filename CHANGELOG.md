@@ -1,3 +1,12 @@
+## [0.10.4] - 2026-03-01
+
+### Fixed
+
+- **Orbital Entity Tooltips:**
+  - Added an `isOrbital` type check to `MapTooltip.tsx` to ensure satellites display correct purple tactical styling.
+  - Orbital tooltips now output speeds accurately in `km/s` instead of converting `kts`.
+  - Updated icon to `Satellite` instead of `Plane` for orbital metadata popups.
+
 ## [0.10.3] - 2026-02-25
 
 ### Added

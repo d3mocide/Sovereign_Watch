@@ -1,18 +1,12 @@
-# Release - v0.10.3 - Sovereign Glass: Globe Redux
+# Release - v0.10.4 - Orbital Tooltip Styling
 
-This update marks a significant architectural shift in how Sovereign Watch handles spherical projections. By moving away from standard billboarding icons in favor of native geographic polygons, we have achieved absolute rendering stability in MapLibre Globe mode.
+This patch update ensures that orbital entities correctly inherit their intended tactical aesthetics within the HUD, instead of falling back to default avionics styling.
 
-### 🌌 High-Fidelity Atmosphere
-We've introduced a dedicated **Sky Atmosphere** layer. In Globe mode, you'll now see a realistic deep-space gradient transitioning into a navy horizon glow. The system intelligently detects solar orientation to simulate tactical lighting conditions.
-
-### 📐 Geometric Precision
-MapLibre v5's globe implementation has known conflicts with standard `IconLayer` depth testing. 
-- **The Solution**: We've replaced these icons with procedural `PolygonLayer` triangles that are mathematically calculated to drape perfectly across the Earth's curvature.
-- **The Result**: Zero flickering, zero "bleeding" through the planet, and perfect alignment with tactical headings at any zoom level.
-
-### ⚙️ Under the Hood
-- Optimized `useMapCamera` to handle rapid projection transitions without style collisions.
-- Unified 3D visuals logic to ensure performance remains high even with complex atmosphere layers active.
+### 🛰️ Orbital Metadata Refinement
+Satellites in the tactical view now display precise metadata directly on hover or selection:
+- **Type Accuracy**: Properly labels entities as `ORBITAL` in tooltips.
+- **Speed Output**: Correctly formats orbital velocity in `km/s` rather than marine/air `kts`.
+- **Aesthetic Integration**: Employs the "Sovereign Glass" purple accent (`text-purple-400` and glow) globally for all orbital interactions, replacing the generic plane icon with a specialized satellite glyph.
 
 ---
 
