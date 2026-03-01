@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Ship, ChevronRight, Satellite } from 'lucide-react';
+import { Plane, Ship, ChevronRight, Satellite, Activity } from 'lucide-react';
 
 interface LayerFiltersProps {
   filters: { 
@@ -14,15 +14,18 @@ interface LayerFiltersProps {
       showTanker?: boolean;
       showPassenger?: boolean;
       showFishing?: boolean;
-      [key: string]: boolean | undefined;
+      showInfra?: boolean;
+      infraOpacity?: number;
+      [key: string]: boolean | number | undefined;
   };
-  onFilterChange: (key: string, value: boolean) => void;
+  onFilterChange: (key: string, value: any) => void;
 }
 
 export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterChange }) => {
   const [airExpanded, setAirExpanded] = useState(false);
   const [seaExpanded, setSeaExpanded] = useState(false);
   const [satExpanded, setSatExpanded] = useState(false);
+  const [infraExpanded, setInfraExpanded] = useState(false);
 
   return (
     <div className="flex flex-col rounded-sm border border-tactical-border bg-black/40 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden relative">
@@ -364,7 +367,7 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
             </div>
             
             <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
-              <input type="checkbox" className="sr-only" checked={filters.showSatellites} onChange={(e) => onFilterChange('showSatellites', e.target.checked)} />
+              <input type="checkbox" className="sr-only" checked={!!filters.showSatellites} onChange={(e) => onFilterChange('showSatellites', e.target.checked)} />
               <div 
                 className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showSatellites ? 'bg-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
                 onClick={(e) => {
@@ -422,6 +425,60 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
             </div>
           )}
         </div>
+
+        {/* Infrastructure Filter */}
+        <div className="flex flex-col gap-1">
+          <div className={`group flex items-center justify-between rounded border transition-all ${filters.showInfra !== false ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+            <div
+              className="flex flex-1 items-center justify-between p-2 cursor-pointer"
+              onClick={() => setInfraExpanded(!infraExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <Activity size={14} className={filters.showInfra !== false ? 'text-cyan-400' : 'text-white/20'} />
+                <span className={`text-[10px] font-bold tracking-widest ${filters.showInfra !== false ? 'text-white' : 'text-white/40'}`}>INFRASTRUCTURE</span>
+              </div>
+              <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: infraExpanded ? 'rotate(90deg)' : 'none' }}>
+                  <ChevronRight size={14} className="text-white/40" />
+              </div>
+            </div>
+
+            <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
+              <input type="checkbox" className="sr-only" checked={filters.showInfra !== false} onChange={(e) => onFilterChange('showInfra', e.target.checked)} />
+              <div
+                className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showInfra !== false ? 'bg-cyan-400' : 'bg-white/10 hover:bg-white/20'}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterChange('showInfra', filters.showInfra === false);
+                }}
+              >
+                <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showInfra !== false ? 'left-3.5' : 'left-0.5'}`} />
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-filters for Infrastructure */}
+          {infraExpanded && (
+            <div className="flex flex-col gap-2 px-2 py-1 opacity-90">
+                {/* Opacity Slider */}
+                <label className="flex flex-col gap-1.5 rounded border border-white/5 bg-white/5 p-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold tracking-wide text-white/50">OPACITY</span>
+                        <span className="text-[9px] text-white/50">{Math.round((typeof filters.infraOpacity === 'number' ? filters.infraOpacity : 0.6) * 100)}%</span>
+                    </div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={typeof filters.infraOpacity === 'number' ? filters.infraOpacity : 0.6}
+                        onChange={(e) => onFilterChange('infraOpacity', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    />
+                </label>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

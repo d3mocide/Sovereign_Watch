@@ -292,6 +292,9 @@ class PollerService:
             
         cot_type = f"a-f-A-{affil_code}-{plat_code}"
         
+        # Add a custom tag or use standard CoT type mapping if needed
+        # We will embed the specific class in the meta field below
+
         # Special case: Ground Vehicles (C1=Emergency, C2=Service, C3=Obstacle)
         # Mapping to Friendly - Ground - Equipment - Vehicle - Civil
         if category == "C1" or category == "C2" or category == "C3":

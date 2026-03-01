@@ -59,6 +59,8 @@ function App() {
     showSatComms: true,
     showSatSurveillance: true,
     showSatOther: true,
+    showInfra: true,
+    infraOpacity: 0.6,
   });
 
   // Velocity Vector Toggle

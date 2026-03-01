@@ -52,10 +52,29 @@ def classify_aircraft(ac: Dict[str, Any]) -> Dict[str, Any]:
     # 2. Determine Platform
     platform = "fixed_wing"  # Default
 
-    if category == "A7" or t_field.startswith("H"):
-        platform = "helicopter"
-    elif category == "B6":
+    # Expanded Drone Classification Logic
+    squawk = (ac.get("squawk") or "").strip()
+    is_drone = False
+
+    # Check 1: Explicit Category or ICAO type prefix
+    if category == "B6" or t_field.startswith(("~", "Q", "UNM")):
+        is_drone = True
+
+    # Check 2: Squawk code 7400 (UAS assigned)
+    if squawk == "7400":
+        is_drone = True
+
+    # Check 3: Operator / Type description string matching
+    operator_upper = operator.upper()
+    desc_upper = (ac.get("desc") or "").upper()
+    drone_keywords = ["DRONE", "UAV", "UAS", "DJI", "SKYDIO", "RQ-", "MQ-", "AEROVIRONMENT", "AUTEL"]
+    if any(keyword in operator_upper or keyword in desc_upper for keyword in drone_keywords):
+        is_drone = True
+
+    if is_drone:
         platform = "drone"
+    elif category == "A7" or t_field.startswith("H"):
+        platform = "helicopter"
     elif category == "B2":
         platform = "balloon"
     elif category == "B1":

@@ -8,7 +8,7 @@ interface IntelFeedProps {
   onEntitySelect?: (entity: CoTEntity) => void;
   mapActions?: MapActions;
   filters?: MapFilters;
-  onFilterChange?: (key: string, value: boolean) => void;
+  onFilterChange?: (key: string, value: any) => void;
 }
 
 export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilterChange }: IntelFeedProps) => {

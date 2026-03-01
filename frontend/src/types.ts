@@ -123,5 +123,8 @@ export interface MapFilters {
   showGovernment: boolean;
   showCommercial: boolean;
   showPrivate: boolean;
-  [key: string]: boolean | undefined;
+  showDrone?: boolean;
+  showInfra: boolean;
+  infraOpacity: number;
+  [key: string]: boolean | number | undefined;
 }

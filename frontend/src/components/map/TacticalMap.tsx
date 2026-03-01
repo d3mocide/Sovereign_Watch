@@ -22,6 +22,7 @@ import { useEntityWorker } from "../../hooks/useEntityWorker";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
+import { useInfraData } from "../../hooks/useInfraData";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 
 // Pick the map adapter at module init time based on the build-time env var.
@@ -63,7 +64,9 @@ interface TacticalMapProps {
     showHsc?: boolean;
     showPilot?: boolean;
     showSpecial?: boolean;
-    [key: string]: boolean | undefined;
+    showInfra?: boolean;
+    infraOpacity?: number;
+    [key: string]: boolean | number | undefined;
   };
   onEvent?: (event: {
     type: "new" | "lost" | "alert";
@@ -135,6 +138,9 @@ export function TacticalMap({
   const overlayRef = useRef<MapboxOverlay | null>(null);
   // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
   const mapInstanceRef = useRef<any>(null);
+
+  // Infrastructure Data Load
+  const { cablesData, landingPointsData } = useInfraData();
 
   // Environment Fallbacks
   const envLat = import.meta.env.VITE_CENTER_LAT;
@@ -281,6 +287,8 @@ export function TacticalMap({
     onFollowModeChange,
     js8StationsRef,
     ownGridRef,
+    cablesData,
+    landingPointsData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

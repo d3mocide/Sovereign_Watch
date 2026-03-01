@@ -6,6 +6,7 @@ import { buildAOTLayers } from "../layers/buildAOTLayers";
 import { buildTrailLayers } from "../layers/buildTrailLayers";
 import { buildEntityLayers } from "../layers/buildEntityLayers";
 import { buildJS8Layers } from "../layers/buildJS8Layers";
+import { buildCableLayers } from "../layers/buildCableLayers";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -65,7 +66,9 @@ interface UseAnimationLoopOptions {
     showSatComms?: boolean;
     showSatSurveillance?: boolean;
     showSatOther?: boolean;
-    [key: string]: boolean | undefined;
+    showInfra?: boolean;
+    infraOpacity?: number;
+    [key: string]: boolean | number | undefined;
   } | undefined;
   globeMode: boolean | undefined;
   enable3d: boolean;
@@ -86,6 +89,8 @@ interface UseAnimationLoopOptions {
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
+  cablesData?: any;
+  landingPointsData?: any;
 }
 
 export function useAnimationLoop({
@@ -123,6 +128,8 @@ export function useAnimationLoop({
   onFollowModeChange,
   js8StationsRef,
   ownGridRef,
+  cablesData,
+  landingPointsData,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
@@ -685,7 +692,46 @@ export function useAnimationLoop({
         );
       }
 
+      const cablesLayers = buildCableLayers({
+        cablesData,
+        landingPointsData,
+        visible: filters?.showInfra !== false,
+        opacity: typeof filters?.infraOpacity === "number" ? filters.infraOpacity : 0.6,
+        zoom: mapRef.current?.getMap()?.getZoom() ?? 0,
+        onHover: (info: any) => {
+          if (info.object) {
+            setHoveredEntity({
+              id: info.object.properties?.id || info.object.properties?.name || 'cable',
+              callsign: info.object.properties?.name || "Submarine Cable",
+              type: "cable",
+              lat: info.coordinate[1],
+              lon: info.coordinate[0],
+              ...info.object.properties
+            } as any);
+            setHoverPosition({ x: info.x, y: info.y });
+          } else {
+            setHoveredEntity(null);
+            setHoverPosition(null);
+          }
+        },
+        onClick: (info: any) => {
+          if (info.object) {
+            onEntitySelect({
+              id: info.object.properties?.id || info.object.properties?.name || 'cable',
+              callsign: info.object.properties?.name || "Submarine Cable",
+              type: "cable",
+              lat: info.coordinate[1],
+              lon: info.coordinate[0],
+              ...info.object.properties
+            } as any);
+          } else {
+            onEntitySelect(null);
+          }
+        },
+      });
+
       const layers = [
+        ...cablesLayers,
         ...getOrbitalLayers({
           satellites: filteredSatellites,
           selectedEntity: currentSelected,
