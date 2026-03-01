@@ -23,6 +23,7 @@ import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
+import { useInfraData } from "../../hooks/useInfraData";
 
 // Pick the map adapter at module init time based on the build-time env var.
 // react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
@@ -112,6 +113,9 @@ export function TacticalMap({
   repeatersRef,
   showRepeaters,
 }: TacticalMapProps) {
+  // Fetch infra data (Submarine cables & landing stations)
+  const { cablesData, stationsData } = useInfraData();
+
   // State for UI interactions
   const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{
@@ -126,6 +130,7 @@ export function TacticalMap({
     lat: number;
     lon: number;
   } | null>(null);
+  const [hoveredInfra, setHoveredInfra] = useState<any>(null);
 
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -157,6 +162,25 @@ export function TacticalMap({
   });
 
   // Refs for transient state
+  // Store previously active filters for detecting when cables are turned on
+  const prevActiveRef = useRef<{showCables?: boolean}>({ showCables: false });
+
+  useEffect(() => {
+    const prevCables = prevActiveRef.current?.showCables;
+    const currCables = filters?.showCables;
+
+    if (prevCables === false && currCables !== false && cablesData && stationsData) {
+       const cableCount = cablesData.features?.length || 0;
+       const stationCount = stationsData.features?.length || 0;
+       onEvent?.({
+          message: `INFRA: ${cableCount} submarine cables loaded — ${stationCount} landing stations active`,
+          type: "new",
+
+       });
+    }
+    prevActiveRef.current = { showCables: filters?.showCables !== false };
+  }, [filters?.showCables, cablesData, stationsData, onEvent]);
+
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
   const currentMissionRef = useRef<{
     lat: number;
@@ -272,10 +296,32 @@ export function TacticalMap({
     aotShapes,
     selectedEntity,
     filters,
+    cablesData: cablesData,
+    stationsData: stationsData,
+    setHoveredInfra: setHoveredInfra,
+    setSelectedInfra: (info: any) => {
+      if (!info || !info.object) return;
+
+      const infraEntity: CoTEntity = {
+        uid: String(info.object.properties?.id || `infra-${Date.now()}`),
+        lat: info.coordinate?.[1] || 0,
+        lon: info.coordinate?.[0] || 0,
+        altitude: 0,
+        type: 'infra',
+        course: 0,
+        speed: 0,
+        callsign: String(info.object.properties?.name || 'INFRA'),
+        lastSeen: Date.now(),
+        trail: [],
+        uidHash: 0,
+        detail: info.object
+      };
+      onEntitySelect(infraEntity);
+    },
     globeMode,
     enable3d,
-    mapToken,
-    mapStyle,
+    mapToken: mapToken || "",
+    mapStyle: mapStyle || "",
     mapLoaded,
     replayMode,
     onCountsUpdate,
@@ -297,7 +343,7 @@ export function TacticalMap({
     globeMode,
     enable3d,
     setEnable3d,
-    mapToken,
+    mapToken: mapToken || "",
   });
 
   // Mission Area Handlers that bridge to context menu UI

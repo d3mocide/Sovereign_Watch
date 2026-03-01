@@ -169,7 +169,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 id: `satellite-ground-track${sfx}`,
                 data: satellites,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                getPath: (d: any) => {
+                getPath: (d: any): any => {
                     const trail: number[][] = d.smoothedTrail || [];
                     if (projectionMode === 'globe') {
                         // Lift trail to orbital altitude so it arcs through 3D space
