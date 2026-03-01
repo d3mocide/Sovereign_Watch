@@ -83,6 +83,41 @@ class OrbitalPulseService:
         safe_endpoint = endpoint.replace("/", "_")
         return os.path.join(CACHE_DIR, f"{safe_endpoint}_{param_name}_{param_val}.txt")
 
+    def parse_tle_data(self, data_text, param_val, category_map):
+        """Parse TLE data synchronously (CPU bound)."""
+        parsed_sats = {}
+        lines = [line.strip() for line in data_text.splitlines() if line.strip()]
+        for i in range(0, len(lines)-2, 3):
+            name = lines[i]
+            l1 = lines[i+1]
+            l2 = lines[i+2]
+
+            try:
+                sat = Satrec.twoline2rv(l1, l2)
+                norad_id = sat.satnum
+
+                inc_deg = math.degrees(sat.inclo)
+                # approximate period in minutes = 2pi / mean_motion, mean_motion is in rad/min
+                period_min = (2 * math.pi / sat.no_kozai) if sat.no_kozai > 0 else 0
+
+                # Use the clean category label, not the raw group name
+                category = category_map.get(param_val, param_val)
+
+                parsed_sats[norad_id] = {
+                    "satrec": sat,
+                    "meta": {
+                        "name": name,
+                        "norad_id": norad_id,
+                        "category": category,
+                        "period_min": period_min,
+                        "inclination_deg": inc_deg
+                    }
+                }
+            except Exception as e:
+                logger.warning(f"Failed to parse TLE for {name}: {e}")
+
+        return parsed_sats
+
     async def fetch_tle_data(self):
         """Fetch Celestrak data, honoring rate limits and caching"""
         async with aiohttp.ClientSession() as session:
@@ -129,36 +164,14 @@ class OrbitalPulseService:
                     # Prevent rapid requests
                     await asyncio.sleep(1.0)
 
-                # Parse TLE
-                lines = [line.strip() for line in data_text.splitlines() if line.strip()]
-                for i in range(0, len(lines)-2, 3):
-                    name = lines[i]
-                    l1 = lines[i+1]
-                    l2 = lines[i+2]
-
-                    try:
-                        sat = Satrec.twoline2rv(l1, l2)
-                        norad_id = sat.satnum
-
-                        inc_deg = math.degrees(sat.inclo)
-                        # approximate period in minutes = 2pi / mean_motion, mean_motion is in rad/min
-                        period_min = (2 * math.pi / sat.no_kozai) if sat.no_kozai > 0 else 0
-
-                        # Use the clean category label, not the raw group name
-                        category = self.GROUP_CATEGORY_MAP.get(param_val, param_val)
-
-                        sat_dict[norad_id] = {
-                            "satrec": sat,
-                            "meta": {
-                                "name": name,
-                                "norad_id": norad_id,
-                                "category": category,
-                                "period_min": period_min,
-                                "inclination_deg": inc_deg
-                            }
-                        }
-                    except Exception as e:
-                        logger.warning(f"Failed to parse TLE for {name}: {e}")
+                # Parse TLE off the main thread
+                parsed_sats = await asyncio.to_thread(
+                    self.parse_tle_data,
+                    data_text,
+                    param_val,
+                    self.GROUP_CATEGORY_MAP
+                )
+                sat_dict.update(parsed_sats)
 
             # Prepare arrays for vectorized computation
             self.satrecs = [v["satrec"] for v in sat_dict.values()]
