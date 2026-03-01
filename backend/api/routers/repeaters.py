@@ -44,8 +44,12 @@ async def get_repeaters(
         "format": "json",
     }
 
+    headers = {
+        "User-Agent": "SovereignWatch/0.10.4 (admin@sovereignwatch.local)"
+    }
+
     try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, headers=headers) as client:
             resp = await client.get(REPEATERBOOK_BASE_URL, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -64,10 +68,9 @@ async def get_repeaters(
     repeaters = []
 
     for entry in raw_results:
-        coords = entry.get("Coordinates") or {}
         try:
-            r_lat = float(coords.get("Latitude", 0))
-            r_lon = float(coords.get("Longitude", 0))
+            r_lat = float(entry.get("Lat", 0))
+            r_lon = float(entry.get("Long", 0))
         except (TypeError, ValueError):
             continue
 

@@ -20,6 +20,8 @@ Key design choices:
   rate limiting, and normalises the upstream JSON schema.
 - **On-demand fetch** (`useRepeaters.ts`): Data is only requested when the layer toggle
   is enabled. Refetch is triggered when the mission centre moves more than 0.25°.
+  - Integrated via `useRepeaters` explicitly.
+  - Added a dedicated `MapLayersWidget` component in the sidebar for explicitly managing static infrastructure overlays (like RF sites), keeping them conceptually separated from dynamic kinetic tracks (Air, Sea, Orbital) inside the IntelFeed.
 - **Static layer**: Repeaters are not animated — they go through the 60 fps RAF loop
   only for layer inclusion, not for position interpolation.
 - **Deck.gl integration**: `ScatterplotLayer` (halo + core dot) + `TextLayer`
