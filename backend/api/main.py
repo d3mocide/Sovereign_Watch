@@ -3,7 +3,7 @@ import logging
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis
+from routers import system, tracks, analysis, repeaters
 from core.database import db
 from services.historian import historian_task
 from services.broadcast import broadcast_service
@@ -82,6 +82,7 @@ async def shutdown():
 app.include_router(system.router)
 app.include_router(tracks.router)
 app.include_router(analysis.router)
+app.include_router(repeaters.router)
 
 if __name__ == "__main__":
     import uvicorn

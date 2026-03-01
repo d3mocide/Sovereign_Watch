@@ -1,11 +1,12 @@
 import { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, JS8Station } from "../types";
+import { CoTEntity, JS8Station, RepeaterStation } from "../types";
 import { getCompensatedCenter, maidenheadToLatLon } from "../utils/map/geoUtils";
 import { getOrbitalLayers } from "../layers/OrbitalLayer";
 import { buildAOTLayers } from "../layers/buildAOTLayers";
 import { buildTrailLayers } from "../layers/buildTrailLayers";
 import { buildEntityLayers } from "../layers/buildEntityLayers";
 import { buildJS8Layers } from "../layers/buildJS8Layers";
+import { buildRepeaterLayers } from "../layers/buildRepeaterLayers";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -86,6 +87,8 @@ interface UseAnimationLoopOptions {
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
+  repeatersRef?: MutableRefObject<RepeaterStation[]>;
+  showRepeaters?: boolean;
 }
 
 export function useAnimationLoop({
@@ -123,6 +126,8 @@ export function useAnimationLoop({
   onFollowModeChange,
   js8StationsRef,
   ownGridRef,
+  repeatersRef,
+  showRepeaters,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
@@ -661,10 +666,11 @@ export function useAnimationLoop({
         return filters.showSatOther !== false;
       });
 
+      const zoom = mapRef.current?.getMap()?.getZoom() ?? 0;
+
       // JS8 station layers (bearing lines + dots + labels)
       let js8Layers: any[] = [];
       if (js8StationsRef && ownGridRef) {
-        const zoom = mapRef.current?.getMap()?.getZoom() ?? 0;
         const ownGrid = ownGridRef.current;
         let ownLat = 0, ownLon = 0;
         if (ownGrid) [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
@@ -678,6 +684,19 @@ export function useAnimationLoop({
           ownLon,
           globeMode,
           selectedJS8Callsign,
+          onEntitySelect,
+          setHoveredEntity,
+          setHoverPosition,
+          zoom,
+        );
+      }
+
+      // Repeater infrastructure layers (ham radio repeaters)
+      let repeaterLayers: any[] = [];
+      if (showRepeaters && repeatersRef && repeatersRef.current.length > 0) {
+        repeaterLayers = buildRepeaterLayers(
+          repeatersRef.current,
+          globeMode,
           onEntitySelect,
           setHoveredEntity,
           setHoverPosition,
@@ -708,7 +727,10 @@ export function useAnimationLoop({
         // 0. AOT Boundaries
         ...buildAOTLayers(aotShapes, filters, globeMode),
 
-        // 1-2. Trail layers (history trails, gap bridges, selected trail)
+        // 1. Repeater infrastructure (rendered below entity icons for context)
+        ...repeaterLayers,
+
+        // 2-3. Trail layers (history trails, gap bridges, selected trail)
         ...buildTrailLayers(
           interpolated,
           currentSelected,
@@ -716,7 +738,7 @@ export function useAnimationLoop({
           historyTailsRef.current,
         ),
 
-        // 3+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
+        // 4+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
         ...buildEntityLayers(
           interpolated,
           currentSelected,
@@ -730,7 +752,7 @@ export function useAnimationLoop({
           selectedEntity,
         ),
 
-        // 4. JS8 station layers (rendered above entity icons)
+        // 5. JS8 station layers (rendered above entity icons)
         ...js8Layers,
       ];
 
@@ -765,5 +787,6 @@ export function useAnimationLoop({
     hoveredEntity,
     selectedEntity,
     onFollowModeChange,
+    showRepeaters,
   ]);
 }

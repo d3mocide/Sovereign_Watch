@@ -115,6 +115,20 @@ export interface JS8StatusLine {
   freq: string;
 }
 
+export interface RepeaterStation {
+  callsign: string;
+  lat: number;
+  lon: number;
+  frequency: string;    // Output frequency, e.g. "146.940"
+  input_freq: string;   // Input (TX) frequency
+  ctcss: string | null; // PL/CTCSS tone
+  use: string;          // "OPEN" | "CLOSED" | "PRIVATE"
+  status: string;       // "On-air" | "Off-air" | etc.
+  city: string;
+  state: string;
+  modes: string[];      // e.g. ["FM Analog", "D-Star"]
+}
+
 export interface MapFilters {
   showAir: boolean;
   showSea: boolean;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Ship, ChevronRight, Satellite } from 'lucide-react';
+import { Plane, Ship, ChevronRight, Satellite, Radio } from 'lucide-react';
 
 interface LayerFiltersProps {
   filters: { 
@@ -421,6 +421,27 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
                 </label>
             </div>
           )}
+        </div>
+
+        {/* Repeater Infrastructure Filter */}
+        <div className="flex flex-col gap-1">
+          <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-teal-400/30 bg-teal-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+            <div className="flex flex-1 items-center gap-2 p-2">
+              <Radio size={14} className={filters.showRepeaters ? 'text-teal-400' : 'text-white/20'} />
+              <span className={`text-[10px] font-bold tracking-widest ${filters.showRepeaters ? 'text-white' : 'text-white/40'}`}>REPEATERS</span>
+            </div>
+            <div
+              className="border-l border-white/10 p-2 cursor-pointer flex items-center"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFilterChange('showRepeaters', !filters.showRepeaters);
+              }}
+            >
+              <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showRepeaters ? 'bg-teal-400' : 'bg-white/10 hover:bg-white/20'}`}>
+                <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showRepeaters ? 'left-3.5' : 'left-0.5'}`} />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
