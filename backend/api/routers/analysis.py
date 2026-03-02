@@ -35,7 +35,11 @@ async def analyze_track(uid: str, req: AnalyzeRequest):
         WHERE entity_id = $1
         AND time > NOW() - INTERVAL '1 hour' * $2
     """
-    track_summary = await db.pool.fetchrow(track_query, uid, req.lookback_hours)
+    try:
+        track_summary = await db.pool.fetchrow(track_query, uid, req.lookback_hours)
+    except Exception as e:
+        logger.error(f"Analysis track query failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not track_summary or track_summary['points'] == 0:
         return {"error": "No track data found for this entity within lookback period"}

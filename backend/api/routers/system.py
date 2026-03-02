@@ -40,10 +40,14 @@ async def set_mission_location(location: MissionLocation):
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
 
-    await db.redis_client.set("mission:active", json.dumps(mission_data))
+    try:
+        await db.redis_client.set("mission:active", json.dumps(mission_data))
 
-    # Publish update to subscribers (pollers)
-    await db.redis_client.publish("navigation-updates", json.dumps(mission_data))
+        # Publish update to subscribers (pollers)
+        await db.redis_client.publish("navigation-updates", json.dumps(mission_data))
+    except Exception as e:
+        logger.error(f"Mission location update failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     logger.info(f"Mission location updated: {location.lat}, {location.lon} ({location.radius_nm}nm)")
 
@@ -58,7 +62,11 @@ async def get_mission_location():
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
 
-    mission_json = await db.redis_client.get("mission:active")
+    try:
+        mission_json = await db.redis_client.get("mission:active")
+    except Exception as e:
+        logger.error(f"Failed to get mission location: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if mission_json:
         return json.loads(mission_json)
