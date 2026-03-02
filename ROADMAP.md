@@ -136,22 +136,33 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **FE-19**      | Refined Optics     | Frontend  | **DONE**. 3D Altitude centering, Synchronized Telemetry, Tactical Zoom (v0.5.0).    |
 | **Ingest-03**  | Orbital Pulse      | Data Eng  | **DONE**. Celestrak TLE fetch → SGP4 propagation → `orbital_raw` Kafka topic.       |
 | **FE-20**      | Orbital Viz        | Frontend  | **DONE**. `OrbitalLayer.tsx`: satellite icons, ground tracks, footprint circles.    |
+| **FE-21**      | Undersea Cable Layer    | Frontend  | **DONE** (v0.12.0). `CableLayer.tsx`: animated cable routes, landing stations, INFRA toggle.  |
+| **Ingest-07a** | ADS-B Drone Enhancement | Data Eng  | **DONE** (v0.12.1). Drone ICAO type-code expansion, squawk 7400, drone_class sub-type.        |
+| **Audit-01**   | Code Review             | Security  | **DONE** (v0.13.0). 20 bugs resolved across frontend and backend.                             |
 
 ### Next Priority (P0–P1)
 
 | ID             | Task Name               | Component | Description                                                                                                                                                             |
 | :------------- | :---------------------- | :-------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Audit-01**   | **Code Review**         | Security  | **(P1)**. Full codebase audit, linting, and security scan.                                                                                                              |
 | **Fix-01**     | **CoT Tracking**        | Frontend  | **(P1)**. Restore functional Cursor-on-Target event tracking.                                                                                                           |
-| **FE-21**      | Undersea Cable Layer    | Frontend  | **(P1)**. `CableLayer.tsx`: animated fiber routes (TeleGeography GeoJSON), landing station markers, cable metadata popup, INFRA toggle in LayerFilters.                 |
-| **Ingest-07a** | ADS-B Drone Enhancement | Data Eng  | **(P1)**. Expand drone ICAO type-code detection, squawk 7400 forced classification, drone sub-type (`MILITARY_UAS`/`COMMERCIAL_UAS`/`CIVIL_UAS`) tagging in TAK detail. |
-| **FE-22**      | Drone Tactical Layer    | Frontend  | **(P1)**. Dedicated drone rotor-icon layer, operator position link line (Remote ID), DroneDetail sidebar panel.                                                         |
+| **FE-22**      | Drone Tactical Layer    | Frontend  | **(P1)**. `DroneLayer.tsx` with rotor icon, drone_class color coding, military/commercial/civil sub-filters. |
+| **FE-27**      | Repeater Mode Sub-Filters | Frontend | **(P1)**. Expandable REPEATERS section with FM/P25/DMR/D-Star/Fusion/Open sub-toggles. Data already in RepeaterBook API. |
+| **FE-25a**     | NOAA Weather Radio Layer | Frontend  | **(P1)**. Static NOAA transmitter data, amber coverage circles, `useNoaaRadio` hook, INFRA toggle. |
+| **FE-25c**     | PSAP / 911 Centers Layer | Frontend  | **(P1)**. Bundled static GeoJSON of dispatch centers, red/amber markers by PSAP type. |
 
 ### Backlog (P2)
 
 | ID             | Task Name        | Component | Description                                                                                    |
 | :------------- | :--------------- | :-------- | :--------------------------------------------------------------------------------------------- |
-| **Ingest-08**  | **Infra Caching**       | Data Eng  | **(P2)**. Move Submarine Cable/Landing Station caching to a backend Python service to replace client-side localStorage.                             |
+| **Ingest-09**  | P25 System Pulse        | Data Eng  | RadioReference API → P25 trunked system sites, agency type tagging, Redis cache, `/api/p25/sites`. |
+| **FE-23**      | P25 System Layer        | Frontend  | `buildP25Layers.ts`: agency-colored site markers, coverage circles, COMMS section in LayerFilters. |
+| **Ingest-10**  | APRS Stream Poller      | Data Eng  | APRS-IS TCP connection → `aprs_raw` Kafka topic. iGate/digipeater/vehicle/weather classification. |
+| **FE-24**      | APRS Layer              | Frontend  | APRS entity routing in takWorker, `buildAprsLayers.ts` with infra/mobile/weather sub-filters. |
+| **Ingest-12**  | DMR Brandmeister Pulse  | Data Eng  | Brandmeister API proxy (1h server cache), `/api/dmr/repeaters` endpoint. |
+| **FE-26**      | DMR Activity Layer      | Frontend  | `buildDmrLayers.ts`: online/offline coloring, active-talkgroup glow. |
+| **Ingest-11**  | FCC ASR Tower Service   | Data Eng  | FCC public antenna structure DB → bounding-box filtered `/api/towers` endpoint. |
+| **FE-25b**     | FCC Tower Layer         | Frontend  | `buildTowerLayers.ts`: communication tower markers by height and type. |
+| **Ingest-08**  | **Infra Caching**       | Data Eng  | Move Submarine Cable/Landing Station caching to a backend Python service to replace client-side localStorage. |
 | **FE-09**      | Coverage Viz     | Frontend  | H3 polling fidelity visualization.                                                                                                              |
 | **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                                                            |
 | **FE-12**      | Settings UI      | Frontend  | Configure API keys/Pollers via UI (no more ENV editing).                                       |
@@ -175,4 +186,4 @@ The frontend is the "Single Pane of Glass" for the analyst.
 
 ---
 
-_Updated 2026-02-20. Phase 8 feature plan added (Orbital, Undersea Cable, Drone). See `docs/FEATURE-ROADMAP-PHASE-8.md` for full architecture and agent prompts._
+_Updated 2026-03-02. Phase 9 feature plan added (RF Infrastructure: P25, APRS, DMR, NOAA WX, PSAP). See `docs/FEATURE-ROADMAP-PHASE-9.md` for full architecture and agent prompts._
