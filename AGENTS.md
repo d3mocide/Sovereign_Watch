@@ -1,26 +1,38 @@
-# AGENTS.md - AI Developer Guide
+# AGENTS.md - Developer & AI Guide
 
-> **CRITICAL:** This file is the authoritative source for AI agents working on this project. Read this first.
+> **CRITICAL:** This file is the authoritative source for AI agents and developers working on Sovereign Watch. It contains all architectural rules, verification commands, and documentation requirements.
 
 ## 1. Project Context
+
 **Sovereign Watch** is a distributed intelligence fusion platform.
 - **Frontend**: React (Vite), Tailwind CSS.
   - **Mapping**: Hybrid Architecture supporting **Mapbox GL JS** OR **MapLibre GL JS** (dynamic import based on env), overlaid with **Deck.gl** v9.
-  - Source: `frontend/src/components/map/TacticalMap.tsx`
-- **Backend**: FastAPI (Python)
-  - **Ingestion**: Python-based pollers in `backend/ingestion/` (Aviation, Maritime, Satellite)
-  - **Streaming**: Redpanda (Kafka-compatible) for event bus.
+  - **Source**: `frontend/src/components/map/TacticalMap.tsx`
+- **Backend**: FastAPI (Python).
+  - **Ingestion**: Python-based pollers in `backend/ingestion/` (Aviation, Maritime, Satellite).
+  - **Streaming**: Redpanda (Kafka-compatible) for the event bus.
 - **Infrastructure**: Docker Compose, localized dev environment.
 
-## 2. Mandatory Rules (from `.agent/rules/GEMINI.md`)
+## 2. Mandatory Architectural Invariants
 
-### 🏗️ Architectural Invariants
-- **Communication**: All inter-service communication use **TAK Protocol V1 (Protobuf)**. No ad-hoc JSON.
-- **Rendering**: Hybrid Architecture (WebGL2 for visuals). Do not downgrade to Leaflet.
+- **Container-First**: Do NOT run `npm`, `node`, `python`, `pip`, or `go` directly on the host shell for build/runtime tasks. Use Docker Compose (`docker compose build <service>`, `docker compose up -d --build <service>`).
+- **Communication**: All inter-service communication must use **TAK Protocol V1 (Protobuf)** via `tak.proto`. No ad-hoc JSON.
+- **Rendering**: Hybrid Architecture (WebGL2 for visuals, WebGPU/Workers for compute). Do not downgrade to Leaflet.
 - **State**: Backend uses `Redpanda` (Kafka-compatible) for event streaming.
 - **Ingestion**: Use Python pollers (`backend/ingestion/`). Do NOT use Redpanda Connect (Benthos).
 
-### 📝 Documentation & Change Tracking
+## 3. Development Workflow (Live Code Updates)
+
+Both frontend and backend have Hot Module Replacement (HMR) enabled:
+
+| Service       | Trigger                      | HMR Method                                               | Notes                                         |
+| ------------- | ---------------------------- | -------------------------------------------------------- | --------------------------------------------- |
+| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                          | No restart needed. Changes reflect instantly. |
+| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                          | No restart needed. Server auto-restarts.      |
+| **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart.|
+
+## 4. Documentation & Change Tracking
+
 - **Requirement**: You **MUST** create a new file in `docs/tasks/` for all significant features, bug fixes, and architectural changes.
 - **Format**: Filename: `YYYY-MM-DD-{task-slug}.md`
 - **Content**:
@@ -30,11 +42,11 @@
   - **Verification**: Tests run and results observed.
   - **Benefits**: Impact on the project (e.g., performance, security, maintainability).
 
-## 3. Verification & Quality Gates
+## 5. Verification & Quality Gates
+
 Before declaring a task complete, you **MUST** run the appropriate verification using standard tools for the repository.
 
-### ⚡ Quick Checks
-Run standard commands based on the part of the project you are editing:
+### Quick Checks
 
 ```bash
 # Frontend
@@ -53,10 +65,11 @@ ruff check .
 python -m pytest
 ```
 
-## 4. Directory Structure Map
+## 6. Directory Structure Map
+
 ```
 .
-├── .agent/           # Antigravity Framework (DO NOT READ RECURSIVELY)
+├── .agent/           # Focused AI Skills (e.g., specific rules for React, FastAPI, Geo)
 ├── frontend/         # React Application (Vite)
 │   ├── src/          # Source Code
 │   └── package.json  # Frontend Dependencies
@@ -75,6 +88,3 @@ python -m pytest
 ├── docker-compose.yml
 └── AGENTS.md         # This file
 ```
-
-## 5. Common Issues & Fixes
-- **Testing Failures**: Ensure that you have the required dependencies installed (e.g. `npm install` for frontend, `pip install -r requirements.txt` for backend) when running tests directly.
