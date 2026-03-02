@@ -1,55 +1,14 @@
----
-name: architecture
-description: Architectural decision-making framework. Requirements analysis, trade-off evaluation, ADR documentation. Use when making architecture decisions or analyzing system design.
-allowed-tools: Read, Glob, Grep
----
+# Architecture - Sovereign Watch
 
-# Architecture Decision Framework
+> **CRITICAL:** Sovereign Watch is a distributed intelligence fusion platform using a specific containerized architecture.
 
-> "Requirements drive architecture. Trade-offs inform decisions. ADRs capture rationale."
+## Core Architectural Rules
 
-## 🎯 Selective Reading Rule
-
-**Read ONLY files relevant to the request!** Check the content map, find what you need.
-
-| File | Description | When to Read |
-|------|-------------|--------------|
-| `context-discovery.md` | Questions to ask, project classification | Starting architecture design |
-| `trade-off-analysis.md` | ADR templates, trade-off framework | Documenting decisions |
-| `pattern-selection.md` | Decision trees, anti-patterns | Choosing patterns |
-| `examples.md` | MVP, SaaS, Enterprise examples | Reference implementations |
-| `patterns-reference.md` | Quick lookup for patterns | Pattern comparison |
-
----
-
-## 🔗 Related Skills
-
-| Skill | Use For |
-|-------|---------|
-| `@[skills/database-design]` | Database schema design |
-| `@[skills/api-patterns]` | API design patterns |
-| `@[skills/deployment-procedures]` | Deployment architecture |
-
----
-
-## Core Principle
-
-**"Simplicity is the ultimate sophistication."**
-
-- Start simple
-- Add complexity ONLY when proven necessary
-- You can always add patterns later
-- Removing complexity is MUCH harder than adding it
-
----
-
-## Validation Checklist
-
-Before finalizing architecture:
-
-- [ ] Requirements clearly understood
-- [ ] Constraints identified
-- [ ] Each decision has trade-off analysis
-- [ ] Simpler alternatives considered
-- [ ] ADRs written for significant decisions
-- [ ] Team expertise matches chosen patterns
+1.  **Container-First**: The host machine is NOT the runtime environment. All services must run via Docker Compose (`docker-compose.yml`). Modifying code in `backend/ingestion/` (pollers) requires a container rebuild (`docker compose up -d --build <service>`).
+2.  **Ingestion Pollers**: Data ingestion is handled exclusively by custom Python-based pollers located in `backend/ingestion/` (e.g., Aviation, Maritime, Satellite).
+    *   **Anti-Pattern**: DO NOT use "Redpanda Connect" or "Benthos" for ingestion.
+    *   **Threading**: To prevent blocking the `asyncio` event loop in ingestion services, CPU-bound tasks (like `sgp4` TLE parsing) must be offloaded to a thread pool using `asyncio.to_thread`.
+    *   **Kafka Producers**: High-throughput Kafka producers must use non-blocking `send` calls coupled with `add_done_callback` for error logging, rather than `await`-ing every send operation.
+3.  **Event Streaming**: The system uses **Redpanda** (Kafka-compatible) as the central event bus for the backend. The Kafka broker address is configured via the `KAFKA_BROKERS` environment variable (default: `sovereign-redpanda:9092`).
+4.  **Frontend Architecture**: The application uses a **Hybrid Rendering Architecture** for maps. It dynamically imports **Mapbox GL JS** or **MapLibre GL JS** based on the environment, heavily overlaid with **Deck.gl v9** (WebGL2).
+5.  **Replay Data**: Replay data processing is centralized in `frontend/src/utils/replayUtils.ts`. It relies on the backend to provide guaranteed time-sorted order (ASC) to avoid client-side sorting.
