@@ -1,81 +1,16 @@
----
-name: api-patterns
-description: API design principles and decision-making. REST vs GraphQL vs tRPC selection, response formats, versioning, pagination.
-allowed-tools: Read, Write, Edit, Glob, Grep
----
+# API Patterns - Sovereign Watch
 
-# API Patterns
+> **CRITICAL:** Sovereign Watch strictly uses **FastAPI (Python)** and the **TAK Protocol V1 (Protobuf)** for inter-service communication.
 
-> API design principles and decision-making for 2025.
-> **Learn to THINK, not copy fixed patterns.**
+## Core Rules
 
-## 🎯 Selective Reading Rule
+1.  **FastAPI Routing**: All backend endpoints must be built using FastAPI. Routes should be organized cleanly in `backend/api/routers/`.
+2.  **TAK Protocol**: Inter-service streaming and tactical data exchange must use TAK Protocol V1 (Protobuf). **DO NOT** use ad-hoc JSON for high-throughput event streaming. TAK Protocol Buffer messages are prefixed with the magic header `0xbf 0x01 0xbf`.
+3.  **Input Validation**: Use Pydantic models for all incoming HTTP requests.
+4.  **Error Handling**: Input validation (returning HTTP 400) must precede infrastructure availability checks (like database pool status returning 503) to distinguish client errors from server outages. Never leak raw database exceptions (e.g., return HTTP 500 'Internal server error' instead of psycopg2 errors).
+5.  **Security Middleware**: The backend enforces security headers (HSTS, CSP `default-src 'none'`). Note that `/docs`, `/redoc`, and `/openapi.json` have relaxed CSP to support Swagger UI execution.
+6.  **WebSockets**: The `BroadcastManager` service (`backend/api/services/broadcast.py`) handles WebSockets. It includes a 0.5s timeout on sends to prevent slow clients from blocking the realtime broadcast loop.
 
-**Read ONLY files relevant to the request!** Check the content map, find what you need.
-
----
-
-## 📑 Content Map
-
-| File | Description | When to Read |
-|------|-------------|--------------|
-| `api-style.md` | REST vs GraphQL vs tRPC decision tree | Choosing API type |
-| `rest.md` | Resource naming, HTTP methods, status codes | Designing REST API |
-| `response.md` | Envelope pattern, error format, pagination | Response structure |
-| `graphql.md` | Schema design, when to use, security | Considering GraphQL |
-| `trpc.md` | TypeScript monorepo, type safety | TS fullstack projects |
-| `versioning.md` | URI/Header/Query versioning | API evolution planning |
-| `auth.md` | JWT, OAuth, Passkey, API Keys | Auth pattern selection |
-| `rate-limiting.md` | Token bucket, sliding window | API protection |
-| `documentation.md` | OpenAPI/Swagger best practices | Documentation |
-| `security-testing.md` | OWASP API Top 10, auth/authz testing | Security audits |
-
----
-
-## 🔗 Related Skills
-
-| Need | Skill |
-|------|-------|
-| API implementation | `@[skills/backend-development]` |
-| Data structure | `@[skills/database-design]` |
-| Security details | `@[skills/security-hardening]` |
-
----
-
-## ✅ Decision Checklist
-
-Before designing an API:
-
-- [ ] **Asked user about API consumers?**
-- [ ] **Chosen API style for THIS context?** (REST/GraphQL/tRPC)
-- [ ] **Defined consistent response format?**
-- [ ] **Planned versioning strategy?**
-- [ ] **Considered authentication needs?**
-- [ ] **Planned rate limiting?**
-- [ ] **Documentation approach defined?**
-
----
-
-## ❌ Anti-Patterns
-
-**DON'T:**
-- Default to REST for everything
-- Use verbs in REST endpoints (/getUsers)
-- Return inconsistent response formats
-- Expose internal errors to clients
-- Skip rate limiting
-
-**DO:**
-- Choose API style based on context
-- Ask about client requirements
-- Document thoroughly
-- Use appropriate status codes
-
----
-
-## Script
-
-| Script | Purpose | Command |
-|--------|---------|---------|
-| `scripts/api_validator.py` | API endpoint validation | `python scripts/api_validator.py <project_path>` |
-
+## Testing
+Run backend API tests using:
+`PYTHONPATH=backend/api python -m pytest backend/api/tests/`

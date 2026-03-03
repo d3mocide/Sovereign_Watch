@@ -1,0 +1,3 @@
+## 2024-05-15 - [ARIA State Attributes for Icon Toggles]
+**Learning:** Icon-only toggle buttons (like those used for map layers and filters) provide zero context to screen readers about their current state (on/off, expanded/collapsed) unless explicitly told. `aria-pressed` is crucial for binary toggle buttons (like "Show Air"), while `aria-expanded` is essential for buttons that reveal additional content (like "Show Filters"). Relying solely on visual changes (like text color or background) leaves visually impaired users guessing.
+**Action:** Always include `aria-label`, and pair it with `aria-pressed={boolean}` for stateful toggles or `aria-expanded={boolean}` for disclosure buttons. Add `focus-visible:ring-*` to ensure keyboard navigation is visibly obvious.

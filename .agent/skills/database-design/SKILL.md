@@ -1,52 +1,13 @@
----
-name: database-design
-description: Database design principles and decision-making. Schema design, indexing strategy, ORM selection, serverless databases.
-allowed-tools: Read, Write, Edit, Glob, Grep
----
+# Database Design - Sovereign Watch
 
-# Database Design
+> **CRITICAL:** Sovereign Watch uses **PostgreSQL** with **PostGIS** and **TimescaleDB** extensions.
 
-> **Learn to THINK, not copy SQL patterns.**
+## Core Rules
 
-## 🎯 Selective Reading Rule
-
-**Read ONLY files relevant to the request!** Check the content map, find what you need.
-
-| File | Description | When to Read |
-|------|-------------|--------------|
-| `database-selection.md` | PostgreSQL vs Neon vs Turso vs SQLite | Choosing database |
-| `orm-selection.md` | Drizzle vs Prisma vs Kysely | Choosing ORM |
-| `schema-design.md` | Normalization, PKs, relationships | Designing schema |
-| `indexing.md` | Index types, composite indexes | Performance tuning |
-| `optimization.md` | N+1, EXPLAIN ANALYZE | Query optimization |
-| `migrations.md` | Safe migrations, serverless DBs | Schema changes |
-
----
-
-## ⚠️ Core Principle
-
-- ASK user for database preferences when unclear
-- Choose database/ORM based on CONTEXT
-- Don't default to PostgreSQL for everything
-
----
-
-## Decision Checklist
-
-Before designing schema:
-
-- [ ] Asked user about database preference?
-- [ ] Chosen database for THIS context?
-- [ ] Considered deployment environment?
-- [ ] Planned index strategy?
-- [ ] Defined relationship types?
-
----
-
-## Anti-Patterns
-
-❌ Default to PostgreSQL for simple apps (SQLite may suffice)
-❌ Skip indexing
-❌ Use SELECT * in production
-❌ Store JSON when structured data is better
-❌ Ignore N+1 queries
+1.  **Initialization**: The database schema is initialized via `backend/db/init.sql`. The `POSTGRES_PASSWORD` environment variable is mandatory for `backend/scripts/cleanup_timescale.py`.
+2.  **Indexes**: The system relies heavily on specific indexes for performance.
+    *   It uses the `pg_trgm` extension.
+    *   GIN indexes must be maintained on `tracks(entity_id)` and `tracks((meta->>'callsign'))` to support efficient substring (`ILIKE`) searches.
+3.  **Hybrid Intelligence Retrieval**: The system uses a specialized PostgreSQL function `get_contextual_intel(embedding, radius_meters, centroid_geom)` defined in `init.sql` for semantic + geospatial searches.
+4.  **Embeddings**: Vector embeddings for intelligence reports use a dimension of **384** (compatible with models like `all-MiniLM-L6-v2` or truncated `text-embedding-3-small`). The embedding service uses LiteLLM with a default model of `text-embedding-3-small`.
+5.  **Schema Changes**: Schema changes should be applied to existing deployments using standalone scripts (e.g., `backend/scripts/apply_indexes.py`) in addition to updating `backend/db/init.sql` for fresh installs.
