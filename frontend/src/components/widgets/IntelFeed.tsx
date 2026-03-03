@@ -105,21 +105,27 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                     <div className="flex items-center gap-1.5">
                         <button
                             title="Toggle Air"
-                            className={`p-1 rounded transition-all active:scale-95 ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            aria-label="Toggle Air Intelligence"
+                            aria-pressed={filters?.showAir}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showAir', !filters?.showAir)}
                         >
                             <Plane size={12} />
                         </button>
                         <button
                             title="Toggle Sea"
-                            className={`p-1 rounded transition-all active:scale-95 ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            aria-label="Toggle Sea Intelligence"
+                            aria-pressed={filters?.showSea}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showSea', !filters?.showSea)}
                         >
                             <Ship size={12} />
                         </button>
                         <button
                             title="Toggle Orbital"
-                            className={`p-1 rounded transition-all active:scale-95 ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            aria-label="Toggle Orbital Intelligence"
+                            aria-pressed={filters?.showSatellites}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showSatellites', !filters?.showSatellites)}
                         >
                             <Satellite size={12} />
@@ -129,7 +135,10 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                     <div className="h-4 w-[1px] bg-white/10 mx-1" />
 
                     <button
-                        className={`transition-colors p-1 rounded ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
+                        title="Toggle Filters"
+                        aria-label="Toggle filter options"
+                        aria-expanded={showFilters}
+                        className={`transition-colors p-1 rounded focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
                         onClick={() => setShowFilters(!showFilters)}
                     >
                         <Filter size={12} />
