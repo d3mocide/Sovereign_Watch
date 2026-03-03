@@ -81,6 +81,24 @@ async def search_tracks(q: str, limit: int = 10):
     Search for entities by ID or Callsign (substring).
     Returns the most recent position for each match.
     """
+    if limit > settings.TRACK_SEARCH_MAX_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_SEARCH_MAX_LIMIT})"
+        )
+
+    if limit <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="limit must be a positive integer"
+        )
+
+    if len(q) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Query string is too long"
+        )
+
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 

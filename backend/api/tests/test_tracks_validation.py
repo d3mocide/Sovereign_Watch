@@ -61,3 +61,50 @@ async def test_track_history_valid_request():
         # But crucially, it is NOT 400.
         assert response.status_code == 503
         assert "Database not ready" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_search_tracks_limit_exceeded():
+    """
+    Test that requesting search exceeding the max limit returns 400.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Default limit is 100. Request 101.
+        response = await client.get("/api/tracks/search?q=test&limit=101")
+        assert response.status_code == 400
+        assert "Limit exceeds maximum allowed" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_search_tracks_negative_limit():
+    """
+    Test that requesting search with zero or negative limit returns 400.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/tracks/search?q=test&limit=0")
+        assert response.status_code == 400
+        assert "limit must be a positive integer" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_search_tracks_long_query():
+    """
+    Test that requesting search with extremely long query string returns 400.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        long_query = "a" * 101
+        response = await client.get(f"/api/tracks/search?q={long_query}")
+        assert response.status_code == 400
+        assert "Query string is too long" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_search_tracks_valid_request():
+    """
+    Test that a valid search request passes validation.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/tracks/search?q=test&limit=10")
+        assert response.status_code == 503  # DB not ready is expected
+        assert "Database not ready" in response.json()["detail"]
