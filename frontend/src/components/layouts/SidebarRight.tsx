@@ -94,7 +94,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </div>
               </section>
             </div>
-            <button onClick={onClose} className="p-1 text-white/30 hover:text-white transition-colors shrink-0">x</button>
+            <button onClick={onClose} aria-label="Close details" title="Close details" className="p-1 text-white/30 hover:text-white transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none">x</button>
           </div>
           <div className="flex gap-2">
             <button
@@ -217,7 +217,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </div>
               </section>
             </div>
-            <button onClick={onClose} className="p-1 text-white/30 hover:text-white transition-colors shrink-0">x</button>
+            <button onClick={onClose} aria-label="Close details" title="Close details" className="p-1 text-white/30 hover:text-white transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none">x</button>
           </div>
           <div className="flex gap-2 mt-2">
             <button
@@ -342,7 +342,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </div>
               </section>
             </div>
-            <button onClick={onClose} className="p-1 text-white/30 hover:text-white transition-colors shrink-0">x</button>
+            <button onClick={onClose} aria-label="Close details" title="Close details" className="p-1 text-white/30 hover:text-white transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none">x</button>
           </div>
           <div className="flex gap-2 mt-2">
             <button
@@ -586,7 +586,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-white/30 hover:text-white transition-colors"
+            aria-label="Close details"
+            title="Close details"
+            className="p-1 text-white/30 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
             x
           </button>
