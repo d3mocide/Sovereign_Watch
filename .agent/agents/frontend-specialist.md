@@ -30,19 +30,18 @@ You are a Senior Frontend Architect who designs and builds high-density, real-ti
 
 ### 🎨 Visual Identity
 - **Palette**: Dark Mode / Tactical Background (`bg-tactical-bg` -> `#050505`).
-- **Surfaces**: Translucent panels (glassmorphism via `bg-tactical-panel` -> `#121212`) combined with subtle borders (`tactical-border` -> `#1e1e1e`).
-- **Accents**: Neon / Tactical highlights (`text-hud-green` -> `#00ff41`, `air-accent`, `sea-accent`, `alert-red`, `alert-amber`).
-- **Typography**: Strictly Monospace (`JetBrains Mono` or similar) for high data density readability.
+- **Surfaces**: Translucent panels (glassmorphism via `bg-black/40 backdrop-blur-md` or `bg-tactical-panel` -> `#121212`) combined with subtle borders (`tactical-border` -> `#1e1e1e` or `border-white/10`).
+- **Accents**: Neon / Tactical highlights (`text-hud-green` -> `#00ff41`, `air-accent` -> `#00ff41`, `sea-accent` -> `#00ffff`, `alert-red` -> `#ff3333`, `alert-amber` -> `#ffb000`, `purple-400` / `fuchsia-400` / `magenta` for specific tracks like Drones or Orbital, `cyan-400` for maritime/infrastructure).
+- **Typography**: Strictly Monospace (`JetBrains Mono` or similar via `font-mono`) for high data density readability. Use varying text sizes (down to `text-[8px]`), weights (`font-bold`), opacities (`text-white/40`, `text-white/70`), and capitalization (`uppercase tracking-widest`) to create typographic hierarchy without changing font families.
 
 ### 📐 Structural Layouts
-- **High Data Density**: Optimize for situational awareness; minimize whitespace while retaining readability.
+- **High Data Density**: Optimize for situational awareness; minimize whitespace while retaining readability. Use tight leading (`leading-tight`, `leading-none`) and tabular figures (`tabular-nums`) for data tables and coordinate displays.
 - **HUD Elements**: Incorporate scanlines (`animate-scanline`), noise patterns (`bg-noise-pattern`), and crosshairs.
 - **Map-Centric**: The layout is built *around* and *over* the interactive Deck.gl/Mapbox canvas. Overlays must not block critical map interaction.
-- **Sharp Geometry**: Avoid soft, rounded corners. Use sharp edges (0px - 2px `rounded-sm`) to reinforce the technical/tactical feel.
+- **Geometry Rules**: Use a mix of sharp edges and functional curves. Main structural panels, widgets, and tooltips should use sharp edges or very slight rounding (`rounded-sm` / 2px) to reinforce the technical/tactical feel. However, interactive state toggles, status indicators, and specific categorical badges should use fully rounded or pill shapes (`rounded-full`) to clearly denote their interactive or standalone nature.
 
 ### ⛔ FORBIDDEN DESIGN ANTI-PATTERNS
-- ❌ **The "Purple Ban"**: No purple, violet, indigo, or magenta.
-- ❌ **SaaS Clichés**: No Bento Grids, massive hero splits, or "friendly" rounded corners.
+- ❌ **SaaS Clichés**: No Bento Grids, massive hero splits, or overly "friendly" bouncy animations.
 - ❌ **Light Mode**: The interface is strictly dark-mode tactical.
 
 ---
