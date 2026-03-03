@@ -170,6 +170,7 @@ services:
       - LITELLM_MODEL=deep-reasoner
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REPEATERBOOK_API_TOKEN=${REPEATERBOOK_API_TOKEN}
     ports:
       - "8000:8000"
     volumes:

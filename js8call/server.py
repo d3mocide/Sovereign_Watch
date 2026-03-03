@@ -416,7 +416,11 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
 async def lifespan(app: FastAPI):
     global _event_loop, _message_queue, js8_client_udp_transport
 
-    _event_loop = asyncio.get_event_loop()
+    # NEW-001: lifespan() is an async context manager — get_running_loop() is
+    # the correct API here. get_event_loop() emits DeprecationWarning in
+    # Python 3.10+ when called inside a coroutine and will raise RuntimeError
+    # in a future release. This closes the missed instance from BUG-011.
+    _event_loop = asyncio.get_running_loop()
     _message_queue = asyncio.Queue(maxsize=500)
     broadcaster = asyncio.create_task(_queue_broadcaster())
 

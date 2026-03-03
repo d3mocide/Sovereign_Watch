@@ -10,10 +10,13 @@ situational awareness.
 """
 
 import logging
+import os
+import json
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
+from core.database import db
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Repeaters")
@@ -37,6 +40,21 @@ async def get_repeaters(
     - **lat/lon**: Mission area centre point.
     - **radius**: Search radius in miles (capped at 500 to avoid abuse).
     """
+    
+    # Create deterministic cache key by rounding to 2 decimal places (approx ~1km)
+    cache_key = f"repeaters:lat={lat:.2f}:lon={lon:.2f}:rad={int(radius)}"
+    
+    # 1. Check Redis Cache
+    if db.redis_client:
+        try:
+            cached_data = await db.redis_client.get(cache_key)
+            if cached_data:
+                logger.info(f"RepeaterBook Cache HIT: {cache_key}")
+                return json.loads(cached_data)
+        except Exception as e:
+            logger.warning(f"Redis cache read failed for {cache_key}: {e}")
+
+    # 2. Cache MISS — Fetch from external API
     params = {
         "lat": lat,
         "lng": lon,
@@ -47,6 +65,10 @@ async def get_repeaters(
     headers = {
         "User-Agent": "SovereignWatch/0.10.4 (admin@sovereignwatch.local)"
     }
+    
+    token = os.getenv("REPEATERBOOK_API_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, headers=headers) as client:
@@ -56,6 +78,11 @@ async def get_repeaters(
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="RepeaterBook API timeout")
     except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise HTTPException(
+                status_code=502, # Keep as 502 for the proxy so it matches frontend expectations, but pass detail
+                detail="RepeaterBook API requires an auth token. Set REPEATERBOOK_API_TOKEN.",
+            )
         raise HTTPException(
             status_code=502,
             detail=f"RepeaterBook API error: {exc.response.status_code}",
@@ -100,4 +127,15 @@ async def get_repeaters(
             }
         )
 
-    return {"count": len(repeaters), "results": repeaters}
+    response_data = {"count": len(repeaters), "results": repeaters}
+    
+    # 3. Store in Redis Cache (24 hour TTL)
+    if db.redis_client:
+        try:
+            # 86400 seconds = 24 hours
+            await db.redis_client.setex(cache_key, 86400, json.dumps(response_data))
+            logger.info(f"RepeaterBook Cache STORED: {cache_key}")
+        except Exception as e:
+            logger.warning(f"Redis cache write failed for {cache_key}: {e}")
+
+    return response_data

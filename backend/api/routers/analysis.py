@@ -1,9 +1,8 @@
-import asyncio
 import json
 import logging
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
-from litellm import completion
+from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from core.database import db
 from core.config import settings
@@ -92,13 +91,14 @@ async def analyze_track(uid: str, req: AnalyzeRequest):
     """
 
     # 4. Stream AI Response
-    # BUG-005: completion() is a synchronous blocking call. Running it directly
-    # inside an async generator stalls the entire FastAPI event loop for the
-    # duration of the LLM response. asyncio.to_thread() offloads it to a
-    # threadpool so the event loop stays free for WebSocket broadcasts etc.
+    # NEW-003 (supersedes BUG-005): The prior asyncio.to_thread(completion, ...,
+    # stream=True) fix only offloaded the initial HTTP handshake. The generator
+    # returned immediately, but the chunk-by-chunk iteration ran synchronously
+    # back in the event loop — recreating the blocking problem, one token at a
+    # time. Switching to acompletion() + async for keeps the event loop fully
+    # unblocked throughout the entire streaming response.
     async def event_generator():
-        response = await asyncio.to_thread(
-            completion,
+        response = await acompletion(
             model=settings.LITELLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -106,7 +106,7 @@ async def analyze_track(uid: str, req: AnalyzeRequest):
             ],
             stream=True
         )
-        for chunk in response:
+        async for chunk in response:
             content = chunk.choices[0].delta.content or ""
             if content:
                 yield {"data": content}

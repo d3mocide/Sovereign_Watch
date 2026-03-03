@@ -313,7 +313,9 @@ export function useEntityWorker({
           trail,
           smoothedTrail: getSmoothedTrail(trail, existingEntity),
           uidHash: 0, // Will be set below
-          raw: updateData.raw, // Map raw hex from worker
+          // NEW-005: Removed stale `raw: updateData.raw` — tak.worker.ts no
+          // longer attaches .raw after BUG-018 removed the hex debug string.
+          // It was always `undefined` and silently discarded by `as CoTEntity`.
           classification: classification
             ? {
               ...existingEntity?.classification,
@@ -519,13 +521,11 @@ export function useEntityWorker({
         // Don't log noisy errors - onclose will handle reconnection
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         if (isCleaningUp) return;
 
-        // Only log if it was previously connected (not initial failures)
-        if (reconnectAttempts === 0 && event.wasClean) {
-          console.log("TAK Stream disconnected");
-        }
+        // NEW-002: Removed console.log("TAK Stream disconnected") —
+        // it fired on every clean disconnect, adding noisy output in production.
 
         // Exponential backoff: 1s, 2s, 4s, 8s... max 30s
         if (reconnectAttempts < maxReconnectAttempts) {

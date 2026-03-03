@@ -151,6 +151,14 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
             detail=f"Limit exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_LIMIT})"
         )
 
+    # NEW-004: Mirror the BUG-007 lower-bound guard from the history endpoint.
+    # limit=0 silently returns 0 rows; negative values may cause asyncpg errors.
+    if limit <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="limit must be a positive integer"
+        )
+
     try:
         # Pydantic/FastAPI handles some ISO parsing, but we need robust handling
         dt_start = datetime.fromisoformat(start.replace('Z', '+00:00'))
