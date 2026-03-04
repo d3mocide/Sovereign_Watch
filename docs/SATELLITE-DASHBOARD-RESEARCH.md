@@ -221,8 +221,8 @@ Color Map per Category:
 
 | Feature | Component | Status |
 |---|---|---|
-| Expand Celestrak TLE groups (from 4 → 10+ categories) | `orbital_pulse` config | extend |
-| Real-time SGP4 position update (30s cadence) | `orbital_pulse` main loop | extend |
+| Expand Celestrak TLE groups (from 4 → 10+ categories) | `orbital_pulse` config | done |
+| Real-time SGP4 position update (30s cadence) | `orbital_pulse` main loop | done |
 | NORAD ID → name resolution cache | `backend/api` layer | new |
 | SpaceTrack API integration (authenticated TLE pull) | `orbital_pulse` config option | new |
 

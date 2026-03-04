@@ -161,7 +161,7 @@ export function useMissionArea({
     [handleSetFocus],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const handleSwitchMission = useCallback(
     async (mission: any) => {
       await handleSetFocus(mission.lat, mission.lon, mission.radius_nm);

@@ -4,6 +4,7 @@ import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
 import { MainHud } from './components/layouts/MainHud'
 import { TopBar } from './components/layouts/TopBar'
+import OrbitalDashboard from './components/layouts/OrbitalDashboard'
 import RadioTerminal from './components/js8call/RadioTerminal'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
@@ -13,7 +14,7 @@ import { useRepeaters } from './hooks/useRepeaters'
 import { processReplayData } from './utils/replayUtils'
 
 function App() {
-  const [viewMode, setViewMode] = useState<'TACTICAL' | 'RADIO'>('TACTICAL');
+  const [viewMode, setViewMode] = useState<'TACTICAL' | 'RADIO' | 'ORBITAL'>('TACTICAL');
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
@@ -120,7 +121,7 @@ function App() {
     });
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const [events, setEvents] = useState<IntelEvent[]>([]);
 
   // Mission management state
@@ -452,6 +453,15 @@ function App() {
             />
           )}
         </>
+      ) : viewMode === 'ORBITAL' ? (
+        <div className="w-full h-full pt-14 overflow-hidden bg-tactical-bg">
+          <OrbitalDashboard
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            trackCount={trackCounts.orbital}
+            health={health}
+          />
+        </div>
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
           <RadioTerminal />

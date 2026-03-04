@@ -49,6 +49,20 @@ class OrbitalPulseService:
             ("gp.php", "beidou"),
             ("gp.php", "weather"),
             ("gp.php", "noaa"),
+            ("gp.php", "goes"),
+            ("gp.php", "sarsat"),
+            ("gp.php", "starlink"),
+            ("gp.php", "oneweb"),
+            ("gp.php", "iridium-NEXT"),
+            ("gp.php", "military"),
+            ("gp.php", "amateur"),
+            ("gp.php", "cubesat"),
+            ("gp.php", "radarsat"),
+            ("gp.php", "stations"),     # ISS, Tiangong, etc
+            ("gp.php", "visual"),       # 100 brightest
+            ("gp.php", "resource"),     # Earth resources
+            ("gp.php", "spire"),        # Spire fleet
+            ("gp.php", "planet"),       # Planet fleet
         ]
 
         # Map Celestrak group names → clean user-facing category labels
@@ -60,6 +74,20 @@ class OrbitalPulseService:
             "beidou":     "gps",
             "weather":    "weather",
             "noaa":       "weather",
+            "goes":       "weather",
+            "sarsat":     "sar",
+            "starlink":   "comms",
+            "oneweb":     "comms",
+            "iridium-NEXT": "comms",
+            "military":   "intel",
+            "amateur":    "comms",
+            "cubesat":    "leo",
+            "radarsat":   "intel",
+            "stations":   "leo",
+            "visual":     "leo",
+            "resource":   "weather",
+            "spire":      "intel",
+            "planet":     "intel"
         }
 
     async def setup(self):
@@ -110,7 +138,10 @@ class OrbitalPulseService:
                         "norad_id": norad_id,
                         "category": category,
                         "period_min": period_min,
-                        "inclination_deg": inc_deg
+                        "inclination_deg": inc_deg,
+                        "eccentricity": sat.ecco,
+                        "tle_line1": l1,
+                        "tle_line2": l2
                     }
                 }
             except Exception as e:
@@ -288,6 +319,9 @@ class OrbitalPulseService:
                     tak_event["detail"]["category"] = meta['category']
                     tak_event["detail"]["period_min"] = meta['period_min']
                     tak_event["detail"]["inclination_deg"] = meta['inclination_deg']
+                    tak_event["detail"]["eccentricity"] = meta['eccentricity']
+                    tak_event["detail"]["tle_line1"] = meta['tle_line1']
+                    tak_event["detail"]["tle_line2"] = meta['tle_line2']
 
                     # To kafka
                     batch_tasks.append(self.kafka_producer.send(

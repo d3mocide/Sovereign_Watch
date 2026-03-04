@@ -8,6 +8,7 @@ import { buildEntityLayers } from "../layers/buildEntityLayers";
 import { buildJS8Layers } from "../layers/buildJS8Layers";
 import { buildRepeaterLayers } from "../layers/buildRepeaterLayers";
 import { buildInfraLayers } from "../layers/buildInfraLayers";
+import { getTerminatorLayer } from "../components/map/TerminatorLayer";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -728,6 +729,7 @@ export function useAnimationLoop({
       );
 
       const layers = [
+        getTerminatorLayer(!!filters.showTerminator),
         ...getOrbitalLayers({
           satellites: filteredSatellites,
           selectedEntity: currentSelected,

@@ -120,7 +120,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
         // 1. Footprint Circle — skipped in Globe mode (flat projection artifact)
         ...(projectionMode !== 'globe' ? [new ScatterplotLayer({
             id: `satellite-footprint${sfx}`,
-            data: satellites.filter(s => s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
+            data: satellites.filter(s => showFootprints || s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
             getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
             getRadius: (d: CoTEntity) => {
                 const altKm = (d.altitude || 0) / 1000;
@@ -178,7 +178,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
         })] : []),
 
         // 2. Orbital Trail (respects historyTails toggle, Chaikin-smoothed)
-        ...(showHistoryTails ? [
+        ...((showHistoryTails || showGroundTracks) ? [
             new PathLayer({
                 id: `satellite-ground-track${sfx}`,
                 data: satellites,
@@ -193,8 +193,13 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                     }
                     return trail;
                 },
-                getColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, Math.floor(255 * 0.3)),
-                getWidth: 3.5,
+                getColor: (d: CoTEntity) => {
+                    const isSelected = d.uid === selectedEntity?.uid || d.uid === hoveredEntity?.uid;
+                    if (isSelected) return getSatColor(d.detail?.category as string, 200);
+                    if (showGroundTracks) return getSatColor(d.detail?.category as string, 120);
+                    return getSatColor(d.detail?.category as string, Math.floor(255 * 0.3));
+                },
+                getWidth: (d: CoTEntity) => (d.uid === selectedEntity?.uid || d.uid === hoveredEntity?.uid) ? 4.5 : 3.5,
                 widthMinPixels: 2.5,
                 jointRounded: true,
                 capRounded: true,
@@ -202,7 +207,12 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 // wrapLongitude off in globe mode: conflicts with _full3d depth buffer and causes culling
                 wrapLongitude: projectionMode !== 'globe',
                 // Positive depthBias pushes geometry BEHIND the viewer — trail sits behind the diamond (bias 0)
-                parameters: { depthTest: true, depthBias: 50.0 }
+                parameters: { depthTest: true, depthBias: 50.0 },
+                updateTriggers: {
+                    getPath: [now],
+                    getColor: [selectedEntity?.uid, hoveredEntity?.uid, showGroundTracks],
+                    getWidth: [selectedEntity?.uid, hoveredEntity?.uid]
+                }
             })
         ] : []),
 

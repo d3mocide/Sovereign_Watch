@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Globe,
     Radio,
+    Satellite,
     Server,
     PlayCircle,
     History,
@@ -25,8 +26,8 @@ interface TopBarProps {
     onToggleSatellites?: () => void;
     isReplayMode?: boolean;
     onToggleReplay?: () => void;
-    viewMode?: 'TACTICAL' | 'RADIO';
-    onViewChange?: (mode: 'TACTICAL' | 'RADIO') => void;
+    viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL';
+    onViewChange?: (mode: 'TACTICAL' | 'RADIO' | 'ORBITAL') => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -119,6 +120,16 @@ export const TopBar: React.FC<TopBarProps> = ({
                     >
                         <Radio size={12} strokeWidth={3} />
                         <span className={viewMode === 'RADIO' ? 'block' : 'hidden'}>RADIO</span>
+                    </button>
+                    <button
+                        onClick={() => onViewChange?.('ORBITAL')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'ORBITAL'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
+                            : 'text-white/30 hover:text-white/60'
+                            }`}
+                    >
+                        <Satellite size={12} strokeWidth={3} />
+                        <span className={viewMode === 'ORBITAL' ? 'block' : 'hidden'}>ORBITAL</span>
                     </button>
                 </div>
             </div>
