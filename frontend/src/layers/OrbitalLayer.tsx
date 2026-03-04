@@ -41,7 +41,7 @@ const getSatColor = (category?: string, alpha: number = 255): [number, number, n
     if (cat === 'gps' || cat.includes('gps') || cat.includes('gnss') || cat.includes('galileo') || cat.includes('beidou') || cat.includes('glonass')) return [56, 189, 248, alpha];
     if (cat === 'weather' || cat.includes('weather') || cat.includes('noaa') || cat.includes('meteosat')) return [251, 191, 36, alpha];
     if (cat === 'comms' || cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') || cat.includes('iridium')) return [52, 211, 153, alpha];
-    if (cat === 'surveillance' || cat.includes('surveillance') || cat.includes('military') || cat.includes('isr')) return [251, 113, 133, alpha];
+    if (cat === 'surveillance' || cat.includes('surveillance') || cat.includes('military') || cat.includes('isr') || cat.includes('intel') || cat.includes('earth observation') || cat.includes('imaging')) return [251, 113, 133, alpha];
     return [156, 163, 175, alpha];
 };
 

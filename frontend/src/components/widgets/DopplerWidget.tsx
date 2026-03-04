@@ -49,8 +49,8 @@ export const DopplerWidget: React.FC<DopplerWidgetProps> = ({ referenceFreqMhz =
 
   // SVG Chart Setup
   const width = 250;
-  const height = 80;
-  const padding = { top: 10, right: 30, bottom: 20, left: 30 };
+  const height = 200;
+  const padding = { top: 20, right: 30, bottom: 20, left: 30 };
 
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
@@ -80,9 +80,9 @@ export const DopplerWidget: React.FC<DopplerWidgetProps> = ({ referenceFreqMhz =
   }
 
   return (
-    <div className="rounded border border-white/10 bg-black/30 p-2">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[8px] text-purple-400/70 tracking-[0.2em] uppercase">DOPPLER SHIFT</span>
+    <div className="flex flex-col rounded border border-white/10 bg-black/30 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden">
+      <div className="flex items-center justify-between bg-white/5 border-b border-white/10 px-3 py-2">
+        <span className="text-[10px] font-bold tracking-[0.2em] text-purple-400/70 uppercase">DOPPLER SHIFT</span>
         <div className="flex items-center gap-1">
           <span className="text-[8px] text-white/30 uppercase tracking-widest">f0:</span>
           <input

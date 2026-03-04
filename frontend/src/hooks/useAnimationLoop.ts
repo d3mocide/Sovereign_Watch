@@ -607,7 +607,10 @@ export function useAnimationLoop({
         } else if (
           cat.includes("surveillance") ||
           cat.includes("military") ||
-          cat.includes("isr")
+          cat.includes("isr") ||
+          cat.includes("intel") ||
+          cat.includes("earth observation") ||
+          cat.includes("imaging")
         ) {
           if (filters?.showSatSurveillance === false) continue;
         } else {
@@ -672,7 +675,10 @@ export function useAnimationLoop({
         if (
           cat.includes("surveillance") ||
           cat.includes("military") ||
-          cat.includes("isr")
+          cat.includes("isr") ||
+          cat.includes("intel") ||
+          cat.includes("earth observation") ||
+          cat.includes("imaging")
         )
           return filters.showSatSurveillance !== false;
         // Everything else (debris, active unclassified, etc.) falls to 'Other'

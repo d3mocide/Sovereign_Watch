@@ -109,7 +109,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         onClick={() => onViewChange?.('TACTICAL')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'TACTICAL'
                             ? 'bg-hud-green text-black shadow-[0_0_15px_rgba(0,255,65,0.3)]'
-                            : 'text-white/30 hover:text-white/60'
+                            : 'text-white/30 hover:text-white hover:bg-white/5'
                             }`}
                     >
                         <Globe size={12} strokeWidth={3} />
@@ -119,7 +119,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         onClick={() => onViewChange?.('ORBITAL')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'ORBITAL'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
-                            : 'text-white/30 hover:text-white/60'
+                            : 'text-white/30 hover:text-white hover:bg-purple-500/10'
                             }`}
                     >
                         <Satellite size={12} strokeWidth={3} />
@@ -129,7 +129,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         onClick={() => onViewChange?.('RADIO')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
                             ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.3)]'
-                            : 'text-white/30 hover:text-white/60'
+                            : 'text-white/30 hover:text-white hover:bg-indigo-600/20'
                             }`}
                     >
                         <Radio size={12} strokeWidth={3} />
@@ -246,27 +246,17 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
 
                 {/* Tactical Clock */}
-                <div className="flex flex-col items-end border-l border-white/5 pl-3 justify-center">
-                    <div className="flex items-center gap-1">
-                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
-                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
-                                {hh}
-                            </span>
+                <div className="flex flex-col items-end pl-2 justify-center">
+                    <div className="flex items-center bg-black/40 border border-hud-green/20 rounded pl-3 pr-2 py-1 shadow-[inset_0_1px_4px_rgba(0,255,65,0.1)] backdrop-blur-md">
+                        <div className="flex items-center gap-0.5 text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
+                            <span>{hh}</span>
+                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity delay-75`}>:</span>
+                            <span>{mm}</span>
+                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity delay-75`}>:</span>
+                            <span className="text-hud-green/80">{ss}</span>
                         </div>
-                        <span className={`text-hud-green/50 font-bold ${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity`}>:</span>
-                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
-                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
-                                {mm}
-                            </span>
-                        </div>
-                        <span className={`text-hud-green/50 font-bold ${time.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-30'} transition-opacity`}>:</span>
-                        <div className="bg-hud-green/10 px-1.5 py-0.5 rounded-[2px] border border-hud-green/20">
-                            <span className="text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.3)]">
-                                {ss}
-                            </span>
-                        </div>
-                        <div className="ml-2 bg-hud-green/20 text-hud-green border border-hud-green/30 px-1.5 py-0.5 rounded-[2px] flex items-center justify-center">
-                            <span className="text-[10px] font-black tracking-widest">ZULU</span>
+                        <div className="ml-3 bg-hud-green text-black pl-1.5 pr-2.5 py-0.5 rounded-[2px] flex items-center justify-center">
+                            <span className="text-[9px] font-black tracking-widest">ZULU</span>
                         </div>
                     </div>
                 </div>

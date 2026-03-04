@@ -19,13 +19,10 @@ interface PassPredictorWidgetProps {
 
 export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({ passes, homeLocation, onPassClick, isLoading }) => {
   return (
-    <div className="flex flex-col gap-1.5 mt-2 bg-black/40 rounded border border-white/10 p-2 overflow-hidden flex-1">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-[8px] font-bold tracking-[0.2em] text-white/30 uppercase">UPCOMING PASSES</span>
-        <div className="flex flex-col items-end">
-           <span className="text-[7px] text-white/20 uppercase tracking-widest">Observer</span>
-           <span className="text-[8px] text-white/40 font-mono tracking-widest">{homeLocation.lat.toFixed(2)}°, {homeLocation.lon.toFixed(2)}°</span>
-        </div>
+    <div className="flex flex-col mt-2 bg-black/30 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] rounded border border-white/10 overflow-hidden flex-1">
+      <div className="flex justify-between items-center bg-white/5 border-b border-white/10 px-3 py-2">
+        <span className="text-[10px] font-bold tracking-[0.2em] text-purple-400/70 uppercase">UPCOMING PASSES</span>
+        <span className="text-[8px] text-white/40 font-mono tracking-widest">{homeLocation.lat.toFixed(2)}°, {homeLocation.lon.toFixed(2)}°</span>
       </div>
 
       {isLoading ? (
@@ -38,7 +35,7 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({ passes
           <span className="text-[9px] text-white/20 font-mono tracking-widest uppercase">No upcoming passes</span>
         </div>
       ) : (
-        <div className="flex flex-col gap-1 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-purple-400/20">
           {passes.map((pass, i) => {
             const aosTime = new Date(pass.aos).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 

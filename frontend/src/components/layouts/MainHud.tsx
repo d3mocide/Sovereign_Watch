@@ -26,7 +26,6 @@ export const MainHud: React.FC<MainHudProps> = ({
 
       {/* Z-5: CRT/Grid Overlay Effects */}
       <div className="pointer-events-none absolute inset-0 z-[5] bg-grid-pattern opacity-10 mix-blend-screen" />
-      <div className="pointer-events-none absolute inset-0 z-[6] bg-[radial-gradient(circle_at_center,transparent_0%,#000000_120%)] opacity-40" />
 
       {/* Subtle Noise/Grain */}
       <div className="pointer-events-none absolute inset-0 z-[8] bg-noise-pattern opacity-[0.02] mix-blend-overlay" />

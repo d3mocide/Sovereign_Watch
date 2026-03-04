@@ -6,7 +6,6 @@ import { MainHud } from './components/layouts/MainHud'
 import { TopBar } from './components/layouts/TopBar'
 import { OrbitalMap } from './components/map/OrbitalMap'
 import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
-import { OrbitalSidebarRight } from './components/layouts/OrbitalSidebarRight'
 import RadioTerminal from './components/js8call/RadioTerminal'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
@@ -16,13 +15,12 @@ import { useRepeaters } from './hooks/useRepeaters'
 import { processReplayData } from './utils/replayUtils'
 
 function App() {
-  const [viewMode, setViewMode] = useState<'TACTICAL' | 'RADIO' | 'ORBITAL'>('TACTICAL');
+
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
 
   // Orbital Dashboard State
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
   const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
 
@@ -126,6 +124,21 @@ function App() {
     return saved !== null ? JSON.parse(saved) : true; // Default to true for better initial UX
   });
 
+  // View Mode Persistence
+  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL'>(() => {
+    const saved = localStorage.getItem('viewMode');
+    // Default to TACTICAL if nothing saved or on first load
+    if (saved === 'ORBITAL' || saved === 'TACTICAL') {
+      return saved as 'TACTICAL' | 'ORBITAL';
+    }
+    return 'TACTICAL';
+  });
+
+  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL') => {
+    setViewModeState(mode);
+    localStorage.setItem('viewMode', mode);
+  }, []);
+
   const handleHistoryTailsToggle = useCallback(() => {
     setShowHistoryTails((prev: boolean) => {
       const newValue = !prev;
@@ -208,14 +221,8 @@ function App() {
       showTerminator: showTerminator,
       showCables: false,
       showLandingStations: false,
-      // Map category picker to SAT_* filters in the engine
-      showSatGPS: selectedCategory === 'ALL' || selectedCategory === 'GPS',
-      showSatWeather: selectedCategory === 'ALL' || selectedCategory === 'WEATHER',
-      showSatComms: selectedCategory === 'ALL' || selectedCategory === 'COMMS',
-      showSatSurveillance: selectedCategory === 'ALL' || selectedCategory === 'INTEL',
-      showSatOther: selectedCategory === 'ALL' || selectedCategory === 'LEO' || selectedCategory === 'GEO',
     };
-  }, [filters, selectedCategory, showTerminator]);
+  }, [filters, showTerminator]);
   const [replayTime, setReplayTime] = useState<number>(Date.now());
   const [replayRange, setReplayRange] = useState({ start: Date.now() - 3600000, end: Date.now() });
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -466,12 +473,9 @@ function App() {
           <OrbitalSidebarLeft
             filters={filters}
             onFilterChange={handleFilterChange}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
             selectedSatNorad={selectedSatNorad}
             setSelectedSatNorad={handleSetSelectedSatNorad}
-            showHistoryTails={showHistoryTails}
-            onToggleHistoryTails={() => setShowHistoryTails(!showHistoryTails)}
+            trackCount={trackCounts.orbital}
           />
         ) : null
       }
@@ -491,11 +495,18 @@ function App() {
             }}
           />
         ) : viewMode === 'ORBITAL' ? (
-          <OrbitalSidebarRight
-            selectedSatNorad={selectedSatNorad}
-            setSelectedSatNorad={handleSetSelectedSatNorad}
-            selectedEntity={selectedEntity}
-            trackCount={trackCounts.orbital}
+          <SidebarRight
+            entity={selectedEntity}
+            onClose={() => {
+              setSelectedEntity(null);
+              setFollowMode(false);
+            }}
+            onCenterMap={() => {
+              setFollowMode(true);
+              if (selectedEntity && mapActions) {
+                mapActions.flyTo(selectedEntity.lat, selectedEntity.lon);
+              }
+            }}
           />
         ) : null
       }

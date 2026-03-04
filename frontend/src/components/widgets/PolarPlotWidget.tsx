@@ -55,10 +55,13 @@ export const PolarPlotWidget: React.FC<PolarPlotWidgetProps> = ({ pass, width = 
   }
 
   return (
-    <div className="rounded border border-white/10 bg-black/30 p-2 flex flex-col items-center">
-      <span className="text-[8px] text-white/30 tracking-[0.2em] uppercase self-start mb-2">PASS GEOMETRY</span>
+    <div className="flex flex-col rounded border border-white/10 bg-black/30 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] overflow-hidden">
+      <div className="flex items-center justify-between bg-white/5 border-b border-white/10 px-3 py-2">
+        <span className="text-[10px] font-bold tracking-[0.2em] text-purple-400/70 uppercase">PASS GEOMETRY</span>
+      </div>
 
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <div className="flex flex-col items-center justify-center p-2">
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {/* Grids */}
         {rings.map((el) => {
           const r = radius * (1 - el / 90);
@@ -116,6 +119,7 @@ export const PolarPlotWidget: React.FC<PolarPlotWidgetProps> = ({ pass, width = 
         {tcaPoint && <circle cx={tcaPoint.x} cy={tcaPoint.y} r="4" fill="#a855f7" stroke="#ffffff" strokeWidth="1" opacity="0.9" />}
         {losPoint && <circle cx={losPoint.x} cy={losPoint.y} r="3" fill="#ef4444" />}
       </svg>
+      </div>
     </div>
   );
 };

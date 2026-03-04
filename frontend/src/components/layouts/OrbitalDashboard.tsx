@@ -3,7 +3,6 @@ import { OrbitalMap } from '../map/OrbitalMap';
 import { MapFilters, CoTEntity } from '../../types';
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { OrbitalSidebarLeft } from './OrbitalSidebarLeft';
-import { OrbitalSidebarRight } from './OrbitalSidebarRight';
 
 interface OrbitalDashboardProps {
   filters: MapFilters;
@@ -24,7 +23,6 @@ export const OrbitalDashboard: React.FC<OrbitalDashboardProps> = ({
   selectedEntity,
   onEntitySelect
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
 
   const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
@@ -86,10 +84,9 @@ export const OrbitalDashboard: React.FC<OrbitalDashboardProps> = ({
       <OrbitalSidebarLeft
         filters={filters}
         onFilterChange={onFilterChange}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
         selectedSatNorad={selectedSatNorad}
         setSelectedSatNorad={handleSetSelectedSatNorad}
+        trackCount={trackCount}
       />
 
       {/* Center Main Map Area */}
@@ -122,10 +119,7 @@ export const OrbitalDashboard: React.FC<OrbitalDashboardProps> = ({
         />
       </div>
 
-      <OrbitalSidebarRight
-        selectedSatNorad={selectedSatNorad}
-        setSelectedSatNorad={handleSetSelectedSatNorad}
-      />
+
     </div>
   );
 };
