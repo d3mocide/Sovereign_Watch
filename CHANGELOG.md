@@ -1,3 +1,10 @@
+## [0.14.1] - 2026-03-03
+
+### Changed
+
+- **Orbital UI Polish:** Refactored the orbital dashboard sidebars and filters to align perfectly with the established tactical UI schema.
+- **Globe Rendering:** Removed the artificial radial vignette from the main HUD shell to provide a cleaner void background for the 3D globe.
+
 ## [0.14.0] - 2026-03-03
 
 ### Added
