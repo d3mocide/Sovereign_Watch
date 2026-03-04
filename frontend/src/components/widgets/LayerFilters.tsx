@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Ship, ChevronRight, Satellite, Radio } from 'lucide-react';
+import { Plane, Ship, ChevronRight, Satellite } from 'lucide-react';
 
 interface LayerFiltersProps {
   filters: {
@@ -14,7 +14,6 @@ interface LayerFiltersProps {
     showTanker?: boolean;
     showPassenger?: boolean;
     showFishing?: boolean;
-    showRepeaters?: boolean;
     [key: string]: any;
   };
   onFilterChange: (key: string, value: any) => void;
@@ -346,106 +345,85 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
             </div>
           )}
-        </div>
-
-        {/* Orbital Filter */}
-        <div className="flex flex-col gap-1">
-          <div className={`group flex items-center justify-between rounded border transition-all ${filters.showSatellites ? 'border-purple-400/30 bg-purple-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
-            <div
-              className="flex flex-1 items-center justify-between p-2 cursor-pointer"
-              onClick={() => setSatExpanded(!satExpanded)}
-            >
-              <div className="flex items-center gap-2">
-                <Satellite size={14} className={filters.showSatellites ? 'text-purple-400' : 'text-white/20'} />
-                <span className={`text-[10px] font-bold tracking-widest ${filters.showSatellites ? 'text-white' : 'text-white/40'}`}>ORBITAL</span>
-              </div>
-              <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: satExpanded ? 'rotate(90deg)' : 'none' }}>
-                <ChevronRight size={14} className="text-white/40" />
-              </div>
+        </div>        {/* ORBITAL / SATELLITES */}
+        <div className={`group flex items-center justify-between rounded border transition-all ${filters.showSatellites ? 'border-purple-400/30 bg-purple-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+          <div
+            className="flex flex-1 items-center justify-between p-2 cursor-pointer"
+            onClick={() => setSatExpanded(!satExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <Satellite size={14} className={filters.showSatellites ? 'text-purple-400' : 'text-white/20'} />
+              <span className={`text-[10px] font-bold tracking-widest ${filters.showSatellites ? 'text-white' : 'text-white/40'}`}>ORBITAL</span>
             </div>
-
-            <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
-              <input type="checkbox" className="sr-only" checked={filters.showSatellites} onChange={(e) => onFilterChange('showSatellites', e.target.checked)} />
-              <div
-                className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showSatellites ? 'bg-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFilterChange('showSatellites', !filters.showSatellites);
-                }}
-              >
-                <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showSatellites ? 'left-3.5' : 'left-0.5'}`} />
-              </div>
+            <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: satExpanded ? 'rotate(90deg)' : 'none' }}>
+              <ChevronRight size={14} className="text-white/40" />
             </div>
           </div>
-
-          {/* Sub-filters for Satellites */}
-          {satExpanded && (
-            <div className="grid grid-cols-2 gap-1 px-1 opacity-90">
-              {/* GPS */}
+          <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" className="sr-only" checked={filters.showSatellites} onChange={(e) => onFilterChange('showSatellites', e.target.checked)} />
+            <div
+              className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showSatellites ? 'bg-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFilterChange('showSatellites', !filters.showSatellites);
+              }}
+            >
+              <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showSatellites ? 'left-3.5' : 'left-0.5'}`} />
+            </div>
+          </div>
+        </div>
+        {/* Sub-filters for Satellites */}
+        {satExpanded && (
+          <div className="flex flex-col gap-1.5 pl-4 pr-1 animate-in slide-in-from-top-2 fade-in duration-200">
+            <div className="flex gap-1.5">
               <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatGPS !== false ? 'border-sky-400/20 bg-sky-400/5' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">🛰️</span>
+                  <div className={`h-1.5 w-1.5 rounded-full ${filters.showSatGPS !== false ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]' : 'bg-white/20'}`} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatGPS !== false ? 'text-sky-400/80' : 'text-white/30'}`}>GPS</span>
                 </div>
                 <input type="checkbox" className="sr-only" checked={filters.showSatGPS !== false} onChange={(e) => onFilterChange('showSatGPS', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatGPS !== false ? 'bg-sky-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatGPS !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
-              {/* Weather */}
               <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatWeather !== false ? 'border-amber-400/20 bg-amber-400/5' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">⛅</span>
+                  <div className={`h-1.5 w-1.5 rounded-full ${filters.showSatWeather !== false ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]' : 'bg-white/20'}`} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatWeather !== false ? 'text-amber-400/80' : 'text-white/30'}`}>WEATHER</span>
                 </div>
                 <input type="checkbox" className="sr-only" checked={filters.showSatWeather !== false} onChange={(e) => onFilterChange('showSatWeather', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatWeather !== false ? 'bg-amber-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatWeather !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
-
-              {/* Comms */}
+            </div>
+            <div className="flex gap-1.5">
               <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatComms !== false ? 'border-emerald-400/20 bg-emerald-400/5' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">📡</span>
+                  <div className={`h-1.5 w-1.5 rounded-full ${filters.showSatComms !== false ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-white/20'}`} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatComms !== false ? 'text-emerald-400/80' : 'text-white/30'}`}>COMMS</span>
                 </div>
                 <input type="checkbox" className="sr-only" checked={filters.showSatComms !== false} onChange={(e) => onFilterChange('showSatComms', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatComms !== false ? 'bg-emerald-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatComms !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
-              {/* Surveillance */}
               <label className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatSurveillance !== false ? 'border-rose-400/20 bg-rose-400/5' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">👁️</span>
+                  <div className={`h-1.5 w-1.5 rounded-full ${filters.showSatSurveillance !== false ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]' : 'bg-white/20'}`} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatSurveillance !== false ? 'text-rose-400/80' : 'text-white/30'}`}>INTEL</span>
                 </div>
                 <input type="checkbox" className="sr-only" checked={filters.showSatSurveillance !== false} onChange={(e) => onFilterChange('showSatSurveillance', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatSurveillance !== false ? 'bg-rose-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatSurveillance !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
             </div>
-          )}
-        </div>
 
-
-
-        {/* Repeater Filter */}
-        <div className="flex flex-col gap-1">
-          <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
-            <div className="flex flex-1 items-center gap-2 p-2">
-              <Radio size={14} className={filters.showRepeaters ? 'text-emerald-400' : 'text-white/20'} />
-              <span className={`text-[10px] font-bold tracking-widest ${filters.showRepeaters ? 'text-white' : 'text-white/40'}`}>REPEATERS</span>
-            </div>
-            <div
-              className="border-l border-white/10 p-2 cursor-pointer flex items-center"
-              onClick={(e) => {
-                e.stopPropagation();
-                onFilterChange('showRepeaters', !filters.showRepeaters);
-              }}
-            >
-              <div className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showRepeaters ? 'bg-emerald-400' : 'bg-white/10 hover:bg-white/20'}`}>
-                <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showRepeaters ? 'left-3.5' : 'left-0.5'}`} />
+            <label className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatOther !== false ? 'border-slate-400/20 bg-slate-400/5' : 'border-white/5 bg-white/5'}`}>
+              <div className="flex items-center gap-1.5">
+                <div className={`h-1.5 w-1.5 rounded-full ${filters.showSatOther !== false ? 'bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.8)]' : 'bg-white/20'}`} />
+                <span className={`text-[9px] font-bold tracking-wide ${filters.showSatOther !== false ? 'text-slate-400/80' : 'text-white/30'}`}>OTHER</span>
               </div>
-            </div>
+              <input type="checkbox" className="sr-only" checked={filters.showSatOther !== false} onChange={(e) => onFilterChange('showSatOther', e.target.checked)} />
+              <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatOther !== false ? 'bg-slate-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatOther !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+            </label>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ class OrbitalPulseService:
 
         # Fetched twice daily usually; every 6h loop checks HTTP cache locally
         self.fetch_interval_hours = 6
-        self.propagate_interval_sec = 30
+        self.propagate_interval_sec = 5
 
         # Curated groups only — 'active' (~9k unclassified sats) is intentionally excluded.
         # Supplemental GPS/GLONASS duplicates are also excluded to avoid redundant feeds.

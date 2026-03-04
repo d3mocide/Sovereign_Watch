@@ -4,7 +4,9 @@ import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
 import { MainHud } from './components/layouts/MainHud'
 import { TopBar } from './components/layouts/TopBar'
-import OrbitalDashboard from './components/layouts/OrbitalDashboard'
+import { OrbitalMap } from './components/map/OrbitalMap'
+import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
+import { OrbitalSidebarRight } from './components/layouts/OrbitalSidebarRight'
 import RadioTerminal from './components/js8call/RadioTerminal'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
@@ -18,6 +20,31 @@ function App() {
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
+
+  // Orbital Dashboard State
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
+  const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
+
+  const handleSetSelectedSatNorad = useCallback((noradId: number | null) => {
+    if (noradId) {
+      setSelectedEntity({
+        uid: String(noradId),
+        type: 'a-s-K',
+        callsign: `NORAD ${noradId}`,
+        lat: 0,
+        lon: 0,
+        altitude: 0,
+        course: 0,
+        speed: 0,
+        lastSeen: Date.now(),
+        trail: [],
+        uidHash: 0,
+      } as CoTEntity);
+    } else {
+      setSelectedEntity(null);
+    }
+  }, []);
   const health = useSystemHealth();
   const {
     stationsRef: js8StationsRef,
@@ -59,7 +86,7 @@ function App() {
       showSatellites: false,
       showSatGPS: true,
       showSatWeather: true,
-      showSatComms: true,
+      showSatComms: false,
       showSatSurveillance: true,
       showSatOther: true,
       showRepeaters: false,
@@ -113,10 +140,23 @@ function App() {
     return saved !== null ? JSON.parse(saved) : false;
   });
 
+  const [showTerminator, setShowTerminator] = useState(() => {
+    const saved = localStorage.getItem('showTerminator');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
   const handleGlobeModeToggle = useCallback(() => {
     setGlobeMode((prev: boolean) => {
       const newValue = !prev;
       localStorage.setItem('globeMode', JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
+
+  const handleTerminatorToggle = useCallback(() => {
+    setShowTerminator((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem('showTerminator', JSON.stringify(newValue));
       return newValue;
     });
   }, []);
@@ -138,6 +178,44 @@ function App() {
   // Replay System State
   const [replayMode, setReplayMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Orbital Filters setup
+  const orbitalFilters: import('./types').MapFilters = useMemo(() => {
+    return {
+      ...filters,
+      showAir: false,
+      showSea: false,
+      showHelicopter: false,
+      showMilitary: false,
+      showGovernment: false,
+      showCommercial: false,
+      showPrivate: false,
+      showCargo: false,
+      showTanker: false,
+      showPassenger: false,
+      showFishing: false,
+      showSeaMilitary: false,
+      showLawEnforcement: false,
+      showSar: false,
+      showTug: false,
+      showPleasure: false,
+      showHsc: false,
+      showPilot: false,
+      showSpecial: false,
+      showDrone: false,
+      showSatellites: true,
+      showRepeaters: false,
+      showTerminator: showTerminator,
+      showCables: false,
+      showLandingStations: false,
+      // Map category picker to SAT_* filters in the engine
+      showSatGPS: selectedCategory === 'ALL' || selectedCategory === 'GPS',
+      showSatWeather: selectedCategory === 'ALL' || selectedCategory === 'WEATHER',
+      showSatComms: selectedCategory === 'ALL' || selectedCategory === 'COMMS',
+      showSatSurveillance: selectedCategory === 'ALL' || selectedCategory === 'INTEL',
+      showSatOther: selectedCategory === 'ALL' || selectedCategory === 'LEO' || selectedCategory === 'GEO',
+    };
+  }, [filters, selectedCategory, showTerminator]);
   const [replayTime, setReplayTime] = useState<number>(Date.now());
   const [replayRange, setReplayRange] = useState({ start: Date.now() - 3600000, end: Date.now() });
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -355,6 +433,8 @@ function App() {
           onToggleVelocityVectors={handleVelocityVectorToggle}
           showHistoryTails={showHistoryTails}
           onToggleHistoryTails={handleHistoryTailsToggle}
+          showTerminator={showTerminator}
+          onToggleTerminator={handleTerminatorToggle}
           onToggleReplay={() => {
             if (replayMode) setReplayMode(false);
             else loadReplayData();
@@ -382,6 +462,17 @@ function App() {
             js8Connected={js8Connected}
             js8ActiveKiwiConfig={js8ActiveKiwiConfig}
           />
+        ) : viewMode === 'ORBITAL' ? (
+          <OrbitalSidebarLeft
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            selectedSatNorad={selectedSatNorad}
+            setSelectedSatNorad={handleSetSelectedSatNorad}
+            showHistoryTails={showHistoryTails}
+            onToggleHistoryTails={() => setShowHistoryTails(!showHistoryTails)}
+          />
         ) : null
       }
       rightSidebar={
@@ -399,6 +490,13 @@ function App() {
               }
             }}
           />
+        ) : viewMode === 'ORBITAL' ? (
+          <OrbitalSidebarRight
+            selectedSatNorad={selectedSatNorad}
+            setSelectedSatNorad={handleSetSelectedSatNorad}
+            selectedEntity={selectedEntity}
+            trackCount={trackCounts.orbital}
+          />
         ) : null
       }
     >
@@ -406,7 +504,7 @@ function App() {
         <>
           <TacticalMap
             onCountsUpdate={setTrackCounts}
-            filters={filters}
+            filters={{ ...filters, showTerminator: showTerminator }}
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
@@ -454,14 +552,30 @@ function App() {
           )}
         </>
       ) : viewMode === 'ORBITAL' ? (
-        <div className="w-full h-full pt-14 overflow-hidden bg-tactical-bg">
-          <OrbitalDashboard
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            trackCount={trackCounts.orbital}
-            health={health}
-          />
-        </div>
+        <OrbitalMap
+          filters={orbitalFilters}
+          globeMode={orbitalViewMode === '3D'}
+          onEntitySelect={handleEntitySelect}
+          selectedEntity={selectedEntity}
+          // The rest are dummy/no-ops for the layout shell
+          onCountsUpdate={setTrackCounts as any}
+          onEvent={() => { }}
+          onMissionPropsReady={() => { }}
+          onMapActionsReady={() => { }}
+          showVelocityVectors={false}
+          showHistoryTails={showHistoryTails}
+          onToggleGlobe={() => setOrbitalViewMode(orbitalViewMode === '3D' ? '2D' : '3D')}
+          replayMode={false}
+          replayEntities={new Map()}
+          followMode={false}
+          onFollowModeChange={() => { }}
+          onEntityLiveUpdate={() => { }}
+          js8StationsRef={{ current: new Map() } as any}
+          ownGridRef={{ current: '' }}
+          repeatersRef={{ current: [] }}
+          showRepeaters={false}
+          repeatersLoading={false}
+        />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
           <RadioTerminal />

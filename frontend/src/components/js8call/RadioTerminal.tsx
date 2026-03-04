@@ -497,10 +497,7 @@ export default function RadioTerminal() {
             <Radio className="w-5 h-5 text-indigo-400" />
           </div>
           <div>
-            <h1 className="font-bold text-slate-100 tracking-wider text-sm">Sovereign Watch</h1>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest leading-none">
-              JS8Call Terminal
-            </p>
+            <h1 className="font-bold text-slate-100 tracking-wider text-sm uppercase">JS8Call Terminal</h1>
           </div>
         </div>
 

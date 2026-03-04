@@ -107,6 +107,9 @@ export function getTerminatorLayer(visible: boolean) {
     // Add updateTriggers if we want it to react to time changes
     updateTriggers: {
       data: [now.getTime()]
+    },
+    parameters: {
+      depthTest: false
     }
   });
 }

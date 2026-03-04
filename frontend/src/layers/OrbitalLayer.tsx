@@ -51,6 +51,7 @@ interface OrbitalLayerProps {
     hoveredEntity: CoTEntity | null;
     now: number;
     showHistoryTails: boolean;
+    showFootprints?: boolean;
     projectionMode?: string; // Nuclear Sync: Appended to IDs to force buffer rebuilds
     zoom?: number;
     onEntitySelect: (entity: CoTEntity | null) => void;
@@ -73,10 +74,10 @@ function buildGemFaces(
 
         const desiredPx = isSelected ? 12 : 6;
         const sizeDegUnclamped = desiredPx * pxToDeg;
-        
+
         // Compensate for altitude expansion: objects further from center appear structurally larger for the same degree width
-        const altRadiusScale = (6371 + (alt / 1000)) / 6371; 
-        
+        const altRadiusScale = (6371 + (alt / 1000)) / 6371;
+
         // Cap the maximum degree size to avoid absurdly huge pyramids at low zoom, 
         // while also preventing them from turning into specs when zooming far in.
         const sizeDeg = Math.min(Math.max((sizeDegUnclamped / altRadiusScale), 0.02), 1.0);
@@ -108,7 +109,7 @@ function buildGemFaces(
     return faces;
 }
 
-export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, now, showHistoryTails, projectionMode, zoom, onEntitySelect, onHover }: OrbitalLayerProps) {
+export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, now, showHistoryTails, showFootprints = false, projectionMode, zoom, onEntitySelect, onHover }: OrbitalLayerProps) {
     const R_EARTH_KM = 6371;
     const sfx = projectionMode ? `-${projectionMode}` : '';
     // Pre-build gem faces for globe mode (avoids IIFE inside array spread)
@@ -120,7 +121,9 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
         // 1. Footprint Circle — skipped in Globe mode (flat projection artifact)
         ...(projectionMode !== 'globe' ? [new ScatterplotLayer({
             id: `satellite-footprint${sfx}`,
-            data: satellites.filter(s => showFootprints || s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
+            // Disabled global showFootprints: rendering 10,000+ giant circles crashes WebGL. 
+            // Now it only shows the footprint for the hovered/selected satellite.
+            data: satellites.filter(s => s.uid === selectedEntity?.uid || s.uid === hoveredEntity?.uid),
             getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
             getRadius: (d: CoTEntity) => {
                 const altKm = (d.altitude || 0) / 1000;
@@ -178,7 +181,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
         })] : []),
 
         // 2. Orbital Trail (respects historyTails toggle, Chaikin-smoothed)
-        ...((showHistoryTails || showGroundTracks) ? [
+        ...(showHistoryTails ? [
             new PathLayer({
                 id: `satellite-ground-track${sfx}`,
                 data: satellites,
@@ -196,8 +199,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 getColor: (d: CoTEntity) => {
                     const isSelected = d.uid === selectedEntity?.uid || d.uid === hoveredEntity?.uid;
                     if (isSelected) return getSatColor(d.detail?.category as string, 200);
-                    if (showGroundTracks) return getSatColor(d.detail?.category as string, 120);
-                    return getSatColor(d.detail?.category as string, Math.floor(255 * 0.3));
+                    return getSatColor(d.detail?.category as string, 120);
                 },
                 getWidth: (d: CoTEntity) => (d.uid === selectedEntity?.uid || d.uid === hoveredEntity?.uid) ? 4.5 : 3.5,
                 widthMinPixels: 2.5,
@@ -210,7 +212,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 parameters: { depthTest: true, depthBias: 50.0 },
                 updateTriggers: {
                     getPath: [now],
-                    getColor: [selectedEntity?.uid, hoveredEntity?.uid, showGroundTracks],
+                    getColor: [selectedEntity?.uid, hoveredEntity?.uid],
                     getWidth: [selectedEntity?.uid, hoveredEntity?.uid]
                 }
             })

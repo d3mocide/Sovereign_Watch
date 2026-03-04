@@ -8,7 +8,8 @@ import {
     History,
     MoveVertical,
     ShieldAlert,
-    ShieldCheck
+    ShieldCheck,
+    Moon
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
@@ -24,6 +25,8 @@ interface TopBarProps {
     onToggleHistoryTails?: () => void;
     showSatellites?: boolean;
     onToggleSatellites?: () => void;
+    showTerminator?: boolean;
+    onToggleTerminator?: () => void;
     isReplayMode?: boolean;
     onToggleReplay?: () => void;
     viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL';
@@ -35,6 +38,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     showVelocityVectors, onToggleVelocityVectors,
     showHistoryTails, onToggleHistoryTails,
     showSatellites, onToggleSatellites,
+    showTerminator, onToggleTerminator,
     isReplayMode, onToggleReplay,
     viewMode = 'TACTICAL', onViewChange
 }) => {
@@ -112,16 +116,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <span className={viewMode === 'TACTICAL' ? 'block' : 'hidden'}>TACTICAL</span>
                     </button>
                     <button
-                        onClick={() => onViewChange?.('RADIO')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
-                            ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.3)]'
-                            : 'text-white/30 hover:text-white/60'
-                            }`}
-                    >
-                        <Radio size={12} strokeWidth={3} />
-                        <span className={viewMode === 'RADIO' ? 'block' : 'hidden'}>RADIO</span>
-                    </button>
-                    <button
                         onClick={() => onViewChange?.('ORBITAL')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'ORBITAL'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
@@ -130,6 +124,16 @@ export const TopBar: React.FC<TopBarProps> = ({
                     >
                         <Satellite size={12} strokeWidth={3} />
                         <span className={viewMode === 'ORBITAL' ? 'block' : 'hidden'}>ORBITAL</span>
+                    </button>
+                    <button
+                        onClick={() => onViewChange?.('RADIO')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
+                            ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.3)]'
+                            : 'text-white/30 hover:text-white/60'
+                            }`}
+                    >
+                        <Radio size={12} strokeWidth={3} />
+                        <span className={viewMode === 'RADIO' ? 'block' : 'hidden'}>RADIO</span>
                     </button>
                 </div>
             </div>
@@ -175,6 +179,17 @@ export const TopBar: React.FC<TopBarProps> = ({
                             title={`Simulation Replay: ${isReplayMode ? 'RUNNING' : 'STANDBY'}`}
                         >
                             <PlayCircle size={15} className={isReplayMode ? 'animate-spin-slow' : ''} />
+                        </button>
+                    )}
+
+                    {/* Terminator Mode Toggle */}
+                    {onToggleTerminator && (
+                        <button
+                            onClick={onToggleTerminator}
+                            className={`transition-all hover:scale-110 active:scale-90 ${showTerminator ? 'text-indigo-400' : 'text-white/20'}`}
+                            title={`Terminator (Day/Night) Overlay: ${showTerminator ? 'ACTIVE' : 'STANDBY'}`}
+                        >
+                            <Moon size={15} />
                         </button>
                     )}
 

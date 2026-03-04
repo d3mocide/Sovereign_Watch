@@ -7,17 +7,13 @@ import React, {
   Suspense,
   MutableRefObject,
 } from "react";
-import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
+import { Globe, Plus, Minus } from "lucide-react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { CoTEntity, JS8Station, MissionProps, RepeaterStation } from "../../types";
 import { MapTooltip } from "./MapTooltip";
-import { MapContextMenu } from "./MapContextMenu";
-import { SaveLocationForm } from "./SaveLocationForm";
-import { AltitudeLegend } from "./AltitudeLegend";
-import { SpeedLegend } from "./SpeedLegend";
 import { useEntityWorker } from "../../hooks/useEntityWorker";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMissionArea } from "../../hooks/useMissionArea";
@@ -92,7 +88,7 @@ interface TacticalMapProps {
   repeatersLoading?: boolean;
 }
 
-export function TacticalMap({
+export function OrbitalMap({
   onCountsUpdate,
   filters,
   onEvent,
@@ -124,14 +120,7 @@ export function TacticalMap({
     x: number;
     y: number;
   } | null>(null);
-  const [contextMenuPos, setContextMenuPos] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const [contextMenuCoords, setContextMenuCoords] = useState<{
-    lat: number;
-    lon: number;
-  } | null>(null);
+
   const [hoveredInfra, setHoveredInfraState] = useState<any>(null);
   const handleHoveredInfra = useCallback((info: any) => {
     const obj = info?.object || null;
@@ -181,7 +170,7 @@ export function TacticalMap({
   const envLon = import.meta.env.VITE_CENTER_LON;
   const initialLat = envLat ? parseFloat(envLat) : 45.5152;
   const initialLon = envLon ? parseFloat(envLon) : -122.6784;
-  const initialZoom = 9.5;
+  const initialZoom = 2.5;
 
   // View State (Controlled for bearing tracking)
   const [viewState, setViewState] = useState({
@@ -364,14 +353,6 @@ export function TacticalMap({
   // are consumed internally by useMissionArea (passed to onMissionPropsReady) — not needed here.
   const {
     aotShapes,
-    handleSetFocus,
-    handleReturnHome,
-    showSaveForm,
-    setShowSaveForm,
-    saveFormCoords,
-    setSaveFormCoords,
-    handleSaveFormSubmit,
-    handleSaveFormCancel,
   } = useMissionArea({
     mapRef,
     currentMissionRef,
@@ -452,7 +433,7 @@ export function TacticalMap({
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
-  const { setViewMode, handleAdjustCamera, handleResetCompass } = useMapCamera({
+  const { setViewMode } = useMapCamera({
     mapRef,
     mapInstanceRef,
     mapLoaded,
@@ -462,20 +443,7 @@ export function TacticalMap({
     mapToken: mapToken || "",
   });
 
-  // Mission Area Handlers that bridge to context menu UI
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleContextMenu = useCallback((e: any) => {
-    e.preventDefault();
-    const { lngLat, point } = e;
-    setContextMenuPos({ x: point.x, y: point.y });
-    setContextMenuCoords({ lat: lngLat.lat, lon: lngLat.lng });
-  }, []);
 
-  const handleSaveLocation = useCallback((lat: number, lon: number) => {
-    setSaveFormCoords({ lat, lon });
-    setShowSaveForm(true);
-    setContextMenuPos(null);
-  }, [setSaveFormCoords, setShowSaveForm]);
 
   const handleOverlayLoaded = useCallback((overlay: MapboxOverlay) => {
     overlayRef.current = overlay;
@@ -595,11 +563,6 @@ export function TacticalMap({
             userSelect: "none",
             WebkitUserSelect: "none",
           }}
-          onContextMenu={handleContextMenu}
-          onClick={() => {
-            setContextMenuPos(null);
-            setContextMenuCoords(null);
-          }}
           antialias={true}
           projection={globeMode ? { type: 'globe' } : { type: 'mercator' }}
           dragRotate={!globeMode}
@@ -622,142 +585,68 @@ export function TacticalMap({
         />
       </Suspense>
 
-      {/* View Controls */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-[100] pointer-events-auto">
-
-        {/* Top Row: View Modes + Zoom */}
-        <div className="flex flex-row items-center gap-4">
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            {!globeMode && (
-              <>
-                <button
-                  onClick={() => setViewMode("2d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${!enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
-                    }`}
-                >
-                  2D
-                </button>
-                <button
-                  onClick={() => setViewMode("3d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
-                    }`}
-                >
-                  3D
-                </button>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-              </>
-            )}
-            <button
-              onClick={() => onToggleGlobe?.()}
-              className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${globeMode
-                ? "bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]"
-                : "text-white/40 hover:text-white/60"
-                }`}
-              title="Toggle Globe View"
-            >
-              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
-              GLOBE
-            </button>
-          </div>
-
-          {/* Map Zoom Controls */}
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            <button
-              onClick={() => mapRef.current?.getMap().zoomOut()}
-              className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
-              title="Zoom Out"
-            >
-              <Minus size={14} strokeWidth={3} />
-            </button>
-            <button
-              onClick={() => mapRef.current?.getMap().zoomIn()}
-              className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
-              title="Zoom In"
-            >
-              <Plus size={14} strokeWidth={3} />
-            </button>
-          </div>
+      {/* View Controls & Zoom HUD - Centered at the bottom */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-row items-center gap-4 z-[100] pointer-events-auto">
+        <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
+          {!globeMode && (
+            <>
+              <button
+                onClick={() => setViewMode("2d")}
+                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${!enable3d
+                  ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
+                  : "text-white/40 hover:text-white/60"
+                  }`}
+              >
+                2D
+              </button>
+              <button
+                onClick={() => setViewMode("3d")}
+                className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${enable3d
+                  ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
+                  : "text-white/40 hover:text-white/60"
+                  }`}
+              >
+                3D
+              </button>
+              <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+            </>
+          )}
+          <button
+            onClick={() => onToggleGlobe?.()}
+            className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${globeMode
+              ? "bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              : "text-white/40 hover:text-white/60"
+              }`}
+            title="Toggle Globe View"
+          >
+            <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
+            GLOBE
+          </button>
         </div>
 
-        {/* Manual Orientation Controls - Only in 3D mode, Hidden in Globe */}
-        {enable3d && !globeMode && (
-          <div className="flex flex-row gap-2">
-            <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <button
-                onClick={() => handleAdjustCamera("bearing", -45)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
-                title="Rotate Left"
-              >
-                <RotateCcw size={16} />
-              </button>
-              <button
-                onClick={handleResetCompass}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-cyan-400 transition-all active:scale-95 w-10 h-10 flex items-center justify-center font-mono font-bold text-lg"
-                title="Reset to North"
-              >
-                N
-              </button>
-              <button
-                onClick={() => handleAdjustCamera("bearing", 45)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
-                title="Rotate Right"
-              >
-                <RotateCcw size={16} className="scale-x-[-1]" />
-              </button>
-            </div>
+        {/* Map Zoom Controls */}
+        <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
+          <button
+            onClick={() => mapRef.current?.getMap().zoomOut()}
+            className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
+            title="Zoom Out"
+          >
+            <Minus size={14} strokeWidth={3} />
+          </button>
+          <button
+            onClick={() => mapRef.current?.getMap().zoomIn()}
+            className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
+            title="Zoom In"
+          >
+            <Plus size={14} strokeWidth={3} />
+          </button>
+        </div>
 
-            <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <button
-                onClick={() => handleAdjustCamera("pitch", 15)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
-                title="Tilt Down"
-              >
-                <ChevronUp size={16} />
-              </button>
-              <button
-                onClick={() => handleAdjustCamera("pitch", -15)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
-                title="Tilt Up"
-              >
-                <ChevronDown size={16} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
-
-      <MapContextMenu
-        position={contextMenuPos}
-        coordinates={contextMenuCoords}
-        onSetFocus={handleSetFocus}
-        onSaveLocation={handleSaveLocation}
-        onReturnHome={handleReturnHome}
-        onClose={() => {
-          setContextMenuPos(null);
-          setContextMenuCoords(null);
-        }}
-      />
-
-      {showSaveForm && (
-        <SaveLocationForm
-          coordinates={saveFormCoords}
-          onSave={handleSaveFormSubmit}
-          onCancel={handleSaveFormCancel}
-        />
-      )}
 
       {hoveredEntity && hoverPosition && (
         <MapTooltip entity={hoveredEntity} position={hoverPosition} />
       )}
-
-      <AltitudeLegend visible={filters?.showAir ?? true} />
-      <SpeedLegend visible={filters?.showSea ?? true} />
     </>
   );
 }
-
-export default TacticalMap;

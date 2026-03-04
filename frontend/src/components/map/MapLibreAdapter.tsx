@@ -13,7 +13,8 @@ function DeckGLOverlay(props: any) {
         ...rest,
         // _full3d reads the Mapbox depth buffer to occlude globe far-side layers.
         // Globe view (GlobeView vs MapView) is auto-detected via getDefaultView(map).
-        _full3d: true
+        // Since Maplibre's globe depth buffer has issues with objects near the surface, keep this false.
+        _full3d: false
     }));
 
     const isDeadRef = useRef(false);
@@ -25,7 +26,7 @@ function DeckGLOverlay(props: any) {
     useEffect(() => {
         if (overlay && overlay.setProps && !isDeadRef.current) {
             try {
-                overlay.setProps({ ...rest, _full3d: true });
+                overlay.setProps({ ...rest, _full3d: false });
             } catch (e) {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }

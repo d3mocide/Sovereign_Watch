@@ -736,6 +736,7 @@ export function useAnimationLoop({
           hoveredEntity: hoveredEntity,
           now,
           showHistoryTails: historyTailsRef.current,
+          showFootprints: filters?.showFootprints,
           projectionMode: globeMode ? "globe" : "mercator",
           zoom,
           onEntitySelect,
