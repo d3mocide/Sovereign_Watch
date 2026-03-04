@@ -1,3 +1,19 @@
+## [0.15.0] - 2026-03-04
+
+### Added
+
+- **Orbital Pass Prediction API:** New `GET /api/orbital/passes` endpoint that computes upcoming satellite passes for an observer location using SGP4 propagation. Returns AOS, TCA, LOS, max elevation, azimuth at AOS/LOS, duration, and a full 10-second point array per pass for polar plot and Doppler rendering.
+- **Ground Track API:** New `GET /api/orbital/groundtrack/{norad_id}` endpoint returning lat/lon/alt arrays for one configurable propagation window.
+- **Satellites Table:** Persistent `satellites` database table (no retention policy) storing the latest TLE and orbital metadata per NORAD ID, independent of the 24-hour `tracks` hypertable retention.
+- **Historian TLE Upsert:** The Historian service now upserts TLE data into `satellites` on every consumed `orbital_raw` Kafka message, ensuring TLEs are always fresh for pass prediction.
+- **SGP4 Coordinate Utilities:** New `backend/api/utils/sgp4_utils.py` with TEME→ECEF→topocentric helpers including `ecef_to_topocentric` for azimuth/elevation/slant-range computation.
+- **`usePassPredictions` Hook:** React hook that polls `GET /api/orbital/passes` every 5 minutes, cancels in-flight requests on unmount, and returns typed `PassResult[]` data.
+- **Live Widget Wiring:** `OrbitalSidebarLeft` now feeds live pass data to `PassPredictorWidget`, `DopplerWidget`, and `PolarPlotWidget` using the active mission area as the observer location.
+
+### Changed
+
+- **`OrbitalSidebarLeft`:** Replaced hardcoded empty arrays with live data from `usePassPredictions`; observer lat/lon sourced from `getMissionArea()` with env var fallback.
+
 ## [0.14.1] - 2026-03-03
 
 ### Changed
