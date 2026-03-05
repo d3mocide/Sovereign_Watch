@@ -3,7 +3,11 @@ import asyncpg
 import os
 
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "password")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+if not DB_PASS:
+    print("Error: POSTGRES_PASSWORD environment variable is not set.")
+    exit(1)
+
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB", "sovereign_watch")

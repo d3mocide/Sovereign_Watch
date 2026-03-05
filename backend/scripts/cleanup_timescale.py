@@ -12,7 +12,11 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB", "sovereign_watch")
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+
+if not DB_PASSWORD:
+    print("❌ Error: POSTGRES_PASSWORD environment variable is not set.")
+    exit(1)
 
 # Retention period (default: 24 hours)
 RETENTION_HOURS = int(os.getenv("RETENTION_HOURS", "24"))
