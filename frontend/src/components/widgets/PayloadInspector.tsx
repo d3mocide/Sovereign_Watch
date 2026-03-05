@@ -29,7 +29,11 @@ export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onCl
                     <h3 className="text-xs font-bold tracking-widest text-white/80">RAW_PAYLOAD</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onClose} className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors">
+                    <button
+                        onClick={onClose}
+                        aria-label="Close payload inspector"
+                        className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-air-accent outline-none"
+                    >
                         <X size={14} />
                     </button>
                 </div>

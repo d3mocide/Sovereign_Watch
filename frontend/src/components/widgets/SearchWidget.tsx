@@ -184,7 +184,8 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                 {query && (
                     <button
                         onClick={() => setQuery('')}
-                        className="absolute inset-y-0 right-0 pr-2 flex items-center text-white/20 hover:text-white/60 transition-colors"
+                        aria-label="Clear search"
+                        className="absolute inset-y-0 right-0 pr-2 flex items-center text-white/20 hover:text-white/60 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                     >
                         <X size={14} />
                     </button>
@@ -193,7 +194,11 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
 
             {/* Results Dropdown */}
             {(results.length > 0 || (query && loading)) && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-black/90 backdrop-blur-xl border border-white/10 rounded shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
+                <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-black/90 backdrop-blur-xl border border-white/10 rounded shadow-2xl max-h-60 overflow-y-auto custom-scrollbar"
+                    aria-label="Search results"
+                    aria-live="polite"
+                >
                     {loading && results.length === 0 && (
                         <div className="p-2 text-xs text-white/40 text-center font-mono">Searching...</div>
                     )}

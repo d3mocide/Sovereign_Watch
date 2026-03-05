@@ -68,7 +68,8 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     <div className="flex items-center gap-3">
                         <button 
                             onClick={onTogglePlay}
-                            className="w-8 h-8 flex items-center justify-center rounded-full bg-hud-green/10 hover:bg-hud-green/30 text-hud-green border border-hud-green/50 transition-all active:scale-95 shadow-[0_0_10px_rgba(0,255,65,0.2)] hover:shadow-[0_0_15px_rgba(0,255,65,0.4)]"
+                            aria-label={isPlaying ? "Pause playback" : "Play playback"}
+                            className="w-8 h-8 flex items-center justify-center rounded-full bg-hud-green/10 hover:bg-hud-green/30 text-hud-green border border-hud-green/50 transition-all active:scale-95 shadow-[0_0_10px_rgba(0,255,65,0.2)] hover:shadow-[0_0_15px_rgba(0,255,65,0.4)] focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                         >
                             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
                         </button>
@@ -78,7 +79,9 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                                 <button
                                     key={speed}
                                     onClick={() => onSpeedChange(speed)}
-                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors ${
+                                    aria-label={`Set playback speed to ${speed}x`}
+                                    aria-pressed={playbackSpeed === speed}
+                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         playbackSpeed === speed 
                                         ? 'bg-hud-green/20 text-hud-green shadow-[0_0_5px_rgba(0,255,65,0.3)] border border-hud-green/30' 
                                         : 'text-white/40 hover:text-white/80 hover:bg-white/5'
@@ -98,7 +101,9 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                                 <button
                                     key={hours}
                                     onClick={() => onDurationChange(hours)}
-                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[20px] transition-colors ${
+                                    aria-label={`Set lookback duration to ${hours} hours`}
+                                    aria-pressed={historyDuration === hours}
+                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[20px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         historyDuration === hours
                                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
                                         : 'text-white/30 hover:text-white/70 hover:bg-white/5'
