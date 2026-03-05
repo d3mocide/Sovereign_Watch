@@ -2,7 +2,6 @@ import { load, Type } from 'protobufjs';
 
 // --- State ---
 let takType: Type | null = null;
-// let processing = false;
 
 // Batching: accumulate decoded entities and flush periodically
 let batch: any[] = [];
@@ -19,8 +18,6 @@ function flushBatch() {
 }
 
 // --- Constants ---
-// Magic Bytes: 0xbf 0x01 0xbf
-// const MAGIC_BYTES = new Uint8Array([0xbf, 0x01, 0xbf]);
 
 // --- Initialization ---
 // We can't rely on standard fetch relative paths easily in workers without some Vite magic
@@ -36,7 +33,6 @@ self.onmessage = async (e: MessageEvent) => {
         try {
             const root = await load(protoUrl);
             takType = root.lookupType("tak.proto.TakMessage");
-            // console.log("TAK Worker: Schema Loaded");
             self.postMessage({ type: 'status', status: 'ready' });
         } catch (err) {
             console.error("TAK Worker: Schema Load Failed", err);
@@ -84,7 +80,7 @@ self.onmessage = async (e: MessageEvent) => {
                 }
 
             } catch (parseErr) {
-                // console.warn("TAK Parse Error:", parseErr);
+                // Ignore parse errors in worker to prevent flooding
             }
         }
     }
