@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CoTEntity } from '../../types';
-import { Terminal, Copy, X } from 'lucide-react';
+import { Terminal, Copy, Check, X } from 'lucide-react';
 
 interface PayloadInspectorProps {
     entity: CoTEntity;
@@ -8,6 +8,17 @@ interface PayloadInspectorProps {
 }
 
 export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onClose }) => {
+    const [copied, setCopied] = useState(false);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
+
     // Determine colors based on type
     const isShip = entity.type.includes('S');
     const accentColor = isShip ? 'text-sea-accent' : 'text-air-accent';
@@ -17,6 +28,11 @@ export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onCl
     const handleCopy = () => {
         if (entity.raw) {
             navigator.clipboard.writeText(entity.raw);
+            setCopied(true);
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+            timeoutRef.current = setTimeout(() => setCopied(false), 2000);
         }
     };
 
@@ -29,9 +45,20 @@ export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onCl
                     <h3 className="text-xs font-bold tracking-widest text-white/80">RAW_PAYLOAD</h3>
                 </div>
                 <div className="flex items-center gap-2">
+                    {entity.raw && (
+                        <button
+                            onClick={handleCopy}
+                            aria-label="Copy raw payload to clipboard"
+                            title="Copy payload"
+                            className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-air-accent outline-none"
+                        >
+                            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
                         aria-label="Close payload inspector"
+                        title="Close inspector"
                         className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-air-accent outline-none"
                     >
                         <X size={14} />
