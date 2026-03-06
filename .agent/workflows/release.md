@@ -31,10 +31,6 @@ Standardized release process: version bump, changelog, release notes, and docume
   ```json
   "version": "X.Y.Z"
   ```
-- [ ] **Documentation**: Update the version number in `README.md` (Title).
-  ```markdown
-  # Sovereign Watch vX.Y.Z: Distributed Multi-INT Fusion Center
-  ```
 - [ ] **Backend (Optional)**: If applicable, check `backend/api/main.py` or equivalent for version strings.
 
 ## 3. Changelog Management
