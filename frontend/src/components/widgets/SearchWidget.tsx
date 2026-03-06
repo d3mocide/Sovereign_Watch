@@ -169,17 +169,17 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
     };
 
     return (
-        <div className="relative group z-50 bg-black/40 backdrop-blur-md border border-white/10 rounded-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+        <div className="relative group z-50 widget-panel">
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search size={14} className="text-cyan-400/60" />
+                    <Search size={13} className="text-cyan-400" />
                 </div>
                 <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search Callsign / UID..."
-                    className="w-full bg-white/5 border border-white/10 rounded pl-9 pr-8 py-2 text-sm text-cyan-300 placeholder-cyan-300/50 focus:outline-none focus:border-cyan-400/60 focus:shadow-[0_0_10px_rgba(34,211,238,0.2)] transition-all font-mono uppercase"
+                    className="w-full bg-white/5 border border-white/10 rounded pl-9 pr-8 py-2 text-[10px] font-bold tracking-[.3em] text-white/50 placeholder-white/30 focus:outline-none focus:border-cyan-400/60 focus:shadow-[0_0_10px_rgba(34,211,238,0.2)] transition-all uppercase"
                 />
                 {query && (
                     <button

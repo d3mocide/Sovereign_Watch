@@ -43,7 +43,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   sendMessage = () => { },
 }) => {
   return (
-    <div className="flex flex-col h-full p-4 gap-4 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
+    <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
       {/* Search Widget */}
       {mapActions && (
         <SearchWidget

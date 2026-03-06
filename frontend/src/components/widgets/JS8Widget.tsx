@@ -59,44 +59,47 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
   };
 
   return (
-    <div className="font-mono overflow-hidden bg-black/40 backdrop-blur-md border border-white/10 rounded-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+    <div className="font-mono overflow-visible widget-panel">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/10">
-        <button
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-        >
-          <Radio size={13} className={connected ? 'text-indigo-400' : 'text-slate-600'} />
+      <div 
+        className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/10 cursor-pointer transition-colors group"
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        <div className="flex items-center gap-2 transition-opacity">
+          <Radio size={14} className={connected ? 'text-purple-400' : 'text-slate-600'} />
           <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
             JS8 / HF Radio
           </span>
           <div
-            className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-indigo-500 animate-pulse' : 'bg-slate-700'
+            className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-purple-500 animate-pulse' : 'bg-slate-700'
               }`}
           />
-        </button>
+        </div>
         <div className="flex items-center gap-3">
           {!collapsed && (
-            <div className="flex bg-black/40 rounded-sm p-0.5 border border-white/5">
+            <div 
+              className="flex bg-black/40 rounded-sm p-0.5 border border-white/5 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
                 onClick={() => setActiveTab('HEARD')}
-                className={`px-2 py-0.5 rounded-sm transition-all ${activeTab === 'HEARD' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/40'
+                className={`px-2 py-0.5 rounded-sm transition-all ${activeTab === 'HEARD' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
                   }`}
               >
                 <Users size={11} />
               </button>
               <button
                 onClick={() => setActiveTab('CHAT')}
-                className={`px-2 py-0.5 rounded-sm transition-all ${activeTab === 'CHAT' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/40'
+                className={`px-2 py-0.5 rounded-sm transition-all ${activeTab === 'CHAT' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
                   }`}
               >
                 <Terminal size={11} />
               </button>
             </div>
           )}
-          <button onClick={() => setCollapsed((v) => !v)} className="text-white/30 hover:text-white/60">
+          <div className="text-white/40 group-hover:text-white/70 transition-colors flex items-center justify-center">
             {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-          </button>
+          </div>
         </div>
       </div>
 
@@ -110,7 +113,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-slate-500">
-            {activeKiwiConfig ? `${activeKiwiConfig.freq} kHz` : '--'}
+            {activeKiwiConfig?.host ? activeKiwiConfig.host : '--'}
           </span>
           <span className={`font-bold ${js8Connected ? 'text-cyan-400' : 'text-red-500/50'}`}>
             {js8Connected ? 'ONLINE' : 'OFFLINE'}
@@ -121,7 +124,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
       {!collapsed && (
         <div className="flex flex-col">
           {/* Tab Content */}
-          <div className="h-48 flex flex-col">
+          <div className={`flex flex-col transition-all duration-300 ${activeTab === 'CHAT' ? 'h-64' : 'h-48'}`}>
             {activeTab === 'HEARD' ? (
               <div className="flex-1 overflow-y-auto scrollbar-none">
                 {stations.length > 0 ? (
@@ -162,7 +165,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col bg-black/20">
+              <div className="flex-1 flex flex-col bg-black/20 min-h-0">
                 <div className="flex-1 overflow-y-auto scrollbar-none p-3 space-y-2">
                   {logEntries.length > 0 ? (
                     logEntries.map((entry) => (
@@ -190,7 +193,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                 </div>
 
                 {/* Message Input */}
-                <form onSubmit={handleSend} className="p-2 border-t border-white/5 bg-white/[0.03]">
+                <form onSubmit={handleSend} className="p-2 border-t border-white/5 bg-white/[0.03] shrink-0">
                   <div className="flex gap-1">
                     <input
                       type="text"

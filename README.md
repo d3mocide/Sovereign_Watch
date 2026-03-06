@@ -1,4 +1,8 @@
-# Sovereign Watch v0.18.0: Distributed Multi-INT Fusion Center
+# Sovereign Watch v0.18.1: Distributed Multi-INT Fusion Center
+
+<div align="center">
+  <img src="assets/images/logo.png" alt="Sovereign Watch Logo" width="200"/>
+</div>
 
 > **Operational Status**: Phase 2 (Tactical Intelligence & Tracking) - _Active Development_
 

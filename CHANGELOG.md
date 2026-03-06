@@ -1,3 +1,22 @@
+## [0.18.1] - 2026-03-06
+
+### Added
+
+- **Branding**: Integrated the official Sovereign Watch cyber-tactical logo into the `README.md` and added a symmetrical text-less favicon to the frontend UI.
+
+### Changed
+
+- **UI Streamlining:**
+  - Standardized the "Sovereign Glass" design aesthetic across the entire tactical and orbital HUD.
+  - Eliminated harsh 30px drop shadows from the left sidebar widgets (Mission Navigator, Search, JS8, System Status, Intel Feed, Doppler, Altitude/Speed Legends) in favor of a cohesive 12px blur with slight rounded corners, matching the orbital design.
+  - Slimmed down the global TopBar height by 10px, refining icon and text padding to eliminate edge-hugging.
+  - Revamped the Historian (TimeControls) widget to perfectly align with the glassmorphism properties, active/inactive pill button states (`hud-green` / `amber-500`), and tabular typography of the main HUD.
+  - Updated all bottom map controls (2D/3D toggle, Globe toggle, ± Zoom controls, and 3D Rotation/Tilt controls) to use tightly fitted `p-1` and `p-1.5` transparent borders with interactive `bg-white/10` hover states and `hud-green`/`indigo-500` active halos.
+
+### Fixed
+
+- **Visual Regressions:** Addressed text cutoff and vertical misalignment in the Historian widget after structural padding changes.
+
 ## [0.18.0] - 2026-03-06
 
 ### Added

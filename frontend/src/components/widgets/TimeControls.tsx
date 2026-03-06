@@ -37,7 +37,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
 
     return (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[500px] animate-in slide-in-from-top duration-300">
-            <div className="bg-black/80 backdrop-blur-md border border-hud-green/30 rounded-lg shadow-[0_0_20px_rgba(0,255,65,0.1)] overflow-hidden">
+            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-lg shadow-[0_4px_30px_rgba(0,0,0,0.5)] overflow-hidden">
                 
                 {/* Scrubber (Top Edge) */}
                 <div 
@@ -84,7 +84,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                                     className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         playbackSpeed === speed 
                                         ? 'bg-hud-green/20 text-hud-green shadow-[0_0_5px_rgba(0,255,65,0.3)] border border-hud-green/30' 
-                                        : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                                        : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
                                     }`}
                                 >
                                     {speed}x
@@ -96,17 +96,17 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     {/* Center: Duration Selector */}
                     <div className="flex items-center gap-1.5">
                         <span className="text-[9px] text-white/40 font-bold tracking-wider">LOOKBACK:</span>
-                        <div className="flex bg-white/5 rounded border border-white/5 p-0.5">
+                        <div className="flex bg-black/40 rounded border border-white/10 p-0.5">
                             {[1, 6, 12, 24].map(hours => (
                                 <button
                                     key={hours}
                                     onClick={() => onDurationChange(hours)}
                                     aria-label={`Set lookback duration to ${hours} hours`}
                                     aria-pressed={historyDuration === hours}
-                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[20px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
+                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         historyDuration === hours
-                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                                        : 'text-white/30 hover:text-white/70 hover:bg-white/5'
+                                        ? 'bg-amber-500/20 text-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.3)] border border-amber-500/30' 
+                                        : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
                                     }`}
                                 >
                                     {hours}h
@@ -118,7 +118,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     {/* Right: Time Display */}
                     <div className="flex items-center gap-1.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_5px_#f59e0b]" />
-                        <span className="text-sm font-mono font-bold text-white/90 leading-none tracking-wide text-right min-w-[80px] drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">
+                        <span className="text-sm font-bold tabular-nums tracking-wider text-hud-green leading-none text-right min-w-[90px] drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
                             {formatTime(currentTime)}
                         </span>
                     </div>

@@ -51,7 +51,7 @@ export const OrbitalCategoryPills: React.FC<OrbitalCategoryPillsProps> = ({ filt
   }, []);
 
   return (
-    <div className="flex flex-col rounded border border-white/15 bg-black/60 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] overflow-hidden">
+    <div className="flex flex-col overflow-hidden widget-panel">
       <div className="flex items-center justify-between bg-white/5 border-b border-white/10 px-3 py-2">
         <span className="text-[10px] font-bold tracking-[0.2em] text-purple-400/70 uppercase">ORBITAL OBJECTS</span>
         <span className="text-sm font-mono font-bold tracking-wider text-purple-400">{trackCount.toLocaleString()}</span>

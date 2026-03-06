@@ -67,7 +67,7 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
   }, []);
 
   return (
-    <div className="flex flex-col mt-2 bg-black/60 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] rounded border border-white/15 overflow-hidden flex-1">
+    <div className="flex flex-col mt-2 overflow-hidden flex-1 widget-panel">
       <div className="flex justify-between items-center bg-white/5 border-b border-white/10 px-3 py-2 gap-2">
         <span className="text-[10px] font-bold tracking-[0.2em] text-purple-400/70 uppercase shrink-0">UPCOMING PASSES</span>
 

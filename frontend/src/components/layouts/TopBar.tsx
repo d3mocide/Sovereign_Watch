@@ -57,12 +57,6 @@ export const TopBar: React.FC<TopBarProps> = ({
 
     const { hh, mm, ss } = formatTime(time);
 
-    // Calculate integrity bars based on latency
-    // < 50ms: 6 bars
-    // < 100ms: 5 bars
-    // < 200ms: 4 bars
-    // < 500ms: 3 bars
-    // Offline: 0 bars (or red)
     const getIntegrityBars = () => {
         if (!health || health.status === 'offline') return 0;
         if (health.latency < 50) return 6;
@@ -74,19 +68,19 @@ export const TopBar: React.FC<TopBarProps> = ({
     const activeBars = getIntegrityBars();
 
     return (
-        <div className="flex h-16 items-center px-6 bg-black/40 backdrop-blur-md border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-50 relative">
+        <div className="flex h-[55px] items-center px-6 bg-black/40 backdrop-blur-md border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-50 relative">
             {/* Subtle top glow */}
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-hud-green/20 to-transparent pointer-events-none" />
 
             {/* Logo and Domain */}
             <div className="flex items-center gap-4 relative z-10">
                 <div className="relative">
-                    <div className="h-8 w-1.5 bg-hud-green shadow-[0_0_12px_#00ff41]" />
-                    <div className="absolute left-0 top-0 h-8 w-1.5 animate-pulse bg-hud-green opacity-50 blur-sm" />
+                    <div className="h-7 w-1.5 bg-hud-green shadow-[0_0_12px_#00ff41]" />
+                    <div className="absolute left-0 top-0 h-7 w-1.5 animate-pulse bg-hud-green opacity-50 blur-sm" />
                 </div>
                 <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-3">
-                        <span className="text-xl font-black tracking-[0.3em] text-hud-green drop-shadow-[0_0_10px_rgba(0,255,65,0.6)]">
+                        <span className="text-lg font-black tracking-[0.3em] text-hud-green drop-shadow-[0_0_10px_rgba(0,255,65,0.6)]">
                             SOVEREIGN WATCH
                         </span>
                         <span className="text-xs font-bold text-hud-green/50 opacity-80 select-none">//</span>
@@ -98,8 +92,10 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <span className="text-[9px] font-medium tracking-[0.2em] text-hud-green/40 uppercase">
                             Collection_Domain:
                         </span>
-                        <span className="text-[9px] font-bold tracking-[0.15em] text-hud-green/60">
-                            OREGON.PORTLAND.01
+                        <span className="text-[9px] font-bold tracking-[0.15em] text-hud-green/60 uppercase">
+                            {location 
+                                ? `${Math.abs(location.lat).toFixed(4)}°${location.lat >= 0 ? 'N' : 'S'} ${Math.abs(location.lon).toFixed(4)}°${location.lon >= 0 ? 'E' : 'W'}` 
+                                : 'LINK.OFFLINE'}
                         </span>
                         <div className="ml-2 h-[1px] w-24 bg-hud-green/20 shadow-[0_0_5px_rgba(0,255,65,0.3)]" />
                     </div>
@@ -107,10 +103,10 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
             {/* Center Area - View Mode Toggle / Telemetry cluster */}
             <div className="ml-12 mr-auto hidden items-center gap-6 xl:flex relative z-10">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-black/30 backdrop-blur-sm border border-white/5 rounded-full shadow-inner">
+                <div className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-full shadow-inner">
                     <button
                         onClick={() => onViewChange?.('TACTICAL')}
-                        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'TACTICAL'
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'TACTICAL'
                             ? 'bg-hud-green/20 text-hud-green border border-hud-green/50 shadow-[0_0_15px_rgba(0,255,65,0.3)] backdrop-blur-md'
                             : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
                             }`}
@@ -120,7 +116,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </button>
                     <button
                         onClick={() => onViewChange?.('ORBITAL')}
-                        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'ORBITAL'
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'ORBITAL'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.3)] backdrop-blur-md'
                             : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
                             }`}
@@ -130,7 +126,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </button>
                     <button
                         onClick={() => onViewChange?.('RADIO')}
-                        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${viewMode === 'RADIO'
                             ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-[0_0_15px_rgba(79,70,229,0.4)] backdrop-blur-md'
                             : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
                             }`}
@@ -167,9 +163,9 @@ export const TopBar: React.FC<TopBarProps> = ({
                 <div className="h-6 w-[1px] bg-white/10" />
 
                 {/* Status Icons Bar */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-black/30 backdrop-blur-sm border border-white/5 rounded-lg shadow-inner">
+                <div className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-lg shadow-inner">
                     {/* Core Status */}
-                    <div className="flex items-center gap-2 mr-3 px-2 py-1 bg-hud-green/10 border border-hud-green/20 rounded-md shadow-[0_0_10px_rgba(0,255,65,0.1)]" title="Core System: ONLINE">
+                    <div className="flex items-center gap-2 mr-3 px-2 py-0.5 bg-hud-green/10 border border-hud-green/20 rounded-md shadow-[0_0_10px_rgba(0,255,65,0.1)]" title="Core System: ONLINE">
                         <Server size={14} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]" />
                         <div className="flex items-center gap-1">
                             <span className="text-[8px] font-bold text-hud-green tracking-wider uppercase drop-shadow-[0_0_2px_rgba(0,255,65,0.5)]">SYS</span>
@@ -181,7 +177,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     {onToggleReplay && (
                         <button
                             onClick={onToggleReplay}
-                            className={`p-1.5 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${isReplayMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                            className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${isReplayMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
                             title={`Simulation Replay: ${isReplayMode ? 'RUNNING' : 'STANDBY'}`}
                         >
                             <PlayCircle size={15} className={isReplayMode ? 'animate-spin-slow drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : ''} />
@@ -192,7 +188,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     {onToggleTerminator && (
                         <button
                             onClick={onToggleTerminator}
-                            className={`p-1.5 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showTerminator ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                            className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showTerminator ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
                             title={`Terminator (Day/Night) Overlay: ${showTerminator ? 'ACTIVE' : 'STANDBY'}`}
                         >
                             <Moon size={15} className={showTerminator ? 'drop-shadow-[0_0_5px_rgba(99,102,241,0.6)]' : ''} />
@@ -203,7 +199,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     {onToggleHistoryTails && (
                         <button
                             onClick={onToggleHistoryTails}
-                            className={`p-1.5 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showHistoryTails ? 'bg-hud-green/20 text-hud-green border border-hud-green/40 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                            className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showHistoryTails ? 'bg-hud-green/20 text-hud-green border border-hud-green/40 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
                             title={`History Trails: ${showHistoryTails ? 'ACTIVE' : 'STANDBY'}`}
                         >
                             <History size={15} className={showHistoryTails ? 'drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]' : ''} />
@@ -214,7 +210,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     {onToggleVelocityVectors && (
                         <button
                             onClick={onToggleVelocityVectors}
-                            className={`p-1.5 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showVelocityVectors ? 'bg-hud-green/20 text-hud-green border border-hud-green/40 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                            className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 ${showVelocityVectors ? 'bg-hud-green/20 text-hud-green border border-hud-green/40 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
                             title={`Velocity Projections: ${showVelocityVectors ? 'ACTIVE' : 'STANDBY'}`}
                         >
                             <MoveVertical size={15} className={showVelocityVectors ? 'drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]' : ''} />
@@ -225,7 +221,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 {/* Alerts Pill */}
                 <div className="flex items-center px-1">
                     <button
-                        className={`group relative flex items-center gap-2 rounded-full px-4 py-1.5 transition-all duration-300 backdrop-blur-md shadow-lg ${alertsCount > 0
+                        className={`group relative flex items-center gap-2 rounded-full px-3 py-1 transition-all duration-300 backdrop-blur-md shadow-lg ${alertsCount > 0
                             ? 'bg-alert-red/20 shadow-[0_0_15px_rgba(255,0,0,0.3)] ring-1 ring-alert-red/60 hover:bg-alert-red/30'
                             : 'bg-black/30 ring-1 ring-white/10 hover:bg-black/50 hover:ring-white/20'
                             }`}
@@ -253,8 +249,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 
                 {/* Tactical Clock */}
                 <div className="flex flex-col items-end pl-1 justify-center">
-                    <div className="flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-4 pr-2 py-1.5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
-                        <div className="flex items-center gap-0.5 text-xl font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
+                    <div className="flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-3 pr-1.5 py-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
+                        <div className="flex items-center gap-0.5 text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
                             <span>{hh}</span>
                             <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity delay-75`}>:</span>
                             <span>{mm}</span>

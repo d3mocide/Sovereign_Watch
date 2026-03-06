@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, ShieldCheck, ChevronDown, ChevronUp, Radio, Network, ChevronRight } from 'lucide-react';
+import { Database, ShieldCheck, ChevronDown, ChevronUp, Radio, Network, ChevronRight, Layers } from 'lucide-react';
 import { MapFilters } from '../../types';
 
 interface SystemStatusProps {
@@ -19,12 +19,15 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
   const orbitalPercent = total > 0 ? (orbitalCount / total) * 100 : 0;
 
   return (
-    <div className="flex flex-col overflow-hidden bg-black/40 backdrop-blur-md border border-white/10 rounded-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+    <div className="flex flex-col overflow-hidden widget-panel">
       {/* System Status Header with Layers toggle */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10 transition-colors"
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 cursor-pointer transition-colors"
         onClick={() => setShowLayers(!showLayers)}>
-        <div className="flex flex-col">
-          <span className="text-[9px] text-white/40 font-bold tracking-widest uppercase">Map Layers</span>
+        <div className="flex items-center gap-2">
+          <Layers size={13} className="text-cyan-400" />
+          <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
+            Map Layers
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {/* Quick layer toggle icon */}

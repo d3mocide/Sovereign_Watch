@@ -94,12 +94,15 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
     }, [onEntitySelect, mapActions]);
 
     return (
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden bg-black/40 backdrop-blur-md border border-white/10 rounded-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden widget-panel">
             <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
-                <h3 className="text-mono-xs font-bold uppercase tracking-[0.2em] text-hud-green/70 flex items-center gap-2 mr-auto">
-                    <Radio size={12} className="animate-pulse text-hud-green" />
-                    Intelligence Stream
-                </h3>
+                <div className="flex items-center gap-2 mr-auto">
+                    <Radio size={13} className="text-hud-green" />
+                    <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
+                        Intelligence Stream
+                    </span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-hud-green animate-pulse" />
+                </div>
 
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5">
@@ -107,7 +110,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                             title="Toggle Air"
                             aria-label="Toggle Air Intelligence"
                             aria-pressed={filters?.showAir}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showAir', !filters?.showAir)}
                         >
                             <Plane size={12} />
@@ -116,7 +119,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                             title="Toggle Sea"
                             aria-label="Toggle Sea Intelligence"
                             aria-pressed={filters?.showSea}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showSea', !filters?.showSea)}
                         >
                             <Ship size={12} />
@@ -125,7 +128,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                             title="Toggle Orbital"
                             aria-label="Toggle Orbital Intelligence"
                             aria-pressed={filters?.showSatellites}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/20 hover:text-white/40 border border-transparent'}`}
+                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
                             onClick={() => onFilterChange?.('showSatellites', !filters?.showSatellites)}
                         >
                             <Satellite size={12} />
@@ -138,7 +141,7 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                         title="Toggle Filters"
                         aria-label="Toggle filter options"
                         aria-expanded={showFilters}
-                        className={`transition-colors p-1 rounded focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green'}`}
+                        className={`transition-colors p-1 rounded focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green hover:bg-white/5'}`}
                         onClick={() => setShowFilters(!showFilters)}
                     >
                         <Filter size={12} />

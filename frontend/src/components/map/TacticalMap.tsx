@@ -632,18 +632,18 @@ export function TacticalMap({
               <>
                 <button
                   onClick={() => setViewMode("2d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${!enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${!enable3d
+                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                     }`}
                 >
                   2D
                 </button>
                 <button
                   onClick={() => setViewMode("3d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${enable3d
-                    ? "bg-sea-accent text-black shadow-[0_0_10px_rgba(0,255,255,0.6)]"
-                    : "text-white/40 hover:text-white/60"
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${enable3d
+                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                     }`}
                 >
                   3D
@@ -653,9 +653,9 @@ export function TacticalMap({
             )}
             <button
               onClick={() => onToggleGlobe?.()}
-              className={`px-3 py-1 text-[10px] font-bold rounded transition-all flex items-center gap-2 ${globeMode
-                ? "bg-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.4)]"
-                : "text-white/40 hover:text-white/60"
+              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${globeMode
+                ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
+                : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                 }`}
               title="Toggle Globe View"
             >
@@ -668,14 +668,14 @@ export function TacticalMap({
           <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
             <button
               onClick={() => mapRef.current?.getMap().zoomOut()}
-              className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
               title="Zoom Out"
             >
               <Minus size={14} strokeWidth={3} />
             </button>
             <button
               onClick={() => mapRef.current?.getMap().zoomIn()}
-              className="p-2 text-white/40 hover:text-hud-green hover:bg-white/5 rounded transition-all active:scale-95"
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
               title="Zoom In"
             >
               <Plus size={14} strokeWidth={3} />
@@ -686,41 +686,41 @@ export function TacticalMap({
         {/* Manual Orientation Controls - Only in 3D mode, Hidden in Globe */}
         {enable3d && !globeMode && (
           <div className="flex flex-row gap-2">
-            <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
               <button
                 onClick={() => handleAdjustCamera("bearing", -45)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
                 title="Rotate Left"
               >
                 <RotateCcw size={16} />
               </button>
               <button
                 onClick={handleResetCompass}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-cyan-400 transition-all active:scale-95 w-10 h-10 flex items-center justify-center font-mono font-bold text-lg"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-hud-green hover:bg-white/5 hover:border-hud-green/30 transition-all active:scale-95 w-8 h-8 flex items-center justify-center font-mono font-bold text-sm"
                 title="Reset to North"
               >
                 N
               </button>
               <button
                 onClick={() => handleAdjustCamera("bearing", 45)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
                 title="Rotate Right"
               >
                 <RotateCcw size={16} className="scale-x-[-1]" />
               </button>
             </div>
 
-            <div className="flex gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
               <button
                 onClick={() => handleAdjustCamera("pitch", 15)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
                 title="Tilt Down"
               >
                 <ChevronUp size={16} />
               </button>
               <button
                 onClick={() => handleAdjustCamera("pitch", -15)}
-                className="p-2 rounded bg-transparent border border-white/10 text-white/50 hover:text-white transition-all active:scale-95 w-10 h-10 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
                 title="Tilt Up"
               >
                 <ChevronDown size={16} />

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { MapPin, Trash2, ChevronDown, Crosshair } from 'lucide-react';
+import { MapPin, Trash2, ChevronDown, Crosshair, Plane, Building2, Waves, Globe2 } from 'lucide-react';
 import { MissionLocation } from '../../types';
 
 // Mission Presets - aligned with documentation
 const MISSION_PRESETS = [
-  { radius: 30, icon: '✈️', label: 'Airport Ops', color: 'text-cyan-400' },
-  { radius: 100, icon: '🏙️', label: 'Metro Area', color: 'text-blue-400' },
-  { radius: 150, icon: '🌊', label: 'Coastal Region', color: 'text-emerald-400' },
-  { radius: 250, icon: '🌐', label: 'Maximum Range', color: 'text-red-400' },
+  { radius: 30, icon: Plane, label: 'Airport Ops', color: 'text-cyan-400' },
+  { radius: 100, icon: Building2, label: 'Metro Area', color: 'text-blue-400' },
+  { radius: 150, icon: Waves, label: 'Coastal Region', color: 'text-emerald-400' },
+  { radius: 250, icon: Globe2, label: 'Maximum Range', color: 'text-red-400' },
 ];
 
 interface MissionNavigatorProps {
@@ -28,7 +28,7 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)] overflow-hidden">
+    <div className="flex flex-col overflow-visible widget-panel">
       {/* Header */}
       <button
         className="w-full text-left px-3 py-2 bg-white/5 border-b border-white/10 cursor-pointer focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
@@ -38,14 +38,14 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Crosshair size={12} className="text-hud-green/60" />
-            <span className="text-[10px] text-hud-green/80 uppercase font-bold tracking-wider">
+            <Crosshair size={13} className="text-hud-green" />
+            <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
               Mission Areas
             </span>
           </div>
           <ChevronDown
             size={14}
-            className={`text-hud-green/40 transition-transform ${
+            className={`text-white/40 group-hover:text-white/70 transition-transform ${
               expanded ? 'rotate-180' : ''
             }`}
           />
@@ -66,26 +66,32 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
               Quick Select
             </div>
             <div className="grid grid-cols-2 gap-1.5">
-              {MISSION_PRESETS.map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => onPresetSelect(preset.radius)}
-                  className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-hud-green/30 rounded p-1.5 transition-all group text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                  aria-label={`Select ${preset.label} preset`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base" aria-hidden="true">{preset.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] text-white/80 font-medium truncate">
+              {MISSION_PRESETS.map((preset) => {
+                const Icon = preset.icon;
+                const isActive = currentMission?.radius_nm === preset.radius;
+                return (
+                  <button
+                    key={preset.label}
+                    onClick={() => onPresetSelect(preset.radius)}
+                    className={`rounded px-2 py-1.5 transition-all group text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none flex items-center justify-between ${
+                      isActive 
+                        ? 'bg-hud-green/10 border border-hud-green/50 shadow-[0_0_10px_rgba(74,222,128,0.1)]' 
+                        : 'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-hud-green/30'
+                    }`}
+                    aria-label={`Select ${preset.label} preset`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Icon size={12} className={isActive ? 'text-hud-green' : preset.color} aria-hidden="true" />
+                      <span className={`text-[10px] font-medium truncate ${isActive ? 'text-white' : 'text-white/80'}`}>
                         {preset.label}
-                      </div>
-                      <div className="text-[8px] text-white/40 font-mono">
-                        {preset.radius}nm
-                      </div>
+                      </span>
                     </div>
-                  </div>
-                </button>
-              ))}
+                    <span className={`text-[9px] font-mono pl-1 shrink-0 ${isActive ? 'text-hud-green/80' : 'text-white/40'}`}>
+                      {preset.radius}nm
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -103,18 +109,18 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
                   >
                     <button
                       onClick={() => onSwitchMission(mission)}
-                      className="flex-1 min-w-0 p-2 text-left hover:bg-hud-green/10 transition-colors rounded-l focus-visible:ring-1 focus-visible:ring-hud-green outline-none focus-visible:bg-hud-green/10"
+                      className="flex-1 min-w-0 px-2 py-1.5 text-left hover:bg-hud-green/10 transition-colors rounded-l focus-visible:ring-1 focus-visible:ring-hud-green outline-none focus-visible:bg-hud-green/10 flex items-center justify-between"
                       aria-label={`Switch to mission ${mission.name}`}
                     >
-                      <div className="flex items-center gap-1.5 mb-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <MapPin size={10} className="text-hud-green/60 flex-shrink-0" aria-hidden="true" />
                         <span className="text-[10px] text-white/90 font-medium truncate">
                           {mission.name}
                         </span>
                       </div>
-                      <div className="text-[9px] text-white/40 font-mono">
+                      <span className="text-[9px] text-white/40 font-mono pl-1 shrink-0">
                         {mission.lat.toFixed(2)}°, {mission.lon.toFixed(2)}° • {mission.radius_nm}nm
-                      </div>
+                      </span>
                     </button>
                     <button
                       onClick={() => onDeleteMission(mission.id)}

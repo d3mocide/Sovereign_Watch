@@ -151,7 +151,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - REPEATERBOOK_API_TOKEN=${REPEATERBOOK_API_TOKEN}
-      - ALLOWED_ORIGINS=http://localhost
+      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
     volumes:
       - ./backend/api:/app
     networks:
@@ -183,7 +183,7 @@ services:
       - JS8CALL_PORT=2442
       # FastAPI bridge port (exposed below)
       - BRIDGE_PORT=8080
-      - ALLOWED_ORIGINS=http://localhost
+      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
     networks:
       - backend-net
     cap_add: []
