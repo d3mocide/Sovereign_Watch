@@ -45,9 +45,8 @@ Sovereign Watch is a self-hosted, distributed intelligence fusion platform desig
     ```
 
 3.  **Access Interfaces**:
-    - **Tactical Map (UI)**: [http://localhost:3000](http://localhost:3000)
-    - **Fusion API**: [http://localhost:8000/docs](http://localhost:8000/docs)
-    - **Redpanda Console**: [http://localhost:8080](http://localhost:8080)
+    - **Tactical Map (UI)**: [http://localhost](http://localhost)
+    - **Fusion API**: [http://localhost/api/docs](http://localhost/api/docs)
 
 ## ⚠️ Disclaimer & Liability
 
@@ -68,17 +67,20 @@ Sovereign Watch is designed purely for research, educational, and hobbyist data 
 
 ---
 
-## � Architecture Overview
+## Architecture Overview
 
 ```mermaid
 graph TD
+    subgraph "Entry Point (Nginx)"
+        NG[Reverse Proxy :80]
+    end
+
     subgraph "Ingestion (Python Pollers)"
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
         Z[Orbital TLE Feed] -->|TLE| B
-        JS[JS8Call HF Radio] -->|TCP API| B
+        JS[Sovereign JS8Call] -->|UDP Bridge| B
         RP[RF Repeaters] -->|REST API| B
-        SC[Submarine Cables] -->|REST API| FE
         B -->|TAK Protobuf| D(Redpanda Bus)
     end
 
@@ -99,7 +101,12 @@ graph TD
         M -->|WebGL 3D| N[Mapbox / MapLibre Overlay]
         FE --> O[Radio Terminal]
         FE --> INF[Infrastructure Layers]
+        SC[Submarine Cables] -->|REST API| FE
     end
+
+    NG -->|/| FE
+    NG -->|/api/| G
+    NG -->|/js8/| JS
 ```
 
 ## 🗂️ Data Sources
