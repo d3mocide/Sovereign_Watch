@@ -290,6 +290,9 @@ We welcome contributions to Sovereign Watch! Phase 2 is currently focused on Tac
 
 Sovereign Watch is built on the shoulders of giants. We extend our deep gratitude to the maintainers of these core technologies:
 
+- **[JS8Call](http://js8call.com/)**: Robust HF digital mode protocol for weak-signal tactical communications.
+- **[KiwiSDR](http://kiwisdr.com/)**: Global network of software-defined radios enabling over-the-horizon intelligence gathering.
+- **[Docker](https://www.docker.com/)**: Containerization engine enabling seamless, edge-to-cloud deployments.
 - **[Deck.gl](https://deck.gl/)**: High-performance WebGL2 spatial rendering.
 - **[MapLibre GL JS](https://maplibre.org/) / [Mapbox GL JS](https://www.mapbox.com/)**: Core mapping engines and spherical globe projections.
 - **[TimescaleDB](https://www.timescale.com/)**: Heavy-duty time-series telemetry persistence.
