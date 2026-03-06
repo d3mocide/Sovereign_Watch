@@ -27,7 +27,7 @@ The following features were implemented after the last roadmap update and are mi
 | ID | Feature | Evidence |
 |:---|:--------|:--------|
 | **FE-28** | Satellite Dashboard Shell | `OrbitalDashboard` view mode in `App.tsx`, `OrbitalSidebarLeft.tsx`, `OrbitalCategoryPills.tsx` all exist |
-| **FE-29** | Terminator Layer (Day/Night) | `TerminatorLayer.tsx` exists in `frontend/src/layers/` |
+| **FE-29** | Terminator Layer (Day/Night) | `TerminatorLayer.tsx` exists at `frontend/src/components/map/TerminatorLayer.tsx` |
 | **FE-30** | Satellite Telemetry Inspector | `SatelliteInspector` component, `DopplerWidget.tsx`, `PolarPlotWidget.tsx`, `PassPredictorWidget.tsx` all exist |
 | **FE-31** | Orbital Category Pills | `OrbitalCategoryPills.tsx` implemented, GPS/COMMS/WEATHER/etc. filter pills |
 | **Ingest-03a** | Celestrak Expanded Groups | 20 distinct ingestion categories added to `orbital_pulse/service.py` (was 5); TLE lines in payload |
@@ -42,9 +42,9 @@ The following features were implemented after the last roadmap update and are mi
 
 ### GAP-01 (Renumbered): Repeater Sub-Filter UI (FE-27)
 
-**Symptoms:** `LayerFilters.tsx` has a REPEATERS toggle but **no mode sub-filters** (FM / P25 / DMR / D-Star / Fusion / Open).
+**Symptoms:** The repeater on/off toggle lives in `SystemStatus.tsx` (not `LayerFilters.tsx`), and there are **no mode sub-filters** (FM / P25 / DMR / D-Star / Fusion / Open) anywhere in the UI.
 
-**Status:** Data already present in RepeaterBook API response (`mode` field), backend proxy at `/api/repeaters/` fully operational. This is a pure frontend addition.
+**Status:** Data already present in RepeaterBook API response (`mode` field), backend proxy at `/api/repeaters/` fully operational. This is a pure frontend addition — add mode sub-filters under the existing repeater toggle in `SystemStatus.tsx`.
 
 ---
 
@@ -54,7 +54,7 @@ These are in the ROADMAP.md "Next Priority" queue and remain unimplemented:
 
 | ID | Feature | Why It Matters |
 |:---|:--------|:--------------|
-| **FE-22** | Drone Tactical Layer | Drones currently render with the same generic aviation chevrons. `DroneLayer.tsx` does **not exist** in `frontend/src/layers/`. No rotor icon, no drone_class coloring. The classifier is complete (Ingest-07a done), making this a frontend gap only. |
+| **FE-22** | Drone Tactical Layer | Drone classification is wired throughout the UI — `showDrone` filter toggle exists (under AIR in `LayerFilters.tsx`), drones receive the tactical halo glow, and get a `🛸` prefix in IntelFeed. The gap is the **map icon**: `buildEntityLayers.ts:181` returns `"aircraft"` for all non-vessel entities, so drones render with a generic chevron instead of a rotor icon, and drone_class has no color coding. Pure frontend fix in `buildEntityLayers.ts`. |
 | **FE-25a** | NOAA Weather Radio Layer | Static NOAA transmitter visualization, amber coverage circles. No `useNoaaRadio` hook exists. Simple static JSON asset + layer — very low complexity. |
 | **FE-25c** | PSAP / 911 Centers Layer | Bundled GeoJSON of dispatch centers with red/amber markers. No PSAP data or layer exists. Low complexity. |
 
@@ -102,7 +102,7 @@ Full RF infrastructure expansion and UX features. None of these have any code:
 | **Ingest-04** | SIGINT/Jamming (NIC/NACp H3) | Phase 6 |
 | **Ingest-05** | Spectrum (SatNOGS) | Phase 6 |
 | **FE-18** | WebGPU Physics Worker | Phase 6 |
-| **AI-01** | Advanced AI Analyst (LiteLLM deep reasoning) | Phase 8 |
+| **AI-01** | AI Analyst Frontend Widget | Phase 4 — backend `/api/analyze/{uid}` done; needs a frontend panel to surface it |
 
 ---
 
@@ -150,7 +150,7 @@ Full RF infrastructure expansion and UX features. None of these have any code:
 | **P25 / APRS / DMR** | ❌ Not Implemented | Phase 3 |
 | **NOAA / PSAP / FCC Towers** | ❌ Not Implemented | Phase 3 |
 | **Auth / RBAC** | ❌ Not Implemented | Phase 4+ |
-| **AI Analyst** | ❌ Stub Only | LiteLLM configured, no analysis endpoints |
+| **AI Analyst** | ⚠️ Backend Only | `/api/analyze/{uid}` fully implemented in `routers/analysis.py` — queries track history, constructs intel prompt, streams SSE via `litellm.acompletion`. No frontend widget calls it yet. |
 
 ---
 

@@ -1,1 +1,0 @@
-Pass Predictor, Doppler Shift, and Polar Plot: These are currently built out but require predictive data (calculating future passes using SGP4 orbital mechanics). Since we only have the live real-time position feed right now, there's no data to feed into them yet. They'll show their empty/loading states until we hook up a backend API that can calculate future trajectories.
