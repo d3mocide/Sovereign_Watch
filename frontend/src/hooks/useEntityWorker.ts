@@ -528,6 +528,7 @@ export function useEntityWorker({
       if (isCleaningUp) return;
 
       // BUG-013: Removed debug console.log for WebSocket connect attempts
+      // WebSocket API natively sends cookies to same-site endpoints, which aligns with 'credentials: include' behavior
       ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
 

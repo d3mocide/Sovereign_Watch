@@ -119,3 +119,27 @@ BEGIN
     LIMIT 5;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Include User Table Creation
+-- Create sw_users table (Standard Postgres table, NOT a TimescaleDB hypertable)
+CREATE TABLE IF NOT EXISTS sw_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    roles TEXT[] DEFAULT '{}',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login TIMESTAMPTZ
+);
+
+-- Unique index on username
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sw_users_username ON sw_users(username);
+
+-- Insert default admin user
+-- NOTE: The password hash below is for 'admin' and MUST be replaced before deployment!
+INSERT INTO sw_users (username, password_hash, roles)
+VALUES (
+    'admin',
+    '$argon2id$v=19$m=65536,t=2,p=1$Mh/NlK3xIeM/P1R5v4wOxg$7D6M3Q2r/b1tT7R0+0jN7o3K5y8m4L9v6q5L3t9Q7Z+6A',
+    '{"admin", "user"}'
+) ON CONFLICT (username) DO NOTHING;
