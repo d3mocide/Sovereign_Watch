@@ -12,6 +12,7 @@ import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
 import { useRepeaters } from './hooks/useRepeaters'
+import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
 
 const NOOP = () => {};
@@ -221,6 +222,17 @@ function App() {
     missionProps?.currentMission?.lon ?? -122.6784,
   );
 
+  // Intel satellite pass predictions for orbital alerts
+  const obsLat = missionProps?.currentMission?.lat ?? 45.5152;
+  const obsLon = missionProps?.currentMission?.lon ?? -122.6784;
+  const { passes: intelPasses } = usePassPredictions(obsLat, obsLon, {
+    category: 'intel',
+    hours: 1,
+    minElevation: 10,
+    skip: !missionProps?.currentMission,
+  });
+  const alertedPassesRef = useRef<Set<string>>(new Set());
+
   // Add new event to feed (max 50 events)
   // Replay System State
   const [replayMode, setReplayMode] = useState(false);
@@ -393,6 +405,26 @@ function App() {
       time: new Date(),
     }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
   }, []);
+
+  // Orbital alert: fire when an intel-category satellite has AOS within 30 minutes
+  useEffect(() => {
+    if (intelPasses.length === 0) return;
+    const now = Date.now();
+    const ALERT_WINDOW_MS = 30 * 60 * 1000;
+    for (const pass of intelPasses) {
+      const aosMs = new Date(pass.aos).getTime();
+      const passKey = `${pass.norad_id}-${pass.aos}`;
+      if (aosMs > now && aosMs - now <= ALERT_WINDOW_MS && !alertedPassesRef.current.has(passKey)) {
+        alertedPassesRef.current.add(passKey);
+        const minutesAway = Math.round((aosMs - now) / 60000);
+        addEvent({
+          type: 'alert',
+          message: `INTEL SAT — ${pass.name} AOS in ${minutesAway}min (El ${Math.round(pass.max_elevation)}°)`,
+          entityType: 'orbital',
+        });
+      }
+    }
+  }, [intelPasses, addEvent]);
 
   // Periodic cleanup for events older than 1 hour
   useEffect(() => {

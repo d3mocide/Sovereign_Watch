@@ -78,6 +78,27 @@ function buildAlertMessage(callsign: string, emergencyKey: string): string {
   return `ALERT — ${callsign}`;
 }
 
+// AIS nav status codes that warrant an alert
+const DISTRESS_NAV_STATUSES: Record<number, string> = {
+  2: 'NOT UNDER COMMAND',
+  6: 'AGROUND',
+  14: 'AIS-SART DISTRESS',
+};
+
+function getMaritimeAlertKey(vesselClassification?: import('../types').VesselClassification): string {
+  const navStatus = vesselClassification?.navStatus;
+  if (navStatus !== undefined && navStatus in DISTRESS_NAV_STATUSES) {
+    return `navStatus:${navStatus}`;
+  }
+  return '';
+}
+
+function buildMaritimeAlertMessage(callsign: string, alertKey: string): string {
+  const code = parseInt(alertKey.slice('navStatus:'.length), 10);
+  const label = DISTRESS_NAV_STATUSES[code] ?? 'MARITIME ALERT';
+  return `${label} — ${callsign}`;
+}
+
 export function useEntityWorker({
   onEvent,
   currentMissionRef,
@@ -530,6 +551,39 @@ export function useEntityWorker({
           } else if (!emergencyKey && lastAlerted) {
             // Emergency cleared — reset tracking so a future emergency triggers again
             alertedEmergencyRef.current.delete(entity.uid);
+          }
+        } else {
+          // Maritime alert detection
+          // 1. AIS distress nav status (can change over time — track state)
+          const maritimeAlertKey = getMaritimeAlertKey(vesselClassification);
+          const lastMaritimeAlert = alertedEmergencyRef.current.get(entity.uid) ?? '';
+          if (maritimeAlertKey && maritimeAlertKey !== lastMaritimeAlert) {
+            alertedEmergencyRef.current.set(entity.uid, maritimeAlertKey);
+            onEvent?.({
+              type: "alert",
+              message: buildMaritimeAlertMessage(callsign, maritimeAlertKey),
+              entityType: "sea",
+            });
+          } else if (!maritimeAlertKey && lastMaritimeAlert.startsWith('navStatus:')) {
+            alertedEmergencyRef.current.delete(entity.uid);
+          }
+
+          // 2. One-time alerts on first detection
+          if (isNew && vesselClassification) {
+            if (vesselClassification.hazardous) {
+              onEvent?.({
+                type: "alert",
+                message: `HAZ CARGO — ${callsign}`,
+                entityType: "sea",
+              });
+            }
+            if (vesselClassification.category === 'military') {
+              onEvent?.({
+                type: "alert",
+                message: `MILITARY VESSEL — ${callsign}`,
+                entityType: "sea",
+              });
+            }
           }
         }
       }
