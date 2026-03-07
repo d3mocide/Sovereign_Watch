@@ -76,18 +76,25 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowElMenu(v => !v)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-white/50 border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+              aria-expanded={showElMenu}
+              aria-haspopup="menu"
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-white/50 border border-white/10 bg-white/5 hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
             >
               MIN EL: {minElevation}°
-              <span className="text-white/30">▾</span>
+              <span className="text-white/30" aria-hidden="true">▾</span>
             </button>
             {showElMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-black/90 border border-white/10 rounded shadow-lg py-1 min-w-[70px]">
+              <div
+                className="absolute right-0 top-full mt-1 z-50 bg-black/90 border border-white/10 rounded shadow-lg py-1 min-w-[70px]"
+                role="menu"
+              >
                 {MIN_EL_OPTIONS.map(opt => (
                   <button
                     key={opt}
                     onClick={() => { onMinElevationChange?.(opt); setShowElMenu(false); }}
-                    className={`w-full text-left px-3 py-1 text-[9px] font-mono hover:bg-white/10 transition-colors ${opt === minElevation ? 'text-purple-400' : 'text-white/60'}`}
+                    role="menuitem"
+                    aria-label={`Set minimum elevation to ${opt} degrees`}
+                    className={`w-full text-left px-3 py-1 text-[9px] font-mono hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none ${opt === minElevation ? 'text-purple-400' : 'text-white/60'}`}
                   >
                     {opt}°
                   </button>
@@ -101,9 +108,10 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
             <button
               onClick={() => exportCsv(passes)}
               title="Export passes as CSV"
-              className="p-1 text-white/30 hover:text-purple-400 transition-colors"
+              aria-label="Export passes as CSV"
+              className="p-1 text-white/30 hover:text-purple-400 transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
             >
-              <Download size={11} />
+              <Download size={11} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -138,12 +146,13 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
             const aosTime = new Date(pass.aos).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 
             return (
-              <div
+              <button
                 key={`${pass.norad_id}-${i}`}
                 onClick={() => onPassClick?.(pass.norad_id)}
-                className={`flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors border-l-2 ${inProgress
-                  ? 'bg-purple-400/10 border-purple-400 animate-pulse'
-                  : 'hover:bg-white/5 border-transparent hover:border-purple-400'
+                aria-label={`View details for pass ${pass.name}`}
+                className={`w-full text-left flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors border-l-2 focus-visible:ring-1 focus-visible:ring-purple-400 outline-none ${inProgress
+                  ? 'bg-purple-400/10 border-purple-400 animate-pulse focus-visible:bg-purple-400/20'
+                  : 'hover:bg-white/5 border-transparent hover:border-purple-400 focus-visible:border-purple-400 focus-visible:bg-white/5'
                   }`}
               >
                 <div className="flex flex-col min-w-[45px]">
@@ -162,7 +171,7 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
                   <span className="text-[10px] text-white/80 font-mono">{pass.max_elevation.toFixed(0)}°</span>
                   <span className="text-[7px] text-white/30 uppercase tracking-widest">MAX EL</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
