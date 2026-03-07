@@ -149,14 +149,21 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Backend-06** | Orbital Pass Prediction API | Backend + Frontend | **DONE** (v0.18.x). `satellites` table, Historian TLE upsert, `routers/orbital.py` (`/api/orbital/passes`, `/api/orbital/groundtrack`), `sgp4_utils.py`, `usePassPredictions` hook, fully wired to `PassPredictorWidget`/`DopplerWidget`/`PolarPlotWidget`. |
 | **Fix-01**     | CoT Event Tracking      | Frontend  | **DONE**. Cursor-on-Target events render on map and appear in IntelFeed. Confirmed operational. |
 
-### Next Priority (P0–P1)
+### Version 1.0 Release Candidate Requirements
+
+These core components, usability improvements, and collaborative features define the transition to a full production v1.0 state.
 
 | ID             | Task Name               | Component | Description                                                                                                                                                             |
 | :------------- | :---------------------- | :-------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **FE-22**      | Drone Tactical Layer    | Frontend  | **(P1)**. `DroneLayer.tsx` with rotor icon, drone_class color coding, military/commercial/civil sub-filters. Classifier already complete (Ingest-07a). Pure frontend gap. |
-| **FE-27**      | Repeater Mode Sub-Filters | Frontend | **(P1)**. Expandable REPEATERS section with FM/P25/DMR/D-Star/Fusion/Open sub-toggles. Data already in RepeaterBook API — frontend-only change to `LayerFilters.tsx`. |
-| **FE-25a**     | NOAA Weather Radio Layer | Frontend  | **(P1)**. Static NOAA transmitter data, amber coverage circles, `useNoaaRadio` hook, INFRA toggle. |
-| **FE-25c**     | PSAP / 911 Centers Layer | Frontend  | **(P1)**. Bundled static GeoJSON of dispatch centers, red/amber markers by PSAP type. |
+| **Backend-04** | Auth / RBAC             | Backend   | **(Security)**. Implement user authentication, session management, and Role-Based Access Control to protect intelligence feeds in production.                           |
+| **FE-14**      | Deep Linking            | Frontend  | **(Collaboration)**. Encode mission state (Lat/Lon/Zoom/Active Layers) into the URL hash, allowing instant sharing of active tactical configurations.                   |
+| **FE-15**      | Data Portability        | Frontend  | **(Collaboration)**. Export full active mission state (AOR, Layer Filters, Preferences) to JSON and import across instances for rapid multi-operator deployments.       |
+| **FE-12**      | Settings UI             | Frontend  | **(Usability)**. Configure API keys and Poller internals via the UI rather than relying entirely on `.env` file modification.                                           |
+| **AI-01**      | AI Analyst Panel        | Frontend  | **(Intelligence)**. Surface the existing `/api/analyze/{uid}` LLM capability into a dedicated frontend widget for instant semantic analysis of tracked assets.          |
+| **FE-22**      | Drone Tactical Layer    | Frontend  | **(Tracking)**. Implement `DroneLayer.tsx` with rotor icon and `drone_class` color coding. Classifier is already complete in backend.                                   |
+| **FE-27**      | Repeater Sub-Filters    | Frontend  | **(Tracking)**. Expand REPEATERS section with FM/P25/DMR/D-Star/Fusion/Open sub-toggles utilizing existing API data.                                                    |
+| **FE-25a**     | NOAA Weather Radio      | Frontend  | **(Tracking)**. Static NOAA transmitter data, amber coverage circles, `useNoaaRadio` hook, INFRA toggle.                                                                |
+| **FE-25c**     | PSAP / 911 Centers      | Frontend  | **(Tracking)**. Bundled static GeoJSON of dispatch centers, red/amber markers by PSAP type.                                                                             |
 
 ### Backlog (P2)
 
@@ -173,11 +180,7 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Ingest-08**  | **Infra Caching**       | Data Eng  | Move Submarine Cable/Landing Station caching to a backend Python service to replace client-side localStorage. |
 | **FE-09**      | Coverage Viz     | Frontend  | H3 polling fidelity visualization.                                                                                                              |
 | **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                                                            |
-| **FE-12**      | Settings UI      | Frontend  | Configure API keys/Pollers via UI (no more ENV editing).                                       |
 | **FE-13**      | Mission Labels   | Frontend  | Floating text labels for coverage areas.                                                       |
-| **FE-14**      | Deep Linking     | Frontend  | Shareable URLs with encoded mission state.                                                     |
-| **FE-15**      | Data Portability | Frontend  | Import/Export Mission Presets (JSON).                                                          |
-| **Backend-04** | Auth/RBAC        | Backend   | User management & Role-Based Access Control.                                                   |
 | **Ingest-07**  | Drone Remote ID  | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline → `drone_raw` Kafka topic. Requires RTL-SDR hardware. |
 
 ### Future (P3 — Phase 6+)
@@ -190,7 +193,6 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Ingest-04**  | SIGINT/Jamming | Data Eng  | H3 Integrity aggregation (NIC/NACp).                       |
 | **Ingest-05**  | Spectrum       | Data Eng  | SatNOGS integration.                                       |
 | **FE-18**      | WebGPU Physics | Frontend  | Headless compute worker for Boids/SGP4.                    |
-| **AI-01**      | AI Analyst     | Backend   | Deep AI-driven analysis (Phase 8).                         |
 
 ---
 

@@ -48,21 +48,26 @@ The following features were implemented after the last roadmap update and are mi
 
 ---
 
-## 3. P0/P1 Features Not Yet Started
+## 3. Version 1.0 Release Candidate Requirements
 
-These are in the ROADMAP.md "Next Priority" queue and remain unimplemented:
+To achieve a production-ready "Version 1.0", the following features must be completed. These combine remaining tracking elements with critical security, usability, and collaborative tools.
 
 | ID | Feature | Why It Matters |
 |:---|:--------|:--------------|
-| **FE-22** | Drone Tactical Layer | Drone classification is wired throughout the UI — `showDrone` filter toggle exists (under AIR in `LayerFilters.tsx`), drones receive the tactical halo glow, and get a `🛸` prefix in IntelFeed. The gap is the **map icon**: `buildEntityLayers.ts:181` returns `"aircraft"` for all non-vessel entities, so drones render with a generic chevron instead of a rotor icon, and drone_class has no color coding. Pure frontend fix in `buildEntityLayers.ts`. |
-| **FE-25a** | NOAA Weather Radio Layer | Static NOAA transmitter visualization, amber coverage circles. No `useNoaaRadio` hook exists. Simple static JSON asset + layer — very low complexity. |
-| **FE-25c** | PSAP / 911 Centers Layer | Bundled GeoJSON of dispatch centers with red/amber markers. No PSAP data or layer exists. Low complexity. |
+| **Backend-04** | Auth / RBAC | **Critical for v1.0 Security.** No user management or access control currently exists. Production deployments must protect intelligence feeds. |
+| **FE-14** | Deep Linking | **Critical for v1.0 Collaboration.** High operator value for mission sharing by encoding active state into the URL. |
+| **FE-15** | Data Portability | **Critical for v1.0 Usability.** Export/Import mission presets (JSON) allows rapid multi-operator deployments and persistence across sessions. |
+| **FE-12** | Settings UI | **Critical for v1.0 Usability.** Removes dependency on `.env` modifications by allowing API keys and Poller configs via the UI. |
+| **AI-01** | AI Analyst Frontend Widget | Backend `/api/analyze/{uid}` is fully done. A dedicated frontend panel is required to surface this core intelligence feature to operators. |
+| **FE-22** | Drone Tactical Layer | Drone classification is wired throughout the UI. The gap is the **map icon**; drones currently render with generic chevrons instead of a rotor icon/drone_class color coding. |
+| **FE-25a** | NOAA Weather Radio Layer | Static NOAA transmitter visualization, amber coverage circles. No `useNoaaRadio` hook exists. |
+| **FE-25c** | PSAP / 911 Centers Layer | Bundled GeoJSON of dispatch centers with red/amber markers. No PSAP data or layer exists. |
 
 ---
 
-## 4. P2 Backlog — Not Started
+## 4. Post-1.0 Backlog (Phase 3+)
 
-Full RF infrastructure expansion and UX features. None of these have any code:
+Full RF infrastructure expansion and additional capabilities planned for post-1.0 releases. None of these have any code:
 
 ### 4.1 RF Infrastructure (Phase 3)
 
@@ -77,65 +82,60 @@ Full RF infrastructure expansion and UX features. None of these have any code:
 | **Ingest-11** | FCC ASR Tower Service | Medium | FCC public DB download + bounding-box filter |
 | **FE-25b** | FCC Tower Layer | Low | Needs Ingest-11 |
 | **Ingest-08** | Infra Caching (Backend) | Low | Move cables/stations from localStorage to backend |
-
-### 4.2 UX Improvements
-
-| ID | Feature | Complexity | Notes |
-|:---|:--------|:----------|:------|
-| **FE-09** | Coverage Viz | Low | H3 polling fidelity hexagons |
-| **FE-12** | Settings UI | High | Full UI for API key/poller config |
-| **FE-13** | Mission Labels | Low | Floating text labels for AOT areas |
-| **FE-14** | Deep Linking | Medium | Encode mission state in URL |
-| **FE-15** | Data Portability | Medium | Import/Export mission presets JSON |
-| **Backend-04** | Auth / RBAC | High | No user management or access control exists |
 | **Ingest-07** | Drone Remote ID | High | RTL-SDR hardware dependency, SDR pipeline |
 
----
-
-## 5. Phase 3+ Future Work
+### 4.2 UX and System Expansion (Phase 6+)
 
 | ID | Feature | Phase |
 |:---|:--------|:------|
+| **FE-09** | Coverage Viz | Phase 6 |
+| **FE-10** | Payload Eval | Phase 6 |
+| **FE-13** | Mission Labels | Phase 6 |
 | **Backend-05** | Multi-Area concurrent surveillance | Phase 6 |
 | **FE-16** | Analytics Dashboard / Heatmaps | Phase 6 |
 | **FE-17** | Collaborative Multi-User Sync | Phase 6 |
 | **Ingest-04** | SIGINT/Jamming (NIC/NACp H3) | Phase 6 |
 | **Ingest-05** | Spectrum (SatNOGS) | Phase 6 |
 | **FE-18** | WebGPU Physics Worker | Phase 6 |
-| **AI-01** | AI Analyst Frontend Widget | Phase 4 — backend `/api/analyze/{uid}` done; needs a frontend panel to surface it |
 
 ---
 
-## 6. Recommended Next Steps (Prioritized)
+## 5. Recommended Next Steps for v1.0 (Prioritized)
 
-### Immediate (Sprint 1)
+### Immediate (Sprint 1: Core Tracking & UI)
 
 1. **FE-22 — Drone Tactical Layer**
    - Classification is already done. This is a pure frontend gap.
    - Create `DroneLayer.tsx` with rotor icon, drone_class color coding, and sub-filters in `LayerFilters.tsx`.
 
-3. **FE-27 — Repeater Mode Sub-Filters**
+2. **FE-27 — Repeater Mode Sub-Filters**
    - Data already exists in the API. Frontend-only change to `LayerFilters.tsx`.
-   - Lowest complexity of any open P1 item.
 
-### Near-Term (Sprint 2)
+3. **AI-01 — AI Analyst Panel**
+   - Surface the existing backend functionality into the UI.
 
-3. **FE-25a — NOAA Weather Radio Layer**
+### Near-Term (Sprint 2: Static Layers)
+
+4. **FE-25a — NOAA Weather Radio Layer**
    - Static data source, minimal backend work.
 
-6. **FE-25c — PSAP / 911 Centers Layer**
+5. **FE-25c — PSAP / 911 Centers Layer**
    - Bundled GeoJSON, no backend required.
 
-### Medium-Term (Sprint 3+)
+### Medium-Term (Sprint 3: Collaboration & Security)
 
-7. **Ingest-08 — Infrastructure Caching** — Move submarine cable/stations to backend service.
-8. **Ingest-09 + FE-23 — P25 Systems** — Begin RF infrastructure expansion.
-9. **FE-14 — Deep Linking** — High operator value for mission sharing.
-10. **FE-15 — Data Portability** — Mission preset export/import.
+6. **Backend-04 — Auth / RBAC**
+   - Implement core security infrastructure.
+
+7. **FE-14 & FE-15 — Deep Linking & Data Portability**
+   - Implement state export/import and URL hash encoding.
+
+8. **FE-12 — Settings UI**
+   - Finalize usability improvements before 1.0 release.
 
 ---
 
-## 7. Health Assessment
+## 6. Health Assessment
 
 | Domain | Status | Notes |
 |:-------|:-------|:------|
