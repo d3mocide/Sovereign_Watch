@@ -14,14 +14,16 @@ import { useJS8Stations } from './hooks/useJS8Stations'
 import { useRepeaters } from './hooks/useRepeaters'
 import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
+import { AlertsWidget } from './components/widgets/AlertsWidget'
 
-const NOOP = () => {};
+const NOOP = () => { };
 
 function App() {
 
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
 
   // Orbital Dashboard State
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
@@ -518,6 +520,10 @@ function App() {
           isReplayMode={replayMode}
           viewMode={viewMode}
           onViewChange={setViewMode}
+          onAlertsClick={() => setIsAlertsOpen(!isAlertsOpen)}
+          isAlertsOpen={isAlertsOpen}
+          alerts={events.filter(e => e.type === 'alert')}
+          onAlertsClose={() => setIsAlertsOpen(false)}
         />
       }
       leftSidebar={

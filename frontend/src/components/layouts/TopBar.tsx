@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
+import { IntelEvent } from '../../types';
+import { AlertsWidget } from '../widgets/AlertsWidget';
 
 interface TopBarProps {
     alertsCount: number;
@@ -31,6 +33,10 @@ interface TopBarProps {
     onToggleReplay?: () => void;
     viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL';
     onViewChange?: (mode: 'TACTICAL' | 'RADIO' | 'ORBITAL') => void;
+    onAlertsClick?: () => void;
+    isAlertsOpen?: boolean;
+    alerts?: IntelEvent[];
+    onAlertsClose?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -40,7 +46,8 @@ export const TopBar: React.FC<TopBarProps> = ({
     showSatellites, onToggleSatellites,
     showTerminator, onToggleTerminator,
     isReplayMode, onToggleReplay,
-    viewMode = 'TACTICAL', onViewChange
+    viewMode = 'TACTICAL', onViewChange,
+    onAlertsClick, isAlertsOpen, alerts, onAlertsClose
 }) => {
     const [time, setTime] = useState(new Date());
 
@@ -93,8 +100,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                             Collection_Domain:
                         </span>
                         <span className="text-[9px] font-bold tracking-[0.15em] text-hud-green/60 uppercase">
-                            {location 
-                                ? `${Math.abs(location.lat).toFixed(4)}°${location.lat >= 0 ? 'N' : 'S'} ${Math.abs(location.lon).toFixed(4)}°${location.lon >= 0 ? 'E' : 'W'}` 
+                            {location
+                                ? `${Math.abs(location.lat).toFixed(4)}°${location.lat >= 0 ? 'N' : 'S'} ${Math.abs(location.lon).toFixed(4)}°${location.lon >= 0 ? 'E' : 'W'}`
                                 : 'LINK.OFFLINE'}
                         </span>
                         <div className="ml-2 h-[1px] w-24 bg-hud-green/20 shadow-[0_0_5px_rgba(0,255,65,0.3)]" />
@@ -219,13 +226,14 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
 
                 {/* Alerts Pill */}
-                <div className="flex items-center px-1">
+                <div className="flex items-center px-1 relative">
                     <button
+                        onClick={onAlertsClick}
                         className={`group relative flex items-center gap-2 rounded-full px-3 py-1 transition-all duration-300 backdrop-blur-md shadow-lg ${alertsCount > 0
                             ? 'bg-alert-red/20 shadow-[0_0_15px_rgba(255,0,0,0.3)] ring-1 ring-alert-red/60 hover:bg-alert-red/30'
-                            : 'bg-black/30 ring-1 ring-white/10 hover:bg-black/50 hover:ring-white/20'
+                            : 'bg-black/30 ring-1 ring-white/10 hover:bg-black/50 hover:ring-white/20 hover:cursor-pointer cursor-default'
                             }`}
-                        title={alertsCount > 0 ? `${alertsCount} Active Alerts` : "No Active Alerts"}
+                        title={alertsCount > 0 ? `${alertsCount} Active Alerts - Click to view` : "No Active Alerts - Click to view"}
                     >
                         {alertsCount > 0 ? (
                             <ShieldAlert size={15} className="text-alert-red animate-pulse drop-shadow-[0_0_8px_rgba(255,0,0,0.8)]" />
@@ -245,6 +253,9 @@ export const TopBar: React.FC<TopBarProps> = ({
                             </div>
                         )}
                     </button>
+                    {isAlertsOpen && alerts && onAlertsClose && (
+                        <AlertsWidget isOpen={isAlertsOpen} alerts={alerts} onClose={onAlertsClose} />
+                    )}
                 </div>
 
                 {/* Tactical Clock */}

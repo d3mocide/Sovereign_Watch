@@ -34,7 +34,7 @@ export const MainHud: React.FC<MainHudProps> = ({
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
 
         {/* Top Bar Zone */}
-        <div className="pointer-events-auto shrink-0 border-b border-hud-green/20 bg-black/40 backdrop-blur-md">
+        <div className="relative z-50 pointer-events-auto shrink-0 border-b border-hud-green/20 bg-black/40 backdrop-blur-md">
           {topBar}
         </div>
 
