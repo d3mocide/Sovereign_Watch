@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, ChevronDown, Copy, Check, Loader2, AlertTriangle, X } from 'lucide-react';
+import { BrainCircuit, ChevronDown, ChevronUp, Copy, Check, Loader2, AlertTriangle, X } from 'lucide-react';
 import { useAnalysis } from '../../hooks/useAnalysis';
 
 const LOOKBACK_OPTIONS = [
@@ -14,15 +14,18 @@ const LOOKBACK_OPTIONS = [
 interface AnalysisWidgetProps {
   uid: string;
   accentColor?: string; // e.g. 'text-air-accent' | 'text-sea-accent'
+  compactMode?: boolean; // If true, render as a single button until activated
 }
 
 export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
   uid,
   accentColor = 'text-air-accent',
+  compactMode = false,
 }) => {
   const { text, isStreaming, error, generatedAt, run, reset } = useAnalysis();
   const [lookback, setLookback] = useState(24);
   const [copied, setCopied] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +43,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
 
   const handleRun = () => {
     run(uid, lookback);
+    setIsCollapsed(false);
   };
 
   const handleCopy = () => {
@@ -51,15 +55,45 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
     });
   };
 
-  const accentBorder = accentColor.includes('sea')
-    ? 'border-sea-accent/30'
-    : 'border-air-accent/30';
-  const accentBg = accentColor.includes('sea')
-    ? 'bg-gradient-to-br from-sea-accent/10 to-sea-accent/5'
-    : 'bg-gradient-to-br from-air-accent/10 to-air-accent/5';
+  let accentBorder = 'border-air-accent/30';
+  let accentBg = 'bg-gradient-to-br from-air-accent/10 to-air-accent/5';
+
+  if (accentColor.includes('sea')) {
+    accentBorder = 'border-sea-accent/30';
+    accentBg = 'bg-gradient-to-br from-sea-accent/10 to-sea-accent/5';
+  } else if (accentColor.includes('purple')) {
+    accentBorder = 'border-purple-400/30';
+    accentBg = 'bg-gradient-to-br from-purple-400/10 to-purple-400/5';
+  } else if (accentColor.includes('indigo')) {
+    accentBorder = 'border-indigo-400/30';
+    accentBg = 'bg-gradient-to-br from-indigo-400/10 to-indigo-400/5';
+  } else if (accentColor.includes('teal')) {
+    accentBorder = 'border-teal-400/30';
+    accentBg = 'bg-gradient-to-br from-teal-400/10 to-teal-400/5';
+  } else if (accentColor.includes('cyan')) {
+    accentBorder = 'border-cyan-400/30';
+    accentBg = 'bg-gradient-to-br from-cyan-400/10 to-cyan-400/5';
+  }
+
+  const isActive = !!(text || isStreaming || error);
+  const showCompact = compactMode && (!isActive || isCollapsed);
+
+  if (showCompact) {
+    return (
+      <button
+        onClick={isActive ? () => setIsCollapsed(false) : handleRun}
+        className={`flex-1 flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} hover:bg-white/10 rounded-sm group transition-all`}
+      >
+        <div className="flex items-center gap-2">
+          <BrainCircuit size={13} className={accentColor} />
+          <span className="text-[10px] font-bold tracking-[.3em] text-white/50 group-hover:text-white/80 transition-colors">AI_ANALYST</span>
+        </div>
+      </button>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col gap-2 ${compactMode ? 'col-span-2' : ''}`}>
       {/* Header row */}
       <div className={`flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} rounded-sm backdrop-blur-md`}>
         <div className="flex items-center gap-2">
@@ -101,11 +135,20 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
               RUN
             </button>
           )}
+          {compactMode && (
+            <button
+              onClick={() => setIsCollapsed(true)}
+              title="Collapse"
+              className="flex items-center justify-center p-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-white/40 hover:text-white/70 transition-colors ml-1"
+            >
+              <ChevronUp size={10} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Output area — only shown once analysis has started */}
-      {(text || isStreaming || error) && (
+      {isActive && (
         <div className="flex flex-col border border-white/10 rounded-sm bg-black/60 backdrop-blur-md overflow-hidden">
           {/* Output header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5">

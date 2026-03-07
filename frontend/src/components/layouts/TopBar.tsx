@@ -15,6 +15,7 @@ import {
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
 import { AlertsWidget } from '../widgets/AlertsWidget';
+import { AIEngineWidget } from '../widgets/AIEngineWidget';
 
 interface TopBarProps {
     alertsCount: number;
@@ -224,6 +225,9 @@ export const TopBar: React.FC<TopBarProps> = ({
                         </button>
                     )}
                 </div>
+
+                {/* AI Engine Widget */}
+                <AIEngineWidget />
 
                 {/* Alerts Pill */}
                 <div className="flex items-center px-1 relative">

@@ -38,6 +38,16 @@ COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
 AIS_HEADING_NOT_AVAILABLE = 511
 
 
+# Minimum change in lat/lon (degrees) or radius (nm) required to trigger a reconnect.
+# Small floating-point drift and same-value updates are ignored.
+MIN_LAT_LON_CHANGE_DEG = 0.05  # ~3nm at mid-latitudes
+MIN_RADIUS_CHANGE_NM = 1.0
+
+# Seconds to wait after the *last* mission update before reconnecting.
+# Rapid preset clicks collapse into a single reconnect once the user stops.
+BBOX_DEBOUNCE_SECONDS = 5.0
+
+
 class MaritimePollerService:
     def __init__(self):
         self.running = True
@@ -52,6 +62,7 @@ class MaritimePollerService:
 
         self.reconnect_delay = 5  # seconds
         self.bbox_update_needed = False
+        self._bbox_debounce_task: Optional[asyncio.Task] = None
         self.vessel_static_cache: Dict[int, dict] = {}
 
     async def setup(self):
@@ -102,6 +113,12 @@ class MaritimePollerService:
 
         logger.info("🛑 Maritime poller shutdown complete")
 
+    async def _schedule_bbox_reconnect(self):
+        """Debounced helper: waits BBOX_DEBOUNCE_SECONDS, then signals a reconnect."""
+        await asyncio.sleep(BBOX_DEBOUNCE_SECONDS)
+        logger.info(f"🔄 Bbox debounce elapsed — scheduling AISStream reconnect")
+        self.bbox_update_needed = True
+
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""
         while self.running:
@@ -117,16 +134,46 @@ class MaritimePollerService:
                     if message["type"] == "message":
                         try:
                             mission = json.loads(message["data"])
+                            new_lat = mission["lat"]
+                            new_lon = mission["lon"]
+                            new_radius = mission["radius_nm"]
+
+                            # ── Minimum-change threshold ──────────────────────────────────
+                            # Ignore updates that are just floating-point drift or identical
+                            # preset re-selections; only reconnect when the area actually moves.
+                            lat_diff = abs(new_lat - self.center_lat)
+                            lon_diff = abs(new_lon - self.center_lon)
+                            radius_diff = abs(new_radius - self.radius_nm)
+
+                            if (lat_diff < MIN_LAT_LON_CHANGE_DEG and
+                                    lon_diff < MIN_LAT_LON_CHANGE_DEG and
+                                    radius_diff < MIN_RADIUS_CHANGE_NM):
+                                logger.debug(
+                                    f"📍 Mission update below threshold — ignoring "
+                                    f"(Δlat={lat_diff:.4f}° Δlon={lon_diff:.4f}° Δr={radius_diff:.1f}nm)"
+                                )
+                                continue
+
                             old_center = (self.center_lat, self.center_lon, self.radius_nm)
+                            self.center_lat = new_lat
+                            self.center_lon = new_lon
+                            self.radius_nm = new_radius
 
-                            self.center_lat = mission["lat"]
-                            self.center_lon = mission["lon"]
-                            self.radius_nm = mission["radius_nm"]
+                            logger.info(
+                                f"📍 Mission area updated: {old_center} → "
+                                f"({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
+                            )
 
-                            logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                            # ── Debounce ──────────────────────────────────────────────────
+                            # Cancel any pending reconnect, then schedule a fresh one.
+                            # Rapid preset clicks collapse into a single reconnect.
+                            if self._bbox_debounce_task and not self._bbox_debounce_task.done():
+                                self._bbox_debounce_task.cancel()
+                                logger.debug("🕐 Debounce reset — new mission update received")
 
-                            # Flag that we need to update the AISStream subscription
-                            self.bbox_update_needed = True
+                            self._bbox_debounce_task = asyncio.create_task(
+                                self._schedule_bbox_reconnect()
+                            )
 
                         except Exception as e:
                             logger.error(f"Failed to parse mission update: {e}")

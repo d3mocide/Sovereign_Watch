@@ -162,15 +162,15 @@ export function useEntityWorker({
           const category =
             entity.detail?.category ??
             (entity.detail?.classification as any)?.category;
-          const constellation = 
+          const constellation =
             entity.detail?.constellation ??
             (entity.detail?.classification as any)?.constellation;
           const period_min =
-            entity.detail?.period_min ??
-            (entity.detail?.classification as any)?.period_min;
+            entity.detail?.periodMin ??
+            (entity.detail?.classification as any)?.periodMin;
           const inclination_deg =
-            entity.detail?.inclination_deg ??
-            (entity.detail?.classification as any)?.inclination_deg;
+            entity.detail?.inclinationDeg ??
+            (entity.detail?.classification as any)?.inclinationDeg;
           const eccentricity =
             entity.detail?.eccentricity ??
             (entity.detail?.classification as any)?.eccentricity;
@@ -231,7 +231,7 @@ export function useEntityWorker({
           const visual = visualStateRef.current.get(entity.uid);
           const blendLat = visual ? visual.lat : newLat;
           const blendLon = visual ? visual.lon : newLon;
-          
+
           const lastServerTime = existingDr ? existingDr.serverTime : now - 5000;
           const timeSinceLast = Math.max(now - lastServerTime, 4000); // Nominal 5s
 
@@ -551,6 +551,27 @@ export function useEntityWorker({
           } else if (!emergencyKey && lastAlerted) {
             // Emergency cleared — reset tracking so a future emergency triggers again
             alertedEmergencyRef.current.delete(entity.uid);
+          }
+
+          // 2. One-time alerts on first detection
+          if (isNew && classification) {
+            if (classification.affiliation === "military") {
+              onEvent?.({
+                type: "alert",
+                message: `MILITARY AIRCRAFT — ${callsign}`,
+                entityType: "air",
+              });
+            }
+            if (
+              classification.platform === "drone" ||
+              classification.platform === "uav"
+            ) {
+              onEvent?.({
+                type: "alert",
+                message: `UAS DETECTED — ${callsign}`,
+                entityType: "air",
+              });
+            }
           }
         } else {
           // Maritime alert detection
