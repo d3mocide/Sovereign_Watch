@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Database, ShieldCheck, ChevronDown, ChevronUp, Radio, Network, ChevronRight, Layers } from 'lucide-react';
+import { Database, ShieldCheck, ChevronDown, ChevronUp, Radio, Network, ChevronRight, Layers, BrainCircuit, Loader2 } from 'lucide-react';
 import { MapFilters } from '../../types';
+import { useAIConfig } from '../../hooks/useAIConfig';
 
 interface SystemStatusProps {
   trackCounts: { air: number; sea: number; orbital?: number };
@@ -11,6 +12,8 @@ interface SystemStatusProps {
 export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters, onFilterChange }) => {
   const [showLayers, setShowLayers] = useState(false);
   const [infraExpanded, setInfraExpanded] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const { config: aiConfig, isSaving, selectModel } = useAIConfig();
 
   const orbitalCount = trackCounts.orbital || 0;
   const total = trackCounts.air + trackCounts.sea + orbitalCount;
@@ -180,6 +183,65 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* AI Engine selector */}
+      <div
+        className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 cursor-pointer transition-colors"
+        onClick={() => setShowAI(!showAI)}
+      >
+        <div className="flex items-center gap-2">
+          <BrainCircuit size={13} className="text-violet-400" />
+          <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">AI Engine</span>
+          {aiConfig && (
+            <span className="text-[9px] font-mono text-violet-400/60 truncate max-w-[90px]">
+              {aiConfig.available_models.find(m => m.id === aiConfig.active_model)?.label ?? aiConfig.active_model}
+            </span>
+          )}
+        </div>
+        {showAI
+          ? <ChevronUp size={14} className="text-white/40" />
+          : <ChevronDown size={14} className="text-white/40" />
+        }
+      </div>
+
+      {showAI && (
+        <div className="p-2 space-y-1.5 border-b border-white/10 bg-black/60">
+          {!aiConfig ? (
+            <div className="flex items-center gap-2 px-1 py-1 text-[10px] text-white/30 font-mono">
+              <Loader2 size={10} className="animate-spin" />
+              Loading models...
+            </div>
+          ) : (
+            aiConfig.available_models.map(model => {
+              const isActive = model.id === aiConfig.active_model;
+              return (
+                <button
+                  key={model.id}
+                  disabled={isSaving}
+                  onClick={() => selectModel(model.id)}
+                  className={`w-full flex items-center justify-between p-2 rounded border transition-all text-left ${
+                    isActive
+                      ? 'bg-violet-400/10 border-violet-400/30'
+                      : 'bg-black/40 border-white/5 hover:bg-white/5 hover:border-white/10'
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className={`text-[10px] font-bold tracking-wide truncate ${isActive ? 'text-violet-300' : 'text-white/60'}`}>
+                      {model.label}
+                    </span>
+                    <span className={`text-[8px] font-mono ${model.local ? 'text-emerald-400/60' : 'text-white/30'}`}>
+                      {model.local ? 'LOCAL · ' : ''}{model.provider}
+                    </span>
+                  </div>
+                  <div className={`shrink-0 h-2 w-2 rounded-full ml-2 transition-colors ${
+                    isActive ? 'bg-violet-400 shadow-[0_0_6px_rgba(167,139,250,0.8)]' : 'bg-white/10'
+                  }`} />
+                </button>
+              );
+            })
+          )}
         </div>
       )}
 

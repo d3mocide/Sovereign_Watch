@@ -6,6 +6,7 @@ from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from core.database import db
 from core.config import settings
+from routers.system import AI_MODEL_REDIS_KEY, AI_MODEL_DEFAULT
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Analysis")
@@ -85,7 +86,17 @@ async def analyze_track(
     ASSESSMENT:
     """
 
-    # 4. Stream AI Response
+    # 4. Resolve active model — prefer Redis-stored user selection, fall back to ENV default
+    active_model = AI_MODEL_DEFAULT
+    if db.redis_client:
+        try:
+            stored = await db.redis_client.get(AI_MODEL_REDIS_KEY)
+            if stored:
+                active_model = stored
+        except Exception as e:
+            logger.warning(f"Could not read AI model from Redis, using default: {e}")
+
+    # 5. Stream AI Response
     # NEW-003 (supersedes BUG-005): The prior asyncio.to_thread(completion, ...,
     # stream=True) fix only offloaded the initial HTTP handshake. The generator
     # returned immediately, but the chunk-by-chunk iteration ran synchronously
@@ -94,7 +105,7 @@ async def analyze_track(
     # unblocked throughout the entire streaming response.
     async def event_generator():
         response = await acompletion(
-            model=settings.LITELLM_MODEL,
+            model=active_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}

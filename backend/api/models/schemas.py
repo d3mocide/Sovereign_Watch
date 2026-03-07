@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+class AIModelRequest(BaseModel):
+    model_id: str = Field(..., description="LiteLLM model profile name")
+
 class AnalyzeRequest(BaseModel):
     # Sentinel: Add input validation bounds to prevent DoS via huge queries
     uid: str = Field(..., max_length=100, description="Unique identifier for the track entity")
