@@ -607,6 +607,7 @@ export function TacticalMap({
           touchPitch={!globeMode}
           keyboard={!globeMode}
           maxPitch={globeMode ? 0 : 85}
+          showTraffic={filters?.showTraffic}
           deckProps={{
             key: `overlay-${globeMode ? "globe" : "merc"}-${enable3d ? "3d" : "2d"}`, // Force remount on projection/3D change
             id: "tactical-overlay",

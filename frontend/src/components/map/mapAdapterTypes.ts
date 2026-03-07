@@ -16,4 +16,5 @@ export interface MapAdapterProps {
         key?: string;
         globeMode?: boolean;
     };
+    showTraffic?: boolean;
 }

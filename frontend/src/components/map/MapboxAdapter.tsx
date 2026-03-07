@@ -61,7 +61,7 @@ function DeckGLOverlay(props: any) {
 
 
 const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?: string }>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, deckProps } = props;
+    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, deckProps, showTraffic } = props;
 
     return (
         <Map
@@ -78,7 +78,10 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             projection={globeMode ? 'globe' : 'mercator'}
             // Apply Standard Style config at init time to eliminate visual flash
             config={{
-                basemap: BASEMAP_CONFIG
+                basemap: {
+                    ...BASEMAP_CONFIG,
+                    showTraffic: !!showTraffic
+                }
             }}
         >
             {(() => {
