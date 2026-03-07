@@ -8,14 +8,27 @@ from uvicorn.protocols.utils import ClientDisconnected
 from core.database import db
 from core.config import settings
 from services.broadcast import broadcast_service
+from auth.config import auth_settings
+from auth.security import decode_access_token
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Tracks")
 
 @router.websocket("/api/tracks/live")
 async def websocket_endpoint(websocket: WebSocket):
+    # Pre-Flight Authentication
+    token = websocket.cookies.get(auth_settings.COOKIE_NAME)
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    payload = decode_access_token(token)
+    if not payload:
+        await websocket.close(code=1008, reason="Invalid or expired token")
+        return
+
     await websocket.accept()
-    client_id = f"api-client-{uuid.uuid4().hex[:8]}"
+    client_id = f"api-client-{uuid.uuid4().hex[:8]}-{payload.sub}"
 
     # Register with Broadcast Service
     await broadcast_service.connect(websocket)

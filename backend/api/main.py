@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import system, tracks, analysis, repeaters, orbital
+from auth.router import router as auth_router
 from core.database import db
 from services.historian import historian_task
 from services.broadcast import broadcast_service
@@ -84,9 +85,11 @@ ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "ht
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 app.include_router(system.router)
 app.include_router(tracks.router)
 app.include_router(analysis.router)
