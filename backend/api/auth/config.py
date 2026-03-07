@@ -10,7 +10,7 @@ class AuthSettings(BaseSettings):
         extra='ignore'
     )
 
-    SECRET_KEY: str = "default_secret_for_development_only"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
     COOKIE_NAME: str = "sw_auth"
