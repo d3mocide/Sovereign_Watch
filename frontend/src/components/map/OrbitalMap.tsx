@@ -403,7 +403,7 @@ export function OrbitalMap({
   }, [showHistoryTails]);
 
   // Entity Worker: TAK worker lifecycle, WebSocket, entity processing
-  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef } =
+  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef, alertedEmergencyRef } =
     useEntityWorker({ onEvent, currentMissionRef });
 
   // Expose the live satellitesRef to parent (App) so it can resolve NORAD IDs to real entities.
@@ -452,6 +452,7 @@ export function OrbitalMap({
     drStateRef,
     visualStateRef,
     prevCourseRef,
+    alertedEmergencyRef,
     countsRef,
     currentMissionRef,
     selectedEntityRef,

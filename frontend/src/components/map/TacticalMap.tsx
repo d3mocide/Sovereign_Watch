@@ -366,7 +366,7 @@ export function TacticalMap({
   }, [showHistoryTails]);
 
   // Entity Worker: TAK worker lifecycle, WebSocket, entity processing
-  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef } =
+  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef, alertedEmergencyRef } =
     useEntityWorker({ onEvent, currentMissionRef });
 
   // Mission Area: mission state, AOT geometry, entity clearing, save form
@@ -406,6 +406,7 @@ export function TacticalMap({
     drStateRef,
     visualStateRef,
     prevCourseRef,
+    alertedEmergencyRef,
     countsRef,
     currentMissionRef,
     selectedEntityRef,

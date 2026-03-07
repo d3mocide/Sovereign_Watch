@@ -22,6 +22,7 @@ interface UseAnimationLoopOptions {
     Map<string, { lon: number; lat: number; alt: number }>
   >;
   prevCourseRef: MutableRefObject<Map<string, number>>;
+  alertedEmergencyRef?: MutableRefObject<Map<string, string>>;
   countsRef: MutableRefObject<{ air: number; sea: number; orbital: number }>;
   currentMissionRef: MutableRefObject<{
     lat: number;
@@ -110,6 +111,7 @@ export function useAnimationLoop({
   drStateRef,
   visualStateRef,
   prevCourseRef,
+  alertedEmergencyRef,
   countsRef,
   selectedEntityRef,
   followModeRef,
@@ -578,6 +580,7 @@ export function useAnimationLoop({
         prevCourseRef.current.delete(uid);
         drStateRef.current.delete(uid);
         visualStateRef.current.delete(uid);
+        alertedEmergencyRef?.current.delete(uid);
       }
 
       // Count Orbitals (Satellites)
