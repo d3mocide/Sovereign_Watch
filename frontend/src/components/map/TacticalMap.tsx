@@ -87,6 +87,7 @@ interface TacticalMapProps {
   onEntityLiveUpdate?: (entity: CoTEntity) => void;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
+  kiwiNodeRef?: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
   repeatersRef?: MutableRefObject<RepeaterStation[]>;
   showRepeaters?: boolean;
   repeatersLoading?: boolean;
@@ -111,6 +112,7 @@ export function TacticalMap({
   onEntityLiveUpdate,
   js8StationsRef,
   ownGridRef,
+  kiwiNodeRef,
   repeatersRef,
   showRepeaters,
   repeatersLoading,
@@ -458,6 +460,7 @@ export function TacticalMap({
     onFollowModeChange,
     js8StationsRef,
     ownGridRef,
+    kiwiNodeRef,
     repeatersRef,
     showRepeaters,
   });

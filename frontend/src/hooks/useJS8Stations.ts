@@ -5,19 +5,23 @@ const WS_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
 
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
-const MAX_LOG = 30;
+const MAX_LOG = 200; // Increased for terminal view
 const MAX_STATIONS = 100;
 
 export interface UseJS8StationsResult {
   stationsRef: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef: MutableRefObject<string>;
+  kiwiNodeRef: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
   stations: JS8Station[];
   logEntries: JS8LogEntry[];
   statusLine: JS8StatusLine;
   connected: boolean;
   js8Connected: boolean;
+  kiwiConnecting: boolean;
   activeKiwiConfig: any;
+  js8Mode: string;
   sendMessage: (target: string, message: string) => void;
+  sendAction: (payload: object) => void;
 }
 
 export function useJS8Stations(): UseJS8StationsResult {
@@ -28,6 +32,7 @@ export function useJS8Stations(): UseJS8StationsResult {
   // Refs for 60fps map layer (mutated in-place, no React re-render needed)
   const stationsRef = useRef<Map<string, JS8Station>>(new Map());
   const ownGridRef = useRef<string>('');
+  const kiwiNodeRef = useRef<{ lat: number; lon: number; host: string } | null>(null);
 
   // React state for sidebar widget
   const [stations, setStations] = useState<JS8Station[]>([]);
@@ -35,7 +40,9 @@ export function useJS8Stations(): UseJS8StationsResult {
   const [statusLine, setStatusLine] = useState<JS8StatusLine>({ callsign: '--', grid: '----', freq: '--' });
   const [connected, setConnected] = useState(false);
   const [js8Connected, setJs8Connected] = useState(false);
+  const [kiwiConnecting, setKiwiConnecting] = useState(false);
   const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
+  const [js8Mode, setJs8Mode] = useState<string>('normal');
 
   const syncStations = useCallback(() => {
     setStations(
@@ -73,6 +80,7 @@ export function useJS8Stations(): UseJS8StationsResult {
 
       if (type === 'CONNECTED') {
         setJs8Connected(payload.js8call_connected ?? false);
+        setJs8Mode(payload.speed || 'normal');
         const c = payload.callsign || '--';
         const g = payload.grid || '----';
         ownGridRef.current = g;
@@ -89,6 +97,7 @@ export function useJS8Stations(): UseJS8StationsResult {
       }
 
       if (type === 'KIWI.STATUS') {
+        setKiwiConnecting(false);
         if (payload.connected && payload.host) {
           setActiveKiwiConfig({
             host: payload.host,
@@ -96,8 +105,13 @@ export function useJS8Stations(): UseJS8StationsResult {
             freq: payload.freq,
             mode: payload.mode || 'usb',
           });
+          // Update the map-layer ref (lat/lon now included from backend)
+          if (payload.lat && payload.lon) {
+            kiwiNodeRef.current = { lat: payload.lat, lon: payload.lon, host: payload.host };
+          }
         } else {
           setActiveKiwiConfig(null);
+          kiwiNodeRef.current = null;
         }
         return;
       }
@@ -105,11 +119,12 @@ export function useJS8Stations(): UseJS8StationsResult {
       if (type === 'STATION.STATUS') {
         const grid = payload.grid || '';
         ownGridRef.current = grid;
-        setStatusLine({
-          callsign: payload.callsign || '--',
-          grid: grid || '----',
-          freq: payload.freq ? `${(payload.freq / 1000).toFixed(3)} kHz` : '--',
-        });
+        if (payload.speed) setJs8Mode(payload.speed);
+        setStatusLine((prev: JS8StatusLine) => ({
+          callsign: payload.callsign || prev.callsign,
+          grid: grid || prev.grid,
+          freq: payload.freq ? `${(payload.freq / 1000).toFixed(3)} kHz` : prev.freq,
+        }));
         return;
       }
 
@@ -170,9 +185,24 @@ export function useJS8Stations(): UseJS8StationsResult {
     };
   }, [syncStations]);
 
-  const sendMessage = useCallback((target: string, message: string) => {
+  const sendMessage = useCallback((target: string, text: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'SEND', target, message }));
+      wsRef.current.send(JSON.stringify({
+        action: 'TX_DIRECTED',
+        target,
+        text,
+      }));
+    }
+  }, []);
+
+  const sendAction = useCallback((payload: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if ((payload as any).action === 'SET_KIWI') {
+        setKiwiConnecting(true);
+        // Safety timeout — unlock UI after 15s if backend hangs
+        setTimeout(() => setKiwiConnecting(false), 15000);
+      }
+      wsRef.current.send(JSON.stringify(payload));
     }
   }, []);
 
@@ -184,5 +214,5 @@ export function useJS8Stations(): UseJS8StationsResult {
     };
   }, [connect]);
 
-  return { stationsRef, ownGridRef, stations, logEntries, statusLine, connected, js8Connected, activeKiwiConfig, sendMessage };
+  return { stationsRef, ownGridRef, kiwiNodeRef, stations, logEntries, statusLine, connected, js8Connected, kiwiConnecting, activeKiwiConfig, js8Mode, sendMessage, sendAction };
 }

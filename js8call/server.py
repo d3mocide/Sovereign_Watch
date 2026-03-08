@@ -286,9 +286,19 @@ def _kiwi_status_callback(status: dict) -> None:
     Also keeps _kiwi_config in sync for REST endpoints.
     """
     global _kiwi_config
+    # Resolve lat/lon for the connected node from the directory cache
+    node_lat, node_lon = 0.0, 0.0
+    if status.get("connected") and _kiwi_directory is not None:
+        host = status.get("host", "")
+        for n in _kiwi_directory._nodes:
+            if n.host == host:
+                node_lat, node_lon = n.lat, n.lon
+                break
     payload = {
         "type": "KIWI.STATUS",
         **status,
+        "lat": node_lat,
+        "lon": node_lon,
         "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
     }
     _enqueue_from_thread(payload)
@@ -301,6 +311,7 @@ def _kiwi_status_callback(status: dict) -> None:
         }
     else:
         _kiwi_config = {}
+
 
 
 def _kiwi_disconnect_callback(close_code: int) -> None:
@@ -947,7 +958,51 @@ async def ws_js8(websocket: WebSocket) -> None:
                     "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
                 })
 
+            # ------------------------------------------------------------------
+            # Action: SET_STATION – update callsign and/or grid square
+            # Payload: {\"action\": \"SET_STATION\", \"callsign\": \"W1AW\", \"grid\": \"FN42\"}
+            # Forwards STATION.SET_CALLSIGN / STATION.SET_GRID to JS8Call UDP API.
+            # Echoes a STATION.STATUS immediately so the UI updates without waiting.
+            # ------------------------------------------------------------------
+            elif action == "SET_STATION":
+                new_callsign = str(cmd.get("callsign", "")).strip().upper()
+                new_grid     = str(cmd.get("grid", "")).strip().upper()
+                if not new_callsign and not new_grid:
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": "SET_STATION: must specify at least one of callsign or grid",
+                    })
+                else:
+                    try:
+                        import socket as _socket
+                        tx = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+                        if new_callsign:
+                            doc = {"TYPE": "STATION.SET_CALLSIGN", "VALUE": new_callsign, "PARAMS": {}}
+                            tx.sendto(
+                                json.dumps(doc).encode("utf-8") + b"\n",
+                                ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                            )
+                            logger.info("SET_STATION callsign → %s", new_callsign)
+                        if new_grid:
+                            doc = {"TYPE": "STATION.SET_GRID", "VALUE": new_grid, "PARAMS": {}}
+                            tx.sendto(
+                                json.dumps(doc).encode("utf-8") + b"\n",
+                                ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                            )
+                            logger.info("SET_STATION grid → %s", new_grid)
+                        tx.close()
+                    except Exception as exc:
+                        logger.warning("SET_STATION UDP send failed: %s", exc)
+                    # Optimistic echo so the UI updates without waiting for JS8Call confirmation
+                    _enqueue_from_thread({
+                        "type": "STATION.STATUS",
+                        "callsign": new_callsign if new_callsign else callsign,
+                        "grid":     new_grid     if new_grid     else grid,
+                        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+                    })
+
             else:
+
                 await websocket.send_json({
                     "type": "ERROR",
                     "message": f"Unknown action: {action}",

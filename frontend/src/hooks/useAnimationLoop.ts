@@ -8,6 +8,7 @@ import { buildEntityLayers } from "../layers/buildEntityLayers";
 import { buildJS8Layers } from "../layers/buildJS8Layers";
 import { buildRepeaterLayers } from "../layers/buildRepeaterLayers";
 import { buildInfraLayers } from "../layers/buildInfraLayers";
+import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { getTerminatorLayer } from "../components/map/TerminatorLayer";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
@@ -97,6 +98,7 @@ interface UseAnimationLoopOptions {
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
+  kiwiNodeRef?: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
   repeatersRef?: MutableRefObject<RepeaterStation[]>;
   showRepeaters?: boolean;
   predictedGroundTrackRef?: MutableRefObject<GroundTrackPoint[]>;
@@ -144,6 +146,7 @@ export function useAnimationLoop({
   onFollowModeChange,
   js8StationsRef,
   ownGridRef,
+  kiwiNodeRef,
   repeatersRef,
   showRepeaters,
   predictedGroundTrackRef,
@@ -830,6 +833,85 @@ export function useAnimationLoop({
         globeMode
       );
 
+      // KiwiSDR node marker layer (Radio Beacon)
+      const kiwiNode = kiwiNodeRef?.current;
+      const kiwiLayers: any[] = [];
+      if (kiwiNode && kiwiNode.lat !== 0 && kiwiNode.lon !== 0) {
+        // High-tech Radio Beacon design
+        const pulse = (Math.sin(now / 400) + 1) / 2; // 0 to 1
+        const breathing = (Math.sin(now / 1500) + 1) / 2; // slow breath
+        
+        // 1. Outer broad glow (Radiating wave)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-glow',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [0, 220, 255, 15 + (pulse * 25)],
+            getRadius: 15000 + (pulse * 10000),
+            radiusUnits: 'meters',
+            pickable: false,
+          })
+        );
+
+        // 2. Secondary rotating ring (Attention ring)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-ring-outer',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [0, 0, 0, 0],
+            getLineColor: [0, 220, 255, 100 + (breathing * 100)],
+            getRadius: 10000,
+            radiusUnits: 'meters',
+            stroked: true,
+            getLineWidth: 800 + (pulse * 800),
+            lineWidthUnits: 'meters',
+            pickable: false,
+          })
+        );
+
+        // 3. Inner Signal Core (Rose 400 color from terminal)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-core',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [251, 113, 133, 180 + (pulse * 75)],
+            getLineColor: [251, 113, 133, 200],
+            getRadius: 4000,
+            radiusUnits: 'meters',
+            stroked: true,
+            getLineWidth: 1200,
+            lineWidthUnits: 'meters',
+            pickable: true,
+          })
+        );
+
+        // 4. Premium Label with Pointer
+        kiwiLayers.push(
+          new TextLayer({
+            id: 'kiwi-node-label',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getText: (d: any) => `LIVE SDR\n${d.host}`,
+            getColor: [255, 255, 255, 240],
+            getSize: 10,
+            getTextAnchor: 'middle',
+            getAlignmentBaseline: 'bottom',
+            getPixelOffset: [0, -15],
+            fontFamily: 'Inter, monospace',
+            fontWeight: 700,
+            background: true,
+            getBorderWidth: 1.2,
+            getBorderColor: [251, 113, 133, 180],
+            getBackgroundColor: [0, 0, 0, 190],
+            backgroundPadding: [6, 3],
+            pickable: false,
+          })
+        );
+      }
+
       const layers = [
         getTerminatorLayer(!!filters?.showTerminator),
         ...getOrbitalLayers({
@@ -862,6 +944,9 @@ export function useAnimationLoop({
 
         // Infra layers (cables and landing stations)
         ...infraLayers,
+
+        // KiwiSDR node marker (rendered above infra, below entity icons)
+        ...kiwiLayers,
 
         // 2-3. Trail layers (history trails, gap bridges, selected trail)
         ...buildTrailLayers(

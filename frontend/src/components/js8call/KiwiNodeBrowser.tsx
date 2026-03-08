@@ -8,7 +8,7 @@
  * collapsible section at the bottom.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -16,9 +16,9 @@ import {
   RefreshCw,
   Server,
   X,
-} from 'lucide-react';
-import type { KiwiNode } from '../../types';
-import { useKiwiNodes } from '../../hooks/useKiwiNodes';
+} from "lucide-react";
+import type { KiwiNode } from "../../types";
+import { useKiwiNodes } from "../../hooks/useKiwiNodes";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -55,9 +55,11 @@ interface Props {
 // ---------------------------------------------------------------------------
 
 function distanceCls(km: number): string {
-  if (km < 500)  return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-  if (km < 2000) return 'text-yellow-400  bg-yellow-500/10  border-yellow-500/20';
-  return                  'text-red-400    bg-red-500/10     border-red-500/20';
+  if (km < 500)
+    return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+  if (km < 2000)
+    return "text-yellow-400  bg-yellow-500/10  border-yellow-500/20";
+  return "text-red-400    bg-red-500/10     border-red-500/20";
 }
 
 function fmtDistance(km: number): string {
@@ -67,13 +69,18 @@ function fmtDistance(km: number): string {
 function LoadBar({ users, numCh }: { users: number; numCh: number }) {
   const pct = numCh > 0 ? Math.min(100, (users / numCh) * 100) : 0;
   const barCls =
-    pct < 50 ? 'bg-emerald-500' : pct < 80 ? 'bg-yellow-500' : 'bg-red-500';
+    pct < 50 ? "bg-emerald-500" : pct < 80 ? "bg-yellow-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-1 text-[10px] text-slate-500">
       <div className="w-10 h-1 bg-slate-800 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${barCls}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full transition-all ${barCls}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
-      <span>{users}/{numCh}</span>
+      <span>
+        {users}/{numCh}
+      </span>
     </div>
   );
 }
@@ -97,7 +104,10 @@ export default function KiwiNodeBrowser({
   onManualConfigChange,
   onManualConnect,
 }: Props) {
-  const { nodes, loading, error, refetch } = useKiwiNodes(currentFreqKhz, isOpen);
+  const { nodes, loading, error, refetch } = useKiwiNodes(
+    currentFreqKhz,
+    isOpen,
+  );
   const [showManual, setShowManual] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -110,8 +120,8 @@ export default function KiwiNodeBrowser({
       const inContainer = containerRef.current?.contains(target);
       if (!inPanel && !inContainer) onClose();
     }
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
   }, [isOpen, onClose, containerRef]);
 
   if (!isOpen) return null;
@@ -119,7 +129,7 @@ export default function KiwiNodeBrowser({
   return (
     <div
       ref={panelRef}
-      className="absolute top-full right-0 mt-2 w-[500px] z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl shadow-black/70 overflow-hidden"
+      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[500px] z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl shadow-black/70 overflow-hidden"
     >
       {/* ── Panel header ── */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">
@@ -139,7 +149,9 @@ export default function KiwiNodeBrowser({
             title="Refresh node list"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </button>
           <button
             onClick={onClose}
@@ -155,7 +167,9 @@ export default function KiwiNodeBrowser({
         <div className="flex items-center justify-between px-4 py-2 bg-indigo-950/30 border-b border-indigo-500/20">
           <div className="flex items-center gap-2 text-xs">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="font-mono text-slate-300">{activeConfig.host}:{activeConfig.port}</span>
+            <span className="font-mono text-slate-300">
+              {activeConfig.host}:{activeConfig.port}
+            </span>
             <span className="text-slate-600">@</span>
             <span className="font-mono text-emerald-400 font-semibold">
               {activeConfig.freq} kHz {activeConfig.mode.toUpperCase()}
@@ -198,51 +212,69 @@ export default function KiwiNodeBrowser({
         {/* Node rows */}
         {nodes.map((node) => {
           const isActive =
-            activeConfig?.host === node.host && activeConfig?.port === node.port;
+            activeConfig?.host === node.host &&
+            activeConfig?.port === node.port;
           return (
             <div
               key={`${node.host}:${node.port}`}
               className={`
                 flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/50 transition-colors
-                ${isActive
-                  ? 'bg-indigo-950/40 border-l-2 border-l-indigo-500'
-                  : 'hover:bg-slate-800/40'}
+                ${
+                  isActive
+                    ? "bg-indigo-950/40 border-l-2 border-l-indigo-500"
+                    : "hover:bg-slate-800/40"
+                }
               `}
             >
               {/* Active dot */}
-              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-indigo-400 animate-pulse' : 'bg-slate-700'}`} />
+              <div
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-indigo-400 animate-pulse" : "bg-slate-700"}`}
+              />
 
               {/* Host + freq range + load */}
               <div className="flex-1 min-w-0">
-                <div className="font-mono text-xs text-slate-200 truncate" title={`${node.host}:${node.port}`}>
+                <div
+                  className="font-mono text-xs text-slate-200 truncate"
+                  title={`${node.host}:${node.port}`}
+                >
                   {node.host}
-                  <span className="text-slate-600 ml-1 text-[10px]">:{node.port}</span>
+                  <span className="text-slate-600 ml-1 text-[10px]">
+                    :{node.port}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[10px] text-slate-600 font-mono">
-                    {node.freq_min_khz.toFixed(0)}–{node.freq_max_khz.toFixed(0)} kHz
+                    {node.freq_min_khz.toFixed(0)}–
+                    {node.freq_max_khz.toFixed(0)} kHz
                   </span>
                   <LoadBar users={node.users} numCh={node.num_ch} />
                 </div>
               </div>
 
               {/* Distance badge */}
-              <div className={`px-1.5 py-0.5 rounded border text-[10px] font-mono shrink-0 ${distanceCls(node.distance_km)}`}>
+              <div
+                className={`px-1.5 py-0.5 rounded border text-[10px] font-mono shrink-0 ${distanceCls(node.distance_km)}`}
+              >
                 {fmtDistance(node.distance_km)}
               </div>
 
               {/* Connect / Active button */}
               <button
-                onClick={() => { onConnect(node); onClose(); }}
+                onClick={() => {
+                  onConnect(node);
+                  onClose();
+                }}
                 disabled={!bridgeConnected || kiwiConnecting || isActive}
                 className={`
                   px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0
-                  ${isActive
-                    ? 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 cursor-default'
-                    : 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 disabled:opacity-40 disabled:cursor-not-allowed'}
+                  ${
+                    isActive
+                      ? "text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 cursor-default"
+                      : "text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                  }
                 `}
               >
-                {isActive ? 'Active' : kiwiConnecting ? '…' : 'Connect'}
+                {isActive ? "Active" : kiwiConnecting ? "…" : "Connect"}
               </button>
             </div>
           );
@@ -252,12 +284,14 @@ export default function KiwiNodeBrowser({
       {/* ── Manual entry (collapsible) ── */}
       <div className="border-t border-slate-800">
         <button
-          onClick={() => setShowManual(v => !v)}
+          onClick={() => setShowManual((v) => !v)}
           className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-wider transition-colors"
         >
-          {showManual
-            ? <ChevronDown className="w-3 h-3" />
-            : <ChevronRight className="w-3 h-3" />}
+          {showManual ? (
+            <ChevronDown className="w-3 h-3" />
+          ) : (
+            <ChevronRight className="w-3 h-3" />
+          )}
           Manual entry — private / unlisted nodes
         </button>
 
@@ -266,7 +300,7 @@ export default function KiwiNodeBrowser({
             <input
               type="text"
               value={manualConfig.host}
-              onChange={e => onManualConfigChange({ host: e.target.value })}
+              onChange={(e) => onManualConfigChange({ host: e.target.value })}
               placeholder="sdr.host.com"
               disabled={!bridgeConnected || kiwiConnecting}
               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-36 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
@@ -275,7 +309,9 @@ export default function KiwiNodeBrowser({
             <input
               type="number"
               value={manualConfig.port}
-              onChange={e => onManualConfigChange({ port: Number(e.target.value) || 8073 })}
+              onChange={(e) =>
+                onManualConfigChange({ port: Number(e.target.value) || 8073 })
+              }
               placeholder="8073"
               disabled={!bridgeConnected || kiwiConnecting}
               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-16 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
@@ -284,7 +320,9 @@ export default function KiwiNodeBrowser({
             <input
               type="number"
               value={manualConfig.freq}
-              onChange={e => onManualConfigChange({ freq: Number(e.target.value) || 14074 })}
+              onChange={(e) =>
+                onManualConfigChange({ freq: Number(e.target.value) || 14074 })
+              }
               placeholder="14074"
               disabled={!bridgeConnected || kiwiConnecting}
               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-20 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
@@ -292,7 +330,7 @@ export default function KiwiNodeBrowser({
             <span className="text-slate-600 text-[10px]">kHz</span>
             <select
               value={manualConfig.mode}
-              onChange={e => onManualConfigChange({ mode: e.target.value })}
+              onChange={(e) => onManualConfigChange({ mode: e.target.value })}
               disabled={!bridgeConnected || kiwiConnecting}
               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
             >
@@ -302,11 +340,16 @@ export default function KiwiNodeBrowser({
               <option value="cw">CW</option>
             </select>
             <button
-              onClick={() => { onManualConnect(); onClose(); }}
-              disabled={!bridgeConnected || kiwiConnecting || !manualConfig.host}
+              onClick={() => {
+                onManualConnect();
+                onClose();
+              }}
+              disabled={
+                !bridgeConnected || kiwiConnecting || !manualConfig.host
+              }
               className="px-3 py-1 rounded font-mono text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {kiwiConnecting ? 'Connecting…' : 'Connect'}
+              {kiwiConnecting ? "Connecting…" : "Connect"}
             </button>
           </div>
         )}
