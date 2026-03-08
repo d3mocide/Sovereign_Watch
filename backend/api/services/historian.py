@@ -16,7 +16,7 @@ async def historian_task():
     """
     logger.info("📜 Historian task started")
     consumer = AIOKafkaConsumer(
-        "adsb_raw", "ais_raw", "orbital_raw",
+        "adsb_raw", "ais_raw", "orbital_raw", "rf_raw",
         bootstrap_servers=settings.KAFKA_BROKERS,
         group_id="historian-writer",
         auto_offset_reset="latest"
@@ -55,6 +55,10 @@ async def historian_task():
         async for msg in consumer:
             try:
                 data = json.loads(msg.value.decode('utf-8'))
+
+                if msg.topic == "rf_raw":
+                    await _handle_rf_raw(data, db.pool)
+                    continue
 
                 # --- Parsing Logic (Mirrors WebSocket logic but simplified) ---
 
@@ -170,3 +174,55 @@ async def historian_task():
                 logger.error(f"Historian shutdown flush error: {e}")
         await consumer.stop()
         logger.info("Historian consumer stopped")
+
+
+async def _handle_rf_raw(record: dict, pool):
+    """Upsert an RF site from rf_raw Kafka message into rf_sites table."""
+    if not pool:
+        return
+
+    geom_wkt = f"SRID=4326;POINT({record['lon']} {record['lat']})"
+
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO rf_sites (
+                source, site_id, service, callsign, name,
+                lat, lon, output_freq, input_freq, tone_ctcss, tone_dcs,
+                modes, use_access, status, city, state, country,
+                emcomm_flags, meta, geom, fetched_at, updated_at
+            ) VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+                ST_GeomFromEWKT($20), NOW(), NOW()
+            )
+            ON CONFLICT (source, site_id) DO UPDATE SET
+                name         = EXCLUDED.name,
+                lat          = EXCLUDED.lat,
+                lon          = EXCLUDED.lon,
+                output_freq  = EXCLUDED.output_freq,
+                input_freq   = EXCLUDED.input_freq,
+                tone_ctcss   = EXCLUDED.tone_ctcss,
+                tone_dcs     = EXCLUDED.tone_dcs,
+                modes        = EXCLUDED.modes,
+                use_access   = EXCLUDED.use_access,
+                status       = EXCLUDED.status,
+                city         = EXCLUDED.city,
+                state        = EXCLUDED.state,
+                emcomm_flags = EXCLUDED.emcomm_flags,
+                meta         = EXCLUDED.meta,
+                geom         = EXCLUDED.geom,
+                fetched_at   = NOW(),
+                updated_at   = NOW()
+        """,
+            record["source"], record["site_id"], record["service"],
+            record.get("callsign"), record.get("name"),
+            record["lat"], record["lon"],
+            record.get("output_freq"), record.get("input_freq"),
+            record.get("tone_ctcss"), record.get("tone_dcs"),
+            record.get("modes", []), record.get("use_access", "OPEN"),
+            record.get("status", "Unknown"),
+            record.get("city"), record.get("state"),
+            record.get("country", "US"),
+            record.get("emcomm_flags", []),
+            json.dumps(record.get("meta", {})),
+            geom_wkt,
+        )

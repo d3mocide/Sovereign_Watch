@@ -127,18 +127,31 @@ export interface KiwiNode {
   distance_km: number;
 }
 
-export interface RepeaterStation {
-  callsign: string;
+export type RFService = 'ham' | 'gmrs' | 'public_safety' | 'noaa_nwr';
+export type RFMode = 'FM' | 'DMR' | 'P25' | 'D-Star' | 'Fusion' | 'NXDN' | 'TETRA';
+export type EmcommFlag = 'ARES' | 'RACES' | 'SKYWARN' | 'CERT' | 'WICEN';
+
+export interface RFSite {
+  id: string;
+  source: string;
+  site_id: string;
+  service: RFService;
+  callsign: string | null;
+  name: string | null;
   lat: number;
   lon: number;
-  frequency: string;    // Output frequency, e.g. "146.940"
-  input_freq: string;   // Input (TX) frequency
-  ctcss: string | null; // PL/CTCSS tone
-  use: string;          // "OPEN" | "CLOSED" | "PRIVATE"
-  status: string;       // "On-air" | "Off-air" | etc.
-  city: string;
-  state: string;
-  modes: string[];      // e.g. ["FM Analog", "D-Star"]
+  output_freq: number | null;
+  input_freq: number | null;
+  tone_ctcss: number | null;
+  tone_dcs: string | null;
+  modes: RFMode[];
+  use_access: string;
+  status: string;
+  city: string | null;
+  state: string | null;
+  country: string;
+  emcomm_flags: EmcommFlag[];
+  meta: Record<string, unknown>;
 }
 
 export interface PassPoint {

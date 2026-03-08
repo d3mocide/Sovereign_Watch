@@ -11,7 +11,7 @@ import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
-import { useRepeaters } from './hooks/useRepeaters'
+import { useRFSites } from './hooks/useRFSites'
 import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
 import { AlertsWidget } from './components/widgets/AlertsWidget'
@@ -217,8 +217,8 @@ function App() {
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
-  // Repeater infrastructure layer
-  const { repeatersRef, loading: repeatersLoading } = useRepeaters(
+  // RF infrastructure layer
+  const { rfSitesRef, loading: repeatersLoading } = useRFSites(
     filters.showRepeaters,
     missionProps?.currentMission?.lat ?? 45.5152,
     missionProps?.currentMission?.lon ?? -122.6784,
@@ -609,7 +609,7 @@ function App() {
             onEntityLiveUpdate={handleEntityLiveUpdate}
             js8StationsRef={js8StationsRef}
             ownGridRef={js8OwnGridRef}
-            repeatersRef={repeatersRef}
+            rfSitesRef={rfSitesRef}
             showRepeaters={filters.showRepeaters}
             repeatersLoading={repeatersLoading}
           />
@@ -660,7 +660,7 @@ function App() {
           onEntityLiveUpdate={handleEntityLiveUpdate}
           js8StationsRef={{ current: new Map() } as any}
           ownGridRef={{ current: '' }}
-          repeatersRef={{ current: [] }}
+          rfSitesRef={{ current: [] }}
           showRepeaters={false}
           repeatersLoading={false}
           onSatellitesRefReady={(ref) => { orbitalSatellitesRef.current = ref; }}
