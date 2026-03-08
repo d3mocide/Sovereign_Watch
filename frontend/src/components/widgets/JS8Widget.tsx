@@ -2,9 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Radio, MapPin, ChevronDown, ChevronUp, Send, Terminal, Users } from 'lucide-react';
 import type { JS8Station, JS8LogEntry, JS8StatusLine } from '../../types';
 
+/**
+ * JS8Call decode thresholds:
+ *   ≥ −18 dB  all modes decode  → emerald
+ *   ≥ −24 dB  Normal/Slow work  → yellow
+ *   < −24 dB  Slow-only / none  → red
+ */
 function snrColor(snr: number): string {
-  if (snr >= -10) return 'text-emerald-400';
-  if (snr >= -18) return 'text-yellow-400';
+  if (snr >= -18) return 'text-emerald-400';
+  if (snr >= -24) return 'text-yellow-400';
   return 'text-red-400';
 }
 

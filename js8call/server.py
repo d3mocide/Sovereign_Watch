@@ -822,6 +822,36 @@ async def ws_js8(websocket: WebSocket) -> None:
                 })
 
             # ------------------------------------------------------------------
+            # Action: SET_MODE – change JS8Call frame speed
+            # Payload: {"action": "SET_MODE", "mode": "NORMAL"|"FAST"|"TURBO"|"SLOW"}
+            # Sends MODE.SET_SPEED via JS8Call UDP API (port JS8CALL_UDP_SERVER_PORT).
+            # ------------------------------------------------------------------
+            elif action == "SET_MODE":
+                _VALID_MODES = {"NORMAL", "FAST", "TURBO", "SLOW"}
+                requested_mode = str(cmd.get("mode", "NORMAL")).upper().strip()
+                if requested_mode not in _VALID_MODES:
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": f"SET_MODE: invalid mode '{requested_mode}'. Valid: {sorted(_VALID_MODES)}",
+                    })
+                else:
+                    try:
+                        import socket as _socket
+                        tx = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+                        doc = {"TYPE": "MODE.SET_SPEED", "VALUE": requested_mode, "PARAMS": {}}
+                        tx.sendto(
+                            json.dumps(doc).encode("utf-8") + b"\n",
+                            ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                        )
+                        tx.close()
+                        logger.info("SET_MODE → %s", requested_mode)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_MODE failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
             # Action: SET_FREQ – change JS8Call dial frequency
             # Payload: {"action": "SET_FREQ", "freq": 14074000}
             # ------------------------------------------------------------------
