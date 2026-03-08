@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import type { KiwiNode } from '../../types';
 import KiwiNodeBrowser from './KiwiNodeBrowser';
+import { JS8_BAND_PRESETS, JS8_SPEED_MODES } from '../../constants/js8Presets';
+import type { JS8SpeedMode } from '../../constants/js8Presets';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -83,11 +85,16 @@ function formatAge(ts_unix: number | null): string {
   return `${Math.floor(age / 3600)}h`;
 }
 
-// SNR thresholds tuned to JS8Call's realistic operating range (-24 to +5 dB)
+/**
+ * Map SNR to a colour based on JS8Call decode thresholds:
+ *   ≥ −18 dB → all speed modes decode  (emerald)
+ *   ≥ −24 dB → Normal / Slow decode    (yellow)
+ *   < −24 dB → Slow-only or no decode  (red)
+ */
 function snrColor(snr: number | null): string {
   if (snr == null) return 'text-slate-500';
-  if (snr >= -10) return 'text-emerald-400';
-  if (snr >= -18) return 'text-yellow-400';
+  if (snr >= -18) return 'text-emerald-400';
+  if (snr >= -24) return 'text-yellow-400';
   return 'text-red-400';
 }
 
@@ -253,6 +260,12 @@ export default function RadioTerminal() {
   const [isEditingFreq, setIsEditingFreq] = useState(false);
   const [tempFreq, setTempFreq] = useState('');
 
+  // JS8 speed mode (Normal | Fast | Turbo | Slow)
+  const [js8Mode, setJs8Mode] = useState<JS8SpeedMode['id']>('NORMAL');
+
+  // Live UTC clock for the status bar
+  const [utcTime, setUtcTime] = useState(() => new Date().toUTCString().slice(17, 25));
+
   // ── Refs ───────────────────────────────────────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<any>(null);
@@ -289,6 +302,14 @@ export default function RadioTerminal() {
   useEffect(() => {
     scrollToBottom();
   }, [logEntries, scrollToBottom]);
+
+  // UTC clock — updates every second
+  useEffect(() => {
+    const id = setInterval(() => {
+      setUtcTime(new Date().toUTCString().slice(17, 25));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── WebSocket management ───────────────────────────────────────────────────
 
@@ -497,6 +518,29 @@ export default function RadioTerminal() {
     }
   }, [activeKiwiConfig, tempFreq, connected]);
 
+  // Tune to a band preset — retunes existing SDR connection or updates pending config
+  const handleBandSelect = useCallback((freqKhz: number) => {
+    if (!connected) return;
+    setKiwiConfig(prev => ({ ...prev, freq: freqKhz }));
+    if (activeKiwiConfig) {
+      setKiwiConnecting(true);
+      wsRef.current?.send(JSON.stringify({
+        action: 'SET_KIWI',
+        host: activeKiwiConfig.host,
+        port: activeKiwiConfig.port,
+        freq: freqKhz,
+        mode: activeKiwiConfig.mode,
+      }));
+    }
+  }, [connected, activeKiwiConfig]);
+
+  // Change JS8Call frame speed mode
+  const handleModeSelect = useCallback((modeId: JS8SpeedMode['id']) => {
+    setJs8Mode(modeId);
+    if (!connected) return;
+    wsRef.current?.send(JSON.stringify({ action: 'SET_MODE', mode: modeId }));
+  }, [connected]);
+
   // Connect to a node picked from the browser — keeps current freq/mode
   const handleNodeConnect = useCallback((node: KiwiNode) => {
     if (!connected || kiwiConnecting) return;
@@ -651,6 +695,67 @@ export default function RadioTerminal() {
         </div>
       </header>
 
+      {/* ── BAND + MODE BAR ── */}
+      <div className="shrink-0 bg-black/30 border-b border-white/10 px-3 py-1.5 flex items-center gap-4 overflow-x-auto z-10 relative">
+        {/* Band presets */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] text-slate-600 uppercase tracking-widest mr-1 shrink-0">Band</span>
+          {JS8_BAND_PRESETS.map((preset) => {
+            const isActive = activeKiwiConfig?.freq === preset.freqKhz;
+            return (
+              <button
+                key={preset.label}
+                onClick={() => handleBandSelect(preset.freqKhz)}
+                disabled={!connected}
+                title={`${(preset.freqKhz / 1000).toFixed(3)} MHz — ${preset.note}`}
+                className={`
+                  relative px-2 py-0.5 rounded text-[11px] font-mono font-semibold transition-all duration-150
+                  disabled:opacity-30 disabled:cursor-not-allowed
+                  ${isActive
+                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.2)]'
+                    : preset.primary
+                      ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/40'
+                      : 'bg-black/30 border border-white/10 text-slate-400 hover:bg-black/50 hover:text-slate-300 hover:border-white/20'
+                  }
+                `}
+              >
+                {preset.label}
+                {preset.primary && !isActive && (
+                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-4 bg-slate-800 shrink-0" />
+
+        {/* Speed mode selector */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] text-slate-600 uppercase tracking-widest mr-1 shrink-0">Speed</span>
+          {JS8_SPEED_MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => handleModeSelect(m.id)}
+              title={`${m.label} — ${m.frameSec}s frames, min SNR ${m.snrThreshold} dB. ${m.note}`}
+              className={`
+                px-2.5 py-0.5 rounded text-[11px] font-mono font-semibold transition-all duration-150
+                ${js8Mode === m.id
+                  ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shadow-[0_0_6px_rgba(6,182,212,0.2)]'
+                  : 'bg-black/30 border border-white/10 text-slate-400 hover:bg-black/50 hover:text-slate-300 hover:border-white/20'
+                }
+              `}
+            >
+              {m.label}
+            </button>
+          ))}
+          <span className="text-[10px] text-slate-600 ml-1 hidden sm:inline">
+            ({JS8_SPEED_MODES.find(m => m.id === js8Mode)?.frameSec}s / min {JS8_SPEED_MODES.find(m => m.id === js8Mode)?.snrThreshold} dB)
+          </span>
+        </div>
+      </div>
+
       {/* ── MAIN BODY ── */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -761,6 +866,30 @@ export default function RadioTerminal() {
             {txPending ? 'TX…' : 'SEND'}
           </button>
         </form>
+
+        {/* Status bar */}
+        <div className="flex items-center gap-4 px-5 pb-2 text-[10px] text-slate-600 font-mono relative z-10">
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            <span className="text-slate-500">{utcTime} UTC</span>
+          </span>
+          <span>·</span>
+          <span>
+            Mode: <span className="text-slate-400">{js8Mode}</span>
+          </span>
+          <span>·</span>
+          <span>
+            Stations: <span className="text-slate-400">{sortedStations.length}</span>
+          </span>
+          {activeKiwiConfig && (
+            <>
+              <span>·</span>
+              <span>
+                SDR: <span className="text-slate-400">{activeKiwiConfig.host}</span>
+              </span>
+            </>
+          )}
+        </div>
 
       </footer>
     </div>
