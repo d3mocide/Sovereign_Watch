@@ -80,26 +80,79 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
 
       {showLayers && filters && onFilterChange && (
         <div className="p-2 space-y-2 border-b border-white/10 bg-black/60">
-          {/* RF Infrastructure Toggle Detail */}
-          <div
-            className={`flex items-center justify-between p-2 rounded border transition-colors cursor-pointer group ${filters.showRepeaters
-              ? 'bg-emerald-400/10 border-emerald-400/30 text-emerald-400'
-              : 'bg-black/40 border-white/5 text-white/50 hover:bg-white/5 hover:text-white/80'
-              }`}
-            onClick={() => onFilterChange('showRepeaters', !filters.showRepeaters)}
-          >
-            <div className="flex items-center gap-3">
-              <Radio size={14} className={filters.showRepeaters ? 'text-emerald-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} />
-              <div className="flex flex-col">
-                <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">RF Infrastructure</span>
-                <span className="text-[9px] font-mono text-emerald-400/60">Amateur Radio Repeaters</span>
+          {/* RF Infrastructure Filter */}
+          <div className="flex flex-col gap-1">
+            <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+              <div
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilterChange('showRepeaters', !filters.showRepeaters);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <Radio size={14} className={filters.showRepeaters ? 'text-emerald-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} />
+                  <div className="flex flex-col">
+                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">RF Infrastructure</span>
+                    <span className="text-[9px] font-mono text-emerald-400/60">Ham / NOAA / Public Safety</span>
+                  </div>
+                </div>
+              </div>
+              <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
+                <input type="checkbox" className="sr-only" checked={filters.showRepeaters} onChange={() => onFilterChange('showRepeaters', !filters.showRepeaters)} />
+                <div
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showRepeaters ? 'bg-emerald-400' : 'bg-white/10 hover:bg-white/20'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFilterChange('showRepeaters', !filters.showRepeaters);
+                  }}
+                >
+                  <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showRepeaters ? 'left-3.5' : 'left-0.5'}`} />
+                </div>
               </div>
             </div>
-            <div
-              className={`h-3 w-6 shrink-0 rounded-full transition-colors duration-200 ease-in-out relative ${filters.showRepeaters ? 'bg-emerald-400' : 'bg-white/10 hover:bg-white/20'}`}
-            >
-              <div className={`absolute top-0.5 h-2 w-2 transform rounded-full bg-black transition duration-200 ease-in-out ${filters.showRepeaters ? 'left-3.5' : 'left-0.5'}`} />
-            </div>
+
+            {/* Sub-filters for RF Infrastructure */}
+            {filters.showRepeaters && (
+              <div className="flex flex-col gap-1 px-1 opacity-90 pl-3">
+                <div className="flex items-center gap-2 mb-1 mt-1">
+                  <span className="text-[9px] font-bold text-white/40 tracking-wider">SERVICES</span>
+                </div>
+                {/* Ham / GMRS */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${(!filters.rfService || String(filters.rfService) === 'ham') ? 'border-emerald-400/20 bg-emerald-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <span className={`text-[9px] font-bold tracking-wide ${(!filters.rfService || String(filters.rfService) === 'ham') ? 'text-emerald-400/80' : 'text-emerald-400/30'}`}>Ham / GMRS</span>
+                  <input type="checkbox" className="sr-only" checked={!filters.rfService || String(filters.rfService) === 'ham'} onChange={() => onFilterChange('rfService', 'ham' as unknown as boolean)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${(!filters.rfService || String(filters.rfService) === 'ham') ? 'bg-emerald-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${(!filters.rfService || String(filters.rfService) === 'ham') ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+                {/* NOAA NWR */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${String(filters.rfService) === 'noaa_nwr' ? 'border-sky-400/20 bg-sky-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <span className={`text-[9px] font-bold tracking-wide ${String(filters.rfService) === 'noaa_nwr' ? 'text-sky-400/80' : 'text-sky-400/30'}`}>NOAA Weather Radio</span>
+                  <input type="checkbox" className="sr-only" checked={String(filters.rfService) === 'noaa_nwr'} onChange={() => onFilterChange('rfService', 'noaa_nwr' as unknown as boolean)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${String(filters.rfService) === 'noaa_nwr' ? 'bg-sky-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${String(filters.rfService) === 'noaa_nwr' ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+                {/* Public Safety */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${String(filters.rfService) === 'public_safety' ? 'border-amber-400/20 bg-amber-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <span className={`text-[9px] font-bold tracking-wide ${String(filters.rfService) === 'public_safety' ? 'text-amber-400/80' : 'text-amber-400/30'}`}>Public Safety</span>
+                  <input type="checkbox" className="sr-only" checked={String(filters.rfService) === 'public_safety'} onChange={() => onFilterChange('rfService', 'public_safety' as unknown as boolean)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${String(filters.rfService) === 'public_safety' ? 'bg-amber-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${String(filters.rfService) === 'public_safety' ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Modes Filter - only when Ham is selected */}
+                {(!filters.rfService || String(filters.rfService) === 'ham') && (
+                  <div className="mt-2 pl-2 border-l border-white/10">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[9px] font-bold text-white/40 tracking-wider">MODES</span>
+                    </div>
+                    {/* EMCOMM Only */}
+                    <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.rfEmcommOnly ? 'border-red-400/20 bg-red-400/5' : 'border-white/5 bg-white/5'} mb-1`}>
+                      <span className={`text-[8px] font-bold tracking-wide ${filters.rfEmcommOnly ? 'text-red-400/80' : 'text-red-400/30'}`}>EMCOMM ONLY</span>
+                      <input type="checkbox" className="sr-only" checked={filters.rfEmcommOnly || false} onChange={(e) => onFilterChange('rfEmcommOnly', e.target.checked)} />
+                      <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.rfEmcommOnly ? 'bg-red-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.rfEmcommOnly ? 'left-2.5' : 'left-0.5'}`} /></div>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Infra Filter */}
@@ -165,15 +218,15 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 <div className="group flex flex-col gap-1 rounded border border-white/5 bg-white/5 p-2 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-bold tracking-wide text-white/50">CABLE OPACITY</span>
-                    <span className="text-[9px] text-white/50">{Math.round((filters.cableOpacity ?? 0.6) * 100)}%</span>
+                  <span className="text-[9px] text-white/50">{Math.round(((filters.cableOpacity as unknown as number) ?? 0.6) * 100)}%</span>
                   </div>
                   <input
                     type="range"
                     min="0.2"
                     max="1"
                     step="0.1"
-                    value={filters.cableOpacity ?? 0.6}
-                    onChange={(e) => onFilterChange('cableOpacity', parseFloat(e.target.value))}
+                  value={(filters.cableOpacity as unknown as number) ?? 0.6}
+                  onChange={(e) => onFilterChange('cableOpacity', parseFloat(e.target.value) as unknown as boolean)}
                     className="h-1 w-full appearance-none rounded bg-white/10 outline-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
                   />
                 </div>

@@ -1,48 +1,44 @@
 import { useEffect, useRef, useState, MutableRefObject } from "react";
-import type { RepeaterStation } from "../types";
+import type { RFSite, RFService, RFMode } from "../types";
 
-const API_BASE = "/api/repeaters";
-const DEFAULT_RADIUS_MI = 75;
+const API_BASE = "/api/rf/sites";
+const DEFAULT_RADIUS_NM = 150;
 // Minimum distance (degrees) the mission centre must move before a refetch
 const REFETCH_THRESHOLD_DEG = 0.25;
 
-export interface UseRepeatersResult {
-  repeatersRef: MutableRefObject<RepeaterStation[]>;
-  repeaters: RepeaterStation[];
+export interface UseRFSitesResult {
+  rfSitesRef: MutableRefObject<RFSite[]>;
+  rfSites: RFSite[];
   loading: boolean;
   error: string | null;
 }
 
-/**
- * Fetches amateur radio repeaters from the backend proxy endpoint.
- *
- * Automatically refetches when:
- *  - `enabled` transitions to true
- *  - The mission centre moves more than REFETCH_THRESHOLD_DEG degrees
- *
- * Data is held in both a React state (for sidebar widgets) and a ref
- * (for the 60fps animation loop to read without causing re-renders).
- */
-export function useRepeaters(
+export function useRFSites(
   enabled: boolean,
   missionLat: number,
   missionLon: number,
-  radiusMi: number = DEFAULT_RADIUS_MI,
-): UseRepeatersResult {
-  const repeatersRef = useRef<RepeaterStation[]>([]);
-  const [repeaters, setRepeaters] = useState<RepeaterStation[]>([]);
+  radiusNm: number = DEFAULT_RADIUS_NM,
+  service?: RFService,
+  modes?: RFMode[],
+  emcomm_only?: boolean
+): UseRFSitesResult {
+  const rfSitesRef = useRef<RFSite[]>([]);
+  const [rfSites, setRfSites] = useState<RFSite[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track the last-fetched centre to avoid redundant fetches
   const lastFetchRef = useRef<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const CACHE_KEY = `repeaters_cache_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}`;
+    const modeStr = modes && modes.length > 0 ? modes.sort().join(",") : "all";
+    const serviceStr = service || "all";
+    const emcommStr = emcomm_only ? "true" : "false";
+
+    const CACHE_KEY = `rf_sites_cache_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}_${serviceStr}_${modeStr}_${emcommStr}`;
     const CACHE_TS_KEY = `${CACHE_KEY}_ts`;
-    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    const CACHE_TTL = 3600 * 1000; // 1 hour
 
     // Skip if the mission centre hasn't moved significantly
     const last = lastFetchRef.current;
@@ -54,7 +50,7 @@ export function useRepeaters(
 
     let cancelled = false;
 
-    const fetchRepeaters = async () => {
+    const fetchSites = async () => {
       setLoading(true);
       setError(null);
 
@@ -64,56 +60,64 @@ export function useRepeaters(
         const cachedTs = localStorage.getItem(CACHE_TS_KEY);
         if (cached && cachedTs && (Date.now() - parseInt(cachedTs)) < CACHE_TTL) {
           const parsed = JSON.parse(cached);
-          repeatersRef.current = parsed;
-          setRepeaters(parsed);
+          rfSitesRef.current = parsed;
+          setRfSites(parsed);
           setLoading(false);
           lastFetchRef.current = { lat: missionLat, lon: missionLon };
           return;
         }
       } catch (e) {
-        console.warn("Repeater cache read failed:", e);
+        console.warn("RF sites cache read failed:", e);
       }
 
       // 2. Fetch fresh
       try {
-        const url = `${API_BASE}?lat=${missionLat}&lon=${missionLon}&radius=${radiusMi}`;
+        let url = `${API_BASE}?lat=${missionLat}&lon=${missionLon}&radius_nm=${radiusNm}`;
+        if (service) url += `&service=${service}`;
+        if (emcomm_only) url += `&emcomm_only=true`;
+        if (modes && modes.length > 0) {
+          for (const m of modes) {
+             url += `&modes=${m}`;
+          }
+        }
+
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data: { count: number; results: RepeaterStation[] } = await resp.json();
+        const data: { count: number; results: RFSite[] } = await resp.json();
 
         if (!cancelled) {
           const results = data.results ?? [];
-          repeatersRef.current = results;
-          setRepeaters(results);
+          rfSitesRef.current = results;
+          setRfSites(results);
           lastFetchRef.current = { lat: missionLat, lon: missionLon };
 
           // Update cache
           localStorage.setItem(CACHE_KEY, JSON.stringify(results));
           localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          setError(err?.message ?? "Failed to fetch repeaters");
+          setError(err instanceof Error ? err.message : "Failed to fetch RF sites");
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    fetchRepeaters();
+    fetchSites();
     return () => {
       cancelled = true;
     };
-  }, [enabled, missionLat, missionLon, radiusMi]);
+  }, [enabled, missionLat, missionLon, radiusNm, service, modes, emcomm_only]);
 
   // Clear data when layer is disabled
   useEffect(() => {
     if (!enabled) {
-      repeatersRef.current = [];
-      setRepeaters([]);
+      rfSitesRef.current = [];
+      setRfSites([]);
       lastFetchRef.current = null;
     }
   }, [enabled]);
 
-  return { repeatersRef, repeaters, loading, error };
+  return { rfSitesRef, rfSites, loading, error };
 }

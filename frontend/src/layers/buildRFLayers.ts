@@ -1,57 +1,77 @@
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import type { RepeaterStation, CoTEntity } from "../types";
+import type { RFSite, CoTEntity } from "../types";
 
-/** Colour by digital mode availability */
-function repeaterColor(r: RepeaterStation, alpha: number): [number, number, number, number] {
+/** Colour by service type and digital mode availability */
+function rfSiteColor(r: RFSite, alpha: number): [number, number, number, number] {
+  if (r.service === "noaa_nwr") {
+    return [14, 165, 233, alpha]; // sky-500 — NOAA NWR
+  }
+  if (r.service === "public_safety") {
+    return [245, 158, 11, alpha]; // amber-500 — Public Safety
+  }
+
+  // Ham / GMRS
   const modes = r.modes.map((m) => m.toLowerCase());
   if (modes.some((m) => m.includes("d-star") || m.includes("fusion") || m.includes("dmr") || m.includes("p25"))) {
-    return [139, 92, 246, alpha]; // violet-500  — digital
+    return [139, 92, 246, alpha]; // violet-500 — digital
   }
   if (r.status?.toLowerCase().includes("off")) {
-    return [100, 116, 139, alpha]; // slate-500  — off-air
+    return [100, 116, 139, alpha]; // slate-500 — off-air
   }
-  return [52, 211, 153, alpha]; // emerald-400 — standard FM open
+  return [16, 185, 129, alpha]; // emerald-500 — standard FM open
 }
 
-/** Wrap a repeater as a CoTEntity so it works with the existing
- *  hover/tooltip pipeline without adding new state machinery. */
-export function repeaterToEntity(r: RepeaterStation): CoTEntity {
+/** Determines outline colour based on emcomm flags */
+function rfSiteOutlineColor(r: RFSite): [number, number, number, number] | null {
+  if (r.emcomm_flags && r.emcomm_flags.length > 0) {
+    return [239, 68, 68, 255]; // red-500 outline for EMCOMM flagged
+  }
+  return null;
+}
+
+/** Wrap an RF site as a CoTEntity so it works with the existing hover/tooltip pipeline. */
+export function rfSiteToEntity(r: RFSite): CoTEntity {
   const modesStr = r.modes.length ? r.modes.join(", ") : "FM";
+  const name = r.name || r.callsign || r.site_id;
+
   return {
-    uid: `repeater-${r.callsign}-${r.frequency}`,
-    type: "repeater",
+    uid: `rf-${r.source}-${r.site_id}`,
+    type: "repeater", // keep type repeater to reuse existing tooltip styles or update as needed
     lat: r.lat,
     lon: r.lon,
     altitude: 0,
     course: 0,
     speed: 0,
-    callsign: r.callsign,
+    callsign: name,
     lastSeen: Date.now(),
     trail: [],
     uidHash: 0,
     detail: {
-      frequency: r.frequency,
-      input_freq: r.input_freq,
-      ctcss: r.ctcss ?? "none",
-      use: r.use,
+      service: r.service,
+      frequency: r.output_freq ? r.output_freq.toString() : "N/A",
+      input_freq: r.input_freq ? r.input_freq.toString() : "N/A",
+      ctcss: r.tone_ctcss !== null ? r.tone_ctcss.toString() : "none",
+      dcs: r.tone_dcs || "none",
+      use: r.use_access,
       status: r.status,
       city: r.city,
       state: r.state,
       modes: modesStr,
+      emcomm: r.emcomm_flags ? r.emcomm_flags.join(", ") : "none"
     },
   };
 }
 
-/** Group repeaters into clusters for cleaner overview at low zoom levels. */
-function clusterRepeaters(repeaters: RepeaterStation[], zoom: number) {
+/** Group RF sites into clusters for cleaner overview at low zoom levels. */
+function clusterRFSites(sites: RFSite[], zoom: number) {
   // Only cluster when zoomed out
-  if (zoom >= 7.5) return { clusters: [], individuals: repeaters };
+  if (zoom >= 7.5) return { clusters: [], individuals: sites };
 
   // Grid size decreases as zoom increases.
   const gridSize = 120 / Math.pow(2, Math.max(1, zoom));
-  const clusterMap = new Map<string, { lat: number; lon: number; count: number; representative: RepeaterStation }>();
+  const clusterMap = new Map<string, { lat: number; lon: number; count: number; representative: RFSite }>();
 
-  for (const r of repeaters) {
+  for (const r of sites) {
     const gx = Math.floor(r.lon / gridSize);
     const gy = Math.floor(r.lat / gridSize);
     const key = `${gx},${gy}`;
@@ -67,7 +87,7 @@ function clusterRepeaters(repeaters: RepeaterStation[], zoom: number) {
   }
 
   const clusters: any[] = [];
-  const individuals: RepeaterStation[] = [];
+  const individuals: RFSite[] = [];
 
   for (const c of clusterMap.values()) {
     if (c.count > 1) {
@@ -85,28 +105,28 @@ function clusterRepeaters(repeaters: RepeaterStation[], zoom: number) {
   return { clusters, individuals };
 }
 
-export function buildRepeaterLayers(
-  repeaters: RepeaterStation[],
+export function buildRFLayers(
+  sites: RFSite[],
   globeMode: boolean | undefined,
   onEntitySelect: (entity: CoTEntity | null) => void,
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   zoom: number,
 ): any[] {
-  if (repeaters.length === 0) return [];
+  if (sites.length === 0) return [];
 
   const modeKey = globeMode ? "globe" : "merc";
   const depthParams = { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 };
   const layers: any[] = [];
 
-  const { clusters, individuals } = clusterRepeaters(repeaters, zoom);
+  const { clusters, individuals } = clusterRFSites(sites, zoom);
 
   // 1. Clusters (only if they exist)
   if (clusters.length > 0) {
     layers.push(
       // Cluster Glow/Halo
       new ScatterplotLayer({
-        id: `repeater-cluster-halo-${modeKey}`,
+        id: `rf-cluster-halo-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
         getRadius: (d: any) => 10 + Math.min(d.count / 3, 6),
@@ -121,7 +141,7 @@ export function buildRepeaterLayers(
       }),
       // Cluster Core
       new ScatterplotLayer({
-        id: `repeater-clusters-${modeKey}`,
+        id: `rf-clusters-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
         getRadius: (d: any) => 7 + Math.min(d.count / 5, 4),
@@ -139,7 +159,7 @@ export function buildRepeaterLayers(
       }),
       // Cluster Number Text
       new TextLayer({
-        id: `repeater-cluster-labels-${modeKey}`,
+        id: `rf-cluster-labels-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
         getText: (d: any) => `${d.count}`,
@@ -162,13 +182,13 @@ export function buildRepeaterLayers(
     if (!globeMode) {
       layers.push(
         new ScatterplotLayer({
-          id: `repeater-halo-${modeKey}`,
+          id: `rf-halo-${modeKey}`,
           data: individuals,
-          getPosition: (d: RepeaterStation) => [d.lon, d.lat, 0],
+          getPosition: (d: RFSite) => [d.lon, d.lat, 0],
           getRadius: 9,
           radiusUnits: "pixels" as const,
           radiusMinPixels: 5,
-          getFillColor: (d: RepeaterStation) => repeaterColor(d, 40),
+          getFillColor: (d: RFSite) => rfSiteColor(d, 40),
           stroked: false,
           filled: true,
           pickable: false,
@@ -181,15 +201,17 @@ export function buildRepeaterLayers(
     // Core dot (pickable — hover tooltip + click to select)
     layers.push(
       new ScatterplotLayer({
-        id: `repeater-dots-${modeKey}`,
+        id: `rf-dots-${modeKey}`,
         data: individuals,
-        getPosition: (d: RepeaterStation) => [d.lon, d.lat, 0],
+        getPosition: (d: RFSite) => [d.lon, d.lat, 0],
         getRadius: 5,
         radiusUnits: "pixels" as const,
         radiusMinPixels: 3,
-        getFillColor: (d: RepeaterStation) => repeaterColor(d, 220),
-        getLineColor: [0, 0, 0, 0] as [number, number, number, number],
-        stroked: false,
+        getFillColor: (d: RFSite) => rfSiteColor(d, 220),
+        getLineColor: (d: RFSite) => rfSiteOutlineColor(d) || [0, 0, 0, 0],
+        stroked: true,
+        getLineWidth: (d: RFSite) => rfSiteOutlineColor(d) ? 2 : 0,
+        lineWidthUnits: "pixels" as const,
         filled: true,
         pickable: true,
         wrapLongitude: !globeMode,
@@ -197,7 +219,7 @@ export function buildRepeaterLayers(
         parameters: depthParams,
         onHover: (info: any) => {
           if (info.object) {
-            setHoveredEntity(repeaterToEntity(info.object as RepeaterStation));
+            setHoveredEntity(rfSiteToEntity(info.object as RFSite));
             setHoverPosition({ x: info.x, y: info.y });
           } else {
             setHoveredEntity(null);
@@ -206,7 +228,7 @@ export function buildRepeaterLayers(
         },
         onClick: (info: any) => {
           if (info.object) {
-            onEntitySelect(repeaterToEntity(info.object as RepeaterStation));
+            onEntitySelect(rfSiteToEntity(info.object as RFSite));
           }
         },
       }),
@@ -216,12 +238,12 @@ export function buildRepeaterLayers(
     if (zoom >= 9) {
       layers.push(
         new TextLayer({
-          id: `repeater-labels-${modeKey}`,
+          id: `rf-labels-${modeKey}`,
           data: individuals,
-          getPosition: (d: RepeaterStation) => [d.lon, d.lat, 0],
-          getText: (d: RepeaterStation) => `${d.callsign}\n${d.frequency}`,
+          getPosition: (d: RFSite) => [d.lon, d.lat, 0],
+          getText: (d: RFSite) => `${d.name || d.callsign}\n${d.output_freq || ""}`,
           getSize: 10,
-          getColor: (d: RepeaterStation) => repeaterColor(d, 200),
+          getColor: (d: RFSite) => rfSiteColor(d, 200),
           getPixelOffset: [0, -16],
           fontFamily: "monospace",
           fontWeight: "bold",

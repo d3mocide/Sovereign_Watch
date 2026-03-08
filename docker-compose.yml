@@ -105,6 +105,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- Ingestion: RF Infrastructure (Repeaters, NOAA NWR, Public Safety) ---
+  rf-pulse:
+    build:
+      context: ./backend/ingestion/rf_pulse
+      dockerfile: Dockerfile
+    container_name: sovereign-rf-pulse
+    environment:
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - REDIS_HOST=sovereign-redis
+      - REDIS_PORT=6379
+      - CENTER_LAT=${CENTER_LAT:-45.5152}
+      - CENTER_LON=${CENTER_LON:--122.6784}
+      - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
+      - REPEATERBOOK_API_TOKEN=${REPEATERBOOK_API_TOKEN}
+      - RF_RB_RADIUS_MI=${RF_RB_RADIUS_MI:-200}
+      - RF_REPEATERBOOK_INTERVAL_H=${RF_REPEATERBOOK_INTERVAL_H:-6}
+      - RF_ARD_INTERVAL_H=${RF_ARD_INTERVAL_H:-24}
+      - RF_NOAA_INTERVAL_H=${RF_NOAA_INTERVAL_H:-168}
+      - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
+    networks:
+      - backend-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
   # --- Persistence ---
   timescaledb:
     image: timescale/timescaledb-ha:pg16
@@ -150,7 +178,6 @@ services:
       - LITELLM_MODEL=deep-reasoner
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - REPEATERBOOK_API_TOKEN=${REPEATERBOOK_API_TOKEN}
       - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
     volumes:
       - ./backend/api:/app
