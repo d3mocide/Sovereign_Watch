@@ -1,3 +1,20 @@
+## [0.21.0] - 2026-03-07
+
+### Added
+
+- **JS8 Unified State Management**: Refactored the `useJS8Stations` hook to serve as the single source of truth for all JS8-related telemetry, ensuring perfect synchronization between the Tactical Map widget and the Radio Terminal panel.
+- **Premium Radio Beacon Icon**: Implemented a high-tech, multi-layered "Radio Beacon" icon for connected KiwiSDR nodes on the tactical map, featuring pulsing core animations, radiating cyan waves, and breathing attention rings for enhanced situational awareness.
+
+### Changed
+
+- **KiwiSDR Beacon Scaling**: Refined the radii and font sizes of the map beacon by ~40% for better proportionality within the tactical view.
+- **Radio Terminal Variable Standardization**: Standardized all internal variable names in `RadioTerminal.tsx` (`bridgeConnected`, `kiwiIsConnecting`, `sharedStatusLine`, etc.) to match the unified state provider.
+
+### Fixed
+
+- **Radio Terminal `ReferenceError`**: Resolved a critical bug that caused the Radio Terminal view to crash due to undefined variable references after the state refactor.
+- **JS8 Connection "Stuck" State**: Fixed a UI bug where connection buttons would remain greyed out after a failed SDR connection. Added a status-driven reset and a 15-second safety timeout to ensure the UI remains interactive.
+
 ## [0.20.0] - 2026-03-07
 
 ### Added
@@ -17,7 +34,6 @@
 - **Orbital Sidebar Compacted**: Collapsed the 3-row NORAD ID / Inclination / Eccentricity block into a single inline line beneath the callsign, saving significant vertical space in the inspector panel.
 
 ## [0.19.0] - 2026-03-07
-
 
 ### Added
 
