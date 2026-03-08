@@ -123,27 +123,45 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
         </div>
 
         {/* Tab Buttons (Always Visible) */}
-        <div className="flex bg-black/40 rounded p-0.5 ml-auto mr-2">
+        <div className="flex bg-black/40 rounded p-0.5 ml-auto mr-2" role="tablist" aria-label="JS8Call View Tabs">
           <button
+            role="tab"
+            aria-selected={activeTab === 'HEARD'}
+            aria-controls="js8-tabpanel-heard"
+            id="js8-tab-heard"
+            title="Heard Stations"
+            aria-label="Heard Stations"
             onClick={(e) => { e.stopPropagation(); setActiveTab('HEARD'); setCollapsed(false); }}
-            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 ${activeTab === 'HEARD' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
+            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${activeTab === 'HEARD' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
               }`}
           >
-            <Users size={11} />
+            <Users size={11} aria-hidden="true" />
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'CHAT'}
+            aria-controls="js8-tabpanel-chat"
+            id="js8-tab-chat"
+            title="Radio Terminal"
+            aria-label="Radio Terminal"
             onClick={(e) => { e.stopPropagation(); setActiveTab('CHAT'); setCollapsed(false); }}
-            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 ${activeTab === 'CHAT' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
+            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${activeTab === 'CHAT' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
               }`}
           >
-            <Terminal size={11} />
+            <Terminal size={11} aria-hidden="true" />
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'SDR'}
+            aria-controls="js8-tabpanel-sdr"
+            id="js8-tab-sdr"
+            title="KiwiSDR Network"
+            aria-label="KiwiSDR Network"
             onClick={(e) => { e.stopPropagation(); setActiveTab('SDR'); setCollapsed(false); }}
-            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 ${activeTab === 'SDR' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
+            className={`px-2 py-0.5 rounded-sm transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${activeTab === 'SDR' ? 'bg-indigo-500/20 text-indigo-400' : 'text-white/20 hover:text-white/70 hover:bg-white/5'
               }`}
           >
-            <RadioReceiver size={11} />
+            <RadioReceiver size={11} aria-hidden="true" />
             {activeKiwiConfig?.host && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />}
           </button>
         </div>
@@ -211,7 +229,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
           {/* Tab Content */}
           <div className={`flex flex-col transition-all duration-300 ${activeTab === 'CHAT' ? 'h-64' : 'h-48'}`}>
             {activeTab === 'HEARD' ? (
-              <div className="flex-1 overflow-y-auto scrollbar-none">
+              <div id="js8-tabpanel-heard" role="tabpanel" aria-labelledby="js8-tab-heard" className="flex-1 overflow-y-auto scrollbar-none">
                 {stations.length > 0 ? (
                   stations.map((s) => (
                     <div
@@ -250,7 +268,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                 )}
               </div>
             ) : activeTab === 'SDR' ? (
-              <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col">
+              <div id="js8-tabpanel-sdr" role="tabpanel" aria-labelledby="js8-tab-sdr" className="flex-1 overflow-y-auto scrollbar-none flex flex-col">
                 <div className="px-3 py-1.5 bg-black/40 border-b border-white/5 flex items-center justify-between text-[9px]">
                   <span className="text-white/30 uppercase tracking-widest">KiwiSDR Network</span>
                   <span className="text-indigo-300 font-mono tracking-wider">{sdrFreq} kHz</span>
@@ -308,7 +326,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col bg-black/20 min-h-0">
+              <div id="js8-tabpanel-chat" role="tabpanel" aria-labelledby="js8-tab-chat" className="flex-1 flex flex-col bg-black/20 min-h-0">
                 <div className="flex-1 overflow-y-auto scrollbar-none p-3 space-y-2">
                   {logEntries.length > 0 ? (
                     logEntries.map((entry) => (
