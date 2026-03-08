@@ -1,7 +1,6 @@
 # RF Pulse Container — Implementation Plan
 **Date:** 2026-03-07
 **Status:** PLANNING
-**Branch:** `claude/rf-mapping-pulse-integration-7MjfW`
 
 ---
 
