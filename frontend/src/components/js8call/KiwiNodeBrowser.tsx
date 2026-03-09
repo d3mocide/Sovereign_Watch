@@ -147,7 +147,7 @@ export default function KiwiNodeBrowser({
             onClick={refetch}
             disabled={loading}
             title="Refresh node list"
-            className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40"
+            className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
@@ -155,7 +155,7 @@ export default function KiwiNodeBrowser({
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -178,7 +178,7 @@ export default function KiwiNodeBrowser({
           <button
             onClick={onDisconnect}
             disabled={!bridgeConnected}
-            className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 transition-colors disabled:opacity-40"
+            className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-rose-400 outline-none"
           >
             Disconnect
           </button>
@@ -285,7 +285,7 @@ export default function KiwiNodeBrowser({
       <div className="border-t border-slate-800">
         <button
           onClick={() => setShowManual((v) => !v)}
-          className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-wider transition-colors"
+          className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-wider transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
         >
           {showManual ? (
             <ChevronDown className="w-3 h-3" />

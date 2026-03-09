@@ -38,7 +38,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   e.stopPropagation();
                   onFilterChange('showRepeaters', !filters.showRepeaters);
                 }}
-                className={`p-1 rounded transition-colors ${filters.showRepeaters
+                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters.showRepeaters
                   ? 'bg-emerald-400/20 text-emerald-400 border border-emerald-400/30'
                   : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
                   }`}
@@ -59,7 +59,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                     onFilterChange('showCables', true);
                   }
                 }}
-                className={`p-1 rounded transition-colors ${filters.showCables !== false
+                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters.showCables !== false
                   ? 'bg-cyan-400/20 text-cyan-400 border border-cyan-400/30'
                   : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
                   }`}

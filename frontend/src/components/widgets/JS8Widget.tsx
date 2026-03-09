@@ -305,7 +305,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                             {isActive ? (
                               <button
                                 onClick={() => sendAction({ action: 'DISCONNECT_KIWI' })}
-                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors pointer-events-auto"
+                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors pointer-events-auto focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
                               >
                                 {kiwiConnecting ? 'Busy...' : 'Disconnect'}
                               </button>
@@ -313,7 +313,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                               <button
                                 onClick={() => sendAction({ action: 'SET_KIWI', host: node.host, port: node.port, freq: sdrFreq, mode: 'usb' })}
                                 disabled={kiwiConnecting || (node.users && node.sq && node.users >= node.sq) === true}
-                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-30 disabled:pointer-events-none pointer-events-auto"
+                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-30 disabled:pointer-events-none pointer-events-auto focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
                               >
                                 Connect
                               </button>
@@ -375,7 +375,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                       <button
                         type="submit"
                         disabled={!msgInput.trim() || !js8Connected}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-300 disabled:opacity-30 p-0.5"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-300 disabled:opacity-30 p-0.5 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none rounded"
                       >
                         <Send size={11} />
                       </button>

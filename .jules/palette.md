@@ -15,3 +15,7 @@
 ## 2025-03-08 - Added Accessible Tab Pattern to Widgets
 **Learning:** Icon-only view tabs in dynamic widgets (like JS8Widget) can be confusing for screen readers if not properly marked up. Adding `role="tablist"` to the container, and `role="tab"`, `aria-selected`, `aria-controls`, `id`, `title`, and `aria-label` to the buttons ensures robust accessibility. Additionally, hiding the inner icon with `aria-hidden="true"` prevents redundant announcements. Keyboard support is crucial via `focus-visible` outline styles.
 **Action:** Always apply this comprehensive ARIA pattern to any future icon-only tab groups or segment controls within widgets.
+
+## 2024-03-09 - Ensure Custom Focus Rings Hide Default Outlines
+**Learning:** When using custom `focus-visible:ring-1` classes for accessibility styling on buttons and inputs, the default browser focus ring (usually a thick blue outline) often still appears alongside it, looking unpolished.
+**Action:** Always pair `focus-visible:ring-1` with `outline-none` so that only the custom focus styling is shown to keyboard users.

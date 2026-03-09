@@ -82,7 +82,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
     return (
       <button
         onClick={isActive ? () => setIsCollapsed(false) : handleRun}
-        className={`flex-1 flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} hover:bg-white/10 rounded-sm group transition-all`}
+        className={`flex-1 flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} hover:bg-white/10 rounded-sm group transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`}
       >
         <div className="flex items-center gap-2">
           <BrainCircuit size={13} className={accentColor} />
@@ -122,7 +122,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
             <button
               onClick={reset}
               title="Cancel analysis"
-              className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 rounded text-[10px] text-white/40 hover:text-red-400 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 rounded text-[10px] text-white/40 hover:text-red-400 transition-colors focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
             >
               <X size={10} />
             </button>
@@ -130,7 +130,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
             <button
               onClick={handleRun}
               title="Run AI analysis"
-              className={`flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] font-bold tracking-widest ${accentColor} hover:opacity-100 opacity-70 transition-all`}
+              className={`flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] font-bold tracking-widest ${accentColor} hover:opacity-100 opacity-70 transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`}
             >
               RUN
             </button>
@@ -139,7 +139,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
             <button
               onClick={() => setIsCollapsed(true)}
               title="Collapse"
-              className="flex items-center justify-center p-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-white/40 hover:text-white/70 transition-colors ml-1"
+              className="flex items-center justify-center p-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-white/40 hover:text-white/70 transition-colors ml-1 focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
             >
               <ChevronUp size={10} />
             </button>
@@ -166,7 +166,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
               <button
                 onClick={handleCopy}
                 title="Copy assessment"
-                className="p-1 hover:bg-white/10 rounded text-white/30 hover:text-white/70 transition-colors"
+                className="p-1 hover:bg-white/10 rounded text-white/30 hover:text-white/70 transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
               >
                 {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
               </button>

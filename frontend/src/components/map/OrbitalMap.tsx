@@ -689,7 +689,7 @@ export function OrbitalMap({
             <>
               <button
                 onClick={() => setViewMode("2d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${!enable3d
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${!enable3d
                   ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                   : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}
@@ -698,7 +698,7 @@ export function OrbitalMap({
               </button>
               <button
                 onClick={() => setViewMode("3d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${enable3d
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${enable3d
                   ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                   : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}
@@ -710,7 +710,7 @@ export function OrbitalMap({
           )}
           <button
             onClick={() => onToggleGlobe?.()}
-            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${globeMode
+            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${globeMode
               ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
               : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
               }`}
@@ -725,15 +725,17 @@ export function OrbitalMap({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           <button
             onClick={() => mapRef.current?.getMap().zoomOut()}
-            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Zoom Out"
+            aria-label="Zoom Out"
           >
             <Minus size={14} strokeWidth={3} />
           </button>
           <button
             onClick={() => mapRef.current?.getMap().zoomIn()}
-            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Zoom In"
+            aria-label="Zoom In"
           >
             <Plus size={14} strokeWidth={3} />
           </button>
