@@ -116,7 +116,11 @@ async def get_features_config():
     """Return enabled functionality based on environment."""
     return {
         "repeaterbook_enabled": bool(os.getenv("REPEATERBOOK_API_TOKEN")),
-        "radioref_enabled": bool(os.getenv("RADIOREF_APP_KEY"))
+        "radioref_enabled": bool(
+            os.getenv("RADIOREF_APP_KEY") and
+            os.getenv("RADIOREF_USERNAME") and
+            os.getenv("RADIOREF_PASSWORD")
+        )
     }
 
 @router.post("/api/config/ai")

@@ -1,92 +1,139 @@
 """
-RadioReference source adapter (Phase 3).
+RadioReference source adapter.
+
+Authenticates via the RadioReference SOAP API v2 using a developer app key
+plus a licensed user account (username + password).  An auth token is
+obtained from ``getAuthToken`` and reused until it expires, at which point a
+single re-auth is attempted transparently.
+
+Required environment variables
+--------------------------------
+RADIOREF_APP_KEY   - Developer app key from radioreference.com/apps/api/
+RADIOREF_USERNAME  - RadioReference premium account username
+RADIOREF_PASSWORD  - RadioReference premium account password
+
+If any of the three are absent the source skips all fetches and logs a single
+informational message at startup.
 """
 
 import asyncio
 import logging
 import os
 
-import zeep
-from zeep.transports import AsyncTransport
 import httpx
+import zeep
+import zeep.exceptions
+from zeep.transports import AsyncTransport
 
 logger = logging.getLogger("rf_pulse.radioref")
 
 WSDL_URL = "https://api.radioreference.com/soap2/?wsdl"
 
+
 class RadioReferenceSource:
     def __init__(self, producer, redis_client, topic, fetch_interval_h):
-        self.producer     = producer
-        self.redis_client = redis_client
-        self.topic        = topic
-        self.interval_sec = fetch_interval_h * 3600
-        self.app_key      = os.getenv("RADIOREF_APP_KEY", "")
+        self.producer      = producer
+        self.redis_client  = redis_client
+        self.topic         = topic
+        self.interval_sec  = fetch_interval_h * 3600
+
+        self.app_key  = os.getenv("RADIOREF_APP_KEY", "")
+        self.username = os.getenv("RADIOREF_USERNAME", "")
+        self.password = os.getenv("RADIOREF_PASSWORD", "")
+
+        # Cached session token; cleared on auth fault to force re-auth.
+        self._auth_token: str | None = None
+
+    # ------------------------------------------------------------------
+    # Authentication helpers
+    # ------------------------------------------------------------------
+
+    async def _get_auth_token(self, client: zeep.AsyncClient) -> str:
+        """Acquire a fresh auth token from the API and cache it.
+
+        Credential values are intentionally never written to log output.
+        """
+        token = await client.service.getAuthToken(
+            username=self.username,
+            password=self.password,
+            appKey=self.app_key,
+        )
+        self._auth_token = token
+        logger.info("RadioReference: auth token acquired")
+        return token
+
+    def _auth_info(self) -> dict:
+        """Build the authInfo dict required by most RR SOAP calls."""
+        return {
+            "appKey":    self.app_key,
+            "username":  self.username,
+            "authToken": self._auth_token,
+        }
+
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
 
     async def loop(self):
+        if not (self.app_key and self.username and self.password):
+            logger.info(
+                "RadioReference: RADIOREF_APP_KEY/USERNAME/PASSWORD not fully set, "
+                "skipping RadioReference ingestion."
+            )
+            return
+
         while True:
             try:
                 await self._fetch_and_publish()
             except Exception:
-                logger.exception("RadioRef fetch error")
+                logger.exception("RadioReference: unhandled fetch error")
             await asyncio.sleep(self.interval_sec)
 
-    async def _fetch_and_publish(self):
-        if not self.app_key:
-            # Requires App Key to do anything globally.
-            # End-user credentials will eventually drive targeted on-demand fetches.
-            logger.debug("RadioReference: RADIOREF_APP_KEY not set, skipping background fetch")
-            return
+    # ------------------------------------------------------------------
+    # Fetch + publish
+    # ------------------------------------------------------------------
 
-        logger.info("RadioReference adapter: Fetching data using Zeep (SOAP)")
+    async def _fetch_and_publish(self):
+        transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0))
+        client = zeep.AsyncClient(WSDL_URL, transport=transport)
+
+        # Ensure we have a valid auth token before making data calls.
+        if not self._auth_token:
+            await self._get_auth_token(client)
 
         try:
-            # Use zeep with an async transport
-            transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0))
-            _client = zeep.AsyncClient(WSDL_URL, transport=transport)  # noqa: F841
+            systems = await self._fetch_systems(client)
+        except zeep.exceptions.Fault as fault:
+            # Auth token may have expired; clear it and retry once.
+            logger.warning("RadioReference: SOAP fault (%s), attempting re-auth", fault.message)
+            self._auth_token = None
+            await self._get_auth_token(client)
+            systems = await self._fetch_systems(client)
 
-            # This is a sample polling mechanism for top-level systems in the US (country ID 1)
-            # The actual API requires auth params passed in the header or as part of the request.
-            # We will use the app_key for authentication if required by RR's global endpoints.
+        published = 0
+        for sys in systems:
+            record = {
+                "source":       "radioref",
+                "site_id":      f"rr:sys:{sys.systemId}",
+                "service":      "public_safety",
+                "name":         sys.systemName,
+                "lat":          float(sys.lat),
+                "lon":          float(sys.lon),
+                "modes":        [sys.systemType],   # e.g. "P25", "DMR"
+                "status":       "Unknown",
+                "country":      "US",
+                "emcomm_flags": [],
+                "meta":         {"type": "trunked_system"},
+            }
+            await self.producer.send(self.topic, value=record)
+            published += 1
 
-            # Note: The RadioReference API typically requires authentication (app key + username/password).
-            # For this background poller, we assume the API key is sufficient for some top-level global queries,
-            # or we are simulating the structure that will process systems.
+        logger.info("RadioReference: published %d systems to %s", published, self.topic)
 
-            # As a background ingestion poller, fetching entire RR databases via SOAP is often heavily rate-limited.
-            # Here we provide the functional implementation that fetches a known subset or logs the attempt.
-
-            # Since we don't have a live user auth token here, we'll demonstrate the structure
-            # to fetch systems. If RR rejects the call without user auth, it will throw an exception
-            # which is caught by our error handler.
-
-            # Example call (mocking the expected return structure from RR):
-            # response = await client.service.getCountrySystemList(appKey=self.app_key, countryId=1)
-
-            logger.info("RadioReference Zeep client initialized successfully.")
-            # We simulate the processing of a system list for the purpose of the requirement
-            published = 0
-
-            # Assuming 'systems' is a list of objects returned by Zeep
-            systems = [] # e.g. response.systems
-
-            for sys in systems:
-                record = {
-                    "source":       "radioref",
-                    "site_id":      f"rr:sys:{sys.systemId}",
-                    "service":      "public_safety",
-                    "name":         sys.systemName,
-                    "lat":          float(sys.lat),
-                    "lon":          float(sys.lon),
-                    "modes":        [sys.systemType], # e.g. P25, DMR
-                    "status":       "Unknown",
-                    "country":      "US",
-                    "emcomm_flags": [],
-                    "meta": {"type": "trunked_system"}
-                }
-                await self.producer.send(self.topic, value=record)
-                published += 1
-
-            logger.info("RadioReference: published %d systems to %s", published, self.topic)
-
-        except Exception as e:
-            logger.error(f"Failed to fetch from RadioReference SOAP API: {e}")
+    async def _fetch_systems(self, client: zeep.AsyncClient) -> list:
+        """Fetch trunked systems for the United States (country ID 1)."""
+        response = await client.service.getCountrySystemList(
+            cid=1,
+            authInfo=self._auth_info(),
+        )
+        return list(response or [])

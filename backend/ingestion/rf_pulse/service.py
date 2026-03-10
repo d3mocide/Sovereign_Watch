@@ -31,6 +31,8 @@ NOAA_INTERVAL_H         = int(os.getenv("RF_NOAA_INTERVAL_H", "168"))
 
 RB_TOKEN = os.getenv("REPEATERBOOK_API_TOKEN", "")
 RR_KEY   = os.getenv("RADIOREF_APP_KEY", "")
+RR_USER  = os.getenv("RADIOREF_USERNAME", "")
+RR_PASS  = os.getenv("RADIOREF_PASSWORD", "")
 
 
 class RFPulseService:
@@ -81,7 +83,7 @@ class RFPulseService:
         else:
             logger.info("REPEATERBOOK_API_TOKEN not set, skipping RepeaterBook ingestion module.")
             
-        if RR_KEY:
+        if RR_KEY and RR_USER and RR_PASS:
             self.sources.append(
                 RadioReferenceSource(
                     producer=self.producer,
@@ -91,7 +93,7 @@ class RFPulseService:
                 )
             )
         else:
-            logger.info("RADIOREF_APP_KEY not set, skipping RadioReference ingestion module.")
+            logger.info("RADIOREF_APP_KEY/USERNAME/PASSWORD not fully set, skipping RadioReference ingestion module.")
 
     async def run(self):
         """Run all source loops concurrently."""
