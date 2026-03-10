@@ -349,6 +349,7 @@ export default function RadioTerminal({
               manualConfig={kiwiConfig}
               onManualConfigChange={(patch) => setKiwiConfig((p: any) => ({ ...p, ...patch }))}
               onManualConnect={handleKiwiConnect}
+              operatorGrid={sharedStatusLine.grid}
             />
           </div>
 

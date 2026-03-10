@@ -1086,21 +1086,22 @@ async def get_kiwi() -> dict:
 # ===========================================================================
 
 @app.get("/api/kiwi/nodes", summary="List available KiwiSDR nodes sorted by proximity")
-async def get_kiwi_nodes(freq: float = None, limit: int = 10) -> list:
+async def get_kiwi_nodes(freq: float = None, limit: int = 10, radius_km: float = None) -> list:
     """
     Returns nearby KiwiSDR nodes from the cached public directory, sorted by
     Haversine distance from MY_GRID and filtered to nodes covering `freq` kHz.
 
     Query params:
-      freq  — target frequency in kHz (default: KIWI_FREQ env var)
-      limit — max results to return (default: 10)
+      freq      — target frequency in kHz (default: KIWI_FREQ env var)
+      limit     — max results to return (default: 10)
+      radius_km — only return nodes within this distance in km (default: no limit)
     """
     if _kiwi_directory is None:
         return []
     target_freq = float(freq) if freq is not None else float(KIWI_FREQ)
     limit = max(1, min(limit, 50))
     my_lat, my_lon = maidenhead_to_latlon(MY_GRID)
-    nodes = _kiwi_directory.get_nodes(target_freq, my_lat, my_lon, limit=limit)
+    nodes = _kiwi_directory.get_nodes(target_freq, my_lat, my_lon, limit=limit, max_distance_km=radius_km)
     return [n.to_dict() for n in nodes]
 
 
