@@ -1,4 +1,4 @@
-import { useEffect, useRef, MutableRefObject } from "react";
+import React, { useEffect, useRef, useMemo, MutableRefObject } from "react";
 import { CoTEntity, JS8Station, RFSite } from "../types";
 import { getCompensatedCenter, maidenheadToLatLon } from "../utils/map/geoUtils";
 import { getOrbitalLayers, GroundTrackPoint } from "../layers/OrbitalLayer";
@@ -10,6 +10,7 @@ import { buildRFLayers } from "../layers/buildRFLayers";
 import { buildInfraLayers } from "../layers/buildInfraLayers";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { getTerminatorLayer } from "../components/map/TerminatorLayer";
+import { buildH3CoverageLayer, H3CellData } from "../layers/buildH3CoverageLayer";
 import type { DeadReckoningState } from "./useEntityWorker";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -153,8 +154,34 @@ export function useAnimationLoop({
   observerRef,
   currentMissionRef,
 }: UseAnimationLoopOptions): void {
+  // eslint-disable-next-line react-hooks/purity
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
+
+  // Optional: Add H3 Coverage State in the hook
+  const [h3Cells, setH3Cells] = React.useState<H3CellData[]>([]);
+
+  useEffect(() => {
+    // Only fetch if enabled
+    if (!filters?.showH3Coverage) return;
+
+    const fetchCells = async () => {
+      try {
+        const response = await fetch('/api/debug/h3_cells');
+        if (response.ok) {
+          const data = await response.json();
+          setH3Cells(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch H3 cells:', err);
+      }
+    };
+
+    fetchCells();
+    const interval = setInterval(fetchCells, 5000);
+
+    return () => clearInterval(interval);
+  }, [filters?.showH3Coverage]);
 
   useEffect(() => {
     const animate = () => {
@@ -664,7 +691,7 @@ export function useAnimationLoop({
         if (constellation && filters?.[`showConstellation_${constellation}`] === false) continue;
 
         const cat = (sat.detail?.category as string)?.toLowerCase() || "";
-        let show = false;
+        let show: boolean;
         if (
           cat.includes("gps") ||
           cat.includes("gnss") ||
@@ -914,7 +941,13 @@ export function useAnimationLoop({
       }
 
       const layers = [
+        // 0. Debug H3 Coverage Layer (absolute bottom of stack)
+        ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
+
+        // 0.25. Terminator Layer (always present, visibility internal to call)
         getTerminatorLayer(!!filters?.showTerminator),
+
+        // 0.5. Orbital Layers
         ...getOrbitalLayers({
           satellites: filteredSatellites,
           selectedEntity: currentSelected,
@@ -937,7 +970,7 @@ export function useAnimationLoop({
           },
         }),
 
-        // 0. AOT Boundaries
+        // 1. AOT Boundaries
         ...buildAOTLayers(
           aotShapes,
           filters,
@@ -952,7 +985,7 @@ export function useAnimationLoop({
             : null,
         ),
 
-        // 1. Repeater infrastructure (rendered below entity icons for context)
+        // 2. Repeater infrastructure (rendered below entity icons for context)
         ...repeaterLayers,
 
         // Infra layers (cables and landing stations)
@@ -961,7 +994,7 @@ export function useAnimationLoop({
         // KiwiSDR node marker (rendered above infra, below entity icons)
         ...kiwiLayers,
 
-        // 2-3. Trail layers (history trails, gap bridges, selected trail)
+        // 3-4. Trail layers (history trails, gap bridges, selected trail)
         ...buildTrailLayers(
           interpolated,
           currentSelected,
@@ -969,7 +1002,7 @@ export function useAnimationLoop({
           historyTailsRef.current,
         ),
 
-        // 4+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
+        // 5+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
         ...buildEntityLayers(
           interpolated,
           currentSelected,
@@ -983,7 +1016,7 @@ export function useAnimationLoop({
           selectedEntity,
         ),
 
-        // 5. JS8 station layers (rendered above entity icons)
+        // 6. JS8 station layers (rendered above entity icons)
         ...js8Layers,
       ];
 

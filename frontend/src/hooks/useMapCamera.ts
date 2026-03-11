@@ -111,7 +111,11 @@ export function useMapCamera({
     };
 
     const apply = () => {
-      globeMode ? add() : remove();
+      if (globeMode) {
+        add();
+      } else {
+        remove();
+      }
     };
 
     if (map.isStyleLoaded?.()) apply();
@@ -211,7 +215,9 @@ export function useMapCamera({
         (map as any).setProjection(
           mapToken ? "mercator" : { type: "mercator" },
         );
-      } catch (_) { }
+      } catch (_) {
+        // Ignore projection errors during rapid state transitions
+      }
       mapRef.current.flyTo({
         pitch: 0,
         bearing: 0,

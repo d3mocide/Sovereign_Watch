@@ -26,9 +26,8 @@ class H3PriorityManager:
     /api/debug/h3_cells endpoint can serve the FE-09 coverage viz layer.
     """
 
-    # Resolution 4: avg area ~1770 km², avg edge ~22 km, needs ~15 nm poll radius.
-    # Resolution 7 would eliminate overlap but requires ~170k cells — impractical.
-    RESOLUTION = 4
+    # Resolution 2: avg area ~86000 km², avg edge ~158 km, needs ~120nm poll radius.
+    RESOLUTION = 2
 
     # Redis key constants
     KEY_QUEUE  = "h3:poll_queue"       # ZSET  — member=cell, score=next_poll_epoch
@@ -39,9 +38,9 @@ class H3PriorityManager:
     INTERVAL_ACTIVE = 10
     INTERVAL_EMPTY  = 60
 
-    # Polling radius for a Res-4 cell: edge ~22 km, center-to-vertex ~25 km (~13.5 nm).
-    # Use 15 nm for a small safety margin without excessive overlap.
-    CELL_RADIUS_NM = 15
+    # Polling radius for a Res-2 cell: edge ~158 km.
+    # Use 120 nm for a safety margin.
+    CELL_RADIUS_NM = 120
 
     def __init__(self, redis_url: str = "redis://sovereign-redis:6379"):
         self.redis_url = redis_url
@@ -64,11 +63,11 @@ class H3PriorityManager:
         (a live, active cell won't be bumped back to "poll immediately" on
         a routine re-seed). On a full mission pivot, call flush_region() first.
 
-        k-ring size is derived from radius: k = max(1, floor(radius_km / 22)).
-        For a 150 nm (278 km) zone that gives k=12 → 469 cells.
+        k-ring size is derived from radius: k = max(1, floor(radius_km / 158)).
+        For a 150 nm (278 km) zone that gives k=1 → 7 cells.
         """
         center_cell = h3.latlng_to_cell(center_lat, center_lon, self.RESOLUTION)
-        k = max(1, int(radius_km / 22))
+        k = max(1, int(radius_km / 158))
         cells = h3.grid_disk(center_cell, k)
 
         logger.info(

@@ -16,8 +16,11 @@ import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
 import { AlertsWidget } from '../widgets/AlertsWidget';
 import { AIEngineWidget } from '../widgets/AIEngineWidget';
+import { SystemSettingsWidget } from '../widgets/SystemSettingsWidget';
 
 interface TopBarProps {
+    filters: Record<string, boolean | string | number | string[]>;
+    onFilterChange: (key: string, value: boolean | string | number | string[]) => void;
     alertsCount: number;
     hasNewAlert?: boolean;
     location?: { lat: number; lon: number } | null;
@@ -26,8 +29,6 @@ interface TopBarProps {
     onToggleVelocityVectors?: () => void;
     showHistoryTails?: boolean;
     onToggleHistoryTails?: () => void;
-    showSatellites?: boolean;
-    onToggleSatellites?: () => void;
     showTerminator?: boolean;
     onToggleTerminator?: () => void;
     isReplayMode?: boolean;
@@ -38,17 +39,20 @@ interface TopBarProps {
     isAlertsOpen?: boolean;
     alerts?: IntelEvent[];
     onAlertsClose?: () => void;
+    isSystemSettingsOpen?: boolean;
+    onSystemSettingsClick?: () => void;
+    onSystemSettingsClose?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
-    alertsCount, location, health,
+    filters, onFilterChange, alertsCount, location, health,
     showVelocityVectors, onToggleVelocityVectors,
     showHistoryTails, onToggleHistoryTails,
-    showSatellites, onToggleSatellites,
     showTerminator, onToggleTerminator,
     isReplayMode, onToggleReplay,
     viewMode = 'TACTICAL', onViewChange,
-    onAlertsClick, isAlertsOpen, alerts, onAlertsClose
+    onAlertsClick, isAlertsOpen, alerts, onAlertsClose,
+    isSystemSettingsOpen, onSystemSettingsClick, onSystemSettingsClose
 }) => {
     const [time, setTime] = useState(new Date());
 
@@ -189,12 +193,34 @@ export const TopBar: React.FC<TopBarProps> = ({
                     className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-lg shadow-inner"
                 >
                     {/* Core Status */}
-                    <div className="flex items-center gap-2 mr-3 px-2 py-0.5 bg-hud-green/10 border border-hud-green/20 rounded-md shadow-[0_0_10px_rgba(0,255,65,0.1)]" title="Core System: ONLINE">
-                        <Server size={14} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]" />
-                        <div className="flex items-center gap-1">
-                            <span className="text-[8px] font-bold text-hud-green tracking-wider uppercase drop-shadow-[0_0_2px_rgba(0,255,65,0.5)]">SYS</span>
-                            <div className="h-1.5 w-1.5 rounded-full bg-hud-green shadow-[0_0_8px_#00ff41] animate-pulse" />
-                        </div>
+                    <div className="relative">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onSystemSettingsClick?.();
+                            }}
+                            className={`flex items-center gap-2 px-2 py-0.5 rounded-md transition-all shadow-[0_0_10px_rgba(0,255,65,0.1)] outline-none group
+                                ${isSystemSettingsOpen ? 'bg-hud-green/30 border border-hud-green/50 ring-1 ring-hud-green/50' : 'bg-hud-green/10 border border-hud-green/20 hover:bg-hud-green/20 focus-visible:ring-1 focus-visible:ring-hud-green'}
+                            `}
+                            title="Core System Settings"
+                            aria-expanded={isSystemSettingsOpen}
+                        >
+                            <Server size={14} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]" />
+                            <div className="flex items-center gap-1">
+                                <span className="text-[8px] font-bold text-hud-green tracking-wider uppercase drop-shadow-[0_0_2px_rgba(0,255,65,0.5)]">SYS</span>
+                                <div className="h-1.5 w-1.5 rounded-full bg-hud-green shadow-[0_0_8px_#00ff41] animate-pulse" />
+                            </div>
+                        </button>
+                        
+                        {/* System Settings Widget Dropdown */}
+                        {isSystemSettingsOpen && onSystemSettingsClose && (
+                            <SystemSettingsWidget 
+                                isOpen={isSystemSettingsOpen} 
+                                onClose={onSystemSettingsClose}
+                                filters={filters}
+                                onFilterChange={onFilterChange}
+                            />
+                        )}
                     </div>
 
                     {/* Replay Mode Toggle */}

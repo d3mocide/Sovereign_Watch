@@ -1,3 +1,16 @@
+## [0.24.0] - 2026-03-10
+
+### Added
+
+- **System Settings Widget**: New centralized configuration interface for system-level toggles, accessible via the Top Bar "SYS" button. Currently houses the H3 Poller mesh toggle.
+- **H3 Coverage Mesh**: Real-time H3-based coverage visualization on the Tactical Map, providing spatial awareness of active sensor footprints and poller density.
+
+### Fixed
+
+- **AIS Poller Footprint Optimization**: Standardized AIS ingestion to a fixed 350 NM radius per mission area to prevent reconnection churn while filtering visible data locally.
+- **H3 Layer Rendering**: Optimized H3 mesh with `depthTest: false` and `depthWrite: false` to ensure perfect visibility of grounded tactical entities (AIS/ADS-B) regardless of mesh overlay.
+- **System UI Centering**: Re-aligned the System Settings widget to be perfectly centered beneath the "SYS" button with corrected horizontal translation.
+
 ## [0.23.0] - 2026-03-10
 
 ### Added
@@ -100,8 +113,10 @@
 
 ## [0.18.1] - 2026-03-06
 
-### Added
-
+### Fixed
+- **KiwiNodeBrowser**: Resolved `NaN, NaN` crash in MapLibre by adding defensive guards for invalid coordinates.
+- **geoUtils**: Robust Maidenhead grid conversion to handle non-digit characters in square locators.
+- **Linting**: Fixed all remaining frontend lint errors (purity, setState in effect, etc.).
 - **Branding**: Integrated the official Sovereign Watch cyber-tactical logo into the `README.md` and added a symmetrical text-less favicon to the frontend UI.
 
 ### Changed

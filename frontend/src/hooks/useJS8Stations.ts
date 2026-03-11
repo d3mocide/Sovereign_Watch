@@ -50,7 +50,7 @@ export function useJS8Stations(): UseJS8StationsResult {
     );
   }, []);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(function connectInternal() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     const ws = new WebSocket(WS_URL);
@@ -67,7 +67,7 @@ export function useJS8Stations(): UseJS8StationsResult {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = setTimeout(() => {
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, RECONNECT_MAX_MS);
-        connect();
+        connectInternal();
       }, reconnectDelay.current);
     };
 

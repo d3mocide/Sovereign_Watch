@@ -14,22 +14,6 @@ All three layers analyzed: **Frontend (TypeScript/React)**, **Backend API (Pytho
 | MEDIUM | Duplicate constants; consolidation needed |
 | LOW | Unused imports, unused interfaces |
 
----
-
-## 1. Ingestion Pollers
-
-### 1.1 `h3_sharding.py` — ENTIRE FILE UNUSED (CRITICAL)
-
-**File:** `backend/ingestion/aviation_poller/h3_sharding.py`
-
-The entire module is dead. `H3PriorityManager` was designed for adaptive H3 grid-based polling prioritization but was never imported or instantiated anywhere in the aviation poller.
-
-Dead contents:
-- `class H3PriorityManager` (lines 13–100)
-- Methods: `__init__`, `start`, `initialize_region`, `get_next_batch`, `update_priority`, `get_cell_center_radius`
-- All `h3` library calls (lines 48, 52, 96) are unreachable
-
-**Recommendation:** Delete the file, or if H3 sharding is on the roadmap, move it to `docs/` as a design artifact.
 
 ---
 
@@ -168,12 +152,11 @@ This interface is exported but never imported anywhere. The function `getTermina
 
 | # | File | Item | Type | Severity |
 |---|------|------|------|----------|
-| 1 | `backend/ingestion/aviation_poller/h3_sharding.py` | Entire file — `H3PriorityManager` class | Unused module | CRITICAL |
-| 2 | `frontend/src/hooks/useAnimationLoop.ts:414` | `void speedKts` + computation | Unused variable (per-frame cost) | HIGH |
-| 3 | `frontend/src/components/widgets/SearchWidget.tsx` | `SHIP_TYPE_MAP` | Duplicate constant | MEDIUM |
-| 4 | `frontend/src/components/layouts/SidebarRight.tsx` | `SHIP_TYPE_MAP` | Duplicate constant | MEDIUM |
-| 5 | `backend/api/routers/orbital.py:16` | `jday` from `sgp4.api` | Unused import | LOW |
-| 6 | `backend/api/routers/orbital.py:20` | `teme_to_ecef_vectorized` | Unused import | LOW |
+| 1 | `frontend/src/hooks/useAnimationLoop.ts:414` | `void speedKts` + computation | Unused variable (per-frame cost) | HIGH |
+| 2 | `frontend/src/components/widgets/SearchWidget.tsx` | `SHIP_TYPE_MAP` | Duplicate constant | MEDIUM |
+| 3 | `frontend/src/components/layouts/SidebarRight.tsx` | `SHIP_TYPE_MAP` | Duplicate constant | MEDIUM |
+| 4 | `backend/api/routers/orbital.py:16` | `jday` from `sgp4.api` | Unused import | LOW |
+| 5 | `backend/api/routers/orbital.py:20` | `teme_to_ecef_vectorized` | Unused import | LOW |
 | 7 | `backend/api/tests/test_cors.py:16-18` | `mock_pool`, `mock_redis`, `mock_kafka` | Unused assigned variables | LOW |
 | 8 | `backend/api/tests/test_tracks_validation.py:16-18` | `mock_pool`, `mock_redis`, `mock_kafka` | Unused assigned variables | LOW |
 | 9 | `backend/api/tests/test_tracks_replay.py:17-19` | `mock_pool`, `mock_redis`, `mock_kafka` | Unused assigned variables | LOW |
@@ -199,7 +182,6 @@ This interface is exported but never imported anywhere. The function `getTermina
 
 ## Recommended Action Order
 
-1. **Delete** `backend/ingestion/aviation_poller/h3_sharding.py` (or archive to docs)
 2. **Remove** `void speedKts` and its computation from `useAnimationLoop.ts`
 3. **Extract** `SHIP_TYPE_MAP` to a shared constants file
 4. **Strip** all unused imports across backend API, pollers, and JS8Call (11 items)

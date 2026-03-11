@@ -24,6 +24,7 @@ function App() {
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
 
   // Orbital Dashboard State
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
@@ -122,6 +123,7 @@ function App() {
       showLandingStations: false,
       cableOpacity: 0.6,
       showConstellation_Starlink: false,
+      showH3Coverage: false,
     };
     const saved = localStorage.getItem('mapFilters');
     if (saved) {
@@ -544,6 +546,11 @@ function App() {
           isAlertsOpen={isAlertsOpen}
           alerts={events.filter(e => e.type === 'alert')}
           onAlertsClose={() => setIsAlertsOpen(false)}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          isSystemSettingsOpen={isSystemSettingsOpen}
+          onSystemSettingsClick={() => setIsSystemSettingsOpen(!isSystemSettingsOpen)}
+          onSystemSettingsClose={() => setIsSystemSettingsOpen(false)}
         />
       }
       leftSidebar={

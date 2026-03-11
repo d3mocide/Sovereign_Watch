@@ -113,6 +113,7 @@ graph TD
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
         Z[Orbital TLE Feed] -->|TLE| B
+        H3[H3 Coverage: Live Poller Pulse] -->|JSON| B
         JS[Sovereign JS8Call] -->|UDP Bridge| B
         RF[RF Pulse: ARD/NOAA/RepBook/RadioRef] -->|REST API/SOAP| B
         B -->|TAK Protobuf| D(Redpanda Bus)
@@ -134,6 +135,7 @@ graph TD
         FE --> M[Projective Velocity Blending]
         M -->|WebGL 3D| N[Mapbox / MapLibre Overlay]
         FE --> O[Radio Terminal]
+        FE --> SYS[System Settings Widget]
         FE --> INF[Infrastructure Layers]
         SC[Submarine Cables] -->|REST API| FE
     end
@@ -265,8 +267,10 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 | **RF Infrastructure Awareness**  | Comprehensive mapping of amateur radio repeater networks across the theater for immediate access to communication relays.                |
 | **JS8Call Signal Intelligence**  | Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications.                        |
 | **Projective Velocity Blending** | Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings.                         |
+| **H3 Coverage Visualization**    | Real-time H3-based coverage mesh visualization for monitoring sensor footprints and poller status across the AOR.                        |
 | **Cross-Domain Tactical Alerts** | Automated detection and HUD notification of emergency squawks, maritime distress (AIS-SART), and imminent intel-satellite flyovers.      |
 | **Granular Filtering Matrix**    | Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., Drones or Military).                    |
+| **System Settings HUD**          | Centralized configuration interface for real-time tactical layer toggles and poller visualization controls.                               |
 | **Time-Travel (Historian)**      | All positional data is written to TimescaleDB. Operators can replay tactical situations from hours or days ago locally.                  |
 
 ## 📂 Directory Structure

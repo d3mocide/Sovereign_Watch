@@ -11,7 +11,7 @@ import websockets.exceptions
 from aiokafka import AIOKafkaProducer
 
 from classification import classify_vessel
-from utils import calculate_bbox
+from utils import calculate_bbox, calculate_distance_nm
 
 # Configure Logging
 logging.basicConfig(
@@ -141,16 +141,19 @@ class MaritimePollerService:
                             # ── Minimum-change threshold ──────────────────────────────────
                             # Ignore updates that are just floating-point drift or identical
                             # preset re-selections; only reconnect when the area actually moves.
+                            # We deliberately exclude radius changes here so we don't reconnect
+                            # to AISStream when the user just changes their display radius.
                             lat_diff = abs(new_lat - self.center_lat)
                             lon_diff = abs(new_lon - self.center_lon)
-                            radius_diff = abs(new_radius - self.radius_nm)
+
+                            # Always update the local radius so the stream_loop filter catches it
+                            self.radius_nm = new_radius
 
                             if (lat_diff < MIN_LAT_LON_CHANGE_DEG and
-                                    lon_diff < MIN_LAT_LON_CHANGE_DEG and
-                                    radius_diff < MIN_RADIUS_CHANGE_NM):
+                                    lon_diff < MIN_LAT_LON_CHANGE_DEG):
                                 logger.debug(
-                                    f"📍 Mission update below threshold — ignoring "
-                                    f"(Δlat={lat_diff:.4f}° Δlon={lon_diff:.4f}° Δr={radius_diff:.1f}nm)"
+                                    f"📍 Mission center update below threshold — ignoring reconnect "
+                                    f"(Δlat={lat_diff:.4f}° Δlon={lon_diff:.4f}°). New filter radius: {self.radius_nm}nm"
                                 )
                                 continue
 
@@ -188,8 +191,10 @@ class MaritimePollerService:
                     break
 
     async def connect_aisstream(self):
-        """Connect to AISStream.io WebSocket and subscribe with current bbox."""
-        bbox = calculate_bbox(self.center_lat, self.center_lon, self.radius_nm)
+        """Connect to AISStream.io WebSocket and subscribe with a MAX bounding box."""
+        # Always use a 350nm bounding box for the actual stream connection to prevent 
+        # frequent disconnects when the user just zooms/pans locally.
+        bbox = calculate_bbox(self.center_lat, self.center_lon, 350)
         subscription_message = {
             "APIKey": AISSTREAM_API_KEY,
             "BoundingBoxes": [bbox],
@@ -421,18 +426,27 @@ class MaritimePollerService:
                         tak_event = self.transform_to_tak(data)
 
                         if tak_event:
-                            # Send to Kafka (non-blocking)
-                            asyncio.create_task(
-                                self.kafka_producer.send(
-                                    "ais_raw",
-                                    value=tak_event,
-                                    key=tak_event["uid"].encode("utf-8")
-                                )
+                            # Evaluate distance and drop if outside current dynamic mission radius
+                            dist = calculate_distance_nm(
+                                self.center_lat, 
+                                self.center_lon, 
+                                tak_event["point"]["lat"], 
+                                tak_event["point"]["lon"]
                             )
+                            
+                            if dist <= self.radius_nm:
+                                # Send to Kafka (non-blocking)
+                                asyncio.create_task(
+                                    self.kafka_producer.send(
+                                        "ais_raw",
+                                        value=tak_event,
+                                        key=tak_event["uid"].encode("utf-8")
+                                    )
+                                )
 
-                            # Log sparingly (every 100th message)
-                            if hash(tak_event["uid"]) % 100 == 0:
-                                logger.debug(f"🚢 Published vessel {tak_event['detail']['contact']['callsign']}")
+                                # Log sparingly (every 100th message)
+                                if hash(tak_event["uid"]) % 100 == 0:
+                                    logger.debug(f"🚢 Published vessel {tak_event['detail']['contact']['callsign']}")
                     elif msg_type == "ShipStaticData":
                         meta = data.get("MetaData", {})
                         mmsi = meta.get("MMSI")
@@ -452,17 +466,25 @@ class MaritimePollerService:
                         tak_event = self.handle_class_b_position(data)
 
                         if tak_event:
-                            # Send to Kafka (non-blocking)
-                            asyncio.create_task(
-                                self.kafka_producer.send(
-                                    "ais_raw",
-                                    value=tak_event,
-                                    key=tak_event["uid"].encode("utf-8")
-                                )
+                            dist = calculate_distance_nm(
+                                self.center_lat, 
+                                self.center_lon, 
+                                tak_event["point"]["lat"], 
+                                tak_event["point"]["lon"]
                             )
+                            
+                            if dist <= self.radius_nm:
+                                # Send to Kafka (non-blocking)
+                                asyncio.create_task(
+                                    self.kafka_producer.send(
+                                        "ais_raw",
+                                        value=tak_event,
+                                        key=tak_event["uid"].encode("utf-8")
+                                    )
+                                )
 
-                            if hash(tak_event["uid"]) % 100 == 0:
-                                logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")
+                                if hash(tak_event["uid"]) % 100 == 0:
+                                    logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")
 
                 except asyncio.TimeoutError:
                     # No message in 30s - send ping to keep connection alive

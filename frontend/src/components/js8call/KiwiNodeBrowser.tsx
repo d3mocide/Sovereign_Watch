@@ -184,10 +184,12 @@ export default function KiwiNodeBrowser({
     [operatorGrid],
   );
 
+  const isValidOperator = !isNaN(operatorLat) && !isNaN(operatorLon);
+
   const circleGeoJSON = useMemo(() => {
-    if (!radiusKm) return null;
+    if (!radiusKm || !isValidOperator) return null;
     return buildCircleGeoJSON(operatorLat, operatorLon, radiusKm);
-  }, [operatorLat, operatorLon, radiusKm]);
+  }, [operatorLat, operatorLon, radiusKm, isValidOperator]);
 
   // Close on click outside (excludes the container that owns the trigger)
   useEffect(() => {
@@ -204,6 +206,7 @@ export default function KiwiNodeBrowser({
 
   // Clear node popup when switching views
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedNode(null);
   }, [viewMode]);
 
@@ -441,8 +444,8 @@ export default function KiwiNodeBrowser({
           )}
           <Map
             initialViewState={{
-              latitude: operatorLat,
-              longitude: operatorLon,
+              latitude: isValidOperator ? operatorLat : 0,
+              longitude: isValidOperator ? operatorLon : 0,
               zoom: radiusKm
                 ? Math.max(1, Math.min(8, 8 - Math.log2(radiusKm / 50)))
                 : 3,
@@ -472,57 +475,61 @@ export default function KiwiNodeBrowser({
             )}
 
             {/* Operator location marker */}
-            <Marker
-              latitude={operatorLat}
-              longitude={operatorLon}
-              anchor="center"
-            >
-              <div
-                title={`Operator: ${operatorGrid}`}
-                className="w-3 h-3 rounded-full border-2 shadow-lg"
-                style={{
-                  background: "#818cf8",
-                  borderColor: "#c7d2fe",
-                  boxShadow: "0 0 6px #6366f180",
-                }}
-              />
-            </Marker>
+            {isValidOperator && (
+              <Marker
+                latitude={operatorLat}
+                longitude={operatorLon}
+                anchor="center"
+              >
+                <div
+                  title={`Operator: ${operatorGrid}`}
+                  className="w-3 h-3 rounded-full border-2 shadow-lg"
+                  style={{
+                    background: "#818cf8",
+                    borderColor: "#c7d2fe",
+                    boxShadow: "0 0 6px #6366f180",
+                  }}
+                />
+              </Marker>
+            )}
 
             {/* Node markers */}
-            {nodes.map((node, index) => {
-              const isActive =
-                activeConfig?.host === node.host &&
-                activeConfig?.port === node.port;
-              const color = isActive ? "#818cf8" : markerColor(node.distance_km);
-              return (
-                <Marker
-                  key={`${node.host}:${node.port}-${index}`}
-                  latitude={node.lat}
-                  longitude={node.lon}
-                  anchor="center"
-                  onClick={(e) => {
-                    e.originalEvent.stopPropagation();
-                    setSelectedNode(
-                      selectedNode?.host === node.host &&
-                        selectedNode?.port === node.port
-                        ? null
-                        : node,
-                    );
-                  }}
-                >
-                  <div
-                    title={`${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
-                    className={`w-2.5 h-2.5 rounded-full border-2 cursor-pointer transition-transform hover:scale-125 ${
-                      isActive ? "animate-pulse" : ""
-                    }`}
-                    style={{
-                      background: color + "40",
-                      borderColor: color,
+            {nodes
+              .filter(node => !isNaN(node.lat) && !isNaN(node.lon))
+              .map((node, index) => {
+                const isActive =
+                  activeConfig?.host === node.host &&
+                  activeConfig?.port === node.port;
+                const color = isActive ? "#818cf8" : markerColor(node.distance_km);
+                return (
+                  <Marker
+                    key={`${node.host}:${node.port}-${index}`}
+                    latitude={node.lat}
+                    longitude={node.lon}
+                    anchor="center"
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation();
+                      setSelectedNode(
+                        selectedNode?.host === node.host &&
+                          selectedNode?.port === node.port
+                          ? null
+                          : node,
+                      );
                     }}
-                  />
-                </Marker>
-              );
-            })}
+                  >
+                    <div
+                      title={`${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
+                      className={`w-2.5 h-2.5 rounded-full border-2 cursor-pointer transition-transform hover:scale-125 ${
+                        isActive ? "animate-pulse" : ""
+                      }`}
+                      style={{
+                        background: color + "40",
+                        borderColor: color,
+                      }}
+                    />
+                  </Marker>
+                );
+              })}
 
             {/* Node detail popup */}
             {selectedNode && (

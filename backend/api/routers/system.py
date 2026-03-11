@@ -143,3 +143,29 @@ async def set_ai_config(req: AIModelRequest):
 
     logger.info(f"AI model switched to: {req.model_id}")
     return {"status": "ok", "active_model": req.model_id}
+
+@router.get("/api/debug/h3_cells")
+async def get_h3_cells():
+    """Return the current set of H3 polling cells and their statuses."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        # Retrieve all items from the h3:cell_state Hash
+        cell_states = await db.redis_client.hgetall("h3:cell_state")
+        
+        # Parse each state from JSON back into dictionaries
+        parsed_cells = []
+        for cell_id, state_json in cell_states.items():
+            cell_data = json.loads(state_json)
+            cell_data["cell"] = cell_id
+            parsed_cells.append(cell_data)
+
+        # Sort by cell_id to ensure consistent ordering
+        parsed_cells.sort(key=lambda x: x["cell"])
+
+        return parsed_cells
+
+    except Exception as e:
+        logger.error(f"Failed to get H3 cells: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -14,9 +14,10 @@ interface LayerFiltersProps {
     showTanker?: boolean;
     showPassenger?: boolean;
     showFishing?: boolean;
-    [key: string]: any;
+    showH3Coverage?: boolean;
+    [key: string]: boolean | string | number | string[] | undefined;
   };
-  onFilterChange: (key: string, value: any) => void;
+  onFilterChange: (key: string, value: boolean | string | number | string[]) => void;
 }
 
 export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterChange }) => {
