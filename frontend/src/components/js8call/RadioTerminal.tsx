@@ -35,6 +35,7 @@ import {
   Activity,
   Server,
   ChevronDown,
+  Headphones,
 } from 'lucide-react';
 import type { 
   KiwiNode, 
@@ -43,6 +44,8 @@ import type {
   JS8StatusLine 
 } from '../../types';
 import KiwiNodeBrowser from './KiwiNodeBrowser';
+import ListeningPost from './ListeningPost';
+import { useListenAudio } from '../../hooks/useListenAudio';
 import { 
   JS8_BAND_PRESETS, 
   JS8_SPEED_MODES 
@@ -119,6 +122,7 @@ interface RadioTerminalProps {
   kiwiConnecting: boolean;
   activeKiwiConfig: any;
   js8Mode: string;
+  sMeterDbm: number | null;
   sendMessage: (target: string, message: string) => void;
   sendAction: (payload: object) => void;
 }
@@ -132,10 +136,15 @@ export default function RadioTerminal({
   kiwiConnecting: kiwiIsConnecting,
   activeKiwiConfig: sharedActiveKiwiConfig,
   js8Mode: sharedJs8Mode,
+  sMeterDbm,
   sendMessage,
   sendAction,
 }: RadioTerminalProps) {
   // ── State ──────────────────────────────────────────────────────────────────
+
+  // Radio operating mode: JS8 decode terminal vs. live audio listening post
+  const [radioMode, setRadioMode] = useState<'JS8' | 'LISTEN'>('JS8');
+
   const [txTarget, setTxTarget] = useState('@ALLCALL');
   const [txMessage, setTxMessage] = useState('');
   const [txPending, setTxPending] = useState(false);
@@ -163,6 +172,17 @@ export default function RadioTerminal({
   const logBottomRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const sdrContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Listening Post audio hook (only active in LISTEN mode) ─────────────────
+  const {
+    analyserNode,
+    isConnected: listenConnected,
+    isPlaying: listenPlaying,
+    audioEnabled,
+    enableAudio,
+    volume,
+    setVolume,
+  } = useListenAudio(radioMode === 'LISTEN');
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -356,6 +376,37 @@ export default function RadioTerminal({
           {/* Divider */}
           <div className="w-px h-6 bg-slate-800 shrink-0" />
 
+          {/* Mode toggle: JS8 decode ↔ Listening Post */}
+          <div className="flex rounded-md overflow-hidden border border-white/10 shrink-0">
+            <button
+              onClick={() => setRadioMode('JS8')}
+              title="JS8Call decode mode"
+              className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-all duration-150 ${
+                radioMode === 'JS8'
+                  ? 'bg-indigo-600 text-white border-r border-indigo-500'
+                  : 'bg-black/30 text-slate-500 border-r border-white/10 hover:text-slate-300 hover:bg-slate-800/50'
+              }`}
+            >
+              <Radio className="w-3 h-3" />
+              JS8
+            </button>
+            <button
+              onClick={() => setRadioMode('LISTEN')}
+              title="Listening Post — live audio + waterfall"
+              className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-all duration-150 ${
+                radioMode === 'LISTEN'
+                  ? 'bg-emerald-700 text-white'
+                  : 'bg-black/30 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
+              }`}
+            >
+              <Headphones className="w-3 h-3" />
+              Listen
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-slate-800 shrink-0" />
+
           {/* JS8Call frequency / station */}
           <div 
             className="flex items-center gap-2.5 bg-black/40 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md cursor-pointer hover:border-indigo-500/40 hover:bg-black/60 transition-all shadow-inner"
@@ -520,6 +571,22 @@ export default function RadioTerminal({
       {/* ── MAIN BODY ── */}
       <div className="flex flex-1 overflow-hidden">
 
+      {radioMode === 'LISTEN' ? (
+        <ListeningPost
+          analyserNode={analyserNode}
+          isAudioPlaying={listenPlaying}
+          audioEnabled={audioEnabled}
+          enableAudio={enableAudio}
+          volume={volume}
+          onVolumeChange={setVolume}
+          sMeterDbm={sMeterDbm}
+          activeKiwiConfig={sharedActiveKiwiConfig}
+          bridgeConnected={bridgeConnected}
+          sendAction={sendAction}
+          isConnected={listenConnected}
+        />
+      ) : (
+        <>
         {/* MESSAGE LOG – left, dominant, bottom-anchored like a chat terminal */}
         <main className="flex-1 flex flex-col overflow-y-auto p-4" ref={logContainerRef}>
           {/* Push messages to the bottom when the log is sparse */}
@@ -565,9 +632,12 @@ export default function RadioTerminal({
             )}
           </div>
         </aside>
+        </>
+      )}
       </div>
 
-      {/* ── TRANSMIT PANEL ── */}
+      {/* ── TRANSMIT PANEL — hidden in LISTEN mode ── */}
+      {radioMode === 'JS8' && (
       <footer className="shrink-0 bg-black/50 backdrop-blur-xl border-t border-white/10 z-20 relative">
         {/* Subtle glow underneath footer */}
         <div className="absolute bottom-0 left-0 w-full h-1/2 bg-indigo-500/5 blur-xl pointer-events-none" />
@@ -653,6 +723,7 @@ export default function RadioTerminal({
         </div>
 
       </footer>
+      )}
     </div>
   );
 }

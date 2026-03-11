@@ -111,6 +111,10 @@ _message_queue: Optional[asyncio.Queue] = None  # initialized in lifespan
 # Accessed from the asyncio thread only – no lock needed.
 _ws_clients: list[WebSocket] = []
 
+# Active audio WebSocket connections for the Listening Post browser stream.
+# These receive raw S16LE PCM @ 12 kHz as binary frames.
+_audio_ws_clients: list[WebSocket] = []
+
 # In-memory station registry keyed by callsign.
 # Written from the background task (single asyncio thread) – no lock needed.
 _station_registry: dict[str, dict] = {}
@@ -255,7 +259,12 @@ def _start_pacat() -> Optional[subprocess.Popen]:
 
 
 def _write_audio(pcm: bytes) -> None:
-    """Write a PCM chunk to the persistent pacat process stdin."""
+    """
+    Write a PCM chunk to the persistent pacat process stdin (JS8Call decode path)
+    AND schedule a broadcast to any connected browser audio WebSocket clients
+    (Listening Post path).  Both paths operate independently — pacat failure does
+    not affect browser clients and vice-versa.
+    """
     global _pacat_proc
     if _pacat_proc is None or _pacat_proc.poll() is not None:
         # pacat died — attempt restart
@@ -265,6 +274,37 @@ def _write_audio(pcm: bytes) -> None:
             _pacat_proc.stdin.write(pcm)
         except BrokenPipeError:
             _pacat_proc = None  # will be restarted on next chunk
+
+    # Fan out PCM to browser Listening Post clients.
+    # This is safe to call from within the asyncio event loop (KiwiClient._receive_loop
+    # is an asyncio Task), so ensure_future() schedules on the running loop.
+    if _audio_ws_clients:
+        asyncio.ensure_future(_broadcast_audio_bytes(pcm))
+
+
+async def _broadcast_audio_bytes(pcm: bytes) -> None:
+    """Broadcast a raw PCM chunk to all active /ws/audio clients."""
+    dead: list[WebSocket] = []
+    for ws in _audio_ws_clients:
+        try:
+            await ws.send_bytes(pcm)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _audio_ws_clients:
+            _audio_ws_clients.remove(ws)
+
+
+def _kiwi_rssi_callback(rssi_dbm: float) -> None:
+    """
+    Called by KiwiClient every ~10 audio frames (~800 ms) with the S-meter reading.
+    Enqueues a SMETER message so all /ws/js8 clients receive it.
+    """
+    _enqueue_from_thread({
+        "type": "SMETER",
+        "dbm": round(rssi_dbm, 1),
+        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+    })
 
 
 async def _broadcast_json(payload: dict) -> None:
@@ -618,6 +658,7 @@ async def lifespan(app: FastAPI):
             on_audio=_write_audio,
             on_status=_kiwi_status_callback,
             on_disconnect=_kiwi_disconnect_callback,
+            on_rssi=_kiwi_rssi_callback,
         )
         # Phase 1: start node directory (non-blocking initial fetch)
         _kiwi_directory = KiwiDirectory()
@@ -1016,6 +1057,46 @@ async def ws_js8(websocket: WebSocket) -> None:
         # Always remove from active clients list on disconnect
         if websocket in _ws_clients:
             _ws_clients.remove(websocket)
+
+
+# ===========================================================================
+# WebSocket Endpoint  /ws/audio  — raw PCM stream for browser Listening Post
+# ===========================================================================
+
+@app.websocket("/ws/audio")
+async def ws_audio(websocket: WebSocket) -> None:
+    """
+    Binary WebSocket that streams raw KiwiSDR audio to the browser.
+
+    Outbound (server → frontend):
+      Binary frames of S16LE PCM @ 12 kHz mono, same chunks delivered by the
+      KiwiClient on_audio callback.  No framing headers — each WebSocket message
+      is a contiguous PCM chunk ready for AudioBufferSourceNode scheduling.
+
+    Inbound (frontend → server):
+      Ignored — the client may send periodic text pings to keep the connection
+      alive through proxies, but the server does not act on them.
+
+    This endpoint is only active when the native KiwiClient path is running
+    (KIWI_USE_SUBPROCESS=0).  The browser connects when entering Listening Post
+    mode and disconnects on exit, so bandwidth is only consumed when needed.
+    """
+    await websocket.accept()
+    _audio_ws_clients.append(websocket)
+    remote = websocket.client
+    logger.info("Audio WebSocket connected: %s  (total listeners: %d)", remote, len(_audio_ws_clients))
+    try:
+        while True:
+            # Absorb any inbound heartbeat messages; real-time audio is pushed out.
+            await websocket.receive()
+    except WebSocketDisconnect:
+        logger.info("Audio WebSocket disconnected: %s", remote)
+    except Exception as exc:
+        logger.debug("Audio WebSocket error (%s): %s", remote, exc)
+    finally:
+        if websocket in _audio_ws_clients:
+            _audio_ws_clients.remove(websocket)
+        logger.info("Audio WebSocket removed: %s  (remaining: %d)", remote, len(_audio_ws_clients))
 
 
 # ===========================================================================

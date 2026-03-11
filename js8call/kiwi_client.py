@@ -80,20 +80,23 @@ class KiwiClient:
         on_audio:      Callable[[bytes], None],
         on_status:     Callable[[dict], None],
         on_disconnect: Optional[Callable[[int], None]] = None,
+        on_rssi:       Optional[Callable[[float], None]] = None,
     ) -> None:
         self._on_audio      = on_audio
         self._on_status     = on_status
         self._on_disconnect = on_disconnect
+        self._on_rssi       = on_rssi
 
         self._ws: Optional[object] = None  # websockets.WebSocketClientProtocol
         self._recv_task:      Optional[asyncio.Task] = None
         self._keepalive_task: Optional[asyncio.Task] = None
 
-        self._host:      str   = ""
-        self._port:      int   = 0
-        self._freq_khz:  float = 0.0
-        self._mode:      str   = ""
+        self._host:        str   = ""
+        self._port:        int   = 0
+        self._freq_khz:    float = 0.0
+        self._mode:        str   = ""
         self._disconnecting: bool = False  # True when we initiated the close
+        self._frame_count: int   = 0       # For RSSI decimation
 
     # ------------------------------------------------------------------
     # Public API
@@ -222,6 +225,11 @@ class KiwiClient:
                     continue
                 # Validate SND magic header and extract PCM (bytes 10+)
                 if len(frame) > 10 and frame[:3] == b"SND":
+                    # Extract RSSI (bytes 8-9, int16 BE, units: 0.1 dBm) every 10 frames
+                    self._frame_count += 1
+                    if self._on_rssi and self._frame_count % 10 == 0:
+                        rssi_raw = int.from_bytes(frame[8:10], "big", signed=True)
+                        self._on_rssi(rssi_raw / 10.0)
                     pcm = frame[10:]
                     if pcm:
                         self._on_audio(pcm)
