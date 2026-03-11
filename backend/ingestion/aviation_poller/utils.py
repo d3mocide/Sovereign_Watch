@@ -1,5 +1,5 @@
 import math
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return distance in metres between two WGS-84 coordinates."""

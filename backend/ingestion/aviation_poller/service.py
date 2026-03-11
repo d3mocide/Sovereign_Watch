@@ -11,6 +11,7 @@ from multi_source_poller import MultiSourcePoller
 from classification import classify_aircraft
 from arbitration import Arbitrator
 from utils import safe_float, parse_altitude
+from h3_sharding import H3PriorityManager
 
 # Config - Read from ENV (set in docker-compose.yml)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
@@ -41,6 +42,9 @@ class PollerService:
         self.center_lon = CENTER_LON
         self.radius_nm = COVERAGE_RADIUS_NM
 
+        # H3 adaptive polling manager (Ingest-13)
+        self.h3_manager = H3PriorityManager(REDIS_URL)
+
     async def setup(self):
         await self.poller.start()
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
@@ -53,7 +57,13 @@ class PollerService:
         
         # Check for existing active mission from Redis
         await self.load_active_mission()
-        
+
+        # Start H3 manager and seed the poll queue for the current mission area
+        await self.h3_manager.start()
+        await self.h3_manager.initialize_region(
+            self.center_lat, self.center_lon, self.radius_nm * 1.852
+        )
+
         logger.info("Poller service ready")
 
     async def load_active_mission(self):
@@ -72,6 +82,7 @@ class PollerService:
         logger.info("Shutting down...")
         self.running = False
         await self.poller.close()
+        await self.h3_manager.close()
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
@@ -113,6 +124,11 @@ class PollerService:
                             self.center_lon = mission["lon"]
                             self.radius_nm = mission["radius_nm"]
                             logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                            # Flush stale cells and re-seed for the new AOR
+                            await self.h3_manager.flush_region()
+                            await self.h3_manager.initialize_region(
+                                self.center_lat, self.center_lon, self.radius_nm * 1.852
+                            )
                         except Exception as e:
                             logger.error(f"Failed to parse mission update: {e}")
             except (redis.ConnectionError, asyncio.CancelledError):
@@ -129,30 +145,25 @@ class PollerService:
                     break
 
     async def source_loop(self, source_idx: int):
-        """Independent loop for a specific aviation source."""
+        """Independent loop for a specific aviation source, driven by the H3 priority queue."""
         source = self.poller.sources[source_idx]
         logger.info(f"🚀 Started dedicated loop for {source.name}")
-        
-        current_point_idx = 0
-        
+
         while self.running:
             try:
-                polling_points = self.calculate_polling_points()
-                if not polling_points:
+                cells = await self.h3_manager.get_next_batch(batch_size=1)
+                if not cells:
                     await asyncio.sleep(1)
                     continue
-                    
-                # Ensure index is in range (handles mission area changes that shrink the point list)
-                current_point_idx %= len(polling_points)
-                lat, lon, radius = polling_points[current_point_idx]
-                current_point_idx = (current_point_idx + 1) % len(polling_points)
 
-                # Poll using the specific source directly
-                # Clamp radius to source-specific maximum (e.g. 250nm) to avoid 400 errors
+                cell = cells[0]
+                lat, lon, radius = self.h3_manager.get_cell_center_radius(cell)
+
+                # Clamp radius to source-specific maximum to avoid 400 errors
                 effective_radius = min(radius, source.max_radius)
                 path = source.url_format.format(lat=lat, lon=lon, radius=effective_radius)
                 url = f"{source.base_url}{path}"
-                
+
                 try:
                     # BUG-001: Rate limiting is enforced inside _fetch() via the
                     # per-source limiter in multi_source_poller.py. A second
@@ -162,20 +173,25 @@ class PollerService:
                     aircraft = data.get("ac") or data.get("aircraft") or []
 
                     if aircraft:
-                        # Add metadata for arbitration
                         fetched_at = time.time()
                         for ac in aircraft:
                             ac["_source"] = source.name
                             ac["_fetched_at"] = fetched_at
-
                         await self.process_aircraft_batch(aircraft, lat, lon)
+
+                    # Update cell priority based on observed traffic.
+                    # Use raw count (pre-arbitration) as the activity signal.
+                    await self.h3_manager.update_priority(cell, len(aircraft))
+
                 except Exception as e:
                     logger.error(f"Error in {source.name} cycle: {e}")
                     # Note: source.penalize() is already called inside _fetch for 429s
+                    # Still update priority so the cell re-enters the queue
+                    await self.h3_manager.update_priority(cell, 0)
 
                 # Small sleep to prevent tight-looping
                 await asyncio.sleep(0.1)
-                
+
             except Exception as e:
                 logger.error(f"CRITICAL error in {source.name} loop: {e}")
                 await asyncio.sleep(5)

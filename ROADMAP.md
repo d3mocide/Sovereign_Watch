@@ -178,7 +178,8 @@ These core components, usability improvements, and collaborative features define
 | **Ingest-11**  | FCC ASR Tower Service   | Data Eng  | FCC public antenna structure DB → bounding-box filtered `/api/towers` endpoint. |
 | **FE-25b**     | FCC Tower Layer         | Frontend  | `buildTowerLayers.ts`: communication tower markers by height and type. |
 | **Ingest-08**  | **Infra Caching**       | Data Eng  | Move Submarine Cable/Landing Station caching to a backend Python service to replace client-side localStorage. |
-| **FE-09**      | Coverage Viz     | Frontend  | H3 polling fidelity visualization.                                                                                                              |
+| **Ingest-13**  | H3 Adaptive Aviation Poller | Data Eng | Replace fixed 3-point polling in `service.py` with `H3PriorityManager`. Resolution-4 cells (~1770km²), Redis ZSET priority queue, adaptive intervals (10s active / 60s empty). See `docs/tasks/2026-03-08-h3-poller-plan.md`. |
+| **FE-09**      | Coverage Viz (H3 Debug Layer) | Frontend  | Deck.gl `H3HexagonLayer` fed by `/api/debug/h3_cells` SSE. Color = poll interval (green=active, grey=dormant), opacity = aircraft count. Pairs with Ingest-13. |
 | **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                                                            |
 | **FE-13**      | Mission Labels   | Frontend  | Floating text labels for coverage areas.                                                       |
 | **Ingest-07**  | Drone Remote ID  | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline → `drone_raw` Kafka topic. Requires RTL-SDR hardware. |
@@ -207,4 +208,4 @@ See `docs/GAP_ANALYSIS_2026-03-06.md` for a full automated code review against t
 
 ---
 
-_Updated 2026-03-06. Added FE-28–FE-31, Ingest-03a, Infra-03, Security-01 to Completed. Added GAP-01 (Orbital Pass Prediction) as P0 to Next Priority. See `docs/FEATURE-ROADMAP-PHASE-9.md` for Phase 9 RF Infrastructure specs. See `docs/GAP_ANALYSIS_2026-03-06.md` for full gap report._
+_Updated 2026-03-08. Added Ingest-13 (H3 Adaptive Aviation Poller) and updated FE-09 (Coverage Viz) to P2 backlog. See `docs/tasks/2026-03-08-h3-poller-plan.md` for implementation and testing plan._
