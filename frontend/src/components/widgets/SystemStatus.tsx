@@ -222,8 +222,8 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 <div className="flex items-center gap-3">
                   <Network size={14} className={filters.showCables !== false ? 'text-cyan-400' : 'text-white/20'} />
                   <div className="flex flex-col">
-                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">SUBMARINE CABLES</span>
-                    <span className="text-[9px] font-mono text-cyan-400/60">Global Undersea Infrastructure</span>
+                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">GLOBAL NETWORK</span>
+                    <span className="text-[9px] font-mono text-cyan-400/60">Undersea & Terrestrial Infra</span>
                   </div>
                 </div>
                 <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: infraExpanded ? 'rotate(90deg)' : 'none' }}>
@@ -266,6 +266,26 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   </div>
                   <input type="checkbox" className="sr-only" checked={filters.showLandingStations !== false} onChange={(e) => onFilterChange('showLandingStations', e.target.checked)} />
                   <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showLandingStations !== false ? 'bg-cyan-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showLandingStations !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Internet Outages */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showOutages === true ? 'border-red-400/20 bg-red-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px]">🔥</span>
+                    <span className={`text-[9px] font-bold tracking-wide ${filters.showOutages === true ? 'text-red-400/80' : 'text-red-400/30'}`}>INTERNET OUTAGES</span>
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={filters.showOutages === true} onChange={(e) => onFilterChange('showOutages', e.target.checked)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showOutages === true ? 'bg-red-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showOutages === true ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
+                {/* Datacenters */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showDatacenters === true ? 'border-purple-400/20 bg-purple-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px]">🏢</span>
+                    <span className={`text-[9px] font-bold tracking-wide ${filters.showDatacenters === true ? 'text-purple-400/80' : 'text-purple-400/30'}`}>DATA CENTERS</span>
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={filters.showDatacenters === true} onChange={(e) => onFilterChange('showDatacenters', e.target.checked)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showDatacenters === true ? 'bg-purple-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showDatacenters === true ? 'left-2.5' : 'left-0.5'}`} /></div>
                 </label>
 
                 {/* Opacity Slider */}

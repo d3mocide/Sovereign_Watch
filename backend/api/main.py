@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, rf, orbital
+from routers import system, tracks, analysis, rf, orbital, infra
 from core.database import db
 from services.historian import historian_task
 from services.broadcast import broadcast_service
@@ -92,6 +92,7 @@ app.include_router(tracks.router)
 app.include_router(analysis.router)
 app.include_router(rf.router)
 app.include_router(orbital.router)
+app.include_router(infra.router)
 
 if __name__ == "__main__":
     import uvicorn

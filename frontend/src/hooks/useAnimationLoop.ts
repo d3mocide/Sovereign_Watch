@@ -75,6 +75,8 @@ interface UseAnimationLoopOptions {
   } | undefined;
   cablesData?: any;
   stationsData?: any;
+  outagesData?: any;
+  datacentersData?: any;
   setHoveredInfra?: (info: any) => void;
   setSelectedInfra?: (info: any) => void;
   globeMode: boolean | undefined;
@@ -129,6 +131,8 @@ export function useAnimationLoop({
   filters,
   cablesData,
   stationsData,
+  outagesData,
+  datacentersData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -851,6 +855,8 @@ export function useAnimationLoop({
       const infraLayers = buildInfraLayers(
         cablesData,
         stationsData,
+        outagesData,
+        datacentersData,
         filters,
         setHoveredInfra || (() => { }),
         setSelectedInfra,
@@ -1055,5 +1061,7 @@ export function useAnimationLoop({
     showRepeaters,
     cablesData,
     stationsData,
+    outagesData,
+    datacentersData,
   ]);
 }
