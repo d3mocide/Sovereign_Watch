@@ -12,3 +12,14 @@
 ## 2025-03-06 - Accessible Clipboard Actions in High-Density Views
 **Learning:** In high-density widgets like `PayloadInspector` where raw hex dumps or JSON are displayed, users frequently need to extract the data for external analysis. While a copy function might exist in code, failing to render a distinct, accessible button forces manual text selection, which is poor UX. Furthermore, clipboard actions need clear, immediate visual feedback (e.g., swapping a "Copy" icon for a "Check" icon) and must be keyboard-accessible to support power users and assistive technologies.
 **Action:** Always verify that intended features like "copy to clipboard" have a visible, keyboard-accessible UI element (`<button>` with `focus-visible`), appropriate ARIA labels (`aria-label`, `title`), and stateful visual feedback upon interaction.
+## 2025-03-08 - Added Accessible Tab Pattern to Widgets
+**Learning:** Icon-only view tabs in dynamic widgets (like JS8Widget) can be confusing for screen readers if not properly marked up. Adding `role="tablist"` to the container, and `role="tab"`, `aria-selected`, `aria-controls`, `id`, `title`, and `aria-label` to the buttons ensures robust accessibility. Additionally, hiding the inner icon with `aria-hidden="true"` prevents redundant announcements. Keyboard support is crucial via `focus-visible` outline styles.
+**Action:** Always apply this comprehensive ARIA pattern to any future icon-only tab groups or segment controls within widgets.
+
+## 2024-03-09 - Ensure Custom Focus Rings Hide Default Outlines
+**Learning:** When using custom `focus-visible:ring-1` classes for accessibility styling on buttons and inputs, the default browser focus ring (usually a thick blue outline) often still appears alongside it, looking unpolished.
+**Action:** Always pair `focus-visible:ring-1` with `outline-none` so that only the custom focus styling is shown to keyboard users.
+
+## 2025-03-09 - Icon-Only TopBar Toggle Buttons Require Explicit ARIA
+**Learning:** Icon-only buttons in global navigation elements (like `TopBar.tsx` view modes and toggle switches) provide visual feedback (e.g., color changes, shadows) but are invisible to screen readers without explicit `aria-label` and `aria-pressed` or `title` attributes. Furthermore, without `focus-visible:ring-*` and `outline-none`, keyboard navigation lacks clear indicators in high-density tactical interfaces.
+**Action:** Always ensure that icon-only toggle buttons in navigation bars include `aria-label`, `title`, and stateful attributes like `aria-pressed` or `aria-expanded`. Apply `aria-hidden="true"` to internal SVG icons to prevent redundant announcements, and use consistent `focus-visible:ring-1` styling.

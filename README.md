@@ -13,7 +13,7 @@
 
   <p align="center">
     <em>A self-hosted, edge-to-cloud intelligence platform for high-velocity telemetry (ADS-B, AIS, Orbital) and OSINT fusion.</em><br/>
-    <em>It enforces data sovereignty by running entirely on local hardware, utilizing a "Pulse" architecture and "Tiered AI" cognition.</em>
+    <em>It enforces data sovereignty by running on local hardware, utilizing a "Pulse" architecture and "Tiered AI" cognition.</em>
   </p>
 </div>
 
@@ -51,6 +51,7 @@
     # - VITE_MAPBOX_TOKEN (3D Terrain & Maps)
     # - KIWI_HOST / KIWI_PORT (JS8Call SDR source)
     # - MY_GRID (Your Maidenhead locator)
+    # - RADIOREF_APP_KEY / RADIOREF_USERNAME / RADIOREF_PASSWORD (RadioReference integration)
     ```
 
 2.  **Boot System**:
@@ -62,6 +63,24 @@
 3.  **Access Interfaces**:
     - **Tactical Map (UI)**: [http://localhost](http://localhost)
     - **Fusion API**: [http://localhost/api/docs](http://localhost/api/docs)
+
+### Upgrading an Existing Installation
+
+When pulling new updates that include database schema changes (like the RF Plus Overhaul), you must apply the database migrations to your pre-existing database. Fresh installations do not need to do this.
+
+1.  **Pull Latest Code and Rebuild**:
+
+    ```bash
+    git pull
+    docker compose up -d --build
+    ```
+
+2.  **Apply Migrations**:
+    Run the specific migration script against your running TimescaleDB container. For example, to apply the RF Plus Overhaul tables:
+
+    ```bash
+    docker compose exec -T timescaledb psql -U postgres -d sovereign_watch < ./backend/db/migrate_rf_plus.sql
+    ```
 
 ## ⚠️ Disclaimer & Liability
 
@@ -94,8 +113,9 @@ graph TD
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
         Z[Orbital TLE Feed] -->|TLE| B
+        H3[H3 Coverage: Live Poller Pulse] -->|JSON| B
         JS[Sovereign JS8Call] -->|UDP Bridge| B
-        RP[RF Repeaters] -->|REST API| B
+        RF[RF Pulse: ARD/NOAA/RepBook/RadioRef] -->|REST API/SOAP| B
         B -->|TAK Protobuf| D(Redpanda Bus)
     end
 
@@ -115,6 +135,7 @@ graph TD
         FE --> M[Projective Velocity Blending]
         M -->|WebGL 3D| N[Mapbox / MapLibre Overlay]
         FE --> O[Radio Terminal]
+        FE --> SYS[System Settings Widget]
         FE --> INF[Infrastructure Layers]
         SC[Submarine Cables] -->|REST API| FE
     end
@@ -169,7 +190,12 @@ Sovereign Watch uses the public KiwiSDR directory to find optimal listening node
 
 | Feed             | URL                                                                 | Notes                                                                                                     |
 | :--------------- | :------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------- |
-| **RepeaterBook** | [repeaterbook.com/api](https://www.repeaterbook.com/api/export.php) | API Key Required. (working to get app approved) Proxied server-side to avoid CORS. 24h client-side cache. |
+| **RepeaterBook** | [repeaterbook.com/api](https://www.repeaterbook.com/api/export.php) | API Key required. Proxied server-side via `rf_pulse`.                                                     |
+| **RadioReference**| [radioreference.com](https://www.radioreference.com)               | App Key, Username, and Password required via `.env`. Requires SOAP (`zeep`).                              |
+| **Amateur Radio Dir**| [amateur-radio-directory.com](https://amateur-radio-directory.com) | Open web scraping source using `beautifulsoup4` and `lxml`.                                             |
+| **NOAA NWR**     | [weather.gov/nwr](https://www.weather.gov/nwr/)                     | Publicly accessible NOAA Weather Radio master list CSV parsing.                                           |
+
+> **Note**: These four sources are aggregated continuously by the internal **`rf_pulse`** ingestion poller, a Python microservice with asynchronous Kafka-streaming orchestrated with `redis` caching, `zeep` (SOAP), and `beautifulsoup4/lxml` dependencies.
 
 ### 🌊 Undersea Infrastructure (Submarine Cables)
 
@@ -241,7 +267,10 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 | **RF Infrastructure Awareness**  | Comprehensive mapping of amateur radio repeater networks across the theater for immediate access to communication relays.                |
 | **JS8Call Signal Intelligence**  | Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications.                        |
 | **Projective Velocity Blending** | Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings.                         |
+| **H3 Coverage Visualization**    | Real-time H3-based coverage mesh visualization for monitoring sensor footprints and poller status across the AOR.                        |
+| **Cross-Domain Tactical Alerts** | Automated detection and HUD notification of emergency squawks, maritime distress (AIS-SART), and imminent intel-satellite flyovers.      |
 | **Granular Filtering Matrix**    | Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., Drones or Military).                    |
+| **System Settings HUD**          | Centralized configuration interface for real-time tactical layer toggles and poller visualization controls.                               |
 | **Time-Travel (Historian)**      | All positional data is written to TimescaleDB. Operators can replay tactical situations from hours or days ago locally.                  |
 
 ## 📂 Directory Structure

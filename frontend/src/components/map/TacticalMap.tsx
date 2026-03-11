@@ -12,7 +12,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps, RepeaterStation } from "../../types";
+import { CoTEntity, JS8Station, MissionProps, RFSite } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -87,9 +87,23 @@ interface TacticalMapProps {
   onEntityLiveUpdate?: (entity: CoTEntity) => void;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
-  repeatersRef?: MutableRefObject<RepeaterStation[]>;
+  rfSitesRef?: MutableRefObject<RFSite[]>;
+  kiwiNodeRef?: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
   showRepeaters?: boolean;
   repeatersLoading?: boolean;
+  // Shared Global State
+  entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
+  satellitesRef: MutableRefObject<Map<string, CoTEntity>>;
+  knownUidsRef: MutableRefObject<Set<string>>;
+  drStateRef: MutableRefObject<Map<string, import("../../types").DRState>>;
+  visualStateRef: MutableRefObject<Map<string, import("../../types").VisualState>>;
+  prevCourseRef: MutableRefObject<Map<string, number>>;
+  alertedEmergencyRef: MutableRefObject<Map<string, string>>;
+  currentMissionRef: MutableRefObject<{
+    lat: number;
+    lon: number;
+    radius_nm: number;
+  } | null>;
 }
 
 export function TacticalMap({
@@ -111,9 +125,18 @@ export function TacticalMap({
   onEntityLiveUpdate,
   js8StationsRef,
   ownGridRef,
-  repeatersRef,
+  rfSitesRef,
+  kiwiNodeRef,
   showRepeaters,
   repeatersLoading,
+  entitiesRef,
+  satellitesRef,
+  knownUidsRef,
+  drStateRef,
+  visualStateRef,
+  prevCourseRef,
+  alertedEmergencyRef,
+  currentMissionRef,
 }: TacticalMapProps) {
   // Fetch infra data (Submarine cables & landing stations)
   const { cablesData, stationsData } = useInfraData();
@@ -271,23 +294,19 @@ export function TacticalMap({
 
     // 3. RF Repeaters Trigger
     if (currRepeaters) {
-      const dataReady = repeatersRef?.current && repeatersRef.current.length > 0;
+      const dataReady = rfSitesRef?.current && rfSitesRef.current.length > 0;
       const loadFinished = !repeatersLoading;
 
-      // Notify if:
-      // 1. Data is ready (non-zero count)
-      // 2. OR loading has explicitly finished AFTER we already transitioned showRepeaters to true
-      // This prevents the "0 repeaters" flash during the initial frame of a toggle.
-      if (!infraNotifiedRef.current.notifiedRepeaters) {
-        if (dataReady || (loadFinished && infraNotifiedRef.current.showRepeaters === true)) {
-          const count = repeatersRef?.current?.length || 0;
-          onEvent?.({
-            message: `RF_NET: ${count} amateur radio repeaters active in regional sector`,
-            type: "new",
-            entityType: "infra",
-          });
-          infraNotifiedRef.current.notifiedRepeaters = true;
-        }
+      // Notify if loading has explicitly finished AFTER we already transitioned showRepeaters to true
+      // This prevents logging 0 when the API is still fetching.
+      if (!infraNotifiedRef.current.notifiedRepeaters && loadFinished) {
+        const count = rfSitesRef?.current?.length || 0;
+        onEvent?.({
+          message: `RF_NET: ${count} RF stations active in regional sector`,
+          type: "new",
+          entityType: "infra",
+        });
+        infraNotifiedRef.current.notifiedRepeaters = true;
       }
     } else {
       if (prevRepeaters === true) {
@@ -303,14 +322,9 @@ export function TacticalMap({
     infraNotifiedRef.current.showCables = currCables;
     infraNotifiedRef.current.showLandingStations = currLanding;
     infraNotifiedRef.current.showRepeaters = currRepeaters;
-  }, [filters?.showCables, filters?.showLandingStations, showRepeaters, cablesData, stationsData, onEvent, repeatersRef, repeatersLoading]);
+  }, [filters?.showCables, filters?.showLandingStations, showRepeaters, cablesData, stationsData, onEvent, rfSitesRef, repeatersLoading]);
 
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
-  const currentMissionRef = useRef<{
-    lat: number;
-    lon: number;
-    radius_nm: number;
-  } | null>(null);
 
   // Velocity Vector Toggle - use ref for reactivity in animation loop
   const velocityVectorsRef = useRef(showVelocityVectors ?? false);
@@ -347,6 +361,7 @@ export function TacticalMap({
     // Null out refs so stale instances aren't used after the adapter unmounts.
     // react-map-gl handles GL context destruction internally on unmount — do not
     // call map.remove() here as it races with react-map-gl's own cleanup.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMapLoaded(false);
     mapInstanceRef.current = null;
     overlayRef.current = null;
@@ -365,9 +380,6 @@ export function TacticalMap({
     }
   }, [showHistoryTails]);
 
-  // Entity Worker: TAK worker lifecycle, WebSocket, entity processing
-  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef } =
-    useEntityWorker({ onEvent, currentMissionRef });
 
   // Mission Area: mission state, AOT geometry, entity clearing, save form
   // currentMission/savedMissions/saveMission/deleteMission/handleSwitchMission/handlePresetSelect
@@ -406,6 +418,7 @@ export function TacticalMap({
     drStateRef,
     visualStateRef,
     prevCourseRef,
+    alertedEmergencyRef,
     countsRef,
     currentMissionRef,
     selectedEntityRef,
@@ -457,7 +470,8 @@ export function TacticalMap({
     onFollowModeChange,
     js8StationsRef,
     ownGridRef,
-    repeatersRef,
+    rfSitesRef,
+    kiwiNodeRef,
     showRepeaters,
   });
 
@@ -642,7 +656,7 @@ export function TacticalMap({
               <>
                 <button
                   onClick={() => setViewMode("2d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${!enable3d
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${!enable3d
                     ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                     : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                     }`}
@@ -651,7 +665,7 @@ export function TacticalMap({
                 </button>
                 <button
                   onClick={() => setViewMode("3d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${enable3d
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${enable3d
                     ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                     : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                     }`}
@@ -663,7 +677,7 @@ export function TacticalMap({
             )}
             <button
               onClick={() => onToggleGlobe?.()}
-              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${globeMode
+              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${globeMode
                 ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
                 : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                 }`}
@@ -678,15 +692,17 @@ export function TacticalMap({
           <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
             <button
               onClick={() => mapRef.current?.getMap().zoomOut()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
               title="Zoom Out"
+              aria-label="Zoom Out"
             >
               <Minus size={14} strokeWidth={3} />
             </button>
             <button
               onClick={() => mapRef.current?.getMap().zoomIn()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
               title="Zoom In"
+              aria-label="Zoom In"
             >
               <Plus size={14} strokeWidth={3} />
             </button>
@@ -699,22 +715,25 @@ export function TacticalMap({
             <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
               <button
                 onClick={() => handleAdjustCamera("bearing", -45)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 title="Rotate Left"
+                aria-label="Rotate Left"
               >
                 <RotateCcw size={16} />
               </button>
               <button
                 onClick={handleResetCompass}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-hud-green hover:bg-white/5 hover:border-hud-green/30 transition-all active:scale-95 w-8 h-8 flex items-center justify-center font-mono font-bold text-sm"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-hud-green hover:bg-white/5 hover:border-hud-green/30 transition-all active:scale-95 w-8 h-8 flex items-center justify-center font-mono font-bold text-sm focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 title="Reset to North"
+                aria-label="Reset to North"
               >
                 N
               </button>
               <button
                 onClick={() => handleAdjustCamera("bearing", 45)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 title="Rotate Right"
+                aria-label="Rotate Right"
               >
                 <RotateCcw size={16} className="scale-x-[-1]" />
               </button>
@@ -723,15 +742,17 @@ export function TacticalMap({
             <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
               <button
                 onClick={() => handleAdjustCamera("pitch", 15)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 title="Tilt Down"
+                aria-label="Tilt Down"
               >
                 <ChevronUp size={16} />
               </button>
               <button
                 onClick={() => handleAdjustCamera("pitch", -15)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center"
+                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 title="Tilt Up"
+                aria-label="Tilt Up"
               >
                 <ChevronDown size={16} />
               </button>

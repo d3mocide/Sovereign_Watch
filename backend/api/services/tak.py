@@ -67,6 +67,12 @@ def transform_to_proto(data: dict) -> bytes:
         cot.detail.category = str(src_detail["category"])
     if "constellation" in src_detail and src_detail["constellation"] is not None:
         cot.detail.constellation = str(src_detail["constellation"])
+    if "period_min" in src_detail and src_detail["period_min"] is not None:
+        cot.detail.period_min = to_float(src_detail["period_min"])
+    if "inclination_deg" in src_detail and src_detail["inclination_deg"] is not None:
+        cot.detail.inclination_deg = to_float(src_detail["inclination_deg"])
+    if "eccentricity" in src_detail and src_detail["eccentricity"] is not None:
+        cot.detail.eccentricity = to_float(src_detail["eccentricity"])
 
     # Classification
     src_class = src_detail.get("classification", {})

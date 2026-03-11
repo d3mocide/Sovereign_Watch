@@ -1,3 +1,118 @@
+## [0.25.0] - 2026-03-10
+
+### Added
+
+- **Global COT State Persistence**: Re-engineered the map view lifecycle by hoisting the `useEntityWorker` hook and all tactical track state to the root `App.tsx`. This ensures that tactical tracks, dead reckoning state, and satellite telemetry persist instantly when switching between Tactical and Orbital map views.
+
+### Fixed
+
+- **Map View Transition Performance**: Eliminated the 5-10 second "re-sync" delay when switching map views by preserving the WebSocket and Worker thread throughout the session.
+- **State Reset Bug**: Fixed a critical `TypeError` in `App.tsx` where changing map filters would crash the application due to a missing return in the `setFilters` state updater.
+- **Prop Consistency**: Corrected `alertedEmergencyRef` and `repeatersLoading` type mismatches and interface duplications across `App.tsx`, `TacticalMap.tsx`, and `OrbitalMap.tsx`.
+
+## [0.24.0] - 2026-03-10
+
+### Added
+
+- **System Settings Widget**: New centralized configuration interface for system-level toggles, accessible via the Top Bar "SYS" button. Currently houses the H3 Poller mesh toggle.
+- **H3 Coverage Mesh**: Real-time H3-based coverage visualization on the Tactical Map, providing spatial awareness of active sensor footprints and poller density.
+
+### Fixed
+
+- **AIS Poller Footprint Optimization**: Standardized AIS ingestion to a fixed 350 NM radius per mission area to prevent reconnection churn while filtering visible data locally.
+- **H3 Layer Rendering**: Optimized H3 mesh with `depthTest: false` and `depthWrite: false` to ensure perfect visibility of grounded tactical entities (AIS/ADS-B) regardless of mesh overlay.
+- **System UI Centering**: Re-aligned the System Settings widget to be perfectly centered beneath the "SYS" button with corrected horizontal translation.
+
+## [0.23.0] - 2026-03-10
+
+### Added
+
+- **Multi-Source RF Pulse Poller**: Refactored RF infrastructure ingestion into a single, highly concurrent Python microservice (`rf_pulse`) replacing disparate scripts. Supports RepeaterBook, RadioReference, Amateur Radio Directory (ARD), and NOAA NWR.
+- **RadioReference Integration**: Secured trunked/conventional system ingestion via authenticated SOAP requests using the user's `RADIOREF_APP_KEY`.
+- **Repeater Band Classification**: The Tactical Sidebar now actively computes and displays the physical frequency band (e.g., `2m`, `70cm`, `GMRS (UHF)`) as a compact visual badge attached to the header.
+
+### Changed
+
+- **RF Infrastructure Documentation**: Expanded the `README.md` to cleanly document the `rf_pulse` configuration variables, pipeline architecture, and supported upstream APIs.
+
+## [0.22.1] - 2026-03-10
+
+### Fixed
+
+- **KiwiSDR Node Limits:** Increased the backend node limit from 50 to 10,000 to enable the frontend "Global" radius toggle to correctly display all cached KiwiSDR receivers.
+- **Node Filtering Logic:** Updated the `useKiwiNodes` hook to properly trigger refetches when node limits change. Hardcoded limits applied to Mission (50), Regional (500), and Global (All) modes.
+- **Tactical Map Controls:** Restored MapLibre `NavigationControl` (+/- zoom buttons) to the bottom-right of the tactical map and themed them in the Sovereign Glass style. Extracted MapLibre CSS overrides from Tailwind's `@layer` directive to prevent the JIT compiler from purging them.
+
+## [0.22.0] - 2026-03-09
+
+### Added
+
+- **RF Network Refactor**: Complete architectural overhaul of the Radio Frequency ingestion pipeline, now supporting concurrent polling for multiple service types (Ham/GMRS, NOAA Weather Radio, and Public Safety/RadioReference).
+- **AOR Boundary Ring**: Implemented a dynamic, dashed amber horizon ring on the Tactical Map that scales with the selected RF survey radius, providing instant situational awareness of hardware range.
+- **Service-Aware Clustering**: Refined map clustering logic to group RF sites by service type, maintaining distinct color-coding (Emerald/Sky/Amber) for high-density visualization.
+- **RF Range Expansion**: Extended the operational range limits for RF surveys, now supporting presets up to 2,000 NM with optimized backend query logic.
+
+### Changed
+
+- **RF UI Standardization**: Migrated the RF Infrastructure suite to a high-contrast amber-yellow theme, differentiating polling status from tactical entities.
+- **Condensed Service Filters**: Refactored RF sub-filters into a single horizontal row of high-contrast glowing buttons for better vertical space efficiency.
+- **Viewport Optimization**: Increased the Map Layers panel's maximum height from 40vh to 60vh to prevent layout cramping when multiple service suites are expanded.
+- **Ref Sites Caching**: Implemented a more aggressive caching strategy in `useRFSites` with TTL and movement-based refetch thresholds to reduce API load.
+
+## [0.21.0] - 2026-03-07
+
+### Added
+
+- **JS8 Unified State Management**: Refactored the `useJS8Stations` hook to serve as the single source of truth for all JS8-related telemetry, ensuring perfect synchronization between the Tactical Map widget and the Radio Terminal panel.
+- **Premium Radio Beacon Icon**: Implemented a high-tech, multi-layered "Radio Beacon" icon for connected KiwiSDR nodes on the tactical map, featuring pulsing core animations, radiating cyan waves, and breathing attention rings for enhanced situational awareness.
+
+### Changed
+
+- **KiwiSDR Beacon Scaling**: Refined the radii and font sizes of the map beacon by ~40% for better proportionality within the tactical view.
+- **Radio Terminal Variable Standardization**: Standardized all internal variable names in `RadioTerminal.tsx` (`bridgeConnected`, `kiwiIsConnecting`, `sharedStatusLine`, etc.) to match the unified state provider.
+
+### Fixed
+
+- **Radio Terminal `ReferenceError`**: Resolved a critical bug that caused the Radio Terminal view to crash due to undefined variable references after the state refactor.
+- **JS8 Connection "Stuck" State**: Fixed a UI bug where connection buttons would remain greyed out after a failed SDR connection. Added a status-driven reset and a 15-second safety timeout to ensure the UI remains interactive.
+
+## [0.20.0] - 2026-03-07
+
+### Added
+
+- **AI Engine Widget**: New `AIEngineWidget` component in the TopBar exposing a live model-selection dropdown, letting operators switch between AI backends (GPT-4o, Gemini, Claude, etc.) at runtime without restarting any service.
+- **ADSB Military & Drone Alerts**: The alert engine now fires **one-time** tactical alerts when a military aircraft or drone/UAS first appears in the AOR — matching the existing maritime military vessel alert behavior and completing alert parity across all three tracked domains.
+
+### Fixed
+
+- **Orbital Parameters in Right Sidebar (Period & Inclination)**: Corrected camelCase property access after protobuf compilation. `period_min` → `periodMin` and `inclination_deg` → `inclinationDeg` were being read with snake_case names, causing PERIOD and INC to always show "---" in the entity inspector. Now displays live values correctly.
+- **Protobuf Schema Sync**: Added `period_min`, `inclination_deg`, and `eccentricity` fields to both `backend/api/proto/tak.proto` and `frontend/public/tak.proto`, and updated `tak_pb2.py` and `tak.py` serialization to populate them from the orbital data stream.
+- **AIS Poller Reconnection Churn**: The maritime AIS poller was reconnecting to AISStream.io on every Redis mission-area pub/sub message, causing a cascade of connection timeouts whenever the user rapidly clicked radius presets (30 nm → 100 nm → 150 nm). Fixed with two defenses:
+  - **Minimum-change threshold** — ignores updates where lat/lon changes < 0.05° and radius changes < 1 nm, filtering out floating-point drift and same-value re-selections.
+  - **5-second debounce** — rapid preset clicks now collapse into a single reconnect once the user stops interacting.
+- **AIS Vessel Registration Display**: Extended the right sidebar to surface AIS-specific vessel registration fields (IMO, callsign, flag, draught, destination) when inspecting a maritime contact.
+- **Orbital Registration Badge**: The REGISTRATION field in the entity info bar now shows the NORAD catalog number (e.g. "NORAD 52794") for orbital targets instead of the orbital category type string (e.g. "GPS").
+- **Orbital Sidebar Compacted**: Collapsed the 3-row NORAD ID / Inclination / Eccentricity block into a single inline line beneath the callsign, saving significant vertical space in the inspector panel.
+
+## [0.19.0] - 2026-03-07
+
+### Added
+
+- **Alerts Widget**: A new dropdown widget integrated into the TopBar for viewing the latest tactical alerts directly under the "ALERTS" pill.
+- **Expanded Alert Detection Engine**: The system now automatically detects and generates tactical alerts for critical conditions across all domains:
+  - **Aviation**: Emergency squawk codes (7500, 7600, 7700) and general emergency status flags.
+  - **Maritime**: AIS-SART distress signals (NavStatus 14), Not Under Command (NavStatus 2), Aground (NavStatus 6), and initial detections of military vessels or hazardous cargo.
+  - **Orbital**: Imminent passes (AOS within 30 minutes) of Intel-category satellites (military reconnaissance, SAR, EO constellations).
+- **Persistent Alert State Tracking**: Alerts are intelligently deduplicated per-entity and automatically clear when emergencies resolve, passes conclude, or entities leave the operational area.
+
+### Changed
+
+- **Alerts Widget Styling**: Removed the red outer glow from the alerts panel border in favor of a clean, standard shadow for a more refined look.
+
+### Fixed
+
+- **HUD Z-Indexing**: Explicitly set the TopBar zone's z-index to `z-50` in `MainHud` to ensure that dropdown widgets render correctly over the sidebars and map content.
+
 ## [0.18.2] - 2026-03-06
 
 ### Fixed
@@ -10,8 +125,10 @@
 
 ## [0.18.1] - 2026-03-06
 
-### Added
-
+### Fixed
+- **KiwiNodeBrowser**: Resolved `NaN, NaN` crash in MapLibre by adding defensive guards for invalid coordinates.
+- **geoUtils**: Robust Maidenhead grid conversion to handle non-digit characters in square locators.
+- **Linting**: Fixed all remaining frontend lint errors (purity, setState in effect, etc.).
 - **Branding**: Integrated the official Sovereign Watch cyber-tactical logo into the `README.md` and added a symmetrical text-less favicon to the frontend UI.
 
 ### Changed

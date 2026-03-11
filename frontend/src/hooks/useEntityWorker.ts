@@ -1,5 +1,5 @@
 import { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, TrailPoint } from "../types";
+import { CoTEntity, TrailPoint, DRState, VisualState } from "../types";
 import { getDistanceMeters, getBearing, uidToHash, chaikinSmooth } from "../utils/map/geoUtils";
 import type { EntityClassification } from "../types";
 
@@ -11,18 +11,6 @@ const getSmoothedTrail = (trail: TrailPoint[], existing?: CoTEntity) => {
   return trail.length >= 2 ? chaikinSmooth(trail.map(p => [p[0], p[1], p[2]])) : [];
 };
 
-export interface DeadReckoningState {
-  serverLat: number;
-  serverLon: number;
-  serverSpeed: number;
-  serverCourseRad: number;
-  serverTime: number;
-  blendLat: number;
-  blendLon: number;
-  blendSpeed: number;
-  blendCourseRad: number;
-  expectedInterval: number;
-}
 
 interface UseEntityWorkerOptions {
   onEvent:
@@ -44,11 +32,57 @@ interface UseEntityWorkerReturn {
   entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: MutableRefObject<Map<string, CoTEntity>>;
   knownUidsRef: MutableRefObject<Set<string>>;
-  drStateRef: MutableRefObject<Map<string, DeadReckoningState>>;
-  visualStateRef: MutableRefObject<
-    Map<string, { lon: number; lat: number; alt: number }>
-  >;
+  drStateRef: MutableRefObject<Map<string, DRState>>;
+  visualStateRef: MutableRefObject<Map<string, VisualState>>;
   prevCourseRef: MutableRefObject<Map<string, number>>;
+  alertedEmergencyRef: MutableRefObject<Map<string, string>>;
+}
+
+const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+
+function getEmergencyKey(classification?: EntityClassification): string {
+  if (classification?.squawk && EMERGENCY_SQUAWKS.has(classification.squawk)) {
+    return `squawk:${classification.squawk}`;
+  }
+  if (classification?.emergency && classification.emergency !== 'none' && classification.emergency !== '') {
+    return `emergency:${classification.emergency}`;
+  }
+  return '';
+}
+
+function buildAlertMessage(callsign: string, emergencyKey: string): string {
+  if (emergencyKey.startsWith('squawk:')) {
+    const squawk = emergencyKey.slice(7);
+    if (squawk === '7500') return `SQUAWK 7500 — ${callsign} (HIJACK)`;
+    if (squawk === '7600') return `SQUAWK 7600 — ${callsign} (Radio Failure)`;
+    if (squawk === '7700') return `SQUAWK 7700 — ${callsign} (Emergency)`;
+  }
+  if (emergencyKey.startsWith('emergency:')) {
+    const type = emergencyKey.slice(10);
+    return `EMERGENCY — ${callsign}: ${type.toUpperCase()}`;
+  }
+  return `ALERT — ${callsign}`;
+}
+
+// AIS nav status codes that warrant an alert
+const DISTRESS_NAV_STATUSES: Record<number, string> = {
+  2: 'NOT UNDER COMMAND',
+  6: 'AGROUND',
+  14: 'AIS-SART DISTRESS',
+};
+
+function getMaritimeAlertKey(vesselClassification?: import('../types').VesselClassification): string {
+  const navStatus = vesselClassification?.navStatus;
+  if (navStatus !== undefined && navStatus in DISTRESS_NAV_STATUSES) {
+    return `navStatus:${navStatus}`;
+  }
+  return '';
+}
+
+function buildMaritimeAlertMessage(callsign: string, alertKey: string): string {
+  const code = parseInt(alertKey.slice('navStatus:'.length), 10);
+  const label = DISTRESS_NAV_STATUSES[code] ?? 'MARITIME ALERT';
+  return `${label} — ${callsign}`;
 }
 
 export function useEntityWorker({
@@ -58,11 +92,11 @@ export function useEntityWorker({
   const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
   const satellitesRef = useRef<Map<string, CoTEntity>>(new Map());
   const knownUidsRef = useRef<Set<string>>(new Set());
-  const drStateRef = useRef<Map<string, DeadReckoningState>>(new Map());
-  const visualStateRef = useRef<
-    Map<string, { lon: number; lat: number; alt: number }>
-  >(new Map());
+  const drStateRef = useRef<Map<string, DRState>>(new Map());
+  const visualStateRef = useRef<Map<string, VisualState>>(new Map());
   const prevCourseRef = useRef<Map<string, number>>(new Map());
+  // Tracks the last emitted emergency key per UID to avoid duplicate alerts
+  const alertedEmergencyRef = useRef<Map<string, string>>(new Map());
   const workerRef = useRef<Worker | null>(null);
 
   // Initial Data Generation (Mock) & Worker Setup
@@ -112,15 +146,15 @@ export function useEntityWorker({
           const category =
             entity.detail?.category ??
             (entity.detail?.classification as any)?.category;
-          const constellation = 
+          const constellation =
             entity.detail?.constellation ??
             (entity.detail?.classification as any)?.constellation;
           const period_min =
-            entity.detail?.period_min ??
-            (entity.detail?.classification as any)?.period_min;
+            entity.detail?.periodMin ??
+            (entity.detail?.classification as any)?.periodMin;
           const inclination_deg =
-            entity.detail?.inclination_deg ??
-            (entity.detail?.classification as any)?.inclination_deg;
+            entity.detail?.inclinationDeg ??
+            (entity.detail?.classification as any)?.inclinationDeg;
           const eccentricity =
             entity.detail?.eccentricity ??
             (entity.detail?.classification as any)?.eccentricity;
@@ -181,7 +215,7 @@ export function useEntityWorker({
           const visual = visualStateRef.current.get(entity.uid);
           const blendLat = visual ? visual.lat : newLat;
           const blendLon = visual ? visual.lon : newLon;
-          
+
           const lastServerTime = existingDr ? existingDr.serverTime : now - 5000;
           const timeSinceLast = Math.max(now - lastServerTime, 4000); // Nominal 5s
 
@@ -225,6 +259,7 @@ export function useEntityWorker({
             if (existing) {
               entitiesRef.current.delete(entity.uid);
               knownUidsRef.current.delete(entity.uid);
+              alertedEmergencyRef.current.delete(entity.uid);
               onEvent?.({
                 type: "lost",
                 message: `${isShip ? "🚢" : "✈️"} ${existing.callsign || entity.uid} (Out of Range)`,
@@ -484,6 +519,78 @@ export function useEntityWorker({
                 : classification,
           });
         }
+
+        // Emergency alert detection: fire once when emergency state appears or changes
+        if (!isShip) {
+          const emergencyKey = getEmergencyKey(classification);
+          const lastAlerted = alertedEmergencyRef.current.get(entity.uid) ?? '';
+          if (emergencyKey && emergencyKey !== lastAlerted) {
+            alertedEmergencyRef.current.set(entity.uid, emergencyKey);
+            onEvent?.({
+              type: "alert",
+              message: buildAlertMessage(callsign, emergencyKey),
+              entityType: "air",
+              classification,
+            });
+          } else if (!emergencyKey && lastAlerted) {
+            // Emergency cleared — reset tracking so a future emergency triggers again
+            alertedEmergencyRef.current.delete(entity.uid);
+          }
+
+          // 2. One-time alerts on first detection
+          if (isNew && classification) {
+            if (classification.affiliation === "military") {
+              onEvent?.({
+                type: "alert",
+                message: `MILITARY AIRCRAFT — ${callsign}`,
+                entityType: "air",
+              });
+            }
+            if (
+              classification.platform === "drone" ||
+              classification.platform === "uav"
+            ) {
+              onEvent?.({
+                type: "alert",
+                message: `UAS DETECTED — ${callsign}`,
+                entityType: "air",
+              });
+            }
+          }
+        } else {
+          // Maritime alert detection
+          // 1. AIS distress nav status (can change over time — track state)
+          const maritimeAlertKey = getMaritimeAlertKey(vesselClassification);
+          const lastMaritimeAlert = alertedEmergencyRef.current.get(entity.uid) ?? '';
+          if (maritimeAlertKey && maritimeAlertKey !== lastMaritimeAlert) {
+            alertedEmergencyRef.current.set(entity.uid, maritimeAlertKey);
+            onEvent?.({
+              type: "alert",
+              message: buildMaritimeAlertMessage(callsign, maritimeAlertKey),
+              entityType: "sea",
+            });
+          } else if (!maritimeAlertKey && lastMaritimeAlert.startsWith('navStatus:')) {
+            alertedEmergencyRef.current.delete(entity.uid);
+          }
+
+          // 2. One-time alerts on first detection
+          if (isNew && vesselClassification) {
+            if (vesselClassification.hazardous) {
+              onEvent?.({
+                type: "alert",
+                message: `HAZ CARGO — ${callsign}`,
+                entityType: "sea",
+              });
+            }
+            if (vesselClassification.category === 'military') {
+              onEvent?.({
+                type: "alert",
+                message: `MILITARY VESSEL — ${callsign}`,
+                entityType: "sea",
+              });
+            }
+          }
+        }
       }
     };
 
@@ -593,5 +700,6 @@ export function useEntityWorker({
     drStateRef,
     visualStateRef,
     prevCourseRef,
+    alertedEmergencyRef,
   };
 }

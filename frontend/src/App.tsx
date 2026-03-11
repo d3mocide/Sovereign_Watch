@@ -11,16 +11,28 @@ import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
-import { useRepeaters } from './hooks/useRepeaters'
+import { useRFSites } from './hooks/useRFSites'
+import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
+import { AlertsWidget } from './components/widgets/AlertsWidget'
+import { useEntityWorker } from './hooks/useEntityWorker'
 
-const NOOP = () => {};
+const NOOP = () => { };
 
 function App() {
 
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
   const [followMode, setFollowMode] = useState(false);
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
+
+  // Global COT State Refs
+  const currentMissionRef = useRef<{
+    lat: number;
+    lon: number;
+    radius_nm: number;
+  } | null>(null);
 
   // Orbital Dashboard State
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
@@ -60,31 +72,60 @@ function App() {
     }
   }, []);
 
+  const [events, setEvents] = useState<IntelEvent[]>([]);
+
+  const addEvent = useCallback((event: Omit<IntelEvent, 'id' | 'time'>) => {
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+
+    setEvents((prev: IntelEvent[]) => [{
+      ...event,
+      id: crypto.randomUUID(),
+      time: new Date(),
+    }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
+  }, []);
+
+  // Initialize Global Entity Worker
+  const {
+    entitiesRef,
+    satellitesRef,
+    knownUidsRef,
+    drStateRef,
+    visualStateRef,
+    prevCourseRef,
+    alertedEmergencyRef
+  } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
+
   const health = useSystemHealth();
   const {
     stationsRef: js8StationsRef,
     ownGridRef: js8OwnGridRef,
+    kiwiNodeRef: js8KiwiNodeRef,
     stations: js8Stations,
     logEntries: js8LogEntries,
     statusLine: js8StatusLine,
-    connected: js8BridgeConnected,
-    js8Connected,
+    connected: js8Connected,
+    js8Connected: js8CallConnected,
+    kiwiConnecting: js8KiwiConnecting,
     activeKiwiConfig: js8ActiveKiwiConfig,
+    js8Mode,
+    sendMessage: js8SendMessage,
+    sendAction: js8SendAction,
   } = useJS8Stations();
 
   // Map Actions (Search, FlyTo)
   const [mapActions, setMapActions] = useState<import('./types').MapActions | null>(null);
 
   // Filter state with persistence (tactical map only)
-  const [filters, setFilters] = useState(() => {
+  const [filters, setFilters] = useState<Record<string, boolean | string | number | string[]>>(() => {
     const defaultFilters = {
       showAir: true,
       showSea: true,
       showHelicopter: true,
-      showMilitary: true,
-      showGovernment: true,
       showCommercial: true,
       showPrivate: true,
+      showMilitary: true,
+      showGovernment: true,
       showCargo: true,
       showTanker: true,
       showPassenger: true,
@@ -105,10 +146,16 @@ function App() {
       showSatSurveillance: true,
       showSatOther: true,
       showRepeaters: false,
+      showHam: true,
+      showNoaa: true,
+      showPublicSafety: true,
+      rfRadius: 300,
+      rfEmcommOnly: false,
       showCables: false,
       showLandingStations: false,
       cableOpacity: 0.6,
       showConstellation_Starlink: false,
+      showH3Coverage: false,
     };
     const saved = localStorage.getItem('mapFilters');
     if (saved) {
@@ -208,18 +255,36 @@ function App() {
     });
   }, []);
 
-
-  const [events, setEvents] = useState<IntelEvent[]>([]);
-
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
-  // Repeater infrastructure layer
-  const { repeatersRef, loading: repeatersLoading } = useRepeaters(
-    filters.showRepeaters,
+  // Compute active services list
+  const activeServices: string[] = [];
+  if (filters.showHam !== false) activeServices.push('ham'); // Assuming 'ham' fetches both Ham & GMRS from backend implicitly
+  if (filters.showNoaa !== false) activeServices.push('noaa_nwr');
+  if (filters.showPublicSafety !== false) activeServices.push('public_safety');
+
+  // RF infrastructure layer
+  const { rfSitesRef, loading: repeatersLoading } = useRFSites(
+    filters.showRepeaters as boolean,
     missionProps?.currentMission?.lat ?? 45.5152,
     missionProps?.currentMission?.lon ?? -122.6784,
+    (filters.rfRadius as number) || 300,
+    activeServices as any, // Will update hook signature next
+    (filters.modes as any) || undefined,
+    (filters.rfEmcommOnly as any) || undefined,
   );
+
+  // Intel satellite pass predictions for orbital alerts
+  const obsLat = missionProps?.currentMission?.lat ?? 45.5152;
+  const obsLon = missionProps?.currentMission?.lon ?? -122.6784;
+  const { passes: intelPasses } = usePassPredictions(obsLat, obsLon, {
+    category: 'intel',
+    hours: 1,
+    minElevation: 10,
+    skip: !missionProps?.currentMission,
+  });
+  const alertedPassesRef = useRef<Set<string>>(new Set());
 
   // Add new event to feed (max 50 events)
   // Replay System State
@@ -381,25 +446,32 @@ function App() {
     }
   }, [isPlaying, playbackSpeed, replayRange.end, updateReplayFrame]);
 
-
-  // Add new event to feed (keep events from the last hour)
-  const addEvent = useCallback((event: Omit<IntelEvent, 'id' | 'time'>) => {
+  // Orbital alert: fire when an intel-category satellite has AOS within 30 minutes
+  useEffect(() => {
+    if (intelPasses.length === 0) return;
     const now = Date.now();
-    const oneHourAgo = now - 3600000; // 3600 seconds * 1000 ms
-
-    setEvents(prev => [{
-      ...event,
-      id: crypto.randomUUID(),
-      time: new Date(),
-    }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
-  }, []);
+    const ALERT_WINDOW_MS = 30 * 60 * 1000;
+    for (const pass of intelPasses) {
+      const aosMs = new Date(pass.aos).getTime();
+      const passKey = `${pass.norad_id}-${pass.aos}`;
+      if (aosMs > now && aosMs - now <= ALERT_WINDOW_MS && !alertedPassesRef.current.has(passKey)) {
+        alertedPassesRef.current.add(passKey);
+        const minutesAway = Math.round((aosMs - now) / 60000);
+        addEvent({
+          type: 'alert',
+          message: `INTEL SAT — ${pass.name} AOS in ${minutesAway}min (El ${Math.round(pass.max_elevation)}°)`,
+          entityType: 'orbital',
+        });
+      }
+    }
+  }, [intelPasses, addEvent]);
 
   // Periodic cleanup for events older than 1 hour
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       const oneHourAgo = now - 3600000;
-      setEvents(prev => {
+      setEvents((prev: IntelEvent[]) => {
         const filtered = prev.filter(e => e.time.getTime() > oneHourAgo);
         // Only update state if something was actually removed to avoid unnecessary re-renders
         return filtered.length === prev.length ? prev : filtered;
@@ -408,8 +480,8 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleFilterChange = (key: string, value: any) => {
-    setFilters(prev => {
+  const handleFilterChange = useCallback((key: string, value: any) => {
+    setFilters((prev: Record<string, any>) => {
       const next = { ...prev, [key]: value };
       localStorage.setItem('mapFilters', JSON.stringify(next));
 
@@ -438,10 +510,10 @@ function App() {
 
       return next;
     });
-  };
+  }, [addEvent]);
 
   const alertsCount = useMemo(() =>
-    events.filter(e => e.type === 'alert').length,
+    events.filter(e => (e as any).type === 'alert').length,
     [events]);
 
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {
@@ -486,6 +558,15 @@ function App() {
           isReplayMode={replayMode}
           viewMode={viewMode}
           onViewChange={setViewMode}
+          onAlertsClick={() => setIsAlertsOpen(!isAlertsOpen)}
+          isAlertsOpen={isAlertsOpen}
+          alerts={events.filter(e => e.type === 'alert')}
+          onAlertsClose={() => setIsAlertsOpen(false)}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          isSystemSettingsOpen={isSystemSettingsOpen}
+          onSystemSettingsClick={() => setIsSystemSettingsOpen(!isSystemSettingsOpen)}
+          onSystemSettingsClose={() => setIsSystemSettingsOpen(false)}
         />
       }
       leftSidebar={
@@ -502,9 +583,11 @@ function App() {
             js8Stations={js8Stations}
             js8LogEntries={js8LogEntries}
             js8StatusLine={js8StatusLine}
-            js8BridgeConnected={js8BridgeConnected}
             js8Connected={js8Connected}
+            js8KiwiConnecting={js8KiwiConnecting}
             js8ActiveKiwiConfig={js8ActiveKiwiConfig}
+            sendMessage={js8SendMessage}
+            sendAction={js8SendAction}
           />
         ) : viewMode === 'ORBITAL' ? (
           <OrbitalSidebarLeft
@@ -571,9 +654,18 @@ function App() {
             onEntityLiveUpdate={handleEntityLiveUpdate}
             js8StationsRef={js8StationsRef}
             ownGridRef={js8OwnGridRef}
-            repeatersRef={repeatersRef}
-            showRepeaters={filters.showRepeaters}
+            rfSitesRef={rfSitesRef}
+            kiwiNodeRef={js8KiwiNodeRef}
+            showRepeaters={filters.showRepeaters as boolean}
             repeatersLoading={repeatersLoading}
+            entitiesRef={entitiesRef}
+            satellitesRef={satellitesRef}
+            knownUidsRef={knownUidsRef}
+            drStateRef={drStateRef}
+            visualStateRef={visualStateRef}
+            prevCourseRef={prevCourseRef}
+            alertedEmergencyRef={alertedEmergencyRef}
+            currentMissionRef={currentMissionRef}
           />
 
           {/* Replay Controls Overlay */}
@@ -622,14 +714,35 @@ function App() {
           onEntityLiveUpdate={handleEntityLiveUpdate}
           js8StationsRef={{ current: new Map() } as any}
           ownGridRef={{ current: '' }}
-          repeatersRef={{ current: [] }}
+          rfSitesRef={{ current: [] }}
           showRepeaters={false}
           repeatersLoading={false}
-          onSatellitesRefReady={(ref) => { orbitalSatellitesRef.current = ref; }}
+          onSatellitesRefReady={(ref) => {
+            orbitalSatellitesRef.current = ref;
+          }}
+          entitiesRef={entitiesRef}
+          satellitesRef={satellitesRef}
+          knownUidsRef={knownUidsRef}
+          drStateRef={drStateRef}
+          visualStateRef={visualStateRef}
+          prevCourseRef={prevCourseRef}
+          alertedEmergencyRef={alertedEmergencyRef}
+          currentMissionRef={currentMissionRef}
         />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
-          <RadioTerminal />
+          <RadioTerminal
+            stations={js8Stations}
+            logEntries={js8LogEntries}
+            statusLine={js8StatusLine}
+            connected={js8Connected}
+            js8Connected={js8CallConnected}
+            kiwiConnecting={js8KiwiConnecting}
+            activeKiwiConfig={js8ActiveKiwiConfig}
+            js8Mode={js8Mode}
+            sendMessage={js8SendMessage}
+            sendAction={js8SendAction}
+          />
         </div>
       )}
     </MainHud>

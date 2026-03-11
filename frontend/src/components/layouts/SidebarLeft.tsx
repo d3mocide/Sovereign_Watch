@@ -22,8 +22,10 @@ interface SidebarLeftProps {
   js8StatusLine?: JS8StatusLine;
   js8BridgeConnected?: boolean;
   js8Connected?: boolean;
+  js8KiwiConnecting?: boolean;
   js8ActiveKiwiConfig?: any;
   sendMessage?: (target: string, message: string) => void;
+  sendAction?: (payload: object) => void;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({
@@ -39,8 +41,10 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   js8StatusLine = { callsign: '--', grid: '----', freq: '--' },
   js8BridgeConnected = false,
   js8Connected = false,
+  js8KiwiConnecting = false,
   js8ActiveKiwiConfig = null,
   sendMessage = () => { },
+  sendAction = () => { },
 }) => {
   return (
     <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
@@ -81,8 +85,10 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         statusLine={js8StatusLine}
         connected={js8BridgeConnected}
         js8Connected={js8Connected}
+        kiwiConnecting={js8KiwiConnecting}
         activeKiwiConfig={js8ActiveKiwiConfig}
         sendMessage={sendMessage}
+        sendAction={sendAction}
       />
 
       {/* 4. Metrics, Analytics & Map Layers */}

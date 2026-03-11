@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, repeaters, orbital
+from routers import system, tracks, analysis, rf, orbital
 from auth.router import router as auth_router
 from core.database import db
 from services.historian import historian_task
@@ -93,7 +93,7 @@ app.include_router(auth_router)
 app.include_router(system.router)
 app.include_router(tracks.router)
 app.include_router(analysis.router)
-app.include_router(repeaters.router)
+app.include_router(rf.router)
 app.include_router(orbital.router)
 
 if __name__ == "__main__":

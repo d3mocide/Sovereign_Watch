@@ -1,9 +1,15 @@
 import { ScatterplotLayer, LineLayer, TextLayer } from "@deck.gl/layers";
 import type { JS8Station, CoTEntity } from "../types";
 
+/**
+ * Map SNR to RGBA using JS8Call decode thresholds:
+ *   ≥ −18 dB  all speed modes decode  → emerald
+ *   ≥ −24 dB  Normal / Slow decode    → yellow
+ *   < −24 dB  Slow-only or below floor → red
+ */
 function snrRgba(snr: number, alpha: number): [number, number, number, number] {
-  if (snr >= -10) return [52, 211, 153, alpha];   // emerald-400
-  if (snr >= -18) return [250, 204, 21, alpha];   // yellow-400
+  if (snr >= -18) return [52, 211, 153, alpha];   // emerald-400
+  if (snr >= -24) return [250, 204, 21, alpha];   // yellow-400
   return [248, 113, 113, alpha];                   // red-400
 }
 

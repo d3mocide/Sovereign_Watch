@@ -8,7 +8,7 @@ const NODES_URL =
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // refresh every 5 minutes
 
-export function useKiwiNodes(freqKhz: number, enabled: boolean) {
+export function useKiwiNodes(freqKhz: number, enabled: boolean, radiusKm?: number, limit?: number) {
   const [nodes, setNodes] = useState<KiwiNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +16,14 @@ export function useKiwiNodes(freqKhz: number, enabled: boolean) {
   const fetchNodes = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${NODES_URL}?freq=${freqKhz}&limit=20`);
+      let url = `${NODES_URL}?freq=${freqKhz}`;
+      if (limit !== undefined) {
+        url += `&limit=${limit}`;
+      }
+      if (radiusKm !== undefined && radiusKm > 0) {
+        url += `&radius_km=${radiusKm}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: KiwiNode[] = await res.json();
       setNodes(data);
@@ -26,7 +33,7 @@ export function useKiwiNodes(freqKhz: number, enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [freqKhz]);
+  }, [freqKhz, radiusKm, limit]);
 
   useEffect(() => {
     if (!enabled) return;

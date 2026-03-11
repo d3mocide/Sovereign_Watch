@@ -12,6 +12,53 @@
   .widget-panel {
     @apply bg-black/60 backdrop-blur-md rounded border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)];
   }
+
+}
+
+/* Override maplibre popup default white paddings and background */
+.kiwi-node-popup .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.kiwi-node-popup .maplibregl-popup-tip {
+  border-top-color: #0f172a !important; /* slate-900 */
+  border-bottom-color: #0f172a !important;
+}
+
+/* Theme MapLibre/Mapbox Navigation Controls */
+.maplibregl-ctrl-group, .mapboxgl-ctrl-group {
+  background: rgba(15, 23, 42, 0.9) !important; /* slate-900 */
+  border: 1px solid rgba(51, 65, 85, 1) !important; /* slate-700 */
+  border-radius: 0.375rem !important; /* rounded-md */
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-group button, .mapboxgl-ctrl-group button {
+  border-bottom: 1px solid rgba(51, 65, 85, 1) !important;
+  background-color: transparent !important;
+  height: 32px !important;
+  width: 32px !important;
+}
+
+.maplibregl-ctrl-group button:last-child, .mapboxgl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+.maplibregl-ctrl-group button:hover, .mapboxgl-ctrl-group button:hover {
+  background-color: rgba(30, 41, 59, 1) !important; /* slate-800 */
+}
+
+/* Make default black SVG icons into slate-300 off-white */
+.maplibregl-ctrl-icon, .mapboxgl-ctrl-icon {
+  filter: invert(0.8) sepia(0) saturate(0) hue-rotate(0) brightness(1.5) !important; 
+}
+
+.maplibregl-ctrl-group button:hover .maplibregl-ctrl-icon, 
+.mapboxgl-ctrl-group button:hover .mapboxgl-ctrl-icon {
+  filter: invert(1) brightness(2) !important; /* pure white on hover */
 }
 
 /* Custom scrollbar for tactical look */

@@ -21,6 +21,7 @@ export function buildAOTLayers(
   filters: Filters | undefined,
   globeMode: boolean | undefined,
   observer?: { lat: number; lon: number; radiusKm: number } | null,
+  rfBoundary?: { lat: number; lon: number; radiusKm: number } | null,
 ): any[] {
   const layers: any[] = [];
 
@@ -95,6 +96,28 @@ export function buildAOTLayers(
         radiusMaxPixels: 10,
         pickable: false,
         parameters: { depthTest: false },
+      }),
+    );
+  }
+
+  // RF Survey horizon ring
+  if (rfBoundary && filters?.showRepeaters !== false) {
+    const ringPath = geodesicCircle(rfBoundary.lat, rfBoundary.lon, rfBoundary.radiusKm);
+    layers.push(
+      new PathLayer({
+        id: `aot-rf-horizon-${globeMode ? 'globe' : 'merc'}`,
+        data: [{ path: ringPath }],
+        getPath: (d: any) => d.path,
+        getColor: [251, 191, 36, 90],  // amber-400 at ~35% opacity
+        getWidth: 2,
+        widthMinPixels: 1.5,
+        pickable: false,
+        jointRounded: true,
+        capRounded: true,
+        wrapLongitude: !globeMode,
+        billboard: !!globeMode,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        getDashArray: [4, 4],
       }),
     );
   }

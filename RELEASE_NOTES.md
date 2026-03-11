@@ -1,47 +1,31 @@
-# Release - v0.18.2 - Globe Mode Rendering Fix
+# Release - v0.25.0 - Persistence & Stability Unified
 
-## Summary
+## High-Level Summary
+This major update introduces **Global COT State Persistence**, a foundational architectural shift that eliminates data loss and loading delays during map view transitions. By hoisting tactical tracking and worker lifecycles to the root application level, operators can now switch between Tactical and Orbital views instantly with zero track interruption. This release also resolves several critical stability issues, including a high-priority state reset bug and type inconsistencies in the rendering engine.
 
-This patch release resolves a series of interconnected bugs that caused Deck.gl layers to go blank in Globe mode when a Mapbox API token was present, and fixes a crash triggered when toggling Globe mode off.
+## Key Features
+- **Global COT State Persistence**: Tactical tracks and dead reckoning states now persist globally. Switching from the Tactical Map to the Orbital Map and back is now instantaneous, with no re-synchronization overhead.
+- **H3 Poller Infrastructure**: Real-time H3-based coverage visualization is now fully integrated with the global state, ensuring consistent spatial awareness of sensor density across all views.
+- **System Settings Widget**: Centralized configuration hub for tactical layers and poller toggles, accessible via the "SYS" button.
+- **Improved AIS & ADS-B Reliability**: Refined ingestion radii and optimized rendering layers ensure tactical entities are always visible and accurate.
 
-The root cause is a platform-level Mapbox limitation: **Mapbox Globe does not support `CustomLayerInterface`**, which is the mechanism `MapboxOverlay` uses to register with the Mapbox GL render pipeline. The fix routes Globe mode through the **MapLibre adapter**, which fully supports globe projection and Deck.gl interop, while preserving Mapbox (Standard style) for 2D and 3D Mercator views.
+## Fixed
+- **App Crash on Filter Change**: Fixed a critical `TypeError` in `App.tsx` where missing return statements in state updaters would crash the UI when toggling map layers.
+- **View Transition Latency**: Removed the 5-10 second "re-sync" gap when entering or exiting the Orbital view.
+- **Prop Schema Sync**: Standardized ref types and properties (`alertedEmergencyRef`, `repeatersLoading`) across all map components to prevent compilation and runtime mismatches.
 
-Both the Tactical Map and Orbital Map receive the same fix.
-
----
-
-## What Changed
-
-### Bug Fixes
-
-- **Globe mode now uses MapLibre adapter** (`TacticalMap.tsx`, `OrbitalMap.tsx`)
-  Both maps pre-load both adapters at startup and select between them at render time:
-  - Globe mode → MapLibre adapter (CartoDB Dark Matter style, full Deck.gl globe support)
-  - 2D/3D Mercator with token → Mapbox adapter (Mapbox Standard style)
-
-- **Fixed incorrect projection API form** (`useMapCamera.ts`)
-  `map.setProjection()` was passing the Mapbox-only string `"globe"` to a MapLibre instance. MapLibre requires the object form `{ type: "globe" }`. The hook now resolves the active adapter type from `globeMode` and applies the correct form.
-
-- **Fixed toggle-off crash** (`TacticalMap.tsx`, `OrbitalMap.tsx`)
-  A manual `map.remove()` call in the `globeMode` reset effect was racing with `react-map-gl`'s own internal cleanup, causing `Cannot read properties of undefined (reading 'destroy')`. The redundant call has been removed — react-map-gl fully owns GL context lifecycle management on unmount.
-
----
-
-## Files Changed
-
-| File                                          | Change                                                   |
-| --------------------------------------------- | -------------------------------------------------------- |
-| `frontend/src/components/map/TacticalMap.tsx` | Dynamic adapter selection; mapStyle switch in Globe mode |
-| `frontend/src/components/map/OrbitalMap.tsx`  | Same fix mirrored to Orbital map                         |
-| `frontend/src/hooks/useMapCamera.ts`          | Correct projection API form for MapLibre vs Mapbox       |
-
----
+## Technical Details
+- **Architecture**: `useEntityWorker` and associated `useRefs` hoisted to root `App.tsx`.
+- **State Management**: Optimized `setFilters` and `setEvents` updaters with explicit typing and `useCallback` memoization.
+- **Frontend**: Standardized `DRState` and `VisualState` types in `types.ts` for clean data flow.
 
 ## Upgrade Instructions
-
-```bash
-git pull origin main
-docker compose up -d --build frontend
-```
-
-No configuration changes, dependency changes, or database migrations required.
+1. Pull the latest code:
+   ```bash
+   git pull
+   ```
+2. Rebuild the frontend and ingestion pollers:
+   ```bash
+   docker compose up -d --build frontend adsb-poller maritime-poller orbital-pulse
+   ```
+3. No database migrations are required for this update.

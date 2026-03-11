@@ -1,15 +1,16 @@
-import { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, JS8Station, RepeaterStation } from "../types";
+import React, { useEffect, useRef, useMemo, MutableRefObject } from "react";
+import { CoTEntity, JS8Station, RFSite, DRState, VisualState } from "../types";
 import { getCompensatedCenter, maidenheadToLatLon } from "../utils/map/geoUtils";
 import { getOrbitalLayers, GroundTrackPoint } from "../layers/OrbitalLayer";
 import { buildAOTLayers } from "../layers/buildAOTLayers";
 import { buildTrailLayers } from "../layers/buildTrailLayers";
 import { buildEntityLayers } from "../layers/buildEntityLayers";
 import { buildJS8Layers } from "../layers/buildJS8Layers";
-import { buildRepeaterLayers } from "../layers/buildRepeaterLayers";
+import { buildRFLayers } from "../layers/buildRFLayers";
 import { buildInfraLayers } from "../layers/buildInfraLayers";
+import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { getTerminatorLayer } from "../components/map/TerminatorLayer";
-import type { DeadReckoningState } from "./useEntityWorker";
+import { buildH3CoverageLayer, H3CellData } from "../layers/buildH3CoverageLayer";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
 
@@ -17,11 +18,10 @@ interface UseAnimationLoopOptions {
   entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: MutableRefObject<Map<string, CoTEntity>>;
   knownUidsRef: MutableRefObject<Set<string>>;
-  drStateRef: MutableRefObject<Map<string, DeadReckoningState>>;
-  visualStateRef: MutableRefObject<
-    Map<string, { lon: number; lat: number; alt: number }>
-  >;
+  drStateRef: MutableRefObject<Map<string, DRState>>;
+  visualStateRef: MutableRefObject<Map<string, VisualState>>;
   prevCourseRef: MutableRefObject<Map<string, number>>;
+  alertedEmergencyRef?: MutableRefObject<Map<string, string>>;
   countsRef: MutableRefObject<{ air: number; sea: number; orbital: number }>;
   currentMissionRef: MutableRefObject<{
     lat: number;
@@ -96,7 +96,8 @@ interface UseAnimationLoopOptions {
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
-  repeatersRef?: MutableRefObject<RepeaterStation[]>;
+  rfSitesRef?: MutableRefObject<RFSite[]>;
+  kiwiNodeRef?: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
   showRepeaters?: boolean;
   predictedGroundTrackRef?: MutableRefObject<GroundTrackPoint[]>;
   /** Observer position for the orbital AOI ring. radiusKm is the pass-prediction horizon. */
@@ -110,6 +111,7 @@ export function useAnimationLoop({
   drStateRef,
   visualStateRef,
   prevCourseRef,
+  alertedEmergencyRef,
   countsRef,
   selectedEntityRef,
   followModeRef,
@@ -142,13 +144,41 @@ export function useAnimationLoop({
   onFollowModeChange,
   js8StationsRef,
   ownGridRef,
-  repeatersRef,
+  rfSitesRef,
+  kiwiNodeRef,
   showRepeaters,
   predictedGroundTrackRef,
   observerRef,
+  currentMissionRef,
 }: UseAnimationLoopOptions): void {
+  // eslint-disable-next-line react-hooks/purity
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
+
+  // Optional: Add H3 Coverage State in the hook
+  const [h3Cells, setH3Cells] = React.useState<H3CellData[]>([]);
+
+  useEffect(() => {
+    // Only fetch if enabled
+    if (!filters?.showH3Coverage) return;
+
+    const fetchCells = async () => {
+      try {
+        const response = await fetch('/api/debug/h3_cells');
+        if (response.ok) {
+          const data = await response.json();
+          setH3Cells(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch H3 cells:', err);
+      }
+    };
+
+    fetchCells();
+    const interval = setInterval(fetchCells, 5000);
+
+    return () => clearInterval(interval);
+  }, [filters?.showH3Coverage]);
 
   useEffect(() => {
     const animate = () => {
@@ -578,6 +608,7 @@ export function useAnimationLoop({
         prevCourseRef.current.delete(uid);
         drStateRef.current.delete(uid);
         visualStateRef.current.delete(uid);
+        alertedEmergencyRef?.current.delete(uid);
       }
 
       // Count Orbitals (Satellites)
@@ -652,12 +683,12 @@ export function useAnimationLoop({
       const filteredSatellites: CoTEntity[] = [];
       for (const [uid, sat] of satellitesRef.current.entries()) {
         if (!filters?.showSatellites) continue;
-        
+
         const constellation = sat.detail?.constellation as string | undefined;
         if (constellation && filters?.[`showConstellation_${constellation}`] === false) continue;
 
         const cat = (sat.detail?.category as string)?.toLowerCase() || "";
-        let show = false;
+        let show: boolean;
         if (
           cat.includes("gps") ||
           cat.includes("gnss") ||
@@ -768,11 +799,11 @@ export function useAnimationLoop({
         // Live Sidebar Update
         if (selectedEntity?.uid === uid) {
           const liveSatCount = {
-              ...sat,
-              lat: visual.lat,
-              lon: visual.lon,
-              altitude: visual.alt,
-              course: dr ? ((dr.blendCourseRad * 180) / Math.PI + 360) % 360 : sat.course
+            ...sat,
+            lat: visual.lat,
+            lon: visual.lon,
+            altitude: visual.alt,
+            course: dr ? ((dr.blendCourseRad * 180) / Math.PI + 360) % 360 : sat.course
           };
           onEntityLiveUpdate?.(liveSatCount);
         }
@@ -805,9 +836,9 @@ export function useAnimationLoop({
 
       // Repeater infrastructure layers (ham radio repeaters)
       let repeaterLayers: any[] = [];
-      if (showRepeaters && repeatersRef && repeatersRef.current.length > 0) {
-        repeaterLayers = buildRepeaterLayers(
-          repeatersRef.current,
+      if (showRepeaters && rfSitesRef && rfSitesRef.current.length > 0) {
+        repeaterLayers = buildRFLayers(
+          rfSitesRef.current,
           globeMode,
           onEntitySelect,
           setHoveredEntity,
@@ -827,8 +858,93 @@ export function useAnimationLoop({
         globeMode
       );
 
+      // KiwiSDR node marker layer (Radio Beacon)
+      const kiwiNode = kiwiNodeRef?.current;
+      const kiwiLayers: any[] = [];
+      if (kiwiNode && kiwiNode.lat !== 0 && kiwiNode.lon !== 0) {
+        // High-tech Radio Beacon design
+        const pulse = (Math.sin(now / 400) + 1) / 2; // 0 to 1
+        const breathing = (Math.sin(now / 1500) + 1) / 2; // slow breath
+
+        // 1. Outer broad glow (Radiating wave)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-glow',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [0, 220, 255, 15 + (pulse * 25)],
+            getRadius: 15000 + (pulse * 10000),
+            radiusUnits: 'meters',
+            pickable: false,
+          })
+        );
+
+        // 2. Secondary rotating ring (Attention ring)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-ring-outer',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [0, 0, 0, 0],
+            getLineColor: [0, 220, 255, 100 + (breathing * 100)],
+            getRadius: 10000,
+            radiusUnits: 'meters',
+            stroked: true,
+            getLineWidth: 800 + (pulse * 800),
+            lineWidthUnits: 'meters',
+            pickable: false,
+          })
+        );
+
+        // 3. Inner Signal Core (Rose 400 color from terminal)
+        kiwiLayers.push(
+          new ScatterplotLayer({
+            id: 'kiwi-node-core',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [251, 113, 133, 180 + (pulse * 75)],
+            getLineColor: [251, 113, 133, 200],
+            getRadius: 4000,
+            radiusUnits: 'meters',
+            stroked: true,
+            getLineWidth: 1200,
+            lineWidthUnits: 'meters',
+            pickable: true,
+          })
+        );
+
+        // 4. Premium Label with Pointer
+        kiwiLayers.push(
+          new TextLayer({
+            id: 'kiwi-node-label',
+            data: [kiwiNode],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getText: (d: any) => `LIVE SDR\n${d.host}`,
+            getColor: [255, 255, 255, 240],
+            getSize: 10,
+            getTextAnchor: 'middle',
+            getAlignmentBaseline: 'bottom',
+            getPixelOffset: [0, -15],
+            fontFamily: 'Inter, monospace',
+            fontWeight: 700,
+            background: true,
+            getBorderWidth: 1.2,
+            getBorderColor: [251, 113, 133, 180],
+            getBackgroundColor: [0, 0, 0, 190],
+            backgroundPadding: [6, 3],
+            pickable: false,
+          })
+        );
+      }
+
       const layers = [
+        // 0. Debug H3 Coverage Layer (absolute bottom of stack)
+        ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
+
+        // 0.25. Terminator Layer (always present, visibility internal to call)
         getTerminatorLayer(!!filters?.showTerminator),
+
+        // 0.5. Orbital Layers
         ...getOrbitalLayers({
           satellites: filteredSatellites,
           selectedEntity: currentSelected,
@@ -851,16 +967,31 @@ export function useAnimationLoop({
           },
         }),
 
-        // 0. AOT Boundaries
-        ...buildAOTLayers(aotShapes, filters, globeMode, observerRef?.current),
+        // 1. AOT Boundaries
+        ...buildAOTLayers(
+          aotShapes,
+          filters,
+          globeMode,
+          observerRef?.current,
+          currentMissionRef.current
+            ? {
+              lat: currentMissionRef.current.lat,
+              lon: currentMissionRef.current.lon,
+              radiusKm: (filters?.rfRadius || 300) * 1.852,
+            }
+            : null,
+        ),
 
-        // 1. Repeater infrastructure (rendered below entity icons for context)
+        // 2. Repeater infrastructure (rendered below entity icons for context)
         ...repeaterLayers,
 
         // Infra layers (cables and landing stations)
         ...infraLayers,
 
-        // 2-3. Trail layers (history trails, gap bridges, selected trail)
+        // KiwiSDR node marker (rendered above infra, below entity icons)
+        ...kiwiLayers,
+
+        // 3-4. Trail layers (history trails, gap bridges, selected trail)
         ...buildTrailLayers(
           interpolated,
           currentSelected,
@@ -868,7 +999,7 @@ export function useAnimationLoop({
           historyTailsRef.current,
         ),
 
-        // 4+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
+        // 5+. Entity layers (stems, halos, icons, glow, selection ring, velocity vectors)
         ...buildEntityLayers(
           interpolated,
           currentSelected,
@@ -882,7 +1013,7 @@ export function useAnimationLoop({
           selectedEntity,
         ),
 
-        // 5. JS8 station layers (rendered above entity icons)
+        // 6. JS8 station layers (rendered above entity icons)
         ...js8Layers,
       ];
 

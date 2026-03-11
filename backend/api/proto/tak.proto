@@ -48,6 +48,9 @@ message Detail {
   VesselClassification vesselClassification = 7;
   string category = 8;
   string constellation = 9;
+  double period_min = 10;
+  double inclination_deg = 11;
+  double eccentricity = 12;
   // XML fallback for unmapped fields
   string xmlDetail = 100; 
 }

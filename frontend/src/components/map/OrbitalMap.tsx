@@ -12,7 +12,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps, RepeaterStation } from "../../types";
+import { CoTEntity, JS8Station, MissionProps, RFSite } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -86,11 +86,24 @@ interface TacticalMapProps {
   onEntityLiveUpdate?: (entity: CoTEntity) => void;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
-  repeatersRef?: MutableRefObject<RepeaterStation[]>;
+  rfSitesRef?: MutableRefObject<RFSite[]>;
   showRepeaters?: boolean;
   repeatersLoading?: boolean;
   /** Called once the entity worker is ready, passing the live satellitesRef map. */
   onSatellitesRefReady?: (ref: MutableRefObject<Map<string, CoTEntity>>) => void;
+  // Shared Global State
+  entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
+  satellitesRef: MutableRefObject<Map<string, CoTEntity>>;
+  knownUidsRef: MutableRefObject<Set<string>>;
+  drStateRef: MutableRefObject<Map<string, import("../../types").DRState>>;
+  visualStateRef: MutableRefObject<Map<string, import("../../types").VisualState>>;
+  prevCourseRef: MutableRefObject<Map<string, number>>;
+  alertedEmergencyRef: MutableRefObject<Map<string, string>>;
+  currentMissionRef: MutableRefObject<{
+    lat: number;
+    lon: number;
+    radius_nm: number;
+  } | null>;
 }
 
 export function OrbitalMap({
@@ -112,10 +125,18 @@ export function OrbitalMap({
   onEntityLiveUpdate,
   js8StationsRef,
   ownGridRef,
-  repeatersRef,
+  rfSitesRef,
   showRepeaters,
   repeatersLoading,
   onSatellitesRefReady,
+  entitiesRef,
+  satellitesRef,
+  knownUidsRef,
+  drStateRef,
+  visualStateRef,
+  prevCourseRef,
+  alertedEmergencyRef,
+  currentMissionRef,
 }: TacticalMapProps) {
   // Fetch infra data (Submarine cables & landing stations)
   const { cablesData, stationsData } = useInfraData();
@@ -269,23 +290,19 @@ export function OrbitalMap({
 
     // 3. RF Repeaters Trigger
     if (currRepeaters) {
-      const dataReady = repeatersRef?.current && repeatersRef.current.length > 0;
+      const dataReady = rfSitesRef?.current && rfSitesRef.current.length > 0;
       const loadFinished = !repeatersLoading;
 
-      // Notify if:
-      // 1. Data is ready (non-zero count)
-      // 2. OR loading has explicitly finished AFTER we already transitioned showRepeaters to true
-      // This prevents the "0 repeaters" flash during the initial frame of a toggle.
-      if (!infraNotifiedRef.current.notifiedRepeaters) {
-        if (dataReady || (loadFinished && infraNotifiedRef.current.showRepeaters === true)) {
-          const count = repeatersRef?.current?.length || 0;
-          onEvent?.({
-            message: `RF_NET: ${count} amateur radio repeaters active in regional sector`,
-            type: "new",
-            entityType: "infra",
-          });
-          infraNotifiedRef.current.notifiedRepeaters = true;
-        }
+      // Notify if loading has explicitly finished AFTER we already transitioned showRepeaters to true
+      // This prevents logging 0 when the API is still fetching.
+      if (!infraNotifiedRef.current.notifiedRepeaters && loadFinished) {
+        const count = rfSitesRef?.current?.length || 0;
+        onEvent?.({
+          message: `RF_NET: ${count} RF stations active in regional sector`,
+          type: "new",
+          entityType: "infra",
+        });
+        infraNotifiedRef.current.notifiedRepeaters = true;
       }
     } else {
       if (prevRepeaters === true) {
@@ -301,7 +318,7 @@ export function OrbitalMap({
     infraNotifiedRef.current.showCables = currCables;
     infraNotifiedRef.current.showLandingStations = currLanding;
     infraNotifiedRef.current.showRepeaters = currRepeaters;
-  }, [filters?.showCables, filters?.showLandingStations, showRepeaters, cablesData, stationsData, onEvent, repeatersRef, repeatersLoading]);
+  }, [filters?.showCables, filters?.showLandingStations, showRepeaters, cablesData, stationsData, onEvent, rfSitesRef, repeatersLoading]);
 
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
@@ -325,11 +342,6 @@ export function OrbitalMap({
       .catch(() => { if (!cancelled) predictedGroundTrackRef.current = []; });
     return () => { cancelled = true; };
   }, [selectedEntity?.uid, showHistoryTails]);
-  const currentMissionRef = useRef<{
-    lat: number;
-    lon: number;
-    radius_nm: number;
-  } | null>(null);
 
   // Observer ring ref — passed to useAnimationLoop to render the AOI horizon on the orbital map.
   // radiusKm is derived from the mission's radius_nm (1 nm = 1.852 km).
@@ -402,9 +414,6 @@ export function OrbitalMap({
     }
   }, [showHistoryTails]);
 
-  // Entity Worker: TAK worker lifecycle, WebSocket, entity processing
-  const { entitiesRef, satellitesRef, knownUidsRef, drStateRef, visualStateRef, prevCourseRef } =
-    useEntityWorker({ onEvent, currentMissionRef });
 
   // Expose the live satellitesRef to parent (App) so it can resolve NORAD IDs to real entities.
   // Use a ref+effect so this only fires once after mount, not on every render.
@@ -452,6 +461,7 @@ export function OrbitalMap({
     drStateRef,
     visualStateRef,
     prevCourseRef,
+    alertedEmergencyRef,
     countsRef,
     currentMissionRef,
     selectedEntityRef,
@@ -503,7 +513,7 @@ export function OrbitalMap({
     onFollowModeChange,
     js8StationsRef,
     ownGridRef,
-    repeatersRef,
+    rfSitesRef,
     showRepeaters,
     predictedGroundTrackRef,
     observerRef,
@@ -688,7 +698,7 @@ export function OrbitalMap({
             <>
               <button
                 onClick={() => setViewMode("2d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${!enable3d
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${!enable3d
                   ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                   : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}
@@ -697,7 +707,7 @@ export function OrbitalMap({
               </button>
               <button
                 onClick={() => setViewMode("3d")}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${enable3d
+                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${enable3d
                   ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                   : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}
@@ -709,7 +719,7 @@ export function OrbitalMap({
           )}
           <button
             onClick={() => onToggleGlobe?.()}
-            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 ${globeMode
+            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${globeMode
               ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
               : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
               }`}
@@ -724,15 +734,17 @@ export function OrbitalMap({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           <button
             onClick={() => mapRef.current?.getMap().zoomOut()}
-            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Zoom Out"
+            aria-label="Zoom Out"
           >
             <Minus size={14} strokeWidth={3} />
           </button>
           <button
             onClick={() => mapRef.current?.getMap().zoomIn()}
-            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95"
+            className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Zoom In"
+            aria-label="Zoom In"
           >
             <Plus size={14} strokeWidth={3} />
           </button>

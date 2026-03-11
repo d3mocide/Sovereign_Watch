@@ -267,6 +267,7 @@ class KiwiDirectory:
         lon: float,
         max_users_pct: float = 0.9,
         limit: int = 20,
+        max_distance_km: float | None = None,
     ) -> list[KiwiNode]:
         """
         Return proximity-sorted, frequency-filtered KiwiSDR nodes.
@@ -274,6 +275,7 @@ class KiwiDirectory:
         Filters out:
           - Nodes whose frequency range doesn't cover freq_khz
           - Nodes at >= max_users_pct capacity
+          - Nodes beyond max_distance_km (when set)
 
         Returns at most `limit` results, closest first.
         """
@@ -284,6 +286,8 @@ class KiwiDirectory:
             if node.num_ch > 0 and node.users >= max_users_pct * node.num_ch:
                 continue
             dist = haversine(lat, lon, node.lat, node.lon)
+            if max_distance_km is not None and dist > max_distance_km:
+                continue
             # Create a copy with distance populated
             results.append(KiwiNode(
                 host=node.host, port=node.port,

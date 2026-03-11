@@ -72,6 +72,72 @@ CREATE TABLE IF NOT EXISTS satellites (
 
 CREATE INDEX IF NOT EXISTS ix_satellites_constellation ON satellites (constellation);
 
+-- TABLE: rf_sites (All fixed RF infrastructure)
+CREATE TABLE IF NOT EXISTS rf_sites (
+    id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    source       TEXT NOT NULL,           -- 'repeaterbook' | 'ard' | 'noaa_nwr' | 'radioref'
+    site_id      TEXT NOT NULL,           -- source-native identifier (callsign, NOAA ID, RR site ID)
+    service      TEXT NOT NULL,           -- 'ham' | 'gmrs' | 'public_safety' | 'noaa_nwr'
+    callsign     TEXT,
+    name         TEXT,                    -- human label (site name or NWR station name)
+    lat          DOUBLE PRECISION NOT NULL,
+    lon          DOUBLE PRECISION NOT NULL,
+    output_freq  DOUBLE PRECISION,        -- MHz (output / receive frequency)
+    input_freq   DOUBLE PRECISION,        -- MHz (input / transmit frequency)
+    tone_ctcss   DOUBLE PRECISION,        -- CTCSS Hz (e.g. 141.3)
+    tone_dcs     TEXT,                    -- DCS code where applicable
+    modes        TEXT[],                  -- ['FM','DMR','P25','D-Star','Fusion','NXDN','TETRA']
+    use_access   TEXT,                    -- 'OPEN' | 'CLOSED' | 'LINKED' | 'PRIVATE'
+    status       TEXT DEFAULT 'Unknown',  -- 'On-air' | 'Off-air' | 'Unknown'
+    city         TEXT,
+    state        TEXT,
+    country      TEXT DEFAULT 'US',
+    emcomm_flags TEXT[],                  -- ['ARES','RACES','SKYWARN','CERT','WICEN']
+    meta         JSONB,                   -- source-specific extras (power_w, antenna_height, etc.)
+    geom         GEOMETRY(POINT, 4326),
+    fetched_at   TIMESTAMPTZ DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (source, site_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_rf_sites_geom       ON rf_sites USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_rf_sites_service     ON rf_sites (service);
+CREATE INDEX IF NOT EXISTS ix_rf_sites_source      ON rf_sites (source);
+CREATE INDEX IF NOT EXISTS ix_rf_sites_callsign    ON rf_sites USING gin (callsign gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_rf_sites_modes       ON rf_sites USING GIN (modes);
+CREATE INDEX IF NOT EXISTS ix_rf_sites_emcomm      ON rf_sites USING GIN (emcomm_flags);
+
+-- TABLE: rf_systems (Trunked public safety systems - RadioReference)
+CREATE TABLE IF NOT EXISTS rf_systems (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    source     TEXT DEFAULT 'radioref',
+    rr_sid     TEXT UNIQUE,               -- RadioReference system ID
+    name       TEXT NOT NULL,
+    type       TEXT,                      -- 'P25', 'DMR', 'EDACS', 'Motorola'
+    state      TEXT,
+    county     TEXT,
+    meta       JSONB,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_rf_systems_state ON rf_systems (state);
+
+-- TABLE: rf_talkgroups (Trunked talkgroup catalogue)
+CREATE TABLE IF NOT EXISTS rf_talkgroups (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    system_id   UUID REFERENCES rf_systems(id) ON DELETE CASCADE,
+    decimal_id  INTEGER NOT NULL,
+    alpha_tag   TEXT,
+    description TEXT,
+    category    TEXT,                     -- 'Law Dispatch', 'Fire Dispatch', 'EMS', etc.
+    priority    INTEGER DEFAULT 3,        -- 1=highest, 5=lowest
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (system_id, decimal_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_rf_talkgroups_system ON rf_talkgroups (system_id);
+CREATE INDEX IF NOT EXISTS ix_rf_talkgroups_cat    ON rf_talkgroups (category);
+
 -- TABLE: intel_reports (Semantic Data)
 CREATE TABLE IF NOT EXISTS intel_reports (
     id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,

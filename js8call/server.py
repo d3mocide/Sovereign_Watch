@@ -286,9 +286,19 @@ def _kiwi_status_callback(status: dict) -> None:
     Also keeps _kiwi_config in sync for REST endpoints.
     """
     global _kiwi_config
+    # Resolve lat/lon for the connected node from the directory cache
+    node_lat, node_lon = 0.0, 0.0
+    if status.get("connected") and _kiwi_directory is not None:
+        host = status.get("host", "")
+        for n in _kiwi_directory._nodes:
+            if n.host == host:
+                node_lat, node_lon = n.lat, n.lon
+                break
     payload = {
         "type": "KIWI.STATUS",
         **status,
+        "lat": node_lat,
+        "lon": node_lon,
         "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
     }
     _enqueue_from_thread(payload)
@@ -301,6 +311,7 @@ def _kiwi_status_callback(status: dict) -> None:
         }
     else:
         _kiwi_config = {}
+
 
 
 def _kiwi_disconnect_callback(close_code: int) -> None:
@@ -822,6 +833,36 @@ async def ws_js8(websocket: WebSocket) -> None:
                 })
 
             # ------------------------------------------------------------------
+            # Action: SET_MODE – change JS8Call frame speed
+            # Payload: {"action": "SET_MODE", "mode": "NORMAL"|"FAST"|"TURBO"|"SLOW"}
+            # Sends MODE.SET_SPEED via JS8Call UDP API (port JS8CALL_UDP_SERVER_PORT).
+            # ------------------------------------------------------------------
+            elif action == "SET_MODE":
+                _VALID_MODES = {"NORMAL", "FAST", "TURBO", "SLOW"}
+                requested_mode = str(cmd.get("mode", "NORMAL")).upper().strip()
+                if requested_mode not in _VALID_MODES:
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": f"SET_MODE: invalid mode '{requested_mode}'. Valid: {sorted(_VALID_MODES)}",
+                    })
+                else:
+                    try:
+                        import socket as _socket
+                        tx = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+                        doc = {"TYPE": "MODE.SET_SPEED", "VALUE": requested_mode, "PARAMS": {}}
+                        tx.sendto(
+                            json.dumps(doc).encode("utf-8") + b"\n",
+                            ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                        )
+                        tx.close()
+                        logger.info("SET_MODE → %s", requested_mode)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_MODE failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
             # Action: SET_FREQ – change JS8Call dial frequency
             # Payload: {"action": "SET_FREQ", "freq": 14074000}
             # ------------------------------------------------------------------
@@ -917,7 +958,51 @@ async def ws_js8(websocket: WebSocket) -> None:
                     "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
                 })
 
+            # ------------------------------------------------------------------
+            # Action: SET_STATION – update callsign and/or grid square
+            # Payload: {\"action\": \"SET_STATION\", \"callsign\": \"W1AW\", \"grid\": \"FN42\"}
+            # Forwards STATION.SET_CALLSIGN / STATION.SET_GRID to JS8Call UDP API.
+            # Echoes a STATION.STATUS immediately so the UI updates without waiting.
+            # ------------------------------------------------------------------
+            elif action == "SET_STATION":
+                new_callsign = str(cmd.get("callsign", "")).strip().upper()
+                new_grid     = str(cmd.get("grid", "")).strip().upper()
+                if not new_callsign and not new_grid:
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": "SET_STATION: must specify at least one of callsign or grid",
+                    })
+                else:
+                    try:
+                        import socket as _socket
+                        tx = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+                        if new_callsign:
+                            doc = {"TYPE": "STATION.SET_CALLSIGN", "VALUE": new_callsign, "PARAMS": {}}
+                            tx.sendto(
+                                json.dumps(doc).encode("utf-8") + b"\n",
+                                ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                            )
+                            logger.info("SET_STATION callsign → %s", new_callsign)
+                        if new_grid:
+                            doc = {"TYPE": "STATION.SET_GRID", "VALUE": new_grid, "PARAMS": {}}
+                            tx.sendto(
+                                json.dumps(doc).encode("utf-8") + b"\n",
+                                ("127.0.0.1", JS8CALL_UDP_SERVER_PORT),
+                            )
+                            logger.info("SET_STATION grid → %s", new_grid)
+                        tx.close()
+                    except Exception as exc:
+                        logger.warning("SET_STATION UDP send failed: %s", exc)
+                    # Optimistic echo so the UI updates without waiting for JS8Call confirmation
+                    _enqueue_from_thread({
+                        "type": "STATION.STATUS",
+                        "callsign": new_callsign if new_callsign else callsign,
+                        "grid":     new_grid     if new_grid     else grid,
+                        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+                    })
+
             else:
+
                 await websocket.send_json({
                     "type": "ERROR",
                     "message": f"Unknown action: {action}",
@@ -1001,21 +1086,22 @@ async def get_kiwi() -> dict:
 # ===========================================================================
 
 @app.get("/api/kiwi/nodes", summary="List available KiwiSDR nodes sorted by proximity")
-async def get_kiwi_nodes(freq: float = None, limit: int = 10) -> list:
+async def get_kiwi_nodes(freq: float = None, limit: int = 10, radius_km: float = None) -> list:
     """
     Returns nearby KiwiSDR nodes from the cached public directory, sorted by
     Haversine distance from MY_GRID and filtered to nodes covering `freq` kHz.
 
     Query params:
-      freq  — target frequency in kHz (default: KIWI_FREQ env var)
-      limit — max results to return (default: 10)
+      freq      — target frequency in kHz (default: KIWI_FREQ env var)
+      limit     — max results to return (default: 10)
+      radius_km — only return nodes within this distance in km (default: no limit)
     """
     if _kiwi_directory is None:
         return []
     target_freq = float(freq) if freq is not None else float(KIWI_FREQ)
-    limit = max(1, min(limit, 50))
+    limit = max(1, min(limit, 10000))
     my_lat, my_lon = maidenhead_to_latlon(MY_GRID)
-    nodes = _kiwi_directory.get_nodes(target_freq, my_lat, my_lon, limit=limit)
+    nodes = _kiwi_directory.get_nodes(target_freq, my_lat, my_lon, limit=limit, max_distance_km=radius_km)
     return [n.to_dict() for n in nodes]
 
 

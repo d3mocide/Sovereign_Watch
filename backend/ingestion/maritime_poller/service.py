@@ -11,7 +11,7 @@ import websockets.exceptions
 from aiokafka import AIOKafkaProducer
 
 from classification import classify_vessel
-from utils import calculate_bbox
+from utils import calculate_bbox, calculate_distance_nm
 
 # Configure Logging
 logging.basicConfig(
@@ -38,6 +38,16 @@ COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
 AIS_HEADING_NOT_AVAILABLE = 511
 
 
+# Minimum change in lat/lon (degrees) or radius (nm) required to trigger a reconnect.
+# Small floating-point drift and same-value updates are ignored.
+MIN_LAT_LON_CHANGE_DEG = 0.05  # ~3nm at mid-latitudes
+MIN_RADIUS_CHANGE_NM = 1.0
+
+# Seconds to wait after the *last* mission update before reconnecting.
+# Rapid preset clicks collapse into a single reconnect once the user stops.
+BBOX_DEBOUNCE_SECONDS = 5.0
+
+
 class MaritimePollerService:
     def __init__(self):
         self.running = True
@@ -52,6 +62,7 @@ class MaritimePollerService:
 
         self.reconnect_delay = 5  # seconds
         self.bbox_update_needed = False
+        self._bbox_debounce_task: Optional[asyncio.Task] = None
         self.vessel_static_cache: Dict[int, dict] = {}
 
     async def setup(self):
@@ -102,6 +113,12 @@ class MaritimePollerService:
 
         logger.info("🛑 Maritime poller shutdown complete")
 
+    async def _schedule_bbox_reconnect(self):
+        """Debounced helper: waits BBOX_DEBOUNCE_SECONDS, then signals a reconnect."""
+        await asyncio.sleep(BBOX_DEBOUNCE_SECONDS)
+        logger.info(f"🔄 Bbox debounce elapsed — scheduling AISStream reconnect")
+        self.bbox_update_needed = True
+
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""
         while self.running:
@@ -117,16 +134,49 @@ class MaritimePollerService:
                     if message["type"] == "message":
                         try:
                             mission = json.loads(message["data"])
+                            new_lat = mission["lat"]
+                            new_lon = mission["lon"]
+                            new_radius = mission["radius_nm"]
+
+                            # ── Minimum-change threshold ──────────────────────────────────
+                            # Ignore updates that are just floating-point drift or identical
+                            # preset re-selections; only reconnect when the area actually moves.
+                            # We deliberately exclude radius changes here so we don't reconnect
+                            # to AISStream when the user just changes their display radius.
+                            lat_diff = abs(new_lat - self.center_lat)
+                            lon_diff = abs(new_lon - self.center_lon)
+
+                            # Always update the local radius so the stream_loop filter catches it
+                            self.radius_nm = new_radius
+
+                            if (lat_diff < MIN_LAT_LON_CHANGE_DEG and
+                                    lon_diff < MIN_LAT_LON_CHANGE_DEG):
+                                logger.debug(
+                                    f"📍 Mission center update below threshold — ignoring reconnect "
+                                    f"(Δlat={lat_diff:.4f}° Δlon={lon_diff:.4f}°). New filter radius: {self.radius_nm}nm"
+                                )
+                                continue
+
                             old_center = (self.center_lat, self.center_lon, self.radius_nm)
+                            self.center_lat = new_lat
+                            self.center_lon = new_lon
+                            self.radius_nm = new_radius
 
-                            self.center_lat = mission["lat"]
-                            self.center_lon = mission["lon"]
-                            self.radius_nm = mission["radius_nm"]
+                            logger.info(
+                                f"📍 Mission area updated: {old_center} → "
+                                f"({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
+                            )
 
-                            logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                            # ── Debounce ──────────────────────────────────────────────────
+                            # Cancel any pending reconnect, then schedule a fresh one.
+                            # Rapid preset clicks collapse into a single reconnect.
+                            if self._bbox_debounce_task and not self._bbox_debounce_task.done():
+                                self._bbox_debounce_task.cancel()
+                                logger.debug("🕐 Debounce reset — new mission update received")
 
-                            # Flag that we need to update the AISStream subscription
-                            self.bbox_update_needed = True
+                            self._bbox_debounce_task = asyncio.create_task(
+                                self._schedule_bbox_reconnect()
+                            )
 
                         except Exception as e:
                             logger.error(f"Failed to parse mission update: {e}")
@@ -141,8 +191,10 @@ class MaritimePollerService:
                     break
 
     async def connect_aisstream(self):
-        """Connect to AISStream.io WebSocket and subscribe with current bbox."""
-        bbox = calculate_bbox(self.center_lat, self.center_lon, self.radius_nm)
+        """Connect to AISStream.io WebSocket and subscribe with a MAX bounding box."""
+        # Always use a 350nm bounding box for the actual stream connection to prevent 
+        # frequent disconnects when the user just zooms/pans locally.
+        bbox = calculate_bbox(self.center_lat, self.center_lon, 350)
         subscription_message = {
             "APIKey": AISSTREAM_API_KEY,
             "BoundingBoxes": [bbox],
@@ -374,18 +426,27 @@ class MaritimePollerService:
                         tak_event = self.transform_to_tak(data)
 
                         if tak_event:
-                            # Send to Kafka (non-blocking)
-                            asyncio.create_task(
-                                self.kafka_producer.send(
-                                    "ais_raw",
-                                    value=tak_event,
-                                    key=tak_event["uid"].encode("utf-8")
-                                )
+                            # Evaluate distance and drop if outside current dynamic mission radius
+                            dist = calculate_distance_nm(
+                                self.center_lat, 
+                                self.center_lon, 
+                                tak_event["point"]["lat"], 
+                                tak_event["point"]["lon"]
                             )
+                            
+                            if dist <= self.radius_nm:
+                                # Send to Kafka (non-blocking)
+                                asyncio.create_task(
+                                    self.kafka_producer.send(
+                                        "ais_raw",
+                                        value=tak_event,
+                                        key=tak_event["uid"].encode("utf-8")
+                                    )
+                                )
 
-                            # Log sparingly (every 100th message)
-                            if hash(tak_event["uid"]) % 100 == 0:
-                                logger.debug(f"🚢 Published vessel {tak_event['detail']['contact']['callsign']}")
+                                # Log sparingly (every 100th message)
+                                if hash(tak_event["uid"]) % 100 == 0:
+                                    logger.debug(f"🚢 Published vessel {tak_event['detail']['contact']['callsign']}")
                     elif msg_type == "ShipStaticData":
                         meta = data.get("MetaData", {})
                         mmsi = meta.get("MMSI")
@@ -405,17 +466,25 @@ class MaritimePollerService:
                         tak_event = self.handle_class_b_position(data)
 
                         if tak_event:
-                            # Send to Kafka (non-blocking)
-                            asyncio.create_task(
-                                self.kafka_producer.send(
-                                    "ais_raw",
-                                    value=tak_event,
-                                    key=tak_event["uid"].encode("utf-8")
-                                )
+                            dist = calculate_distance_nm(
+                                self.center_lat, 
+                                self.center_lon, 
+                                tak_event["point"]["lat"], 
+                                tak_event["point"]["lon"]
                             )
+                            
+                            if dist <= self.radius_nm:
+                                # Send to Kafka (non-blocking)
+                                asyncio.create_task(
+                                    self.kafka_producer.send(
+                                        "ais_raw",
+                                        value=tak_event,
+                                        key=tak_event["uid"].encode("utf-8")
+                                    )
+                                )
 
-                            if hash(tak_event["uid"]) % 100 == 0:
-                                logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")
+                                if hash(tak_event["uid"]) % 100 == 0:
+                                    logger.debug(f"🚢 Published Class B vessel {tak_event['detail']['contact']['callsign']}")
 
                 except asyncio.TimeoutError:
                     # No message in 30s - send ping to keep connection alive

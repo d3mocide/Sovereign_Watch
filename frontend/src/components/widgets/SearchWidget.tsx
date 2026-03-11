@@ -162,6 +162,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
     };
 
     const formatTimeAgo = (ts: number) => {
+        // eslint-disable-next-line react-hooks/purity
         const seconds = Math.floor((Date.now() - ts) / 1000);
         if (seconds < 60) return `${seconds}s ago`;
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;

@@ -3,11 +3,24 @@ import logging
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
-from models.schemas import MissionLocation
+from models.schemas import MissionLocation, AIModelRequest
 from core.database import db
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.System")
+
+# ---------------------------------------------------------------------------
+# AI model registry — mirrors litellm_config.yaml model_list.
+# Update here if models are added/removed from the YAML.
+# ---------------------------------------------------------------------------
+AVAILABLE_AI_MODELS = [
+    {"id": "deep-reasoner", "label": "Claude 3.5 Sonnet", "provider": "Anthropic", "local": False},
+    {"id": "public-flash",  "label": "Gemini 1.5 Flash",  "provider": "Google",    "local": False},
+    {"id": "secure-core",   "label": "LLaMA3 (Ollama)",   "provider": "Local",     "local": True},
+]
+_VALID_MODEL_IDS = {m["id"] for m in AVAILABLE_AI_MODELS}
+AI_MODEL_REDIS_KEY = "config:ai:active_model"
+AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
 @router.get("/health")
 async def health():
@@ -80,3 +93,79 @@ async def get_mission_location():
     }
 
     return default_mission
+
+@router.get("/api/config/ai")
+async def get_ai_config():
+    """Return available AI models and the currently active one."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        active = await db.redis_client.get(AI_MODEL_REDIS_KEY)
+    except Exception as e:
+        logger.error(f"Failed to get AI model config: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {
+        "active_model": active or AI_MODEL_DEFAULT,
+        "available_models": AVAILABLE_AI_MODELS,
+    }
+
+@router.get("/api/config/features")
+async def get_features_config():
+    """Return enabled functionality based on environment."""
+    return {
+        "repeaterbook_enabled": bool(os.getenv("REPEATERBOOK_API_TOKEN")),
+        "radioref_enabled": bool(
+            os.getenv("RADIOREF_APP_KEY") and
+            os.getenv("RADIOREF_USERNAME") and
+            os.getenv("RADIOREF_PASSWORD")
+        )
+    }
+
+@router.post("/api/config/ai")
+async def set_ai_config(req: AIModelRequest):
+    """Switch the active AI model used for track analysis."""
+    if req.model_id not in _VALID_MODEL_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown model '{req.model_id}'. Valid options: {sorted(_VALID_MODEL_IDS)}"
+        )
+
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        await db.redis_client.set(AI_MODEL_REDIS_KEY, req.model_id)
+    except Exception as e:
+        logger.error(f"Failed to set AI model config: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    logger.info(f"AI model switched to: {req.model_id}")
+    return {"status": "ok", "active_model": req.model_id}
+
+@router.get("/api/debug/h3_cells")
+async def get_h3_cells():
+    """Return the current set of H3 polling cells and their statuses."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        # Retrieve all items from the h3:cell_state Hash
+        cell_states = await db.redis_client.hgetall("h3:cell_state")
+        
+        # Parse each state from JSON back into dictionaries
+        parsed_cells = []
+        for cell_id, state_json in cell_states.items():
+            cell_data = json.loads(state_json)
+            cell_data["cell"] = cell_id
+            parsed_cells.append(cell_data)
+
+        # Sort by cell_id to ensure consistent ordering
+        parsed_cells.sort(key=lambda x: x["cell"])
+
+        return parsed_cells
+
+    except Exception as e:
+        logger.error(f"Failed to get H3 cells: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

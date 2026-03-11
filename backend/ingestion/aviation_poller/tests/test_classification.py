@@ -1,5 +1,4 @@
 import pytest
-from typing import Dict, Any
 from backend.ingestion.aviation_poller.classification import classify_aircraft, MILITARY_OPERATORS, GOV_OPERATORS
 
 class TestADSBClassification:

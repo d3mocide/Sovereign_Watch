@@ -5,6 +5,7 @@ import { PolarPlotWidget } from '../widgets/PolarPlotWidget';
 import { Crosshair, Map as MapIcon, Network, Radio, Shield, Terminal } from 'lucide-react';
 import { TimeTracked } from './TimeTracked';
 import { PayloadInspector } from '../widgets/PayloadInspector';
+import { AnalysisWidget } from '../widgets/AnalysisWidget';
 import { useMissionLocation } from '../../hooks/useMissionLocation';
 import { usePassPredictions } from '../../hooks/usePassPredictions';
 import { satAzEl } from '../../utils/map/geoUtils';
@@ -53,6 +54,7 @@ function formatCountdown(isoTarget: string, now: number): string {
 
 function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
   const { lat: obsLat, lon: obsLon } = useMissionLocation();
+  // eslint-disable-next-line react-hooks/purity
   const [now, setNow] = useState(Date.now());
 
   // Prefer detail.norad_id; fall back to parsing from uid string e.g. "SAT-40044"
@@ -82,8 +84,8 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
   // Next upcoming pass
   const nextPass = passes.find(p => new Date(p.los).getTime() > now);
 
-  const inclination = entity.detail?.inclination_deg != null
-    ? Number(entity.detail.inclination_deg).toFixed(2) + '°'
+  const inclination = entity.detail?.inclinationDeg != null
+    ? Number(entity.detail.inclinationDeg).toFixed(2) + '°'
     : '---';
   const eccentricity = entity.detail?.eccentricity != null
     ? Number(entity.detail.eccentricity).toFixed(5)
@@ -139,19 +141,19 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
 
       {/* Next pass countdown */}
       {nextPass && (
-        <div className="mt-1 p-2 rounded bg-purple-400/5 border border-purple-400/20 space-y-0.5">
+        <div className="mt-1 px-2 py-1.5 rounded bg-purple-400/5 border border-purple-400/20 flex items-center justify-between">
           <span className="text-[8px] text-purple-400/60 font-bold tracking-widest uppercase">Next Pass</span>
-          <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
-            <div className="flex flex-col">
-              <span className="text-[7px] text-white/30 uppercase">AOS</span>
+          <div className="flex gap-3 text-[10px] font-mono">
+            <div className="flex items-center gap-1">
+              <span className="text-[7px] text-white/30 uppercase">AOS:</span>
               <span className="text-white/80">{formatCountdown(nextPass.aos, now)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-[7px] text-white/30 uppercase">TCA</span>
-              <span className="text-purple-300">{nextPass.max_elevation.toFixed(0)}° max</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[7px] text-white/30 uppercase">TCA:</span>
+              <span className="text-purple-300">{nextPass.max_elevation.toFixed(0)}°</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-[7px] text-white/30 uppercase">DUR</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[7px] text-white/30 uppercase">DUR:</span>
               <span className="text-white/80">{Math.round(nextPass.duration_seconds / 60)}m</span>
             </div>
           </div>
@@ -181,6 +183,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
   // Reset inspector when entity changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowInspector(false);
   }, [entity?.uid]);
 
@@ -280,34 +283,27 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             </div>
           </section>
 
-          <div className="h-px bg-white/5 w-full my-2" />
-
-          <section className="space-y-1">
-            <h3 className="text-[10px] text-white/50 font-bold pb-1">Metadata_Source</h3>
-            <div className="flex flex-col gap-1 text-[10px] font-mono">
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">TIME_TRACKED:</span>
-                <span className="text-white/80"><TimeTracked lastSeen={entity.lastSeen} /></span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">Signal_Source:</span>
-                <span className="text-hud-green/80">JS8CALL_HF</span>
-              </div>
-            </div>
-          </section>
         </div>
 
         {/* Footer */}
-        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
-          <button
-            onClick={() => setShowInspector(true)}
-            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-          >
-            <div className="flex items-center justify-between px-3">
-              <span className="text-[10px] font-bold tracking-[.4em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD_EVAL</span>
-              <Terminal size={14} className="text-white/20" />
-            </div>
-          </button>
+        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
+          <div className="flex gap-2 w-full">
+            <AnalysisWidget uid={entity.uid} accentColor="text-indigo-400" compactMode={true} />
+            <button
+              onClick={() => setShowInspector(true)}
+              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
+            >
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
+                <Terminal size={12} className="text-white/20" />
+              </div>
+            </button>
+          </div>
+          {/* Compact Metadata Footer */}
+          <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
+            <span>SIG: <span className="text-hud-green/70">JS8CALL_HF</span></span>
+            <span><TimeTracked lastSeen={entity.lastSeen} /></span>
+          </div>
         </div>
       </div>
     );
@@ -324,21 +320,42 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       ? ((Number(detail.input_freq) - Number(detail.frequency)) > 0 ? `+${(Number(detail.input_freq) - Number(detail.frequency)).toFixed(2)}` : (Number(detail.input_freq) - Number(detail.frequency)).toFixed(2))
       : 'SIMPLEX';
 
+    const getHamBand = (freqMhz?: number | string): string => {
+      const f = Number(freqMhz);
+      if (!f || isNaN(f)) return 'UNKNOWN';
+      if (f >= 28 && f <= 29.7) return '10m';
+      if (f >= 50 && f <= 54) return '6m';
+      if (f >= 144 && f <= 148) return '2m';
+      if (f >= 219 && f <= 225) return '1.25m';
+      if (f >= 420 && f <= 450) return '70cm';
+      if (f >= 902 && f <= 928) return '33cm';
+      if (f >= 1240 && f <= 1300) return '23cm';
+      if (f >= 162.4 && f <= 162.55) return 'WX (VHF)';
+      if (f >= 462 && f <= 468) return 'GMRS (UHF)';
+      if (f >= 136 && f <= 174) return 'VHF COMMERCIAL';
+      if (f >= 380 && f <= 512) return 'UHF COMMERCIAL';
+      if (f >= 769 && f <= 869) return '700/800 MHz';
+      return 'OTHER';
+    };
+
     return (
       <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
         {/* Header */}
         <div className="p-3 border border-b-0 border-teal-400/30 bg-gradient-to-br from-teal-400/20 to-teal-400/5 backdrop-blur-md rounded-t-sm">
           <div className="flex justify-between items-start">
             <div className="flex flex-col flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Radio size={14} className="text-teal-400 shrink-0" />
                 <span className="text-[10px] font-bold tracking-[.3em] text-white/40">RF_INFRASTRUCTURE</span>
+                <span className="px-1.5 py-[2px] rounded text-[9px] font-bold border border-white/20 text-white/70 bg-white/5 whitespace-nowrap mt-[-2px]">
+                  {getHamBand(detail.frequency as number)}
+                </span>
               </div>
               <h2 className="text-mono-xl font-bold tracking-tighter text-teal-300 drop-shadow-[0_0_8px_currentColor] mb-2 truncate" title={entity.callsign}>
                 {entity.callsign}
               </h2>
               <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
-                <h3 className="text-mono-sm font-bold text-white/90">
+                <h3 className="text-mono-sm font-bold text-white/90 tracking-[0.15em]">
                   {String(detail.use || 'REPEATER').toUpperCase()}
                 </h3>
                 <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
@@ -371,6 +388,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           <section className="space-y-2">
             <h3 className="text-[10px] text-white/50 font-bold">RF_Parameters</h3>
             <div className="space-y-1 text-mono-xs font-medium">
+              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                <span className="text-white/30">BAND:</span>
+                <span className="text-purple-300 font-bold">{getHamBand(detail.frequency as number)}</span>
+              </div>
               <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
                 <span className="text-white/30">OUTPUT:</span>
                 <span className="text-teal-400 tabular-nums font-bold">{formatFreq(detail.frequency as number)}</span>
@@ -409,34 +430,27 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             </div>
           </section>
 
-          <div className="h-px bg-white/5 w-full my-2" />
-
-          <section className="space-y-1">
-            <h3 className="text-[10px] text-white/50 font-bold pb-1">Metadata_Source</h3>
-            <div className="flex flex-col gap-1 text-[10px] font-mono">
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">TIME_TRACKED:</span>
-                <span className="text-white/80"><TimeTracked lastSeen={entity.lastSeen} /></span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">Data_Source:</span>
-                <span className="text-teal-400/80">REPEATERBOOK_API</span>
-              </div>
-            </div>
-          </section>
         </div>
 
         {/* Footer */}
-        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
-          <button
-            onClick={() => setShowInspector(true)}
-            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-          >
-            <div className="flex items-center justify-between px-3">
-              <span className="text-[10px] font-bold tracking-[.4em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD_EVAL</span>
-              <Terminal size={14} className="text-white/20" />
-            </div>
-          </button>
+        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
+          <div className="flex gap-2 w-full">
+            <AnalysisWidget uid={entity.uid} accentColor="text-teal-400" compactMode={true} />
+            <button
+              onClick={() => setShowInspector(true)}
+              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
+            >
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
+                <Terminal size={12} className="text-white/20" />
+              </div>
+            </button>
+          </div>
+          {/* Compact Metadata Footer */}
+          <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
+            <span>SRC: <span className="text-teal-400/70">REPEATERBOOK_API</span></span>
+            <span><TimeTracked lastSeen={entity.lastSeen} /></span>
+          </div>
         </div>
       </div>
     );
@@ -554,32 +568,27 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             </section>
           )}
 
-          <section className="space-y-1">
-            <h3 className="text-[10px] text-white/50 font-bold pb-1">Metadata_Source</h3>
-            <div className="flex flex-col gap-1 text-[10px] font-mono">
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">TIME_TRACKED:</span>
-                <span className="text-white/80"><TimeTracked lastSeen={entity.lastSeen} /></span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr]">
-                <span className="text-white/30">Data_Source:</span>
-                <span className="text-cyan-400/80">SUBMARINE_MAP_API</span>
-              </div>
-            </div>
-          </section>
         </div>
 
         {/* Footer */}
-        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
-          <button
-            onClick={() => setShowInspector(true)}
-            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-          >
-            <div className="flex items-center justify-between px-3">
-              <span className="text-[10px] font-bold tracking-[.4em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD_EVAL</span>
-              <Terminal size={14} className="text-white/20" />
-            </div>
-          </button>
+        <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
+          <div className="flex gap-2 w-full">
+            <AnalysisWidget uid={entity.uid} accentColor="text-cyan-400" compactMode={true} />
+            <button
+              onClick={() => setShowInspector(true)}
+              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
+            >
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
+                <Terminal size={12} className="text-white/20" />
+              </div>
+            </button>
+          </div>
+          {/* Compact Metadata Footer */}
+          <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
+            <span>SRC: <span className="text-cyan-400/70">SUBMARINE_MAP_API</span></span>
+            <span><TimeTracked lastSeen={entity.lastSeen} /></span>
+          </div>
         </div>
       </div>
     );
@@ -664,33 +673,25 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             {/* Vessel Info Box */}
             {/* Satellite Info Box */}
             {isSat && entity.detail ? (
-              <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
-                <h3 className="text-mono-sm font-bold text-white/90">
-                  {String(entity.detail.category || 'ORBITAL ASSET').toUpperCase()}
-                </h3>
-                <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
-                  <div className="flex gap-2">
-                    <span className="text-white/30 w-16">NORAD ID:</span>
-                    <span className="text-white/80">
-                      {entity.detail.norad_id
-                        ? String(entity.detail.norad_id)
-                        : entity.uid?.replace?.(/^SAT-/i, '') || '—'}
-                    </span>
-                  </div>
-                  {entity.detail.inclination_deg != null && (
-                    <div className="flex gap-2">
-                      <span className="text-white/30 w-16">Incl:</span>
-                      <span className="text-purple-300/80">{Number(entity.detail.inclination_deg).toFixed(2)}°</span>
-                    </div>
-                  )}
-                  {entity.detail.eccentricity != null && (
-                    <div className="flex gap-2">
-                      <span className="text-white/30 w-16">Ecc:</span>
-                      <span className="text-white/70">{Number(entity.detail.eccentricity).toFixed(5)}</span>
-                    </div>
-                  )}
+              <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <h3 className="text-mono-sm font-bold text-white/90 shrink-0">
+                    {String(entity.detail.category || 'ORBITAL ASSET').toUpperCase()}
+                  </h3>
+                  <span className="text-[10px] text-white/40 font-mono">
+                    #{entity.detail.norad_id
+                      ? String(entity.detail.norad_id)
+                      : entity.uid?.replace?.(/^SAT-/i, '') || '—'}
+                    {entity.detail.inclinationDeg != null && (
+                      <> · <span className="text-purple-300/80">{Number(entity.detail.inclinationDeg).toFixed(1)}°</span></>
+                    )}
+                    {entity.detail.eccentricity != null && (
+                      <> · <span className="text-white/50">e={Number(entity.detail.eccentricity).toFixed(4)}</span></>
+                    )}
+                  </span>
                 </div>
               </section>
+
             ) : isShip && entity.vesselClassification ? (
               <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
                 <h3 className="text-mono-sm font-bold text-white/90">
@@ -752,8 +753,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">REGISTRATION</span>
             <span className="text-mono-xs font-bold truncate text-white">
               {isSat
-                ? String(entity.detail?.category || 'ORBITAL').toUpperCase()
-                : entity.classification?.registration || 'N/A'}
+                ? `NORAD ${entity.detail?.norad_id ?? entity.uid?.replace?.(/^SAT-/i, '') ?? '—'}`
+                : (isShip && entity.vesselClassification?.imo)
+                  ? `IMO ${entity.vesselClassification.imo}`
+                  : entity.classification?.registration || 'N/A'}
             </span>
           </div>
         </div>
@@ -833,7 +836,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                   <div className="flex justify-between border-b border-white/5 pb-1">
                     <span className="text-white/30">PERIOD:</span>
                     <span className="text-white/40 tabular-nums">
-                      {entity.detail?.period_min ? `${Number(entity.detail.period_min).toFixed(1)}m` : '---'}
+                      {entity.detail?.periodMin ? `${Number(entity.detail.periodMin).toFixed(1)}m` : '---'}
                     </span>
                   </div>
                 </div>
@@ -914,36 +917,29 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             {!isSat && <Compass heading={entity.course} size={180} accentColor={accentBase} />}
           </div>
         </section>
-
-        <div className="h-px bg-white/5 w-full my-2"></div>
-
-        {/* Metadata Group */}
-        <section className="space-y-1">
-          <h3 className="text-[10px] text-white/50 font-bold pb-1">Metadata_Source</h3>
-          <div className="flex flex-col gap-1 text-[10px] font-mono">
-            <div className="grid grid-cols-[100px_1fr]">
-              <span className="text-white/30">TIME_TRACKED:</span>
-              <span className="text-white/80"><TimeTracked lastSeen={entity.lastSeen} /></span>
-            </div>
-            <div className="grid grid-cols-[100px_1fr]">
-              <span className="text-white/30">Signal_Source:</span>
-              <span className="text-hud-green/80">{isSat ? 'ORBITAL_Poller' : isShip ? 'AIS_Poller' : 'ADSB_Poller'}</span>
-            </div>
-          </div>
-        </section>
       </div>
 
       {/* 3. Footer Actions */}
-      <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm">
-        <button
-          onClick={() => setShowInspector(true)}
-          className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-        >
-          <div className="flex items-center justify-between px-3">
-            <span className="text-[10px] font-bold tracking-[.4em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD_EVAL</span>
-            <Terminal size={14} className="text-white/20" />
-          </div>
-        </button>
+      <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
+        <div className="flex items-stretch gap-2 w-full grid grid-cols-2">
+          <AnalysisWidget uid={entity.uid} accentColor={accentColor} compactMode={true} />
+
+          <button
+            onClick={() => setShowInspector(true)}
+            className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all col-span-1"
+          >
+            <div className="flex items-center justify-between px-3 h-full">
+              <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
+              <Terminal size={12} className="text-white/20" />
+            </div>
+          </button>
+        </div>
+
+        {/* Compact Metadata Footer */}
+        <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
+          <span>SIG: <span className="text-hud-green/70">{isSat ? 'ORBITAL_Poller' : isShip ? 'AIS_Poller' : 'ADSB_Poller'}</span></span>
+          <span><TimeTracked lastSeen={entity.lastSeen} /></span>
+        </div>
       </div>
     </div>
   );
