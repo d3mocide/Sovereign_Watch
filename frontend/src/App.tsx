@@ -109,6 +109,7 @@ function App() {
     kiwiConnecting: js8KiwiConnecting,
     activeKiwiConfig: js8ActiveKiwiConfig,
     js8Mode,
+    sMeterDbm: js8SMeterDbm,
     sendMessage: js8SendMessage,
     sendAction: js8SendAction,
   } = useJS8Stations();
@@ -740,6 +741,7 @@ function App() {
             kiwiConnecting={js8KiwiConnecting}
             activeKiwiConfig={js8ActiveKiwiConfig}
             js8Mode={js8Mode}
+            sMeterDbm={js8SMeterDbm}
             sendMessage={js8SendMessage}
             sendAction={js8SendAction}
           />

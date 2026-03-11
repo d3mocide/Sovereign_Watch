@@ -20,6 +20,7 @@ export interface UseJS8StationsResult {
   kiwiConnecting: boolean;
   activeKiwiConfig: any;
   js8Mode: string;
+  sMeterDbm: number | null;
   sendMessage: (target: string, message: string) => void;
   sendAction: (payload: object) => void;
 }
@@ -43,6 +44,7 @@ export function useJS8Stations(): UseJS8StationsResult {
   const [kiwiConnecting, setKiwiConnecting] = useState(false);
   const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
   const [js8Mode, setJs8Mode] = useState<string>('normal');
+  const [sMeterDbm, setsMeterDbm] = useState<number | null>(null);
 
   const syncStations = useCallback(() => {
     setStations(
@@ -167,6 +169,11 @@ export function useJS8Stations(): UseJS8StationsResult {
         return;
       }
 
+      if (type === 'SMETER') {
+        setsMeterDbm(typeof payload.dbm === 'number' ? payload.dbm : null);
+        return;
+      }
+
       if (type === 'RX.DIRECTED' || type === 'TX.SENT') {
         const entry: JS8LogEntry = {
           id: `${Date.now()}-${Math.random()}`,
@@ -214,5 +221,5 @@ export function useJS8Stations(): UseJS8StationsResult {
     };
   }, [connect]);
 
-  return { stationsRef, ownGridRef, kiwiNodeRef, stations, logEntries, statusLine, connected, js8Connected, kiwiConnecting, activeKiwiConfig, js8Mode, sendMessage, sendAction };
+  return { stationsRef, ownGridRef, kiwiNodeRef, stations, logEntries, statusLine, connected, js8Connected, kiwiConnecting, activeKiwiConfig, js8Mode, sMeterDbm, sendMessage, sendAction };
 }
