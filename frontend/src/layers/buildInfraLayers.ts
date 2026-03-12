@@ -10,16 +10,118 @@ function hexToRgb(hex: string, alpha: number = 255): [number, number, number, nu
     return [r, g, b, alpha];
 }
 
+// Assuming standard GeoJSON Feature types
+interface GeoJsonFeature {
+    type: "Feature";
+    properties: Record<string, unknown>;
+    geometry: {
+        type: string;
+        coordinates: number[];
+    };
+}
+
+interface InfraFilters {
+    showCables?: boolean;
+    showLandingStations?: boolean;
+    showOutages?: boolean;
+        cableOpacity?: number;
+}
+
 export function buildInfraLayers(
-    cablesData: any,
-    stationsData: any,
-    filters: any,
-    setHoveredInfra: (info: any) => void,
-    setSelectedInfra: ((info: any) => void) | undefined,
-    selectedEntity: any = null,
-    globeMode: boolean = false
+    cablesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
+    stationsData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
+    outagesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
+    filters: InfraFilters | null,
+    setHoveredInfra: (info: unknown) => void,
+    setSelectedInfra: ((info: unknown) => void) | undefined,
+    selectedEntity: { uid: string } | null = null,
+    globeMode: boolean = false,
+    worldCountriesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null = null
 ) {
     const layers = [];
+
+    // Country Outage Shading Layer
+    if (worldCountriesData && outagesData && filters?.showOutages === true) {
+        // Create a map of country codes to their outage data
+        const countryOutageMap: Record<string, any> = {};
+        outagesData.features.forEach(f => {
+            const countryCode = f.properties?.country_code as string;
+            if (countryCode) {
+                // Keep the record with the highest severity if duplicates exist
+                const current = countryOutageMap[countryCode];
+                if (!current || (f.properties?.severity as number || 0) > (current.severity || 0)) {
+                    countryOutageMap[countryCode] = f.properties;
+                }
+            }
+        });
+
+        layers.push(
+            new GeoJsonLayer({
+                id: `country-outages-layer-${globeMode ? "globe" : "merc"}`,
+                data: worldCountriesData,
+                pickable: true,
+                stroked: true,
+                filled: true,
+                getFillColor: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
+                    const iso2 = feature.properties?.["ISO3166-1-Alpha-2"] as string;
+                    const outage = countryOutageMap[iso2];
+                    const severity = outage?.severity || 0;
+                    
+                    if (severity === 0) return [0, 0, 0, 0];
+                    
+                    // Heat map color based on severity
+                    const alpha = Math.min(200, 50 + (severity * 1.5));
+                    if (severity > 80) return [239, 68, 68, alpha]; // Red
+                    if (severity > 50) return [249, 115, 22, alpha]; // Orange
+                    return [234, 179, 8, alpha]; // Yellow
+                },
+                getLineColor: [255, 255, 255, 30],
+                lineWidthMinPixels: 0.5,
+                updateTriggers: {
+                    getFillColor: [outagesData]
+                },
+                wrapLongitude: !globeMode,
+                parameters: globeMode ? { depthTest: true, depthBias: -30.0 } : undefined,
+                onHover: (info: any) => {
+                    const iso2 = info.object?.properties?.["ISO3166-1-Alpha-2"];
+                    const outage = iso2 ? countryOutageMap[iso2] : null;
+                    
+                    if (outage) {
+                        // Synthesize an 'outage' entity for the tooltip preserving geometry
+                        setHoveredInfra({
+                            ...info,
+                            object: {
+                                ...info.object,
+                                type: 'outage',
+                                properties: { ...info.object.properties, ...outage }
+                            }
+                        });
+                    } else {
+                        // Pass null object to clear tooltips for countries without outages
+                        setHoveredInfra({ ...info, object: null });
+                    }
+                },
+                onClick: (info: any) => {
+                    const iso2 = info.object?.properties?.["ISO3166-1-Alpha-2"];
+                    const outage = iso2 ? countryOutageMap[iso2] : null;
+                    
+                    if (outage && setSelectedInfra) {
+                        setSelectedInfra({
+                            ...info,
+                            object: {
+                                ...info.object,
+                                type: 'outage',
+                                properties: { ...info.object.properties, ...outage }
+                            }
+                        });
+                    } else if (setSelectedInfra) {
+                        setSelectedInfra({ ...info, object: null });
+                    }
+                },
+            })
+        );
+    }
 
     // Submarine Cables Layer - uses GeoJsonLayer
     if (cablesData && filters?.showCables !== false) {
@@ -32,14 +134,16 @@ export function buildInfraLayers(
                 filled: false,
                 lineWidthScale: 10,
                 lineWidthMinPixels: 3, // Increased from 2 for better clickability
-                getLineColor: (d: any) => {
-                    const isSelected = selectedEntity?.uid === String(d.properties?.id);
+                getLineColor: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
+                    const isSelected = selectedEntity?.uid === String(feature.properties?.id);
                     const opacity = isSelected ? 255 : (filters?.cableOpacity ?? 0.6) * 255;
-                    const colorHex = isSelected ? '#38bdf8' : d.properties?.color;
+                    const colorHex = isSelected ? '#38bdf8' : (feature.properties?.color as string);
                     return hexToRgb(colorHex, opacity);
                 },
-                getLineWidth: (d: any) => {
-                    const isSelected = selectedEntity?.uid === String(d.properties?.id);
+                getLineWidth: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
+                    const isSelected = selectedEntity?.uid === String(feature.properties?.id);
                     return isSelected ? 4 : 2;
                 },
                 updateTriggers: {
@@ -50,8 +154,7 @@ export function buildInfraLayers(
                     getLineColor: 300,
                     getLineWidth: 300
                 },
-                wrapLongitude: !globeMode,
-                parameters: globeMode ? { depthTest: true, depthBias: -210.0 } : undefined,
+                parameters: globeMode ? { depthTest: true, depthBias: -40.0 } : undefined,
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
             })
@@ -63,9 +166,9 @@ export function buildInfraLayers(
         // Build a map of cable names to colors for efficient lookup
         const cableColorMap: Record<string, string> = {};
         if (cablesData?.features) {
-            cablesData.features.forEach((f: any) => {
-                const name = f.properties?.name;
-                const color = f.properties?.color;
+            cablesData.features.forEach((f: GeoJsonFeature) => {
+                const name = f.properties?.name as string | undefined;
+                const color = f.properties?.color as string | undefined;
                 if (name && color) cableColorMap[name.toLowerCase()] = color;
             });
         }
@@ -82,10 +185,11 @@ export function buildInfraLayers(
                 radiusMinPixels: 4,
                 radiusMaxPixels: 20,
                 lineWidthMinPixels: 1,
-                getPosition: (d: any) => d.geometry.coordinates,
-                getFillColor: (d: any) => {
+                getPosition: (d: unknown) => (d as GeoJsonFeature).geometry.coordinates as [number, number],
+                getFillColor: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
                     // Try to find matching cable color
-                    const cableList = (d.properties?.cables || "").split(",");
+                    const cableList = ((feature.properties?.cables as string) || "").split(",");
                     for (const rawName of cableList) {
                         const name = rawName.trim().toLowerCase();
                         if (cableColorMap[name]) {
@@ -98,8 +202,7 @@ export function buildInfraLayers(
                 updateTriggers: {
                     getFillColor: [cablesData]
                 },
-                wrapLongitude: !globeMode,
-                parameters: globeMode ? { depthTest: true, depthBias: -210.0 } : undefined,
+                parameters: globeMode ? { depthTest: true, depthBias: -40.0 } : undefined,
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
             })

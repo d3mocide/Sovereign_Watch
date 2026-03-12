@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, rf, orbital
+from routers import system, tracks, analysis, rf, orbital, infra
 from auth.router import router as auth_router
 from core.database import db
 from services.historian import historian_task
@@ -73,8 +73,8 @@ async def add_security_headers(request: Request, call_next):
         # Allow framing for these if needed, or keep DENY
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
-        # Strict CSP for API endpoints
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        # Relaxed CSP for API endpoints to allow WebSocket connections
+        response.headers["Content-Security-Policy"] = "default-src 'self' ws: wss:; frame-ancestors 'none'"
         response.headers["X-Frame-Options"] = "DENY"
 
     return response
@@ -95,6 +95,7 @@ app.include_router(tracks.router)
 app.include_router(analysis.router)
 app.include_router(rf.router)
 app.include_router(orbital.router)
+app.include_router(infra.router)
 
 if __name__ == "__main__":
     import uvicorn

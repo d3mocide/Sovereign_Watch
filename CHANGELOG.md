@@ -1,3 +1,66 @@
+## [0.28.0] - 2026-03-11
+
+### Added
+
+- **Internet Outage Intelligence Layer**: Implemented a global internet outage visualization layer powered by Georgia Tech's IODA (Internet Outage Detection and Analysis).
+  - **Dynamic Country Shading**: Countries are now dynamically shaded on the map based on the severity of active internet outages, using a multi-stage heatmap (Yellow → Orange → Red).
+  - **Tactical Outage Reports**: Added a dedicated "INTERNET OUTAGE" sidebar section that surfaces IODA scores, affected regions, and data-source attribution for selected countries.
+- **`infra_poller` Microservice**: New Python-based ingestion service that centralizes high-latency infrastructure data fetching.
+  - **IODA Summary V2**: Optimized ingestion using the IODA Summary V2 API with hourly rolling windows.
+  - **Submarine Cable Refresh**: Automated 24h background polling for global submarine cable and landing station datasets.
+  - **Redis-Backed Infrastructure Store**: Migrated infrastructure data to a shared Redis cache to improve frontend load times and reduce external API dependency.
+- **Hierarchical Global Network Toggle**: Re-engineered the "GLOBAL NETWORK" filter into a master switch that controls Undersea Cables, Landing Stations, and Internet Outages as a unified group.
+- **Undersea Cables Sub-filter**: Added granular control for cable paths, allowing them to be toggled independently once the master network switch is active.
+
+### Changed
+
+- **Depth Bias Recalibration**: Standardized `depthBias` across the tactical stack to resolve visibility conflicts. Internet Outages (-30) and Physical Infrastructure (-40) now correctly render beneath AOT Boundaries (-100) and Entity Icons (-200).
+- **Layer Stacking Optimization**: Refined the global rendering order to ensure static infrastructure remains a background "underlay" while real-time tactical data stays prominent on top.
+- **Improved Interaction Model**: Migrated outage interaction from point-based markers to native GeoJSON polygon picking, enabling users to select entire countries for detailed outage analysis.
+
+## [0.27.0] - 2026-03-12
+
+### Added
+
+- **Hybrid Globe Architecture**: Integrated ESRI World Imagery satellite basemap as a high-resolution alternative to the dark tactical style in Globe mode.
+- **Deep Space Starfield**: Implemented a dynamic StarField canvas with 320 twinkling stars, rendered behind the map to provide a cinematic backdrop when atmospheric layers are translucent.
+- **Globe Style Switcher**: New `DARK` / `SAT` toggle buttons exclusively in Globe mode for seamless transition between tactical and reconnaissance views.
+- **Atmospheric Tuning**: Refined the globe's atmosphere in `useMapCamera.ts` to allow starfield visibility while maintaining a high-altitude glow.
+
+### Changed
+
+- **Adaptive Map UI**: 2D and 3D views are now forced to the high-contrast Dark Tactical style for optimal UI performance and legibility. Satellite imagery is dynamically restricted to the Globe projection.
+- **Control Bar Refinement**: Repositioned 3D orientation controls (Rotation/Tilt) to sit above the mode selector for improved ergonomics.
+- **Orbital Parity**: Added full 3D orientation controls to the `OrbitalMap.tsx` component.
+- **Graticule Color Logic**: Latitude/Longitude grid lines now dynamically adjust contrast based on the underlying basemap (White on Satellite vs Cyan on Dark).
+
+### Fixed
+
+- **High-Load AIS Stability**: Implemented an exponential backoff (5s to 300s) and a 30s minimum cooldown strategy for the maritime poller to prevent IP rate-limiting during rapid mission re-centering.
+- **Websocket Lifecycle**: Fixed an `AttributeError` in `service.py` where stale connection delay variables were causing poller crashes during reconnection cycles.
+- **Orbital UI Missing Assets**: Resolved a `ReferenceError` in `OrbitalMap.tsx` where move/tilt icons were missing from the `lucide-react` module imports.
+- **Layer Re-application**: Fixed a bug where graticule and background layers would disappear after basemap style changes by migrating to persistent `.on("style.load")` listeners in `MapboxAdapter.tsx`.
+
+## [0.26.1] - 2026-03-12
+
+### Fixed
+
+- **KiwiSDR Tuning Stability**: Implemented a 500ms debouncing mechanism for frequency tuning, AGC, and squelch adjustments in the `js8call` service. This prevents remote SDR nodes from being overwhelmed by rapid UI interactions and mitigates connection drops and rate-limiting.
+
+## [0.26.0] - 2026-03-12
+
+### Added
+
+- **HF Listening Post (Beta)**: Integrated a high-performance raw binary streaming architecture for KiwiSDR nodes. Users can now stream real-time 12kHz PCM audio and panoramic waterfall data directly to the Radio Terminal.
+- **Panoramic Waterfall (WVM/WF)**: New high-density spectrum visualization in the Listening Post panel, synchronized with the active SDR frequency and zoom levels.
+
+### Fixed
+
+- **AIS AOT Persistence**: Resolved a race condition where the maritime Area of Interest (AOT) boundary would flicker or disappear when switching between Tactical, Orbital, and Radio views. State is now persisted via root refs.
+- **KiwiSDR Protocol Handshake**: Fixed a critical command sequencing bug in `kiwi_client.py` that caused audio/waterfall streams to hang during initialization.
+- **Audio Stream Resilience**: Implemented non-blocking I/O for the JS8Call audio pipeline to prevent event-loop stalls during buffer saturation.
+- **WebSocket Auto-Reconnect**: Added robust reconnection logic to HF audio and waterfall streams to handle backend service restarts gracefully.
+
 ## [0.25.0] - 2026-03-10
 
 ### Added

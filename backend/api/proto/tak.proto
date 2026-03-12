@@ -51,6 +51,7 @@ message Detail {
   double period_min = 10;
   double inclination_deg = 11;
   double eccentricity = 12;
+  InternetOutage internetOutage = 13;
   // XML fallback for unmapped fields
   string xmlDetail = 100; 
 }
@@ -110,4 +111,10 @@ message VesselClassification {
   float draught = 10;
   float length = 11;
   float beam = 12;
+}
+message InternetOutage {
+  string country_code = 1; // ISO 2-letter code
+  string region = 2;
+  double severity = 3; // 0.0 to 1.0 (or normalized historical)
+  string datasource = 4; // bgp, merit-nt, ping-slash24
 }

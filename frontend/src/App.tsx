@@ -109,6 +109,7 @@ function App() {
     kiwiConnecting: js8KiwiConnecting,
     activeKiwiConfig: js8ActiveKiwiConfig,
     js8Mode,
+    sMeterDbm: js8SMeterDbm,
     sendMessage: js8SendMessage,
     sendAction: js8SendAction,
   } = useJS8Stations();
@@ -583,7 +584,8 @@ function App() {
             js8Stations={js8Stations}
             js8LogEntries={js8LogEntries}
             js8StatusLine={js8StatusLine}
-            js8Connected={js8Connected}
+            js8BridgeConnected={js8Connected}
+            js8Connected={js8CallConnected}
             js8KiwiConnecting={js8KiwiConnecting}
             js8ActiveKiwiConfig={js8ActiveKiwiConfig}
             sendMessage={js8SendMessage}
@@ -740,6 +742,7 @@ function App() {
             kiwiConnecting={js8KiwiConnecting}
             activeKiwiConfig={js8ActiveKiwiConfig}
             js8Mode={js8Mode}
+            sMeterDbm={js8SMeterDbm}
             sendMessage={js8SendMessage}
             sendAction={js8SendAction}
           />

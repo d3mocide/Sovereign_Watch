@@ -1,31 +1,22 @@
-# Release - v0.25.0 - Persistence & Stability Unified
+# Release - v0.28.0 - Infrastructure & Outage Awareness
 
-## High-Level Summary
-This major update introduces **Global COT State Persistence**, a foundational architectural shift that eliminates data loss and loading delays during map view transitions. By hoisting tactical tracking and worker lifecycles to the root application level, operators can now switch between Tactical and Orbital views instantly with zero track interruption. This release also resolves several critical stability issues, including a high-priority state reset bug and type inconsistencies in the rendering engine.
+## Summary
+Version 0.28.0 introduces a massive update to the project's infrastructure intelligence capabilities. The centerpiece is a new **Global Internet Outage** layer, which provides real-time situational awareness of network disruptions worldwide. This release also marks the introduction of the `infra_poller` microservice, significantly improving the performance and reliability of static infrastructure data.
 
 ## Key Features
-- **Global COT State Persistence**: Tactical tracks and dead reckoning states now persist globally. Switching from the Tactical Map to the Orbital Map and back is now instantaneous, with no re-synchronization overhead.
-- **H3 Poller Infrastructure**: Real-time H3-based coverage visualization is now fully integrated with the global state, ensuring consistent spatial awareness of sensor density across all views.
-- **System Settings Widget**: Centralized configuration hub for tactical layers and poller toggles, accessible via the "SYS" button.
-- **Improved AIS & ADS-B Reliability**: Refined ingestion radii and optimized rendering layers ensure tactical entities are always visible and accurate.
-
-## Fixed
-- **App Crash on Filter Change**: Fixed a critical `TypeError` in `App.tsx` where missing return statements in state updaters would crash the UI when toggling map layers.
-- **View Transition Latency**: Removed the 5-10 second "re-sync" gap when entering or exiting the Orbital view.
-- **Prop Schema Sync**: Standardized ref types and properties (`alertedEmergencyRef`, `repeatersLoading`) across all map components to prevent compilation and runtime mismatches.
+- **Internet Outage Shading**: Real-time country-level disruption heatmap powered by IODA (Georgia Tech).
+- **`infra_poller` Microservice**: New dedicated background service for IODA and Submarine Cable synchronization.
+- **Polygon-Based Interaction**: Select entire countries to view detailed outage reports and severity scores.
+- **Master Network Toggle**: Unified control for Cables, Stations, and Outages in the System Status widget.
+- **Tactical Layer Rebalancing**: Recalibrated depth buffers to ensure infrastructure underlays never obscure tactical tracks or boundaries.
 
 ## Technical Details
-- **Architecture**: `useEntityWorker` and associated `useRefs` hoisted to root `App.tsx`.
-- **State Management**: Optimized `setFilters` and `setEvents` updaters with explicit typing and `useCallback` memoization.
-- **Frontend**: Standardized `DRState` and `VisualState` types in `types.ts` for clean data flow.
+- **Backend**: Python-based `infra_poller` service using `requests` and `redis`.
+- **Frontend**: Transitioned from `ScatterplotLayer` markers to high-performance `GeoJsonLayer` country shading.
+- **Rendering**: Established a consistent "tactical sandwich" using `depthBias` (-30 to -200).
 
 ## Upgrade Instructions
-1. Pull the latest code:
-   ```bash
-   git pull
-   ```
-2. Rebuild the frontend and ingestion pollers:
-   ```bash
-   docker compose up -d --build frontend adsb-poller maritime-poller orbital-pulse
-   ```
-3. No database migrations are required for this update.
+```bash
+docker compose pull
+docker compose up -d --build
+```

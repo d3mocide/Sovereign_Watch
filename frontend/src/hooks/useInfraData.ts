@@ -81,74 +81,57 @@ const fallbackStations = {
   ]
 };
 
+const fallbackEmpty = {
+  type: "FeatureCollection",
+  features: []
+};
+
 export const useInfraData = () => {
   const [cablesData, setCablesData] = useState<any>(null);
   const [stationsData, setStationsData] = useState<any>(null);
-
+  const [outagesData, setOutagesData] = useState<any>(null);
+  
   useEffect(() => {
-    const CACHE_KEY_CABLES = 'infra_cables_data';
-    const CACHE_KEY_STATIONS = 'infra_stations_data';
-    const CACHE_KEY_TS = 'infra_data_timestamp';
-    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
     const fetchRealData = async () => {
       try {
-        // 1. Check Cache first
-        const cachedTs = localStorage.getItem(CACHE_KEY_TS);
-        const now = Date.now();
-
-        if (cachedTs && (now - parseInt(cachedTs)) < CACHE_TTL) {
-          const cachedCables = localStorage.getItem(CACHE_KEY_CABLES);
-          const cachedStations = localStorage.getItem(CACHE_KEY_STATIONS);
-          if (cachedCables && cachedStations) {
-            console.log("Using cached submarine cable data (valid for 24h)");
-            setCablesData(JSON.parse(cachedCables));
-            setStationsData(JSON.parse(cachedStations));
-            return; // Exit early
-          }
-        }
-
-        // 2. Fetch if no cache or expired
-        const cablesUrl = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json";
-        const stationsUrl = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json";
-
-        const [cablesRes, stationsRes] = await Promise.all([
-          fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(cablesUrl)).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(stationsUrl)).then(r => r.ok ? r.json() : null).catch(() => null)
+        const [cablesRes, stationsRes, outagesRes] = await Promise.all([
+          fetch("/api/infra/cables").then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch("/api/infra/stations").then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch("/api/infra/outages").then(r => r.ok ? r.json() : null).catch(() => null)
         ]);
 
-        if (cablesRes) {
-          const finalStations = stationsRes || fallbackStations;
+        if (cablesRes && cablesRes.features && cablesRes.features.length > 0) {
           setCablesData(cablesRes);
-          setStationsData(finalStations);
-
-          // Update Cache
-          localStorage.setItem(CACHE_KEY_CABLES, JSON.stringify(cablesRes));
-          localStorage.setItem(CACHE_KEY_STATIONS, JSON.stringify(finalStations));
-          localStorage.setItem(CACHE_KEY_TS, Date.now().toString());
         } else {
-          throw new Error("Failed to fetch cables from proxy");
-        }
-      } catch (err) {
-        console.warn("Falling back to local cache or minimal data:", err);
-
-        // Final fallback: try expired cache before hardcoded
-        const expiredCables = localStorage.getItem(CACHE_KEY_CABLES);
-        const expiredStations = localStorage.getItem(CACHE_KEY_STATIONS);
-
-        if (expiredCables && expiredStations) {
-          console.warn("Using EXPIRED cached data as emergency fallback.");
-          setCablesData(JSON.parse(expiredCables));
-          setStationsData(JSON.parse(expiredStations));
-        } else {
-          console.warn("No cache available. Using hardcoded representative data.");
           setCablesData(fallbackCables);
+        }
+
+        if (stationsRes && stationsRes.features && stationsRes.features.length > 0) {
+          setStationsData(stationsRes);
+        } else {
           setStationsData(fallbackStations);
         }
+
+        if (outagesRes) {
+          setOutagesData(outagesRes);
+        } else {
+          setOutagesData(fallbackEmpty);
+        }
+
+      } catch (err) {
+        console.warn("Falling back to local cache or minimal data:", err);
+        setCablesData(fallbackCables);
+        setStationsData(fallbackStations);
+        setOutagesData(fallbackEmpty);
+        setOutagesData(fallbackEmpty);
       }
     };
     fetchRealData();
-  }, [fallbackCables, fallbackStations]);
 
-  return { cablesData, stationsData };
+    // Refresh outages every 10 minutes from the backend (which caches every 30m)
+    const interval = setInterval(fetchRealData, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { cablesData, stationsData, outagesData };
 };

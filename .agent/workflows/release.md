@@ -4,12 +4,6 @@ description: Release management workflow for version bumping, changelogs, and re
 
 # /release - Release Management
 
-$ARGUMENTS
-
----
-
-## Purpose
-
 Standardized release process: version bump, changelog, release notes, and documentation updates.
 
 ---

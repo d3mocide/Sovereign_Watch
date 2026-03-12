@@ -75,8 +75,10 @@ interface UseAnimationLoopOptions {
   } | undefined;
   cablesData?: any;
   stationsData?: any;
-  setHoveredInfra?: (info: any) => void;
+  outagesData?: any;
+    setHoveredInfra?: (info: any) => void;
   setSelectedInfra?: (info: any) => void;
+  worldCountriesData?: any;
   globeMode: boolean | undefined;
   enable3d: boolean;
   mapToken: string;
@@ -129,6 +131,7 @@ export function useAnimationLoop({
   filters,
   cablesData,
   stationsData,
+  outagesData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -150,6 +153,7 @@ export function useAnimationLoop({
   predictedGroundTrackRef,
   observerRef,
   currentMissionRef,
+  worldCountriesData,
 }: UseAnimationLoopOptions): void {
   // eslint-disable-next-line react-hooks/purity
   const lastFrameTimeRef = useRef<number>(Date.now());
@@ -270,17 +274,6 @@ export function useAnimationLoop({
           interpolated.push(entity);
         }
       } else {
-        // LIVE MODE: Interpolate and Smooth
-        // const liveUpdate = entitiesRef.current.get(selectedEntity?.uid || '');
-        // if (liveUpdate && selectedEntity) {
-        // Check if data changed significantly to avoid react render thrashing?
-        // Actually, for sidebar we want 1Hz or so.
-        // But strictly, we should just push the latest object up if it's new.
-        // To avoid loop: parent only updates if object ref changes.
-        // But we are creating new object refs on every frame here? No, only on ws message.
-        // So passing the ref from entitiesRef.current is safe!
-        // }
-
         for (const [uid, entity] of entities) {
           const isShip = entity.type?.includes("S");
           const threshold = isShip
@@ -483,10 +476,6 @@ export function useAnimationLoop({
         }
       }
 
-      // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
-      // This ensures the camera moves EXACTLY with the interpolated selection
-      // Preventing "rubber banding" or jitter.
-      // Executed ONCE per frame, not per entity.
       // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
       // This ensures the camera moves EXACTLY with the interpolated selection
       // Preventing "rubber banding" or jitter.
@@ -851,11 +840,13 @@ export function useAnimationLoop({
       const infraLayers = buildInfraLayers(
         cablesData,
         stationsData,
+        outagesData,
         filters,
         setHoveredInfra || (() => { }),
         setSelectedInfra,
         currentSelected,
-        globeMode
+        globeMode,
+        worldCountriesData
       );
 
       // KiwiSDR node marker layer (Radio Beacon)
@@ -944,6 +935,9 @@ export function useAnimationLoop({
         // 0.25. Terminator Layer (always present, visibility internal to call)
         getTerminatorLayer(!!filters?.showTerminator),
 
+        // Infra layers (cables, stations, outages) - Rendered in background below live data
+        ...infraLayers,
+
         // 0.5. Orbital Layers
         ...getOrbitalLayers({
           satellites: filteredSatellites,
@@ -985,9 +979,6 @@ export function useAnimationLoop({
         // 2. Repeater infrastructure (rendered below entity icons for context)
         ...repeaterLayers,
 
-        // Infra layers (cables and landing stations)
-        ...infraLayers,
-
         // KiwiSDR node marker (rendered above infra, below entity icons)
         ...kiwiLayers,
 
@@ -1022,7 +1013,15 @@ export function useAnimationLoop({
         // setting projection on every frame interrupts MapboxOverlay's internal
         // camera sync with Mapbox, causing layers to drift when rotating the globe.
         // projection/_full3d are set once at construction in the adapter's useEffect.
-        overlayRef.current.setProps({ layers });
+        overlayRef.current.setProps({ 
+          layers,
+          onHover: (info: any) => {
+            if (!info.object) {
+              setHoveredEntity(null);
+              setHoverPosition(null);
+            }
+          }
+        });
       }
 
       rafRef.current = requestAnimationFrame(animate);
@@ -1055,5 +1054,7 @@ export function useAnimationLoop({
     showRepeaters,
     cablesData,
     stationsData,
+    outagesData,
+    worldCountriesData,
   ]);
 }

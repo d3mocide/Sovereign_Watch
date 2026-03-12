@@ -4,10 +4,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package definition
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies inside the container
-RUN npm install --legacy-peer-deps
+# Install pnpm and dependencies inside the container
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .

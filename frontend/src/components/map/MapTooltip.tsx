@@ -13,6 +13,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isJS8 = entity.type === 'js8';
   const isOrbital = entity.type === "a-s-K" || (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
   const isInfra = entity.type === 'infra';
+  const isOutage = entity.type === 'outage';
 
   const accentColor = isRepeater
     ? 'text-emerald-400'
@@ -24,7 +25,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
           ? 'text-sea-accent'
           : isInfra
             ? 'text-cyan-400'
-            : 'text-air-accent';
+            : isOutage
+              ? 'text-amber-400'
+              : 'text-air-accent';
 
   const borderColor = isRepeater
     ? 'border-emerald-400/50'
@@ -36,7 +39,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
           ? 'border-sea-accent/50'
           : isInfra
             ? 'border-cyan-400/50'
-            : 'border-air-accent/50';
+            : isOutage
+              ? 'border-amber-400/50'
+              : 'border-air-accent/50';
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -48,7 +53,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
           ? Ship
           : isInfra
             ? Network
-            : Plane;
+            : isOutage
+              ? Signal
+              : Plane;
 
   return (
     <div
@@ -70,7 +77,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         <div className="flex items-center gap-1">
           <div className={`h-1.5 w-1.5 rounded-full ${accentColor} animate-pulse shadow-[0_0_4px_currentColor]`} />
           <span className="text-[8px] font-mono text-white/50">
-            {isRepeater ? 'INFRA' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : 'LIVE'}
+            {isRepeater ? 'INFRA' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : isOutage ? 'OUTAGE' : 'LIVE'}
           </span>
         </div>
       </div>
@@ -146,6 +153,33 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             <span className="text-[8px] text-white/40 block leading-tight">OWNERS</span>
             <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight truncate block" title={entity.detail?.properties?.owners}>
               {entity.detail?.properties?.owners || 'CONSORTIUM'}
+            </span>
+          </div>
+        </div>
+      ) : isOutage ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">SYSTEM</span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight uppercase">
+              INTERNET OUTAGE
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">SEVERITY</span>
+            <span className={`text-[10px] font-mono font-bold leading-tight ${Number(entity.detail?.properties?.severity) > 50 ? 'text-red-400' : 'text-amber-400'}`}>
+              {entity.detail?.properties?.severity ?? '0'}%
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">SOURCE</span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight uppercase">
+              {entity.detail?.properties?.datasource || 'IODA'}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">LOCATION</span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight truncate block">
+              {entity.detail?.properties?.region || entity.detail?.properties?.country || 'GLOBAL'}
             </span>
           </div>
         </div>

@@ -17,6 +17,7 @@ interface UseMapCameraOptions {
   enable3d: boolean;
   setEnable3d: React.Dispatch<React.SetStateAction<boolean>>;
   mapToken: string;
+  mapStyleMode?: 'dark' | 'satellite';
 }
 
 export function useMapCamera({
@@ -27,6 +28,7 @@ export function useMapCamera({
   enable3d,
   setEnable3d,
   mapToken,
+  mapStyleMode = 'dark',
 }: UseMapCameraOptions) {
   // Globe projection: Mapbox GL JS uses a string argument; MapLibre GL JS v5 uses { type }.
   // MapLibre v5 also requires the style to be loaded before setProjection can be called.
@@ -80,6 +82,11 @@ export function useMapCamera({
     const SOURCE_ID = "graticule";
     const LAYER_ID = "graticule-lines";
 
+    // White lines over satellite imagery; light blue over dark tactical basemap
+    const lineColor = mapStyleMode === 'satellite'
+      ? "rgba(255, 255, 255, 0.35)"
+      : "rgba(80, 180, 255, 0.45)";
+
     const add = () => {
       if (!map.getSource(SOURCE_ID)) {
         map.addSource(SOURCE_ID, {
@@ -87,7 +94,10 @@ export function useMapCamera({
           data: buildGraticule(30) as any,
         });
       }
-      if (!map.getLayer(LAYER_ID)) {
+      if (map.getLayer(LAYER_ID)) {
+        // Update color in place when globeStyle changes without a full style reload
+        map.setPaintProperty(LAYER_ID, "line-color", lineColor);
+      } else {
         map.addLayer({
           id: LAYER_ID,
           type: "line",
@@ -98,7 +108,7 @@ export function useMapCamera({
             "line-cap": "round",
           },
           paint: {
-            "line-color": "rgba(80, 180, 255, 0.45)",
+            "line-color": lineColor,
             "line-width": 0.5,
           },
         });
@@ -118,13 +128,15 @@ export function useMapCamera({
       }
     };
 
+    // Use persistent listener so the graticule is re-applied whenever the style
+    // is reloaded (e.g. switching between dark and satellite basemaps).
+    map.on("style.load", apply);
     if (map.isStyleLoaded?.()) apply();
-    else map.once("style.load", apply);
 
     return () => {
       map.off("style.load", apply);
     };
-  }, [globeMode, mapLoaded]);
+  }, [globeMode, mapLoaded, mapStyleMode]);
 
   // Dedicated 3D visuals + atmosphere Effect
   useEffect(() => {
@@ -160,49 +172,50 @@ export function useMapCamera({
 
       // ── Atmosphere ────────────────────────────────────────────────────
       // MapLibre GL JS does NOT have setFog() — that's Mapbox-proprietary.
-      // MapLibre v5 uses a "sky" layer type for atmosphere/space effects.
-      if (globeMode) {
-        console.log("[TacticalMap] sync3D: adding sky layer, already exists:", !!map.getLayer(SKY_LAYER_ID));
-        if (!map.getLayer(SKY_LAYER_ID)) {
-          try {
-            // Use ONLY atmosphere-type props — mixing gradient props with
-            // sky-type:atmosphere causes silent MapLibre validation failures.
-            map.addLayer({
-              id: SKY_LAYER_ID,
-              type: "sky",
-              paint: {
-                "sky-type": "atmosphere",
-                "sky-atmosphere-sun": [0, 90],           // Sun at horizon
-                "sky-atmosphere-sun-intensity": 5,        // Low glow (near night)
-                "sky-atmosphere-color": "#0c1e3a",        // Deep navy at horizon
-                "sky-atmosphere-halo-color": "#000d1f",   // Near-black upper atm
-                "sky-opacity": 1,
-              },
-            } as any);
-            console.log("[TacticalMap] Sky atmosphere layer added ✓");
-          } catch (e) {
-            console.warn("[TacticalMap] Sky layer failed:", e);
+      // MapLibre v5 uses the setAtmosphere() API for cinematic space effects.
+      //
+      // Satellite mode: set atmosphere to null so the WebGL canvas remains
+      // transparent outside the globe sphere — this lets the StarField canvas
+      // (rendered behind the map at z-index:0) show through.
+      //
+      // Dark tactical mode: use a deep navy atmosphere but with reduced
+      // opacity to allow the StarField background to show through.
+      if (globeMode && mapStyleMode !== 'satellite') {
+        try {
+          if (typeof map.setAtmosphere === 'function') {
+            map.setAtmosphere({
+              "color": "rgba(12, 30, 58, 0.4)",      // Semi-transparent deep navy
+              "halo-color": "rgba(0, 13, 31, 0.6)",  // Darker outer halo
+              "intensity": 5,                        // Glow intensity
+            });
           }
+        } catch (e) {
+          console.warn("[TacticalMap] setAtmosphere failed:", e);
         }
       } else {
+        // Clear atmosphere if not in Dark Globe mode
+        if (typeof map.setAtmosphere === 'function') {
+          map.setAtmosphere(null);
+        }
+        // Also ensure any stale sky layers are removed if they somehow exist
         if (map.getLayer(SKY_LAYER_ID)) {
           map.removeLayer(SKY_LAYER_ID);
-          console.log("[TacticalMap] Sky atmosphere layer removed");
         }
       }
     };
 
+    // Use persistent listener so sky layer is re-applied whenever the style
+    // is reloaded (e.g. switching between dark and satellite basemaps).
+    map.on("style.load", sync3D);
     if (map.isStyleLoaded()) {
       // Defer one tick so MapLibre v5 can commit any pending projection
       // changes (e.g. globe) into the style before adding sky layer.
       setTimeout(sync3D, 0);
-    } else {
-      map.once("style.load", sync3D);
     }
     return () => {
       map.off("style.load", sync3D);
     };
-  }, [mapLoaded, enable3d, mapToken, globeMode]);
+  }, [mapLoaded, enable3d, mapToken, globeMode, mapStyleMode]);
 
 
   const setViewMode = (mode: "2d" | "3d") => {

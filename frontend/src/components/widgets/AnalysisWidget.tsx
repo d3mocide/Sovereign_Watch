@@ -73,6 +73,12 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
   } else if (accentColor.includes('cyan')) {
     accentBorder = 'border-cyan-400/30';
     accentBg = 'bg-gradient-to-br from-cyan-400/10 to-cyan-400/5';
+  } else if (accentColor.includes('amber')) {
+    accentBorder = 'border-amber-400/30';
+    accentBg = 'bg-gradient-to-br from-amber-400/10 to-amber-400/5';
+  } else if (accentColor.includes('red')) {
+    accentBorder = 'border-red-400/30';
+    accentBg = 'bg-gradient-to-br from-red-400/10 to-red-400/5';
   }
 
   const isActive = !!(text || isStreaming || error);

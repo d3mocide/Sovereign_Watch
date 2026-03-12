@@ -211,7 +211,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
 
           {/* Infra Filter */}
           <div className="flex flex-col gap-1">
-            <div className={`group flex items-center justify-between rounded border transition-all ${filters.showCables !== false ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+            <div className={`group flex items-center justify-between rounded border transition-all ${filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
               <div
                 className="flex flex-1 items-center justify-between p-2 cursor-pointer"
                 onClick={(e) => {
@@ -220,10 +220,10 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 }}
               >
                 <div className="flex items-center gap-3">
-                  <Network size={14} className={filters.showCables !== false ? 'text-cyan-400' : 'text-white/20'} />
+                  <Network size={14} className={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'text-cyan-400' : 'text-white/20'} />
                   <div className="flex flex-col">
-                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">SUBMARINE CABLES</span>
-                    <span className="text-[9px] font-mono text-cyan-400/60">Global Undersea Infrastructure</span>
+                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">GLOBAL NETWORK</span>
+                    <span className="text-[9px] font-mono text-cyan-400/60">Undersea & Terrestrial Infra</span>
                   </div>
                 </div>
                 <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: infraExpanded ? 'rotate(90deg)' : 'none' }}>
@@ -232,25 +232,23 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
               </div>
 
               <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
-                <input type="checkbox" className="sr-only" checked={filters.showCables !== false} onChange={() => {
-                  const isCurrentlyOn = filters.showCables !== false;
-                  onFilterChange('showCables', !isCurrentlyOn);
-                  onFilterChange('showLandingStations', !isCurrentlyOn);
+                <input type="checkbox" className="sr-only" checked={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true} onChange={() => {
+                  const isAnyOn = filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true;
+                  onFilterChange('showCables', !isAnyOn);
+                  onFilterChange('showLandingStations', !isAnyOn);
+                  onFilterChange('showOutages', !isAnyOn);
                 }} />
                 <div
-                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showCables !== false ? 'bg-cyan-400' : 'bg-white/10 hover:bg-white/20'}`}
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'bg-cyan-400' : 'bg-white/10 hover:bg-white/20'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const isCurrentlyOn = filters.showCables !== false;
-                    if (isCurrentlyOn) {
-                      onFilterChange('showCables', false);
-                      onFilterChange('showLandingStations', false);
-                    } else {
-                      onFilterChange('showCables', true);
-                    }
+                    const isAnyOn = filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true;
+                    onFilterChange('showCables', !isAnyOn);
+                    onFilterChange('showLandingStations', !isAnyOn);
+                    onFilterChange('showOutages', !isAnyOn);
                   }}
                 >
-                  <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showCables !== false ? 'left-3.5' : 'left-0.5'}`} />
+                  <div className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'left-3.5' : 'left-0.5'}`} />
                 </div>
               </div>
             </div>
@@ -258,6 +256,16 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
             {/* Sub-filters for Infra */}
             {infraExpanded && (
               <div className="flex flex-col gap-1 px-1 opacity-90">
+                {/* Undersea Cables */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showCables !== false ? 'border-cyan-400/20 bg-cyan-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px]">🌐</span>
+                    <span className={`text-[9px] font-bold tracking-wide ${filters.showCables !== false ? 'text-cyan-400/80' : 'text-cyan-400/30'}`}>UNDERSEA CABLES</span>
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={filters.showCables !== false} onChange={(e) => onFilterChange('showCables', e.target.checked)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showCables !== false ? 'bg-cyan-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showCables !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
                 {/* Landing Stations */}
                 <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showLandingStations !== false ? 'border-cyan-400/20 bg-cyan-400/5' : 'border-white/5 bg-white/5'}`}>
                   <div className="flex items-center gap-1.5">
@@ -267,6 +275,17 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   <input type="checkbox" className="sr-only" checked={filters.showLandingStations !== false} onChange={(e) => onFilterChange('showLandingStations', e.target.checked)} />
                   <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showLandingStations !== false ? 'bg-cyan-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showLandingStations !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
                 </label>
+
+                {/* Internet Outages */}
+                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showOutages === true ? 'border-red-400/20 bg-red-400/5' : 'border-white/5 bg-white/5'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px]">🔥</span>
+                    <span className={`text-[9px] font-bold tracking-wide ${filters.showOutages === true ? 'text-red-400/80' : 'text-red-400/30'}`}>INTERNET OUTAGES</span>
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={filters.showOutages === true} onChange={(e) => onFilterChange('showOutages', e.target.checked)} />
+                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showOutages === true ? 'bg-red-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showOutages === true ? 'left-2.5' : 'left-0.5'}`} /></div>
+                </label>
+
 
                 {/* Opacity Slider */}
                 <div className="group flex flex-col gap-1 rounded border border-white/5 bg-white/5 p-1.5 transition-all">

@@ -50,7 +50,7 @@ export function useMissionArea({
     lat: number;
     lon: number;
     radius_nm: number;
-  } | null>(null);
+  } | null>(currentMissionRef.current);
 
   // AOT Area States (for Deck.gl layers)
   const [aotShapes, setAotShapes] = useState<{

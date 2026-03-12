@@ -42,7 +42,6 @@ services:
       timeout: 5s
       retries: 5
 
-
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
   ais-poller:
     build:
@@ -103,6 +102,21 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
+    restart: unless-stopped
+
+  # --- Ingestion: Infrastructure (Cables, Outages, Datacenters) ---
+  infra-poller:
+    build:
+      context: ./backend/ingestion/infra_poller
+      dockerfile: Dockerfile
+    container_name: sovereign-infra-poller
+    environment:
+      - REDIS_URL=redis://sovereign-redis:6379/0
+    networks:
+      - backend-net
+    depends_on:
+      redis:
+        condition: service_started
     restart: unless-stopped
 
   # --- Ingestion: RF Infrastructure (Repeaters, NOAA NWR, Public Safety) ---
