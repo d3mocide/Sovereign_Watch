@@ -172,35 +172,31 @@ export function useMapCamera({
 
       // ── Atmosphere ────────────────────────────────────────────────────
       // MapLibre GL JS does NOT have setFog() — that's Mapbox-proprietary.
-      // MapLibre v5 uses a "sky" layer type for atmosphere/space effects.
+      // MapLibre v5 uses the setAtmosphere() API for cinematic space effects.
       //
-      // Satellite mode: omit the sky layer entirely so the WebGL canvas is
+      // Satellite mode: set atmosphere to null so the WebGL canvas remains
       // transparent outside the globe sphere — this lets the StarField canvas
-      // (rendered behind the map at z-index:0) show through as a star field.
+      // (rendered behind the map at z-index:0) show through.
       //
-      // Dark tactical mode: keep the navy atmosphere for the cinematic look.
+      // Dark tactical mode: use a deep navy atmosphere.
       if (globeMode && globeStyle !== 'satellite') {
-        if (!map.getLayer(SKY_LAYER_ID)) {
-          try {
-            // Use ONLY atmosphere-type props — mixing gradient props with
-            // sky-type:atmosphere causes silent MapLibre validation failures.
-            map.addLayer({
-              id: SKY_LAYER_ID,
-              type: "sky",
-              paint: {
-                "sky-type": "atmosphere",
-                "sky-atmosphere-sun": [0, 90],           // Sun at horizon
-                "sky-atmosphere-sun-intensity": 5,        // Low glow (near night)
-                "sky-atmosphere-color": "#0c1e3a",        // Deep navy at horizon
-                "sky-atmosphere-halo-color": "#000d1f",   // Near-black upper atm
-                "sky-opacity": 1,
-              },
-            } as any);
-          } catch (e) {
-            console.warn("[TacticalMap] Sky layer failed:", e);
+        try {
+          if (typeof map.setAtmosphere === 'function') {
+            map.setAtmosphere({
+              "color": "#0c1e3a",        // Deep navy at horizon
+              "halo-color": "#000d1f",   // Near-black upper atmosphere
+              "intensity": 5,            // Overall glow intensity
+            });
           }
+        } catch (e) {
+          console.warn("[TacticalMap] setAtmosphere failed:", e);
         }
       } else {
+        // Clear atmosphere if not in Dark Globe mode
+        if (typeof map.setAtmosphere === 'function') {
+          map.setAtmosphere(null);
+        }
+        // Also ensure any stale sky layers are removed if they somehow exist
         if (map.getLayer(SKY_LAYER_ID)) {
           map.removeLayer(SKY_LAYER_ID);
         }
