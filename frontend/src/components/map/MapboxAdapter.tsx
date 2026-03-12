@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useEffect } from 'react';
+import { forwardRef, useRef, useEffect, useMemo } from 'react';
 import { Map, useControl, MapRef, AttributionControl } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapAdapterProps } from './mapAdapterTypes';
@@ -63,6 +63,16 @@ function DeckGLOverlay(props: any) {
 const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?: string }>((props, ref) => {
     const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, deckProps } = props;
 
+    // Mapbox Standard (v3) styling configuration.
+    // We use useMemo to ensure that even if BASEMAP_CONFIG is static, 
+    // the object reference passed to the `config` prop changes whenever
+    // the mapStyle changes. This forces react-map-gl/mapbox to re-trigger
+    // setConfigProperty calls on the internal map instance.
+    const basemapConfig = useMemo(() => {
+        const isStandard = typeof mapStyle === 'string' && mapStyle.includes('standard');
+        return isStandard ? { basemap: BASEMAP_CONFIG } : undefined;
+    }, [mapStyle]);
+
     return (
         <Map
             ref={ref}
@@ -77,10 +87,7 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             antialias={true}
             projection={globeMode ? 'globe' : 'mercator'}
             attributionControl={false}
-            // Apply Standard Style config at init time to eliminate visual flash
-            config={{
-                basemap: BASEMAP_CONFIG
-            }}
+            config={basemapConfig}
         >
             <AttributionControl compact={true} position="bottom-right" />
             {(() => {

@@ -18,22 +18,21 @@ export const DopplerWidget: React.FC<DopplerWidgetProps> = ({ referenceFreqMhz =
 
     const c = 299792.458; // speed of light in km/s
     const results = [];
+    const f0_hz = f0 * 1000000;
 
+    let t1 = Date.parse(passPoints[0].time);
     for (let i = 1; i < passPoints.length; i++) {
-      const p1 = passPoints[i - 1];
       const p2 = passPoints[i];
 
-      const t1 = new Date(p1.time).getTime();
-      const t2 = new Date(p2.time).getTime();
+      const t2 = Date.parse(p2.time);
       const dt = (t2 - t1) / 1000; // delta time in seconds
 
       if (dt > 0) {
+        const p1 = passPoints[i - 1];
         // Range rate (dr/dt) in km/s
         const dr = p2.slant_range_km - p1.slant_range_km;
         const v_radial = dr / dt;
 
-        // Doppler shift in Hz
-        const f0_hz = f0 * 1000000;
         // Non-relativistic Doppler approximation: shift = - f0 * (v_radial / c)
         // Negative sign because if distance is decreasing (v_radial < 0), frequency should INCREASE
         const shift_hz = -1 * f0_hz * (v_radial / c);
@@ -43,6 +42,7 @@ export const DopplerWidget: React.FC<DopplerWidgetProps> = ({ referenceFreqMhz =
           shift: shift_hz
         });
       }
+      t1 = t2;
     }
     return results;
   }, [passPoints, f0]);

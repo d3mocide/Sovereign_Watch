@@ -30,7 +30,6 @@ import React, {
 import {
   Radio,
   Signal,
-  MapPin,
   Clock,
   Activity,
   Server,
@@ -82,19 +81,6 @@ const MAX_STATIONS = 100;
 // ---------------------------------------------------------------------------
 // Utility helpers
 // ---------------------------------------------------------------------------
-
-function bearingToCardinal(deg: number): string {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[Math.round(deg / 45) % 8];
-}
-
-function formatAge(ts_unix: number | null): string {
-  if (!ts_unix) return '--';
-  const age = Math.floor(Date.now() / 1000) - ts_unix;
-  if (age < 60) return `${age}s`;
-  if (age < 3600) return `${Math.floor(age / 60)}m`;
-  return `${Math.floor(age / 3600)}h`;
-}
 
 /**
  * Map SNR to a colour based on JS8Call decode thresholds:
@@ -407,86 +393,90 @@ export default function RadioTerminal({
           {/* Divider */}
           <div className="w-px h-6 bg-slate-800 shrink-0" />
 
-          {/* JS8Call frequency / station */}
-          <div 
-            className="flex items-center gap-2.5 bg-black/40 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md cursor-pointer hover:border-indigo-500/40 hover:bg-black/60 transition-all shadow-inner"
-            title="Click to change frequency"
-            onClick={() => {
-              if (sharedActiveKiwiConfig && !isEditingFreq) {
-                setTempFreq(sharedActiveKiwiConfig.freq.toString());
-                setIsEditingFreq(true);
-              }
-            }}
-          >
-            <Signal className="w-4 h-4 text-emerald-400 shrink-0 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]" />
-            {isEditingFreq ? (
-              <div className="flex items-center gap-1.5 font-mono text-emerald-400 font-semibold max-w-[120px]">
-                <input
-                  type="number"
-                  className="bg-black/50 border-b border-emerald-500 text-emerald-300 w-16 outline-none appearance-none font-mono font-semibold px-1 rounded-sm focus:bg-black/70 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  value={tempFreq}
-                  autoFocus
-                  onChange={(e) => setTempFreq(e.target.value)}
-                  onBlur={handleFreqSubmit}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleFreqSubmit();
-                    if (e.key === 'Escape') setIsEditingFreq(false);
-                  }}
-                />
-                <span className="text-emerald-500/70">kHz</span>
+          {radioMode === 'JS8' && (
+            <>
+              {/* JS8Call frequency / station */}
+              <div 
+                className="flex items-center gap-2.5 bg-black/40 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md cursor-pointer hover:border-indigo-500/40 hover:bg-black/60 transition-all shadow-inner"
+                title="Click to change frequency"
+                onClick={() => {
+                  if (sharedActiveKiwiConfig && !isEditingFreq) {
+                    setTempFreq(sharedActiveKiwiConfig.freq.toString());
+                    setIsEditingFreq(true);
+                  }
+                }}
+              >
+                <Signal className="w-4 h-4 text-emerald-400 shrink-0 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]" />
+                {isEditingFreq ? (
+                  <div className="flex items-center gap-1.5 font-mono text-emerald-400 font-semibold max-w-[120px]">
+                    <input
+                      type="number"
+                      className="bg-black/50 border-b border-emerald-500 text-emerald-300 w-16 outline-none appearance-none font-mono font-semibold px-1 rounded-sm focus:bg-black/70 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      value={tempFreq}
+                      autoFocus
+                      onChange={(e) => setTempFreq(e.target.value)}
+                      onBlur={handleFreqSubmit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleFreqSubmit();
+                        if (e.key === 'Escape') setIsEditingFreq(false);
+                      }}
+                    />
+                    <span className="text-emerald-500/70">kHz</span>
+                  </div>
+                ) : (
+                  <span className="font-semibold text-emerald-400 font-mono tracking-wide drop-shadow-[0_0_2px_rgba(52,211,153,0.3)]">
+                    {sharedActiveKiwiConfig ? `${sharedActiveKiwiConfig.freq} kHz` : '--'}
+                  </span>
+                )}
               </div>
-            ) : (
-              <span className="font-semibold text-emerald-400 font-mono tracking-wide drop-shadow-[0_0_2px_rgba(52,211,153,0.3)]">
-                {sharedActiveKiwiConfig ? `${sharedActiveKiwiConfig.freq} kHz` : '--'}
-              </span>
-            )}
-          </div>
-          {/* Editable CALL */}
-          <div
-            className="flex items-center gap-1 text-slate-400 cursor-pointer group"
-            title="Click to edit callsign"
-            onClick={() => { if (!isEditingCall) { setTempCall(sharedStatusLine.callsign); setIsEditingCall(true); } }}
-          >
-            <span className="text-slate-600">CALL </span>
-            {isEditingCall ? (
-              <input
-                type="text"
-                className="bg-black/50 border-b border-indigo-500 text-indigo-300 w-20 outline-none font-mono font-semibold px-1 rounded-sm text-xs uppercase tracking-wider focus:bg-black/70 transition-colors"
-                value={tempCall}
-                autoFocus
-                onChange={e => setTempCall(e.target.value.toUpperCase())}
-                onBlur={handleCallSubmit}
-                onKeyDown={e => { if (e.key === 'Enter') handleCallSubmit(); if (e.key === 'Escape') setIsEditingCall(false); }}
-                onClick={e => e.stopPropagation()}
-              />
-            ) : (
-              <span className="text-slate-300 font-semibold group-hover:text-indigo-300 transition-colors">{sharedStatusLine.callsign}</span>
-            )}
-          </div>
+              {/* Editable CALL */}
+              <div
+                className="flex items-center gap-1 text-slate-400 cursor-pointer group"
+                title="Click to edit callsign"
+                onClick={() => { if (!isEditingCall) { setTempCall(sharedStatusLine.callsign); setIsEditingCall(true); } }}
+              >
+                <span className="text-slate-600">CALL </span>
+                {isEditingCall ? (
+                  <input
+                    type="text"
+                    className="bg-black/50 border-b border-indigo-500 text-indigo-300 w-20 outline-none font-mono font-semibold px-1 rounded-sm text-xs uppercase tracking-wider focus:bg-black/70 transition-colors"
+                    value={tempCall}
+                    autoFocus
+                    onChange={e => setTempCall(e.target.value.toUpperCase())}
+                    onBlur={handleCallSubmit}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCallSubmit(); if (e.key === 'Escape') setIsEditingCall(false); }}
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="text-slate-300 font-semibold group-hover:text-indigo-300 transition-colors">{sharedStatusLine.callsign}</span>
+                )}
+              </div>
 
-          {/* Editable GRID */}
-          <div
-            className="flex items-center gap-1 text-slate-400 cursor-pointer group"
-            title="Click to edit grid square"
-            onClick={() => { if (!isEditingGrid) { setTempGrid(sharedStatusLine.grid); setIsEditingGrid(true); } }}
-          >
-            <span className="text-slate-600">GRID </span>
-            {isEditingGrid ? (
-              <input
-                type="text"
-                className="bg-black/50 border-b border-indigo-500 text-indigo-300 w-14 outline-none font-mono font-semibold px-1 rounded-sm text-xs uppercase tracking-wider focus:bg-black/70 transition-colors"
-                value={tempGrid}
-                autoFocus
-                maxLength={6}
-                onChange={e => setTempGrid(e.target.value.toUpperCase())}
-                onBlur={handleGridSubmit}
-                onKeyDown={e => { if (e.key === 'Enter') handleGridSubmit(); if (e.key === 'Escape') setIsEditingGrid(false); }}
-                onClick={e => e.stopPropagation()}
-              />
-            ) : (
-              <span className="text-slate-300 group-hover:text-indigo-300 transition-colors">{sharedStatusLine.grid}</span>
-            )}
-          </div>
+              {/* Editable GRID */}
+              <div
+                className="flex items-center gap-1 text-slate-400 cursor-pointer group"
+                title="Click to edit grid square"
+                onClick={() => { if (!isEditingGrid) { setTempGrid(sharedStatusLine.grid); setIsEditingGrid(true); } }}
+              >
+                <span className="text-slate-600">GRID </span>
+                {isEditingGrid ? (
+                  <input
+                    type="text"
+                    className="bg-black/50 border-b border-indigo-500 text-indigo-300 w-14 outline-none font-mono font-semibold px-1 rounded-sm text-xs uppercase tracking-wider focus:bg-black/70 transition-colors"
+                    value={tempGrid}
+                    autoFocus
+                    maxLength={6}
+                    onChange={e => setTempGrid(e.target.value.toUpperCase())}
+                    onBlur={handleGridSubmit}
+                    onKeyDown={e => { if (e.key === 'Enter') handleGridSubmit(); if (e.key === 'Escape') setIsEditingGrid(false); }}
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="text-slate-300 group-hover:text-indigo-300 transition-colors">{sharedStatusLine.grid}</span>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right: connection state */}
@@ -507,7 +497,8 @@ export default function RadioTerminal({
         </div>
       </header>
 
-      {/* ── BAND + MODE BAR ── */}
+      {/* ── BAND + MODE BAR — hidden in LISTEN mode ── */}
+      {radioMode === 'JS8' && (
       <div className="shrink-0 bg-black/30 border-b border-white/10 px-3 py-1.5 flex items-center gap-4 overflow-x-auto z-10 relative">
         {/* Band presets */}
         <div className="flex items-center gap-1 shrink-0">
@@ -567,6 +558,7 @@ export default function RadioTerminal({
           </span>
         </div>
       </div>
+      )}
 
       {/* ── MAIN BODY ── */}
       <div className="flex flex-1 overflow-hidden">

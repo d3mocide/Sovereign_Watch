@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 
@@ -38,14 +39,16 @@ COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
 AIS_HEADING_NOT_AVAILABLE = 511
 
 
-# Minimum change in lat/lon (degrees) or radius (nm) required to trigger a reconnect.
-# Small floating-point drift and same-value updates are ignored.
+# AISStream Reconnection Stability Constants
 MIN_LAT_LON_CHANGE_DEG = 0.05  # ~3nm at mid-latitudes
-MIN_RADIUS_CHANGE_NM = 1.0
-
-# Seconds to wait after the *last* mission update before reconnecting.
-# Rapid preset clicks collapse into a single reconnect once the user stops.
 BBOX_DEBOUNCE_SECONDS = 5.0
+
+# Rate Limit Mitigations
+MIN_RECONNECT_INTERVAL_SECONDS = 30.0  # Minimum time between ANY reconnection
+BACKOFF_INITIAL_DELAY_SECONDS = 5.0
+BACKOFF_MAX_DELAY_SECONDS = 300.0
+BACKOFF_FACTOR = 2.0
+CONNECTION_STABILITY_THRESHOLD_SECONDS = 60.0 # Time connected to reset backoff
 
 
 class MaritimePollerService:
@@ -60,7 +63,11 @@ class MaritimePollerService:
         self.pubsub: Optional[redis.client.PubSub] = None
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
 
-        self.reconnect_delay = 5  # seconds
+        # Stability & Backoff State
+        self.last_reconnect_time: Optional[datetime] = None
+        self.reconnect_attempts = 0
+        self.connection_start_time: Optional[datetime] = None
+        
         self.bbox_update_needed = False
         self._bbox_debounce_task: Optional[asyncio.Task] = None
         self.vessel_static_cache: Dict[int, dict] = {}
@@ -402,22 +409,59 @@ class MaritimePollerService:
             try:
                 # Connect or reconnect if needed
                 if self.ws is None or (hasattr(self.ws, 'closed') and self.ws.closed) or self.bbox_update_needed:
+                    now = datetime.utcnow()
+                    
+                    # 1. Enforce a minimum interval between ANY reconnection attempt
+                    if self.last_reconnect_time:
+                        elapsed_since_last = (now - self.last_reconnect_time).total_seconds()
+                        if elapsed_since_last < MIN_RECONNECT_INTERVAL_SECONDS:
+                            wait_time = MIN_RECONNECT_INTERVAL_SECONDS - elapsed_since_last
+                            logger.info(f"⏳ Rate limit protection: Waiting {wait_time:.1f}s before next AISStream reconnect")
+                            await asyncio.sleep(wait_time)
+                            continue
+
+                    # 2. Calculate exponential backoff delay with jitter
+                    if self.reconnect_attempts > 0:
+                        delay = min(
+                            BACKOFF_MAX_DELAY_SECONDS,
+                            BACKOFF_INITIAL_DELAY_SECONDS * (BACKOFF_FACTOR ** (self.reconnect_attempts - 1))
+                        )
+                        # Add +/- 10% jitter to prevent thundering herd
+                        jitter = delay * 0.1
+                        actual_delay = delay + random.uniform(-jitter, jitter)
+                        
+                        logger.warning(f"🔄 AISStream retry backoff: attempt {self.reconnect_attempts}, waiting {actual_delay:.1f}s")
+                        await asyncio.sleep(actual_delay)
+
                     if self.ws:
                         try:
                             await self.ws.close()
                         except:
                             pass
 
+                    self.last_reconnect_time = datetime.utcnow()
                     if not await self.connect_aisstream():
-                        logger.warning(f"Retrying connection in {self.reconnect_delay}s...")
-                        await asyncio.sleep(self.reconnect_delay)
+                        self.reconnect_attempts += 1
                         continue
 
+                    # Connection successful
+                    self.connection_start_time = datetime.utcnow()
                     self.bbox_update_needed = False
+                    # Note: We don't reset self.reconnect_attempts here; 
+                    # we do it after the connection proves it's stable.
 
                 # Receive messages
                 try:
                     message = await asyncio.wait_for(self.ws.recv(), timeout=30.0)
+                    
+                    # Connection is behaving - check if we've reached the stability threshold
+                    if self.reconnect_attempts > 0 and self.connection_start_time:
+                        connected_duration = (datetime.utcnow() - self.connection_start_time).total_seconds()
+                        if connected_duration >= CONNECTION_STABILITY_THRESHOLD_SECONDS:
+                            logger.info(f"✅ AISStream connection stable for {connected_duration:.0f}s - resetting backoff counter")
+                            self.reconnect_attempts = 0
+                            self.connection_start_time = None
+                    
                     data = json.loads(message)
 
                     msg_type = data.get("MessageType")
@@ -497,7 +541,7 @@ class MaritimePollerService:
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("🌊 AISStream connection closed, reconnecting...")
                 self.ws = None
-                await asyncio.sleep(self.reconnect_delay)
+                await asyncio.sleep(1.0)
 
             except Exception as e:
                 logger.error(f"Error in stream loop: {e}")

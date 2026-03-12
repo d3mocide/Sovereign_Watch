@@ -584,7 +584,8 @@ function App() {
             js8Stations={js8Stations}
             js8LogEntries={js8LogEntries}
             js8StatusLine={js8StatusLine}
-            js8Connected={js8Connected}
+            js8BridgeConnected={js8Connected}
+            js8Connected={js8CallConnected}
             js8KiwiConnecting={js8KiwiConnecting}
             js8ActiveKiwiConfig={js8ActiveKiwiConfig}
             sendMessage={js8SendMessage}

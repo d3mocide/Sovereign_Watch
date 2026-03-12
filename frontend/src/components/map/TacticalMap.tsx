@@ -24,6 +24,26 @@ import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { useInfraData } from "../../hooks/useInfraData";
+import { StarField } from "./StarField";
+
+// Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
+const SATELLITE_MAP_STYLE = {
+  version: 8 as const,
+  sources: {
+    "esri-satellite": {
+      type: "raster" as const,
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution:
+        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+    },
+  },
+  layers: [{ id: "satellite-layer", type: "raster" as const, source: "esri-satellite" }],
+};
+const DARK_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 // Pre-load both adapters so React doesn't re-suspend when toggling Globe mode.
 // react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
@@ -189,6 +209,7 @@ export function TacticalMap({
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
   const [enable3d, setEnable3d] = useState(false);
+  const [mapStyleMode, setMapStyleMode] = useState<'dark' | 'satellite'>('dark');
   const mapToken = _enableMapbox && _isValidToken ? _mapboxToken : undefined;
 
   // Globe mode always uses MapLibre — Mapbox Globe blocks CustomLayerInterface
@@ -199,7 +220,7 @@ export function TacticalMap({
 
   const mapStyle = (mapToken && !globeMode)
     ? "mapbox://styles/mapbox/standard"
-    : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+    : (mapStyleMode === 'satellite' ? SATELLITE_MAP_STYLE : DARK_MAP_STYLE);
 
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -484,6 +505,7 @@ export function TacticalMap({
     enable3d,
     setEnable3d,
     mapToken: mapToken || "",
+    mapStyleMode,
   });
 
   // Mission Area Handlers that bridge to context menu UI
@@ -583,6 +605,13 @@ export function TacticalMap({
 
   return (
     <>
+      {/* Star field rendered behind the map canvas. In globe mode the sky
+          atmosphere layer is subtly transparent, leaving the WebGL canvas 
+          transparent outside the globe sphere so the star field shows through. */}
+      <StarField active={!!globeMode} />
+
+      {/* z-index:1 ensures the map canvas stacks above the StarField (z-index:0) */}
+      <div style={{ position: 'relative', zIndex: 1, width: '100vw', height: '100vh' }}>
       <Suspense fallback={null}>
         <MapComponent
           key={globeMode ? "map-globe" : "map-mercator"}
@@ -645,70 +674,10 @@ export function TacticalMap({
           }}
         />
       </Suspense>
+      </div>
 
-      {/* View Controls */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-[100] pointer-events-auto">
-
-        {/* Top Row: View Modes + Zoom */}
-        <div className="flex flex-row items-center gap-4">
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            {!globeMode && (
-              <>
-                <button
-                  onClick={() => setViewMode("2d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${!enable3d
-                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                    }`}
-                >
-                  2D
-                </button>
-                <button
-                  onClick={() => setViewMode("3d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${enable3d
-                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                    }`}
-                >
-                  3D
-                </button>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-              </>
-            )}
-            <button
-              onClick={() => onToggleGlobe?.()}
-              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${globeMode
-                ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
-                : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                }`}
-              title="Toggle Globe View"
-            >
-              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
-              GLOBE
-            </button>
-          </div>
-
-          {/* Map Zoom Controls */}
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            <button
-              onClick={() => mapRef.current?.getMap().zoomOut()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom Out"
-              aria-label="Zoom Out"
-            >
-              <Minus size={14} strokeWidth={3} />
-            </button>
-            <button
-              onClick={() => mapRef.current?.getMap().zoomIn()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom In"
-              aria-label="Zoom In"
-            >
-              <Plus size={14} strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-
+      {/* View Controls & Zoom HUD - Centered at the bottom */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto">
         {/* Manual Orientation Controls - Only in 3D mode, Hidden in Globe */}
         {enable3d && !globeMode && (
           <div className="flex flex-row gap-2">
@@ -759,6 +728,93 @@ export function TacticalMap({
             </div>
           </div>
         )}
+
+        {/* Top Row: View Modes + Zoom */}
+        <div className="flex flex-row items-center gap-4">
+          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
+            {!globeMode && (
+              <>
+                <button
+                  onClick={() => setViewMode("2d")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${!enable3d
+                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                    }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => setViewMode("3d")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${enable3d
+                    ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                    }`}
+                >
+                  3D
+                </button>
+                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+              </>
+            )}
+
+            <button
+              onClick={() => onToggleGlobe?.()}
+              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${globeMode
+                ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
+                : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                }`}
+              title="Toggle Globe View"
+            >
+              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
+              GLOBE
+            </button>
+
+            {globeMode && (
+              <>
+                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+                <button
+                  onClick={() => setMapStyleMode('dark')}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${mapStyleMode === 'dark'
+                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                    }`}
+                  title="Dark Tactical View"
+                >
+                  DARK
+                </button>
+                <button
+                  onClick={() => setMapStyleMode('satellite')}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${mapStyleMode === 'satellite'
+                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
+                    : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                    }`}
+                  title="Satellite Terrain View"
+                >
+                  SAT
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Map Zoom Controls */}
+          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
+            <button
+              onClick={() => mapRef.current?.getMap().zoomOut()}
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              title="Zoom Out"
+              aria-label="Zoom Out"
+            >
+              <Minus size={14} strokeWidth={3} />
+            </button>
+            <button
+              onClick={() => mapRef.current?.getMap().zoomIn()}
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              title="Zoom In"
+              aria-label="Zoom In"
+            >
+              <Plus size={14} strokeWidth={3} />
+            </button>
+          </div>
+        </div>
       </div>
 
       <MapContextMenu

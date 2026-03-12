@@ -1,3 +1,46 @@
+## [0.27.0] - 2026-03-12
+
+### Added
+
+- **Hybrid Globe Architecture**: Integrated ESRI World Imagery satellite basemap as a high-resolution alternative to the dark tactical style in Globe mode.
+- **Deep Space Starfield**: Implemented a dynamic StarField canvas with 320 twinkling stars, rendered behind the map to provide a cinematic backdrop when atmospheric layers are translucent.
+- **Globe Style Switcher**: New `DARK` / `SAT` toggle buttons exclusively in Globe mode for seamless transition between tactical and reconnaissance views.
+- **Atmospheric Tuning**: Refined the globe's atmosphere in `useMapCamera.ts` to allow starfield visibility while maintaining a high-altitude glow.
+
+### Changed
+
+- **Adaptive Map UI**: 2D and 3D views are now forced to the high-contrast Dark Tactical style for optimal UI performance and legibility. Satellite imagery is dynamically restricted to the Globe projection.
+- **Control Bar Refinement**: Repositioned 3D orientation controls (Rotation/Tilt) to sit above the mode selector for improved ergonomics.
+- **Orbital Parity**: Added full 3D orientation controls to the `OrbitalMap.tsx` component.
+- **Graticule Color Logic**: Latitude/Longitude grid lines now dynamically adjust contrast based on the underlying basemap (White on Satellite vs Cyan on Dark).
+
+### Fixed
+
+- **High-Load AIS Stability**: Implemented an exponential backoff (5s to 300s) and a 30s minimum cooldown strategy for the maritime poller to prevent IP rate-limiting during rapid mission re-centering.
+- **Websocket Lifecycle**: Fixed an `AttributeError` in `service.py` where stale connection delay variables were causing poller crashes during reconnection cycles.
+- **Orbital UI Missing Assets**: Resolved a `ReferenceError` in `OrbitalMap.tsx` where move/tilt icons were missing from the `lucide-react` module imports.
+- **Layer Re-application**: Fixed a bug where graticule and background layers would disappear after basemap style changes by migrating to persistent `.on("style.load")` listeners in `MapboxAdapter.tsx`.
+
+## [0.26.1] - 2026-03-12
+
+### Fixed
+
+- **KiwiSDR Tuning Stability**: Implemented a 500ms debouncing mechanism for frequency tuning, AGC, and squelch adjustments in the `js8call` service. This prevents remote SDR nodes from being overwhelmed by rapid UI interactions and mitigates connection drops and rate-limiting.
+
+## [0.26.0] - 2026-03-12
+
+### Added
+
+- **HF Listening Post (Beta)**: Integrated a high-performance raw binary streaming architecture for KiwiSDR nodes. Users can now stream real-time 12kHz PCM audio and panoramic waterfall data directly to the Radio Terminal.
+- **Panoramic Waterfall (WVM/WF)**: New high-density spectrum visualization in the Listening Post panel, synchronized with the active SDR frequency and zoom levels.
+
+### Fixed
+
+- **AIS AOT Persistence**: Resolved a race condition where the maritime Area of Interest (AOT) boundary would flicker or disappear when switching between Tactical, Orbital, and Radio views. State is now persisted via root refs.
+- **KiwiSDR Protocol Handshake**: Fixed a critical command sequencing bug in `kiwi_client.py` that caused audio/waterfall streams to hang during initialization.
+- **Audio Stream Resilience**: Implemented non-blocking I/O for the JS8Call audio pipeline to prevent event-loop stalls during buffer saturation.
+- **WebSocket Auto-Reconnect**: Added robust reconnection logic to HF audio and waterfall streams to handle backend service restarts gracefully.
+
 ## [0.25.0] - 2026-03-10
 
 ### Added

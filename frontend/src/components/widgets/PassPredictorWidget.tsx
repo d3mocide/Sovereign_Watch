@@ -79,10 +79,10 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
               onClick={() => setShowElMenu(v => !v)}
               aria-expanded={showElMenu}
               aria-haspopup="menu"
-              className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-white/50 border border-white/10 bg-white/5 hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-white/50 border border-white/10 bg-white/5 hover:bg-white/10 transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
             >
               MIN EL: {minElevation}°
-              <span className="text-white/30" aria-hidden="true">▾</span>
+              <span className={`text-white/30 inline-block transition-transform duration-200 ${showElMenu ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
             </button>
             {showElMenu && (
               <div
@@ -110,7 +110,7 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
               onClick={() => exportCsv(passes)}
               title="Export passes as CSV"
               aria-label="Export passes as CSV"
-              className="p-1 text-white/30 hover:text-purple-400 transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
+              className="p-1.5 rounded text-white/30 hover:text-purple-400 hover:bg-white/10 transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-purple-400 outline-none"
             >
               <Download size={11} aria-hidden="true" />
             </button>

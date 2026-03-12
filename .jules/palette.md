@@ -23,3 +23,7 @@
 ## 2025-03-09 - Icon-Only TopBar Toggle Buttons Require Explicit ARIA
 **Learning:** Icon-only buttons in global navigation elements (like `TopBar.tsx` view modes and toggle switches) provide visual feedback (e.g., color changes, shadows) but are invisible to screen readers without explicit `aria-label` and `aria-pressed` or `title` attributes. Furthermore, without `focus-visible:ring-*` and `outline-none`, keyboard navigation lacks clear indicators in high-density tactical interfaces.
 **Action:** Always ensure that icon-only toggle buttons in navigation bars include `aria-label`, `title`, and stateful attributes like `aria-pressed` or `aria-expanded`. Apply `aria-hidden="true"` to internal SVG icons to prevent redundant announcements, and use consistent `focus-visible:ring-1` styling.
+
+## 2024-05-24 - Pass Predictor Polish
+**Learning:** Icon-only or minimal buttons often lack tactile feedback, making them feel unresponsive.
+**Action:** Adding `hover:bg-white/10`, consistent rounding (`rounded`), and `active:scale-95` dramatically improves the micro-interaction of small utility buttons like CSV exports and menu toggles.

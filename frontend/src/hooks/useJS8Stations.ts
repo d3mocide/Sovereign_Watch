@@ -87,13 +87,20 @@ export function useJS8Stations(): UseJS8StationsResult {
         const g = payload.grid || '----';
         ownGridRef.current = g;
         setStatusLine((prev: JS8StatusLine) => ({ ...prev, callsign: c, grid: g }));
-        if (payload.kiwi_connected) {
+        if (payload.kiwi_connected && payload.kiwi_host) {
           setActiveKiwiConfig({
             host: payload.kiwi_host,
             port: payload.kiwi_port,
             freq: payload.kiwi_freq,
             mode: payload.kiwi_mode,
           });
+        }
+        
+        // Proactively ask the backend for the current KiwiSDR status
+        // to handle the case where the frontend connects before the backend
+        // has finished its initial node discovery and handshake.
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ action: 'GET_KIWI_STATUS' }));
         }
         return;
       }
@@ -194,10 +201,11 @@ export function useJS8Stations(): UseJS8StationsResult {
 
   const sendMessage = useCallback((target: string, text: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      // Backend expects action:"SEND", target, message (not text)
       wsRef.current.send(JSON.stringify({
-        action: 'TX_DIRECTED',
+        action: 'SEND',
         target,
-        text,
+        message: text,
       }));
     }
   }, []);

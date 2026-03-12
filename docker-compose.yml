@@ -42,7 +42,6 @@ services:
       timeout: 5s
       retries: 5
 
-
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
   ais-poller:
     build:
