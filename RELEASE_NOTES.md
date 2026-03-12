@@ -1,19 +1,22 @@
-# Release - v0.28.0 - Tactical Overlay Refinement
+# Release - v0.28.0 - Infrastructure & Outage Awareness
 
 ## Summary
-Version 0.28.0 introduces a major refinement to the map's tactical layering and infrastructure controls. This update focuses on operational clarity by ensuring that background infrastructure data (cables, stations, and internet outages) never obscures mission-critical tactical boundaries or live entity tracks.
+Version 0.28.0 introduces a massive update to the project's infrastructure intelligence capabilities. The centerpiece is a new **Global Internet Outage** layer, which provides real-time situational awareness of network disruptions worldwide. This release also marks the introduction of the `infra_poller` microservice, significantly improving the performance and reliability of static infrastructure data.
 
 ## Key Features
-- **Master Network Toggle**: The "GLOBAL NETWORK" switch now acts as a high-level master control for all infrastructure sub-layers.
-- **Independent Cable Filtering**: Added an explicit sub-filter for "UNDERSEA CABLES" for finer-grained control.
-- **Optimized Tactical Stack**: Rebalanced depth biases to create a consistent vertical rendering order where tactical overlays always sit on top of infrastructure shading.
+- **Internet Outage Shading**: Real-time country-level disruption heatmap powered by IODA (Georgia Tech).
+- **`infra_poller` Microservice**: New dedicated background service for IODA and Submarine Cable synchronization.
+- **Polygon-Based Interaction**: Select entire countries to view detailed outage reports and severity scores.
+- **Master Network Toggle**: Unified control for Cables, Stations, and Outages in the System Status widget.
+- **Tactical Layer Rebalancing**: Recalibrated depth buffers to ensure infrastructure underlays never obscure tactical tracks or boundaries.
 
 ## Technical Details
-- **Rendering**: Calibrated `depthBias` in `buildInfraLayers.ts` to ensure infrastructure sits at the bottom of the WebGL depth buffer.
-- **State Management**: Implemented hierarchical toggle logic in `SystemStatus.tsx` to keep master/sub-filter states in sync.
+- **Backend**: Python-based `infra_poller` service using `requests` and `redis`.
+- **Frontend**: Transitioned from `ScatterplotLayer` markers to high-performance `GeoJsonLayer` country shading.
+- **Rendering**: Established a consistent "tactical sandwich" using `depthBias` (-30 to -200).
 
 ## Upgrade Instructions
 ```bash
 docker compose pull
-docker compose up -d --build frontend
+docker compose up -d --build
 ```

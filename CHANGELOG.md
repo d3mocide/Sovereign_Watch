@@ -1,7 +1,14 @@
-## [0.28.0] - 2026-03-12
+## [0.28.0] - 2026-03-11
 
 ### Added
 
+- **Internet Outage Intelligence Layer**: Implemented a global internet outage visualization layer powered by Georgia Tech's IODA (Internet Outage Detection and Analysis).
+  - **Dynamic Country Shading**: Countries are now dynamically shaded on the map based on the severity of active internet outages, using a multi-stage heatmap (Yellow → Orange → Red).
+  - **Tactical Outage Reports**: Added a dedicated "INTERNET OUTAGE" sidebar section that surfaces IODA scores, affected regions, and data-source attribution for selected countries.
+- **`infra_poller` Microservice**: New Python-based ingestion service that centralizes high-latency infrastructure data fetching.
+  - **IODA Summary V2**: Optimized ingestion using the IODA Summary V2 API with hourly rolling windows.
+  - **Submarine Cable Refresh**: Automated 24h background polling for global submarine cable and landing station datasets.
+  - **Redis-Backed Infrastructure Store**: Migrated infrastructure data to a shared Redis cache to improve frontend load times and reduce external API dependency.
 - **Hierarchical Global Network Toggle**: Re-engineered the "GLOBAL NETWORK" filter into a master switch that controls Undersea Cables, Landing Stations, and Internet Outages as a unified group.
 - **Undersea Cables Sub-filter**: Added granular control for cable paths, allowing them to be toggled independently once the master network switch is active.
 
@@ -9,6 +16,7 @@
 
 - **Depth Bias Recalibration**: Standardized `depthBias` across the tactical stack to resolve visibility conflicts. Internet Outages (-30) and Physical Infrastructure (-40) now correctly render beneath AOT Boundaries (-100) and Entity Icons (-200).
 - **Layer Stacking Optimization**: Refined the global rendering order to ensure static infrastructure remains a background "underlay" while real-time tactical data stays prominent on top.
+- **Improved Interaction Model**: Migrated outage interaction from point-based markers to native GeoJSON polygon picking, enabling users to select entire countries for detailed outage analysis.
 
 ## [0.27.0] - 2026-03-12
 
