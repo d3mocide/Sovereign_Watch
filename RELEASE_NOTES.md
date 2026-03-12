@@ -1,31 +1,25 @@
-# Release - v0.25.0 - Persistence & Stability Unified
+# Release - v0.27.0 - Celestial Observer
 
-## High-Level Summary
-This major update introduces **Global COT State Persistence**, a foundational architectural shift that eliminates data loss and loading delays during map view transitions. By hoisting tactical tracking and worker lifecycles to the root application level, operators can now switch between Tactical and Orbital views instantly with zero track interruption. This release also resolves several critical stability issues, including a high-priority state reset bug and type inconsistencies in the rendering engine.
+## Summary
+This release introduces a cinematic "Celestial Observer" experience with high-resolution satellite imagery and a deep-space starfield background. It also brings critical stability improvements to the maritime tracking pipeline, ensuring reliable operation under high load.
 
 ## Key Features
-- **Global COT State Persistence**: Tactical tracks and dead reckoning states now persist globally. Switching from the Tactical Map to the Orbital Map and back is now instantaneous, with no re-synchronization overhead.
-- **H3 Poller Infrastructure**: Real-time H3-based coverage visualization is now fully integrated with the global state, ensuring consistent spatial awareness of sensor density across all views.
-- **System Settings Widget**: Centralized configuration hub for tactical layers and poller toggles, accessible via the "SYS" button.
-- **Improved AIS & ADS-B Reliability**: Refined ingestion radii and optimized rendering layers ensure tactical entities are always visible and accurate.
+- **Hybrid Globe Mode**: Toggle between high-contrast tactical and high-resolution satellite basemaps (powered by ESRI World Imagery).
+- **Deep Space Starfield**: A dynamic, twinkling star backdrop rendered behind the globe for a premium situational awareness aesthetic.
+- **Adaptive UI**: The interface now intelligently adapts based on the map mode, hiding 2D/3D controls in Globe mode and providing basemap style switching only where intended.
+- **Improved 3D Layout**: Orientation controls have been restacked for better ergonomics and added to the Orbital Map for functional parity.
 
-## Fixed
-- **App Crash on Filter Change**: Fixed a critical `TypeError` in `App.tsx` where missing return statements in state updaters would crash the UI when toggling map layers.
-- **View Transition Latency**: Removed the 5-10 second "re-sync" gap when entering or exiting the Orbital view.
-- **Prop Schema Sync**: Standardized ref types and properties (`alertedEmergencyRef`, `repeatersLoading`) across all map components to prevent compilation and runtime mismatches.
+## Stability Improvements
+- **AIS Poller Resilience**: Implemented a sophisticated exponential backoff and reconnection cooldown strategy for AISStream.io, effectively eliminating IP rate-limiting issues.
+- **Map Lifecycle Fixes**: Migrated to persistent style-load listeners to ensure graticules and atmospheric layers correctly re-apply after any style switch.
 
 ## Technical Details
-- **Architecture**: `useEntityWorker` and associated `useRefs` hoisted to root `App.tsx`.
-- **State Management**: Optimized `setFilters` and `setEvents` updaters with explicit typing and `useCallback` memoization.
-- **Frontend**: Standardized `DRState` and `VisualState` types in `types.ts` for clean data flow.
+- **Frontend**: Force-reversion of satellite mode in 2D/3D to Mapbox Standard/Dark for performance.
+- **Backend**: Fixed `AttributeError` in the maritime poller exception handler.
+- **Componentry**: Added missing Lucide icons to the `OrbitalMap.tsx` import suite.
 
 ## Upgrade Instructions
-1. Pull the latest code:
-   ```bash
-   git pull
-   ```
-2. Rebuild the frontend and ingestion pollers:
-   ```bash
-   docker compose up -d --build frontend adsb-poller maritime-poller orbital-pulse
-   ```
-3. No database migrations are required for this update.
+```bash
+# Pull latest and rebuild impacted services
+docker compose up -d --build frontend maritime-poller
+```

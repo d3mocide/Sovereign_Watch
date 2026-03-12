@@ -274,17 +274,6 @@ export function useAnimationLoop({
           interpolated.push(entity);
         }
       } else {
-        // LIVE MODE: Interpolate and Smooth
-        // const liveUpdate = entitiesRef.current.get(selectedEntity?.uid || '');
-        // if (liveUpdate && selectedEntity) {
-        // Check if data changed significantly to avoid react render thrashing?
-        // Actually, for sidebar we want 1Hz or so.
-        // But strictly, we should just push the latest object up if it's new.
-        // To avoid loop: parent only updates if object ref changes.
-        // But we are creating new object refs on every frame here? No, only on ws message.
-        // So passing the ref from entitiesRef.current is safe!
-        // }
-
         for (const [uid, entity] of entities) {
           const isShip = entity.type?.includes("S");
           const threshold = isShip
@@ -487,10 +476,6 @@ export function useAnimationLoop({
         }
       }
 
-      // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
-      // This ensures the camera moves EXACTLY with the interpolated selection
-      // Preventing "rubber banding" or jitter.
-      // Executed ONCE per frame, not per entity.
       // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
       // This ensures the camera moves EXACTLY with the interpolated selection
       // Preventing "rubber banding" or jitter.

@@ -86,8 +86,7 @@ KIWI_FREQ = int(os.getenv("KIWI_FREQ", "14074"))
 KIWI_MODE = os.getenv("KIWI_MODE", "usb")
 # Set KIWI_USE_SUBPROCESS=1 to fall back to the kiwirecorder subprocess pipeline
 KIWI_USE_SUBPROCESS = os.getenv("KIWI_USE_SUBPROCESS", "0") == "1"
-# Set KIWI_AUTO_SELECT=1 to auto-connect to the nearest directory node on startup
-KIWI_AUTO_SELECT = os.getenv("KIWI_AUTO_SELECT", "0") == "1"
+# Note: KIWI_AUTO_SELECT has been removed — connect via the Node Browser in the UI
 
 # ---------------------------------------------------------------------------
 # Global state
@@ -110,6 +109,14 @@ _message_queue: Optional[asyncio.Queue] = None  # initialized in lifespan
 # Active WebSocket connections.
 # Accessed from the asyncio thread only – no lock needed.
 _ws_clients: list[WebSocket] = []
+
+# Active audio WebSocket connections for the Listening Post browser stream.
+# These receive raw S16LE PCM @ 12 kHz as binary frames.
+_audio_ws_clients: list[WebSocket] = []
+
+# Active waterfall WebSocket connections.
+# These receive raw waterfall pixel rows as binary frames.
+_waterfall_ws_clients: list[WebSocket] = []
 
 # In-memory station registry keyed by callsign.
 # Written from the background task (single asyncio thread) – no lock needed.
@@ -247,6 +254,8 @@ def _start_pacat() -> Optional[subprocess.Popen]:
             stdin=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
+        if proc.stdin:
+            os.set_blocking(proc.stdin.fileno(), False)
         logger.info("pacat playback process started (PID %d)", proc.pid)
         return proc
     except Exception as exc:
@@ -255,7 +264,12 @@ def _start_pacat() -> Optional[subprocess.Popen]:
 
 
 def _write_audio(pcm: bytes) -> None:
-    """Write a PCM chunk to the persistent pacat process stdin."""
+    """
+    Write a PCM chunk to the persistent pacat process stdin (JS8Call decode path)
+    AND schedule a broadcast to any connected browser audio WebSocket clients
+    (Listening Post path).  Both paths operate independently — pacat failure does
+    not affect browser clients and vice-versa.
+    """
     global _pacat_proc
     if _pacat_proc is None or _pacat_proc.poll() is not None:
         # pacat died — attempt restart
@@ -263,8 +277,75 @@ def _write_audio(pcm: bytes) -> None:
     if _pacat_proc and _pacat_proc.stdin:
         try:
             _pacat_proc.stdin.write(pcm)
+        except BlockingIOError:
+            # Drop frame if PulseAudio pipe is full to avoid stalling event loop
+            pass
         except BrokenPipeError:
             _pacat_proc = None  # will be restarted on next chunk
+
+    # Fan out PCM to browser Listening Post clients.
+    # This is safe to call from within the asyncio event loop (KiwiClient._receive_loop
+    # is an asyncio Task), so ensure_future() schedules on the running loop.
+    if _audio_ws_clients:
+        asyncio.ensure_future(_broadcast_audio_bytes(pcm))
+
+
+_audio_frame_counter = 0
+
+async def _broadcast_audio_bytes(pcm: bytes) -> None:
+    """Broadcast a raw PCM chunk to all active /ws/audio clients."""
+    global _audio_frame_counter
+    _audio_frame_counter += 1
+    if _audio_frame_counter % 100 == 0:
+        logger.info("Broadcasting audio frame, size=%d bytes, to %d clients", len(pcm), len(_audio_ws_clients))
+    
+    dead: list[WebSocket] = []
+    for ws in _audio_ws_clients:
+        try:
+            await ws.send_bytes(pcm)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _audio_ws_clients:
+            _audio_ws_clients.remove(ws)
+
+
+def _write_waterfall(pixels: bytes) -> None:
+    """Broadcast a waterfall pixel row to all active /ws/waterfall clients."""
+    if _waterfall_ws_clients:
+        asyncio.ensure_future(_broadcast_waterfall_bytes(pixels))
+
+
+_wf_frame_counter = 0
+
+async def _broadcast_waterfall_bytes(pixels: bytes) -> None:
+    """Broadcast a raw waterfall chunk to all active /ws/waterfall clients."""
+    global _wf_frame_counter
+    _wf_frame_counter += 1
+    if _wf_frame_counter % 50 == 0:
+        logger.info("Broadcasting waterfall frame, size=%d bytes, to %d clients", len(pixels), len(_waterfall_ws_clients))
+        
+    dead: list[WebSocket] = []
+    for ws in _waterfall_ws_clients:
+        try:
+            await ws.send_bytes(pixels)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _waterfall_ws_clients:
+            _waterfall_ws_clients.remove(ws)
+
+
+def _kiwi_rssi_callback(rssi_dbm: float) -> None:
+    """
+    Called by KiwiClient every ~10 audio frames (~800 ms) with the S-meter reading.
+    Enqueues a SMETER message so all /ws/js8 clients receive it.
+    """
+    _enqueue_from_thread({
+        "type": "SMETER",
+        "dbm": round(rssi_dbm, 1),
+        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+    })
 
 
 async def _broadcast_json(payload: dict) -> None:
@@ -618,32 +699,17 @@ async def lifespan(app: FastAPI):
             on_audio=_write_audio,
             on_status=_kiwi_status_callback,
             on_disconnect=_kiwi_disconnect_callback,
+            on_rssi=_kiwi_rssi_callback,
+            on_waterfall=_write_waterfall,
         )
-        # Phase 1: start node directory (non-blocking initial fetch)
+        # Phase 1: start node directory background fetch (non-blocking).
+        # The UI connects to a KiwiSDR node explicitly via the Node Browser — no
+        # auto-connect on startup.  This avoids up to ~22 s of startup delay when
+        # KIWI_HOST is unreachable or KIWI_AUTO_SELECT was enabled.
         _kiwi_directory = KiwiDirectory()
-        dir_task = asyncio.create_task(_kiwi_directory.refresh(), name="kiwi-dir-initial")
+        asyncio.create_task(_kiwi_directory.refresh(), name="kiwi-dir-initial")
         asyncio.create_task(_kiwi_directory.auto_refresh_loop(), name="kiwi-dir-refresh")
-
-        # Determine startup node
-        connect_host, connect_port = KIWI_HOST, KIWI_PORT
-        if KIWI_AUTO_SELECT:
-            # Wait for initial directory fetch to complete before auto-selecting
-            try:
-                await asyncio.wait_for(asyncio.shield(dir_task), timeout=12.0)
-                my_lat, my_lon = maidenhead_to_latlon(MY_GRID)
-                nearest = _kiwi_directory.get_nodes(KIWI_FREQ, my_lat, my_lon, limit=1)
-                if nearest:
-                    connect_host = nearest[0].host
-                    connect_port = nearest[0].port
-                    logger.info("KIWI_AUTO_SELECT: nearest node → %s:%d", connect_host, connect_port)
-            except asyncio.TimeoutError:
-                logger.warning("KIWI_AUTO_SELECT: directory fetch timed out, using KIWI_HOST")
-
-        if connect_host and connect_host != "kiwisdr.example.com":
-            try:
-                await _kiwi_native.connect(connect_host, connect_port, KIWI_FREQ, KIWI_MODE)
-            except Exception as exc:
-                logger.warning("KiwiSDR native client startup failed (will retry via UI): %s", exc)
+        logger.info("KiwiSDR client ready — connect via the Node Browser in the UI")
 
     # ── UDP listener (JS8Call) ─────────────────────────────────────────────
     for attempt in range(1, 6):
@@ -710,13 +776,13 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
-        # Strict CSP for API endpoints
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        # Relaxed CSP for radio data bridge to allow WebSocket connections
+        response.headers["Content-Security-Policy"] = "default-src 'self' ws: wss:; frame-ancestors 'none'"
         response.headers["X-Frame-Options"] = "DENY"
 
     return response
 
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://127.0.0.1").split(",")]
 
 app.add_middleware(
     CORSMiddleware,
@@ -890,6 +956,21 @@ async def ws_js8(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "STATION_LIST", "stations": stations})
 
             # ------------------------------------------------------------------
+            # Action: GET_KIWI_STATUS – explicitly query the current kiwi SDR connection state
+            # Payload: {"action": "GET_KIWI_STATUS"}
+            # ------------------------------------------------------------------
+            elif action == "GET_KIWI_STATUS":
+                await websocket.send_json({
+                    "type": "KIWI.STATUS",
+                    "connected": _kiwi_is_running(),
+                    "host": _kiwi_config.get("host", ""),
+                    "port": _kiwi_config.get("port", 0),
+                    "freq": _kiwi_config.get("freq", 0),
+                    "mode": _kiwi_config.get("mode", ""),
+                    "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+                })
+
+            # ------------------------------------------------------------------
             # Action: SET_KIWI – (re)connect KiwiSDR to a new target node
             # Payload: {"action": "SET_KIWI", "host": "sdr.example.com",
             #           "port": 8073, "freq": 14074, "mode": "usb"}
@@ -897,7 +978,7 @@ async def ws_js8(websocket: WebSocket) -> None:
             elif action == "SET_KIWI":
                 host = str(cmd.get("host", "")).strip()
                 port = int(cmd.get("port", 8073))
-                freq = int(cmd.get("freq", 14074))
+                freq = float(cmd.get("freq", 14074))
                 mode = str(cmd.get("mode", "usb")).lower().strip()
 
                 if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
@@ -940,6 +1021,43 @@ async def ws_js8(websocket: WebSocket) -> None:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI failed: {exc}"})
+
+            # ------------------------------------------------------------------
+            # Action: SET_AGC – control KiwiSDR AGC / manual RF gain
+            # Payload: {"action": "SET_AGC", "agc": true, "man_gain": 50}
+            # man_gain: 0–120 (KiwiSDR manGain units, 0 = min, 120 = max)
+            # ------------------------------------------------------------------
+            elif action == "SET_AGC":
+                agc_on   = bool(cmd.get("agc", True))
+                man_gain = int(max(0, min(120, cmd.get("man_gain", 50))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_agc(agc_on, man_gain)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_AGC failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_SQUELCH – enable/disable KiwiSDR squelch gate
+            # Payload: {"action": "SET_SQUELCH", "enabled": true, "threshold": 60}
+            # threshold: 0–100 (UI units, mapped to 0–150 in the client)
+            # ------------------------------------------------------------------
+            elif action == "SET_SQUELCH":
+                sq_enabled   = bool(cmd.get("enabled", False))
+                sq_threshold = int(max(0, min(100, cmd.get("threshold", 0))))
+                # Map 0-100 UI range → 0-150 KiwiSDR range
+                kiwi_threshold = int(sq_threshold * 1.5)
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_squelch(sq_enabled, kiwi_threshold)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_SQUELCH failed: {exc}",
+                        })
+                # Subprocess path: squelch not supported (kiwirecorder handles it)
 
             # ------------------------------------------------------------------
             # Action: DISCONNECT_KIWI – stop the KiwiSDR connection
@@ -1016,6 +1134,68 @@ async def ws_js8(websocket: WebSocket) -> None:
         # Always remove from active clients list on disconnect
         if websocket in _ws_clients:
             _ws_clients.remove(websocket)
+
+
+# ===========================================================================
+# WebSocket Endpoint  /ws/audio  — raw PCM stream for browser Listening Post
+# ===========================================================================
+
+@app.websocket("/ws/audio")
+async def ws_audio(websocket: WebSocket) -> None:
+    """
+    Binary WebSocket that streams raw KiwiSDR audio to the browser.
+
+    Outbound (server → frontend):
+      Binary frames of S16LE PCM @ 12 kHz mono, same chunks delivered by the
+      KiwiClient on_audio callback.  No framing headers — each WebSocket message
+      is a contiguous PCM chunk ready for AudioBufferSourceNode scheduling.
+
+    Inbound (frontend → server):
+      Ignored — the client may send periodic text pings to keep the connection
+      alive through proxies, but the server does not act on them.
+
+    This endpoint is only active when the native KiwiClient path is running
+    (KIWI_USE_SUBPROCESS=0).  The browser connects when entering Listening Post
+    mode and disconnects on exit, so bandwidth is only consumed when needed.
+    """
+    await websocket.accept()
+    _audio_ws_clients.append(websocket)
+    remote = websocket.client
+    logger.info("Audio WebSocket connected: %s  (total listeners: %d)", remote, len(_audio_ws_clients))
+    try:
+        while True:
+            # Absorb any inbound heartbeat messages; real-time audio is pushed out.
+            await websocket.receive()
+    except WebSocketDisconnect:
+        logger.info("Audio WebSocket disconnected: %s", remote)
+    except Exception as exc:
+        logger.debug("Audio WebSocket error (%s): %s", remote, exc)
+    finally:
+        if websocket in _audio_ws_clients:
+            _audio_ws_clients.remove(websocket)
+        logger.info("Audio WebSocket removed: %s  (remaining: %d)", remote, len(_audio_ws_clients))
+@app.websocket("/ws/waterfall")
+async def ws_waterfall(websocket: WebSocket) -> None:
+    """
+    Binary WebSocket that streams raw KiwiSDR waterfall rows to the browser.
+
+    Outbound (server → frontend):
+      Binary frames of waterfall pixel data (1024 bytes per frame).
+    """
+    await websocket.accept()
+    _waterfall_ws_clients.append(websocket)
+    remote = websocket.client
+    logger.info("Waterfall WebSocket connected: %s (total: %d)", remote, len(_waterfall_ws_clients))
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        logger.info("Waterfall WebSocket disconnected: %s", remote)
+    except Exception as exc:
+        logger.debug("Waterfall WebSocket error: %s", exc)
+    finally:
+        if websocket in _waterfall_ws_clients:
+            _waterfall_ws_clients.remove(websocket)
 
 
 # ===========================================================================

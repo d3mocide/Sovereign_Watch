@@ -72,8 +72,8 @@ async def add_security_headers(request: Request, call_next):
         # Allow framing for these if needed, or keep DENY
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
-        # Strict CSP for API endpoints
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        # Relaxed CSP for API endpoints to allow WebSocket connections
+        response.headers["Content-Security-Policy"] = "default-src 'self' ws: wss:; frame-ancestors 'none'"
         response.headers["X-Frame-Options"] = "DENY"
 
     return response
