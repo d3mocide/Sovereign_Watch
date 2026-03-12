@@ -129,8 +129,10 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
         wsRef.current.close();
         wsRef.current = null;
       }
-      setIsConnected(false);
-      setIsPlaying(false);
+      queueMicrotask(() => {
+        setIsConnected(false);
+        setIsPlaying(false);
+      });
       nextPlayRef.current = 0;
       return;
     }
@@ -172,8 +174,10 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
         wsRef.current.close();
         wsRef.current = null;
       }
-      setIsConnected(false);
-      setIsPlaying(false);
+      queueMicrotask(() => {
+        setIsConnected(false);
+        setIsPlaying(false);
+      });
     };
   }, [active, handleAudioChunk]);
 

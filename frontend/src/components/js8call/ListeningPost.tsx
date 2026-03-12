@@ -203,16 +203,16 @@ export default function ListeningPost({
   }, [wfMode, analyserNode, drawRow]);
 
   // Sync local frequency and mode with active config from bridge
-  useEffect(() => {
-    if (activeKiwiConfig) {
-      if (activeKiwiConfig.freq && activeKiwiConfig.freq !== localFreq) {
-        setLocalFreq(activeKiwiConfig.freq);
-      }
-      if (activeKiwiConfig.mode && activeKiwiConfig.mode !== localMode) {
-        setLocalMode(activeKiwiConfig.mode);
-      }
-    }
-  }, [activeKiwiConfig, localFreq, localMode]);
+  // Use render-phase stabilization to avoid cascading render warnings in useEffect
+  const [prevSyncFreq, setPrevSyncFreq] = useState<number | undefined>(activeKiwiConfig?.freq);
+  const [prevSyncMode, setPrevSyncMode] = useState<string | undefined>(activeKiwiConfig?.mode);
+
+  if (activeKiwiConfig && (activeKiwiConfig.freq !== prevSyncFreq || activeKiwiConfig.mode !== prevSyncMode)) {
+    setLocalFreq(activeKiwiConfig.freq);
+    setLocalMode(activeKiwiConfig.mode as KiwiMode);
+    setPrevSyncFreq(activeKiwiConfig.freq);
+    setPrevSyncMode(activeKiwiConfig.mode);
+  }
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
