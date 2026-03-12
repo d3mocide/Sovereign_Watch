@@ -115,6 +115,10 @@ _ws_clients: list[WebSocket] = []
 # These receive raw S16LE PCM @ 12 kHz as binary frames.
 _audio_ws_clients: list[WebSocket] = []
 
+# Active waterfall WebSocket connections.
+# These receive raw waterfall pixel rows as binary frames.
+_waterfall_ws_clients: list[WebSocket] = []
+
 # In-memory station registry keyed by callsign.
 # Written from the background task (single asyncio thread) – no lock needed.
 _station_registry: dict[str, dict] = {}
@@ -251,6 +255,8 @@ def _start_pacat() -> Optional[subprocess.Popen]:
             stdin=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
+        if proc.stdin:
+            os.set_blocking(proc.stdin.fileno(), False)
         logger.info("pacat playback process started (PID %d)", proc.pid)
         return proc
     except Exception as exc:
@@ -272,6 +278,9 @@ def _write_audio(pcm: bytes) -> None:
     if _pacat_proc and _pacat_proc.stdin:
         try:
             _pacat_proc.stdin.write(pcm)
+        except BlockingIOError:
+            # Drop frame if PulseAudio pipe is full to avoid stalling event loop
+            pass
         except BrokenPipeError:
             _pacat_proc = None  # will be restarted on next chunk
 
@@ -282,8 +291,15 @@ def _write_audio(pcm: bytes) -> None:
         asyncio.ensure_future(_broadcast_audio_bytes(pcm))
 
 
+_audio_frame_counter = 0
+
 async def _broadcast_audio_bytes(pcm: bytes) -> None:
     """Broadcast a raw PCM chunk to all active /ws/audio clients."""
+    global _audio_frame_counter
+    _audio_frame_counter += 1
+    if _audio_frame_counter % 100 == 0:
+        logger.info("Broadcasting audio frame, size=%d bytes, to %d clients", len(pcm), len(_audio_ws_clients))
+    
     dead: list[WebSocket] = []
     for ws in _audio_ws_clients:
         try:
@@ -293,6 +309,32 @@ async def _broadcast_audio_bytes(pcm: bytes) -> None:
     for ws in dead:
         if ws in _audio_ws_clients:
             _audio_ws_clients.remove(ws)
+
+
+def _write_waterfall(pixels: bytes) -> None:
+    """Broadcast a waterfall pixel row to all active /ws/waterfall clients."""
+    if _waterfall_ws_clients:
+        asyncio.ensure_future(_broadcast_waterfall_bytes(pixels))
+
+
+_wf_frame_counter = 0
+
+async def _broadcast_waterfall_bytes(pixels: bytes) -> None:
+    """Broadcast a raw waterfall chunk to all active /ws/waterfall clients."""
+    global _wf_frame_counter
+    _wf_frame_counter += 1
+    if _wf_frame_counter % 50 == 0:
+        logger.info("Broadcasting waterfall frame, size=%d bytes, to %d clients", len(pixels), len(_waterfall_ws_clients))
+        
+    dead: list[WebSocket] = []
+    for ws in _waterfall_ws_clients:
+        try:
+            await ws.send_bytes(pixels)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _waterfall_ws_clients:
+            _waterfall_ws_clients.remove(ws)
 
 
 def _kiwi_rssi_callback(rssi_dbm: float) -> None:
@@ -659,6 +701,7 @@ async def lifespan(app: FastAPI):
             on_status=_kiwi_status_callback,
             on_disconnect=_kiwi_disconnect_callback,
             on_rssi=_kiwi_rssi_callback,
+            on_waterfall=_write_waterfall,
         )
         # Phase 1: start node directory (non-blocking initial fetch)
         _kiwi_directory = KiwiDirectory()
@@ -751,13 +794,13 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
-        # Strict CSP for API endpoints
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        # Relaxed CSP for radio data bridge to allow WebSocket connections
+        response.headers["Content-Security-Policy"] = "default-src 'self' ws: wss:; frame-ancestors 'none'"
         response.headers["X-Frame-Options"] = "DENY"
 
     return response
 
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://127.0.0.1").split(",")]
 
 app.add_middleware(
     CORSMiddleware,
@@ -931,6 +974,21 @@ async def ws_js8(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "STATION_LIST", "stations": stations})
 
             # ------------------------------------------------------------------
+            # Action: GET_KIWI_STATUS – explicitly query the current kiwi SDR connection state
+            # Payload: {"action": "GET_KIWI_STATUS"}
+            # ------------------------------------------------------------------
+            elif action == "GET_KIWI_STATUS":
+                await websocket.send_json({
+                    "type": "KIWI.STATUS",
+                    "connected": _kiwi_is_running(),
+                    "host": _kiwi_config.get("host", ""),
+                    "port": _kiwi_config.get("port", 0),
+                    "freq": _kiwi_config.get("freq", 0),
+                    "mode": _kiwi_config.get("mode", ""),
+                    "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+                })
+
+            # ------------------------------------------------------------------
             # Action: SET_KIWI – (re)connect KiwiSDR to a new target node
             # Payload: {"action": "SET_KIWI", "host": "sdr.example.com",
             #           "port": 8073, "freq": 14074, "mode": "usb"}
@@ -938,7 +996,7 @@ async def ws_js8(websocket: WebSocket) -> None:
             elif action == "SET_KIWI":
                 host = str(cmd.get("host", "")).strip()
                 port = int(cmd.get("port", 8073))
-                freq = int(cmd.get("freq", 14074))
+                freq = float(cmd.get("freq", 14074))
                 mode = str(cmd.get("mode", "usb")).lower().strip()
 
                 if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
@@ -1097,6 +1155,28 @@ async def ws_audio(websocket: WebSocket) -> None:
         if websocket in _audio_ws_clients:
             _audio_ws_clients.remove(websocket)
         logger.info("Audio WebSocket removed: %s  (remaining: %d)", remote, len(_audio_ws_clients))
+@app.websocket("/ws/waterfall")
+async def ws_waterfall(websocket: WebSocket) -> None:
+    """
+    Binary WebSocket that streams raw KiwiSDR waterfall rows to the browser.
+
+    Outbound (server → frontend):
+      Binary frames of waterfall pixel data (1024 bytes per frame).
+    """
+    await websocket.accept()
+    _waterfall_ws_clients.append(websocket)
+    remote = websocket.client
+    logger.info("Waterfall WebSocket connected: %s (total: %d)", remote, len(_waterfall_ws_clients))
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        logger.info("Waterfall WebSocket disconnected: %s", remote)
+    except Exception as exc:
+        logger.debug("Waterfall WebSocket error: %s", exc)
+    finally:
+        if websocket in _waterfall_ws_clients:
+            _waterfall_ws_clients.remove(websocket)
 
 
 # ===========================================================================

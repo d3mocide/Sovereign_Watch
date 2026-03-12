@@ -94,8 +94,10 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
     const analyser = analyserRef.current;
     if (!ctx || !analyser || ctx.state === 'suspended') return;
 
-    const int16 = new Int16Array(data);
-    if (int16.length === 0) return;
+    // Ensure we only read an even number of bytes to prevent Int16Array RangeError
+    const validBytes = Math.floor(data.byteLength / 2) * 2;
+    if (validBytes === 0) return;
+    const int16 = new Int16Array(data, 0, validBytes / 2);
 
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) {
@@ -133,31 +135,43 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
       return;
     }
 
-    const ws = new WebSocket(AUDIO_WS_URL);
-    ws.binaryType = 'arraybuffer';
-    wsRef.current = ws;
+    let reconnectTimeout: number | undefined;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      nextPlayRef.current = 0;
+    const connect = () => {
+      const ws = new WebSocket(AUDIO_WS_URL);
+      ws.binaryType = 'arraybuffer';
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setIsConnected(true);
+        nextPlayRef.current = 0;
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        setIsPlaying(false);
+        if (active) {
+          reconnectTimeout = window.setTimeout(connect, 3000);
+        }
+      };
+
+      ws.onerror = () => { /* onclose handles cleanup */ };
+
+      ws.onmessage = (evt) => {
+        if (evt.data instanceof ArrayBuffer) {
+          handleAudioChunk(evt.data);
+        }
+      };
     };
 
-    ws.onclose = () => {
-      setIsConnected(false);
-      setIsPlaying(false);
-    };
-
-    ws.onerror = () => { /* onclose handles cleanup */ };
-
-    ws.onmessage = (evt) => {
-      if (evt.data instanceof ArrayBuffer) {
-        handleAudioChunk(evt.data);
-      }
-    };
+    connect();
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
       setIsConnected(false);
       setIsPlaying(false);
     };

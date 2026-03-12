@@ -1,3 +1,17 @@
+## [0.26.0] - 2026-03-12
+
+### Added
+
+- **HF Listening Post (Beta)**: Integrated a high-performance raw binary streaming architecture for KiwiSDR nodes. Users can now stream real-time 12kHz PCM audio and panoramic waterfall data directly to the Radio Terminal.
+- **Panoramic Waterfall (WVM/WF)**: New high-density spectrum visualization in the Listening Post panel, synchronized with the active SDR frequency and zoom levels.
+
+### Fixed
+
+- **AIS AOT Persistence**: Resolved a race condition where the maritime Area of Interest (AOT) boundary would flicker or disappear when switching between Tactical, Orbital, and Radio views. State is now persisted via root refs.
+- **KiwiSDR Protocol Handshake**: Fixed a critical command sequencing bug in `kiwi_client.py` that caused audio/waterfall streams to hang during initialization.
+- **Audio Stream Resilience**: Implemented non-blocking I/O for the JS8Call audio pipeline to prevent event-loop stalls during buffer saturation.
+- **WebSocket Auto-Reconnect**: Added robust reconnection logic to HF audio and waterfall streams to handle backend service restarts gracefully.
+
 ## [0.25.0] - 2026-03-10
 
 ### Added

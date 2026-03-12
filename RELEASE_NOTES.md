@@ -1,31 +1,34 @@
-# Release - v0.25.0 - Persistence & Stability Unified
+# Release - v0.26.0 - HF Listening Post & Operational Continuity
 
-## High-Level Summary
-This major update introduces **Global COT State Persistence**, a foundational architectural shift that eliminates data loss and loading delays during map view transitions. By hoisting tactical tracking and worker lifecycles to the root application level, operators can now switch between Tactical and Orbital views instantly with zero track interruption. This release also resolves several critical stability issues, including a high-priority state reset bug and type inconsistencies in the rendering engine.
+## Executive Summary
+
+This release introduces the **HF Listening Post**, a foundational feature for the Radio Frequency domain of Sovereign Watch. Operators can now stream high-fidelity 12kHz audio and panoramic waterfall data directly from KiwiSDR nodes globally, enabling remote signal identification and monitoring without leaving the tactical HUD. 
+
+Additionally, this version resolves critical UI persistence issues, ensuring that tactical maritime boundaries (AIS AOTs) remain visible and synchronized across all view transitions.
 
 ## Key Features
-- **Global COT State Persistence**: Tactical tracks and dead reckoning states now persist globally. Switching from the Tactical Map to the Orbital Map and back is now instantaneous, with no re-synchronization overhead.
-- **H3 Poller Infrastructure**: Real-time H3-based coverage visualization is now fully integrated with the global state, ensuring consistent spatial awareness of sensor density across all views.
-- **System Settings Widget**: Centralized configuration hub for tactical layers and poller toggles, accessible via the "SYS" button.
-- **Improved AIS & ADS-B Reliability**: Refined ingestion radii and optimized rendering layers ensure tactical entities are always visible and accurate.
 
-## Fixed
-- **App Crash on Filter Change**: Fixed a critical `TypeError` in `App.tsx` where missing return statements in state updaters would crash the UI when toggling map layers.
-- **View Transition Latency**: Removed the 5-10 second "re-sync" gap when entering or exiting the Orbital view.
-- **Prop Schema Sync**: Standardized ref types and properties (`alertedEmergencyRef`, `repeatersLoading`) across all map components to prevent compilation and runtime mismatches.
+- **Direct SDR Streaming**: Native WebSocket architecture for raw PCM audio and waterfall pixel data.
+- **Panoramic Waterfall (WVM)**: Real-time spectrum visualization synchronized with the active radio terminal.
+- **Mission Continuity**: Persistent AIS/ADS-B Area of Interest (AOT) rendering across Tactical, Orbital, and Radio views.
+- **Enhanced SDR Protocol**: Robust KiwiSDR handshake and command sequencing for zero-stall connections.
 
-## Technical Details
-- **Architecture**: `useEntityWorker` and associated `useRefs` hoisted to root `App.tsx`.
-- **State Management**: Optimized `setFilters` and `setEvents` updaters with explicit typing and `useCallback` memoization.
-- **Frontend**: Standardized `DRState` and `VisualState` types in `types.ts` for clean data flow.
+## Technical Highlights
+
+- **Non-Blocking RF Pipeline**: Backend `js8call` service migrated to asynchronous I/O for audio dispatch, preventing event-loop congestion.
+- **Safe Array Processing**: Frontend `useListenAudio` hook now uses byte-aligned `Int16Array` extraction to eliminate browser memory `RangeError` crashes.
+- **State Hoisting**: Mission area state hoisted to root level to ensure instantaneous remounting of tactical overlays.
 
 ## Upgrade Instructions
-1. Pull the latest code:
-   ```bash
-   git pull
-   ```
-2. Rebuild the frontend and ingestion pollers:
-   ```bash
-   docker compose up -d --build frontend adsb-poller maritime-poller orbital-pulse
-   ```
-3. No database migrations are required for this update.
+
+```bash
+# Pull the latest version
+git pull origin main
+
+# Rebuild and restart services
+docker compose down
+docker compose up -d --build
+```
+
+---
+*For detailed change logs, see [CHANGELOG.md](file:///home/zbrain/Projects/Sovereign_Watch/CHANGELOG.md).*

@@ -17,7 +17,7 @@ KiwiSDR SND binary frame layout:
 import asyncio
 import logging
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, Any
 
 try:
     import websockets
@@ -81,15 +81,19 @@ class KiwiClient:
         on_status:     Callable[[dict], None],
         on_disconnect: Optional[Callable[[int], None]] = None,
         on_rssi:       Optional[Callable[[float], None]] = None,
+        on_waterfall:  Optional[Callable[[bytes], None]] = None,
     ) -> None:
         self._on_audio      = on_audio
         self._on_status     = on_status
         self._on_disconnect = on_disconnect
         self._on_rssi       = on_rssi
+        self._on_waterfall  = on_waterfall
 
         self._ws: Optional[object] = None  # websockets.WebSocketClientProtocol
+        self._wf_ws: Optional[object] = None  # Waterfall WebSocket protocol
         self._recv_task:      Optional[asyncio.Task] = None
         self._keepalive_task: Optional[asyncio.Task] = None
+        self._wf_recv_task:   Optional[asyncio.Task] = None
 
         self._host:        str   = ""
         self._port:        int   = 0
@@ -141,6 +145,11 @@ class KiwiClient:
             "host": host, "port": port,
             "freq": freq_khz, "mode": mode,
         })
+
+        # Start waterfall if callback provided
+        if self._on_waterfall:
+            await self._start_waterfall(host, port)
+
         logger.info("KiwiClient connected: %s:%d @ %.3f kHz %s", host, port, freq_khz, mode)
 
     async def tune(self, freq_khz: float, mode: str) -> None:
@@ -163,19 +172,21 @@ class KiwiClient:
     async def disconnect(self) -> None:
         """Gracefully close the WebSocket and cancel background tasks."""
         self._disconnecting = True
-        for task in (self._recv_task, self._keepalive_task):
+        for task in (self._recv_task, self._keepalive_task, self._wf_recv_task):
             if task and not task.done():
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
-        if self._ws:
-            try:
-                await self._ws.close()
-            except Exception:
-                pass
-            self._ws = None
+        for ws in (self._ws, self._wf_ws):
+            if ws:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+        self._ws = None
+        self._wf_ws = None
         self._on_status({"connected": False, "host": "", "port": 0, "freq": 0, "mode": ""})
         logger.info("KiwiClient disconnected")
 
@@ -183,9 +194,13 @@ class KiwiClient:
     def is_connected(self) -> bool:
         if self._ws is None:
             return False
+        if hasattr(self._ws, "open"):
+            return self._ws.open
         state = getattr(self._ws, "state", None)
         if state is not None:
-            return state.name == "OPEN"
+            if hasattr(state, "name"):
+                return state.name == "OPEN"
+            return state == 1  # 1 == OPEN
         return not getattr(self._ws, "closed", True)
 
     @property
@@ -203,26 +218,51 @@ class KiwiClient:
 
     async def _handshake(self, freq_khz: float, mode: str) -> None:
         """Execute the KiwiSDR SND handshake sequence."""
+        self._freq_khz = freq_khz
+        self._mode     = mode
+        # Blast entire configuration burst to avoid SDR initialization timeout!
         await self._ws.send("SET auth t=kiwi p=")
+        await self._ws.send("SET squelch=0 max=0")
+        await self._ws.send("SET genattn=0")
+        await self._ws.send("SET gen=0 mix=-1")
+        await self._ws.send("SET ident_user=js8bridge")
         await self._send_mod(freq_khz, mode)
         await self._ws.send("SET compression=0")
         await self._ws.send("SET agc=1 hang=0 thresh=-100 slope=6 decay=1000 manGain=50")
-        await self._ws.send("SET AR OK in=12000 out=44100")
-        self._freq_khz = freq_khz
-        self._mode     = mode
 
     async def _send_mod(self, freq_khz: float, mode: str) -> None:
         lc, hc = MODE_FILTERS.get(mode, (-5000, 5000))
-        await self._ws.send(
-            f"SET mod={mode} low_cut={lc} high_cut={hc} freq={freq_khz:.3f}"
-        )
+        # Must be sent as a single atomic command or the KiwiSDR stream will hang!
+        await self._ws.send(f"SET mod={mode} low_cut={lc} high_cut={hc} freq={freq_khz:.3f}")
+        # Update passband for waterfall too
+        if self._wf_ws:
+             await self._wf_ws.send(f"SET zoom=0 cf={freq_khz:.3f}")
 
     async def _receive_loop(self) -> None:
         """Read binary SND frames; dispatch PCM payload to on_audio callback."""
+        logger.info("!!! ENTERING KIWICLIENT RECEIVE LOOP !!!")
         try:
             async for frame in self._ws:
+                if self._frame_count < 10:
+                    logger.info("KiwiClient SND frame: type=%s, len=%d, preview=%r", type(frame), len(frame), frame[:20] if isinstance(frame, bytes) else frame[:20])
                 if not isinstance(frame, bytes):
                     continue
+                
+                # Check for KiwiSDR text frames (MSG ...)
+                if frame.startswith(b"MSG "):
+                    msg_text = frame.decode("utf-8", errors="ignore")
+                    
+                    # Some versions send MSG audio_init=... audio_rate=...
+                    if "audio_rate=" in msg_text:
+                        try:
+                            # Extract the audio rate integer
+                            ar_in = int(msg_text.split("audio_rate=")[1].split()[0])
+                            logger.info("KiwiClient dynamic audio rate detected: %d", ar_in)
+                            await self._ws.send(f"SET AR OK in={ar_in} out=44100")
+                        except Exception as e:
+                            logger.warning("Failed to parse audio_rate from %r: %s", msg_text, e)
+                    continue
+
                 # Validate SND magic header and extract PCM (bytes 10+)
                 if len(frame) > 10 and frame[:3] == b"SND":
                     # Extract RSSI (bytes 8-9, int16 BE, units: 0.1 dBm) every 10 frames
@@ -234,8 +274,10 @@ class KiwiClient:
                     if pcm:
                         self._on_audio(pcm)
         except asyncio.CancelledError:
+            logger.warning("!!! RECEIVE LOOP CANCELLED !!!")
             raise
-        except Exception as exc:
+        except BaseException as exc:
+            logger.error("!!! RECEIVE LOOP BASE EXCEPTION !!! %s", repr(exc))
             # Distinguish clean close from unexpected disconnect
             closed_ok   = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedOK)
             closed_err  = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedError)
@@ -258,7 +300,45 @@ class KiwiClient:
                 await asyncio.sleep(KEEPALIVE_INTERVAL)
                 if self.is_connected:
                     await self._ws.send("SET keepalive")
+                if self._wf_ws:
+                    await self._wf_ws.send("SET keepalive")
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.debug("KiwiClient keepalive error: %s", exc)
+
+    async def _start_waterfall(self, host: str, port: int) -> None:
+        """Start the KiwiSDR waterfall stream (W/F)."""
+        wf_uri = f"ws://{host}:{port}/{int(time.time() * 1000)}/W/F"
+        try:
+            ws = await websockets.connect(wf_uri, open_timeout=CONNECT_TIMEOUT, ping_interval=None)
+            self._wf_ws = ws
+            await ws.send("SET auth t=kiwi p=")
+            await ws.send(f"SET zoom=0 cf={self._freq_khz:.3f}")
+            await ws.send("SET max_freq=30000000")
+            await ws.send("SET bins=1024") # Standardized bin width
+            
+            self._wf_recv_task = asyncio.create_task(self._wf_receive_loop(), name="kiwi-wf-recv")
+            logger.info("KiwiClient waterfall started")
+        except Exception as exc:
+            logger.warning("KiwiClient waterfall startup failed: %s", exc)
+
+    async def _wf_receive_loop(self) -> None:
+        """Read binary W/F frames; dispatch waterfall rows to callback."""
+        try:
+            _wf_count = 0
+            async for frame in self._wf_ws:
+                _wf_count += 1
+                if _wf_count < 10:
+                    logger.info("KiwiClient W/F frame: type=%s, len=%d, preview=%r", type(frame), len(frame), frame[:20] if isinstance(frame, bytes) else frame[:20])
+                if not isinstance(frame, bytes):
+                    continue
+                # W/F frame layout: [0-2] "W/F" [3] flags [4-7] seq [8-9] reserved [10+] pixels
+                if len(frame) > 10 and frame[:3] == b"W/F":
+                    pixels = frame[10:]
+                    if self._on_waterfall:
+                        self._on_waterfall(pixels)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("KiwiClient waterfall receive error: %s", exc)

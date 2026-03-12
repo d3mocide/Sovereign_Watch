@@ -1,31 +1,24 @@
 /**
- * ListeningPost — Live HF audio monitor with waterfall spectrum display.
+ * ListeningPost — Professional HF Operator Terminal
  *
- * Rendered by RadioTerminal when the operator switches to LISTEN mode.
- * Requires an active KiwiSDR connection (activeKiwiConfig must be non-null)
- * and a live AnalyserNode from the useListenAudio hook.
- *
- * Layout:
- *   ┌─ audio status / enable prompt ──────────────────────────┐
- *   │  WATERFALL CANVAS (scrolling, 2 s history)             │
- *   │  ← 0 Hz ─────────────────────── 6000 Hz →             │
- *   ├─ S-METER ───────────────────────────────────────────────┤
- *   ├─ FREQUENCY CONTROLS ────────────────────────────────────┤
- *   │  [freq display]  step buttons ±1/10/100 kHz            │
- *   │  mode [USB][LSB][AM][CW][NFM]  volume slider           │
- *   ├─ BAND PRESETS ──────────────────────────────────────────┤
- *   │  [160m][80m][40m][30m][20m][17m][15m][12m][10m]       │
- *   └─────────────────────────────────────────────────────────┘
+ * An overhauled UI inspired by modern tactical radio systems and the user's mockup.
+ * Supports dual-mode waterfall:
+ *  1. Audio Passband (narrow, low-latency, driven by WebAudio AnalyserNode)
+ *  2. Wide Panoramic (driven by /ws/waterfall binary stream from the backend)
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Volume2, VolumeX, Radio, Activity, Zap } from 'lucide-react';
+import { 
+  Volume2, VolumeX, Activity, Zap, 
+  Sliders, Target
+} from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Band presets for general HF listening (centre frequencies, not JS8 offsets)
+// Constants & Types
 // ---------------------------------------------------------------------------
 
 const HF_BANDS = [
+  { label: '240m', freq: 1100  },
   { label: '160m', freq: 1850  },
   { label: '80m',  freq: 3700  },
   { label: '60m',  freq: 5330  },
@@ -36,17 +29,21 @@ const HF_BANDS = [
   { label: '15m',  freq: 21250 },
   { label: '12m',  freq: 24940 },
   { label: '10m',  freq: 28500 },
+  { label: '6m',   freq: 50000 },
+  { label: '2m',   freq: 144000 },
 ] as const;
 
 const KIWI_MODES = ['usb', 'lsb', 'am', 'cw', 'nbfm'] as const;
 type KiwiMode = typeof KIWI_MODES[number];
 
+const WS_BASE_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
+const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, '/ws/waterfall');
+
 // ---------------------------------------------------------------------------
-// S-meter conversion (IARU standard: S9 = −73 dBm, 6 dB per S-unit)
+// Utilities
 // ---------------------------------------------------------------------------
 
 function dbmToSmeter(dbm: number): { label: string; pct: number; color: string } {
-  // Map −127 dBm (S0) → 0%, −73 dBm (S9) → 54%, beyond → > 54%
   const pct = Math.min(100, Math.max(0, ((dbm + 127) / 97) * 100));
   let label: string;
   if (dbm >= -73) {
@@ -56,35 +53,16 @@ function dbmToSmeter(dbm: number): { label: string; pct: number; color: string }
     const s = Math.max(0, Math.min(9, Math.round((dbm + 127) / 6)));
     label = `S${s}`;
   }
-  const color = pct > 70 ? 'bg-rose-500' : pct > 45 ? 'bg-amber-400' : 'bg-emerald-500';
+  const color = pct > 70 ? 'text-rose-500' : pct > 45 ? 'text-amber-400' : 'text-emerald-500';
   return { label, pct, color };
 }
 
-// ---------------------------------------------------------------------------
-// Waterfall colour palette (value 0–255 → CSS colour string)
-// Dark navy at noise floor → cyan → green → yellow → red at strong signal
-// ---------------------------------------------------------------------------
-
-function waterfallColor(value: number): [number, number, number] {
-  // Hue sweeps 240° (blue) → 0° (red) as value goes 0 → 255
-  // Lightness increases 8% → 55%
-  const hue = 240 - value * 0.94;
-  const lum = 8 + value * 0.18;
-  // Approximate HSL → RGB without Math.cos/sin to keep it fast
-  const h = ((hue % 360) + 360) % 360;
-  const s = 1.0;
-  const l = lum / 100;
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-  const m = l - c / 2;
-  let r = 0, g = 0, b = 0;
-  if      (h < 60)  { r = c;  g = x;  b = 0; }
-  else if (h < 120) { r = x;  g = c;  b = 0; }
-  else if (h < 180) { r = 0;  g = c;  b = x; }
-  else if (h < 240) { r = 0;  g = x;  b = c; }
-  else if (h < 300) { r = x;  g = 0;  b = c; }
-  else              { r = c;  g = 0;  b = x; }
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+// Premium "Tactical" Waterfall Palette
+function tacticalColor(value: number): [number, number, number] {
+  if (value < 40) return [Math.round(value * 0.2), 0, Math.round(value * 0.5)]; // Deep shadow
+  if (value < 100) return [0, Math.round((value - 40) * 2.5), Math.round(255 - (value - 40) * 1.5)]; // Blue to Green
+  if (value < 180) return [Math.round((value - 100) * 3), 255, 0]; // Green to Yellow
+  return [255, Math.round(255 - (value - 180) * 3), 0]; // Yellow to Red
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +91,7 @@ interface ListeningPostProps {
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Main Component
 // ---------------------------------------------------------------------------
 
 export default function ListeningPost({
@@ -129,75 +107,118 @@ export default function ListeningPost({
   sendAction,
   isConnected,
 }: ListeningPostProps) {
-  const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const rafRef     = useRef<number>(0);
-  const dataRef    = useRef<Uint8Array | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>(0);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Local frequency mirror for snappy UI feedback before KIWI.STATUS echo arrives
+  // State
   const [localFreq, setLocalFreq] = useState<number>(activeKiwiConfig?.freq ?? 14200);
-  const [localMode, setLocalMode] = useState<KiwiMode>(
-    (activeKiwiConfig?.mode as KiwiMode) ?? 'usb'
-  );
+  const [localMode, setLocalMode] = useState<KiwiMode>((activeKiwiConfig?.mode as KiwiMode) ?? 'usb');
+  const [wfMode, setWfMode] = useState<'PASSBAND' | 'WIDE'>('WIDE');
+  
+  // Settings
+  const [gain] = useState(50);
+  const [speed, setSpeed] = useState('Normal');
+  const [sqn, setSqn] = useState(30);
+  const [sql, setSql] = useState(23);
 
-  // Sync local state when activeKiwiConfig changes from outside (e.g. header band select)
-  useEffect(() => {
-    if (activeKiwiConfig) {
-      setLocalFreq(activeKiwiConfig.freq);
-      setLocalMode((activeKiwiConfig.mode as KiwiMode) ?? 'usb');
+
+  // ── Waterfall Rendering Loop ──────────────────────────────────────────────
+
+  const drawRow = useCallback((pixels: Uint8Array | number[], ctx2d: CanvasRenderingContext2D, w: number, h: number) => {
+    // Scroll down
+    const existing = ctx2d.getImageData(0, 0, w, h - 1);
+    ctx2d.putImageData(existing, 0, 1);
+
+    // Draw new row at top
+    const row = ctx2d.createImageData(w, 1);
+    const data = row.data;
+    const len = pixels.length;
+
+    for (let i = 0; i < w; i++) {
+        const bin = Math.floor(i * len / w);
+        const [r, g, b] = tacticalColor(pixels[bin]);
+        const idx = i * 4;
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
+        data[idx + 3] = 255;
     }
-  }, [activeKiwiConfig?.freq, activeKiwiConfig?.mode]);
-
-  // ── Waterfall RAF loop ────────────────────────────────────────────────────
+    ctx2d.putImageData(row, 0, 0);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !analyserNode) return;
-
+    if (!canvas) return;
     const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx2d) return;
 
-    const bufLen = analyserNode.frequencyBinCount; // fftSize / 2
-    const data   = new Uint8Array(bufLen);
-    dataRef.current = data;
+    if (wfMode === 'PASSBAND' && analyserNode) {
+        // PASSBAND mode: Use AnalyserNode
+        const bufLen = analyserNode.frequencyBinCount;
+        const data = new Uint8Array(bufLen);
+        const draw = () => {
+            analyserNode.getByteFrequencyData(data);
+            drawRow(data, ctx2d, canvas.width, canvas.height);
+            rafRef.current = requestAnimationFrame(draw);
+        };
+        rafRef.current = requestAnimationFrame(draw);
+        return () => cancelAnimationFrame(rafRef.current);
+    } else if (wfMode === 'WIDE') {
+        // WIDE mode: Use WebSocket binary stream
+        let reconnectTimeout: number | undefined;
+        let active = true;
 
-    const draw = () => {
-      analyserNode.getByteFrequencyData(data);
+        const connect = () => {
+            if (!active) return;
+            const ws = new WebSocket(WATERFALL_WS_URL);
+            ws.binaryType = 'arraybuffer';
+            wsRef.current = ws;
 
-      const w = canvas.width;
-      const h = canvas.height;
+            ws.onmessage = (evt) => {
+                if (evt.data instanceof ArrayBuffer) {
+                    const pixels = new Uint8Array(evt.data);
+                    drawRow(pixels, ctx2d, canvas.width, canvas.height);
+                }
+            };
 
-      // Scroll existing content down by 1 px
-      const existing = ctx2d.getImageData(0, 0, w, h - 1);
-      ctx2d.putImageData(existing, 0, 1);
+            ws.onclose = () => {
+                if (active) {
+                    reconnectTimeout = window.setTimeout(connect, 3000);
+                }
+            };
+        };
 
-      // Draw new row at top
-      const row = ctx2d.createImageData(w, 1);
-      const pixels = row.data;
-      for (let i = 0; i < w; i++) {
-        // Map pixel column to FFT bin (linear mapping across 0–Nyquist)
-        const bin   = Math.floor(i * bufLen / w);
-        const value = data[Math.min(bin, bufLen - 1)];
-        const [r, g, b] = waterfallColor(value);
-        const idx = i * 4;
-        pixels[idx]     = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
-        pixels[idx + 3] = 255;
+        connect();
+
+        return () => {
+            active = false;
+            if (reconnectTimeout) window.clearTimeout(reconnectTimeout);
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }
+  }, [wfMode, analyserNode, drawRow]);
+
+  // Sync local frequency and mode with active config from bridge
+  useEffect(() => {
+    if (activeKiwiConfig) {
+      if (activeKiwiConfig.freq && activeKiwiConfig.freq !== localFreq) {
+        setLocalFreq(activeKiwiConfig.freq);
       }
-      ctx2d.putImageData(row, 0, 0);
+      if (activeKiwiConfig.mode && activeKiwiConfig.mode !== localMode) {
+        setLocalMode(activeKiwiConfig.mode);
+      }
+    }
+  }, [activeKiwiConfig, localFreq, localMode]);
 
-      rafRef.current = requestAnimationFrame(draw);
-    };
-
-    rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [analyserNode]);
-
-  // ── Frequency / mode dispatch helpers ────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const tune = useCallback((freq: number, mode: KiwiMode) => {
     if (!activeKiwiConfig || !bridgeConnected) return;
-    const clamped = Math.max(100, Math.min(30000, freq));
+    const clamped = Math.max(0, Math.min(30000, freq));
     setLocalFreq(clamped);
     setLocalMode(mode);
     sendAction({
@@ -209,235 +230,297 @@ export default function ListeningPost({
     });
   }, [activeKiwiConfig, bridgeConnected, sendAction]);
 
-  const step = useCallback((delta: number) => {
-    tune(localFreq + delta, localMode);
-  }, [localFreq, localMode, tune]);
+  const step = (delta: number) => tune(localFreq + delta, localMode);
 
-  const handleFreqInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = parseFloat(e.target.value);
-    if (!isNaN(v)) setLocalFreq(v);
-  }, []);
+  // ── S-Meter Data ─────────────────────────────────────────────────────────
 
-  const handleFreqBlur = useCallback(() => {
-    tune(localFreq, localMode);
-  }, [localFreq, localMode, tune]);
-
-  const handleFreqKey = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') tune(localFreq, localMode);
-  }, [localFreq, localMode, tune]);
-
-  // ── S-meter ───────────────────────────────────────────────────────────────
-
-  const smeter = sMeterDbm !== null ? dbmToSmeter(sMeterDbm) : null;
-
-  // ── Connection guard ──────────────────────────────────────────────────────
-
-  const canControl = !!(activeKiwiConfig && bridgeConnected);
+  const smeter = dbmToSmeter(sMeterDbm ?? -127);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 text-slate-200 font-mono text-xs overflow-hidden">
-
-      {/* ── Audio status / enable prompt ─────────────────────────────────── */}
-      <div className={`flex items-center justify-between px-4 py-2 border-b border-white/10 shrink-0 ${
-        isAudioPlaying ? 'bg-emerald-950/30' : 'bg-slate-950'
-      }`}>
-        <div className="flex items-center gap-2">
-          <Radio className={`w-3.5 h-3.5 ${isAudioPlaying ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-          <span className="text-slate-400 uppercase tracking-widest text-[10px]">Listening Post</span>
-          {isConnected && (
-            <span className="ml-2 text-[10px] text-slate-600">
-              ● {activeKiwiConfig
-                  ? `${activeKiwiConfig.host} — ${localFreq.toLocaleString()} kHz ${localMode.toUpperCase()}`
-                  : 'No SDR connected'}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {isAudioPlaying && (
-            <span className="text-emerald-400 text-[10px] tracking-wider uppercase animate-pulse">
-              ▶ RX
-            </span>
-          )}
-          {!audioEnabled && (
-            <button
-              onClick={enableAudio}
-              className="flex items-center gap-1.5 px-3 py-1 text-[10px] bg-indigo-600/80 hover:bg-indigo-500/80 border border-indigo-500/50 rounded-md text-white uppercase tracking-wider transition-all"
-            >
-              <Zap className="w-3 h-3" />
-              Enable Audio
-            </button>
-          )}
-          {!isConnected && audioEnabled && (
-            <span className="text-amber-400/70 text-[10px] tracking-wider uppercase">Waiting for SDR…</span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Waterfall canvas ─────────────────────────────────────────────── */}
-      <div className="relative flex-1 min-h-0 bg-black overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full block"
-          style={{ imageRendering: 'pixelated' }}
-          // Dimensions set in CSS; actual resolution via width/height attributes
-          width={1024}
-          height={512}
-        />
-        {/* Frequency axis labels overlay */}
-        <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1 py-0.5 pointer-events-none">
-          {['0', '1k', '2k', '3k', '4k', '5k', '6k'].map((lbl) => (
-            <span key={lbl} className="text-[9px] text-slate-600/70 font-mono">{lbl}</span>
-          ))}
-        </div>
-        {/* No-signal overlay */}
-        {!analyserNode && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-            <Activity className="w-8 h-8 text-slate-700" />
-            <p className="text-slate-600 text-xs tracking-wider uppercase">
-              {!audioEnabled ? 'Click "Enable Audio" to start' : 'Waiting for audio stream…'}
-            </p>
+    <div className="flex-1 w-full flex h-full bg-[#05080a] text-slate-300 font-mono text-[11px] overflow-hidden select-none">
+      
+      {/* ── LEFT SIDEBAR: TUNING & FREQ ── */}
+      <div className="w-80 flex flex-col border-r border-[#1a2b36] bg-[#0a1218] shrink-0">
+        
+        {/* Top Header */}
+        <div className="p-4 flex items-center gap-2 border-b border-[#1a2b36] bg-[#0d161d]">
+          <Activity className="w-4 h-4 text-cyan-400" />
+          <span className="uppercase tracking-[0.2em] font-bold text-cyan-500/80">Listening Post</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'bg-slate-700'}`} />
+            <span className="text-[9px] text-slate-500">{isConnected ? 'REMOTE LINKED' : 'OFFLINE'}</span>
           </div>
-        )}
-      </div>
-
-      {/* ── S-meter ─────────────────────────────────────────────────────── */}
-      <div className="px-4 py-2 border-t border-white/10 bg-slate-950/60 shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-slate-500 uppercase tracking-widest text-[9px] w-12">S-METER</span>
-          <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-            {smeter ? (
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${smeter.color}`}
-                style={{ width: `${smeter.pct}%` }}
-              />
-            ) : (
-              <div className="h-full w-0" />
-            )}
-          </div>
-          {/* S-unit scale ticks */}
-          <div className="hidden sm:flex items-center gap-0.5 text-[8px] text-slate-700 select-none">
-            {[1,2,3,4,5,6,7,8,9].map(n => (
-              <span key={n} className="w-4 text-center">{n}</span>
-            ))}
-            <span className="w-8 text-center text-[8px]">+</span>
-          </div>
-          <span className={`text-[11px] font-semibold w-14 text-right tabular-nums ${
-            smeter ? (smeter.pct > 70 ? 'text-rose-400' : smeter.pct > 45 ? 'text-amber-400' : 'text-emerald-400')
-                   : 'text-slate-600'
-          }`}>
-            {smeter ? smeter.label : '–'}
-          </span>
-          <span className="text-slate-600 text-[10px] w-20 text-right tabular-nums">
-            {sMeterDbm !== null ? `${sMeterDbm.toFixed(1)} dBm` : '--'}
-          </span>
         </div>
-      </div>
 
-      {/* ── Frequency + mode controls ────────────────────────────────────── */}
-      <div className="px-4 py-2.5 border-t border-white/10 bg-slate-950/80 shrink-0 space-y-2">
-        {/* Row 1: frequency display + step buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-slate-500 text-[9px] uppercase tracking-widest w-8">FREQ</span>
-          <input
-            type="number"
-            value={localFreq}
-            onChange={handleFreqInput}
-            onBlur={handleFreqBlur}
-            onKeyDown={handleFreqKey}
-            disabled={!canControl}
-            className="w-24 bg-black/60 border border-white/10 text-emerald-300 font-semibold rounded px-2 py-0.5 text-xs text-center focus:border-emerald-500/60 outline-none appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-40"
-          />
-          <span className="text-slate-600 text-[10px]">kHz</span>
+        {/* Freq Display Area */}
+        <div className="p-6 space-y-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest text-left">Central Frequency</span>
+            <div className="flex items-baseline justify-between bg-black/40 border border-[#1a2b36] rounded-md px-4 py-3 group hover:border-cyan-500/30 transition-all duration-300">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold text-cyan-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                  {localFreq.toFixed(2)}
+                </span>
+                <span className="text-xl font-bold text-cyan-900 uppercase">kHz</span>
+              </div>
+              {activeKiwiConfig?.freq !== localFreq && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <Activity size={10} className="text-amber-500 animate-pulse" />
+                  <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tighter">Tuning...</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-          {/* Step buttons */}
-          <div className="flex gap-0.5">
-            {([-100, -10, -1, 1, 10, 100] as const).map((delta) => (
+          {/* Stepping Grid */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {[100, 10, 1, -100, -10, -1].map((delta) => (
               <button
                 key={delta}
                 onClick={() => step(delta)}
-                disabled={!canControl}
-                className="px-1.5 py-0.5 text-[10px] bg-slate-800 hover:bg-slate-700 border border-white/10 rounded font-mono text-slate-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="py-3 bg-[#111d27] border border-[#1a2b36] rounded hover:bg-cyan-950/30 hover:border-cyan-500/50 transition-all active:scale-95 text-cyan-400 font-bold"
               >
-                {delta > 0 ? `+${delta}` : `${delta}`}
+                {delta > 0 ? `+${delta}` : delta}
               </button>
             ))}
+          </div>
+
+          <div className="h-px bg-[#1a2b36] my-6" />
+
+          {/* Mode Selector */}
+          <div className="space-y-2">
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest">SDR Mode</span>
+            <div className="flex flex-wrap gap-1.5">
+              {KIWI_MODES.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => tune(localFreq, m)}
+                  className={`flex-1 min-w-[60px] py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                    localMode === m
+                      ? 'bg-cyan-600/20 border border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                      : 'bg-black/30 border border-[#1a2b36] text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {m === 'nbfm' ? 'NFM' : m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Bands Grid */}
+          <div className="space-y-2 mt-6">
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest">Global Bands</span>
+            <div className="grid grid-cols-4 gap-1">
+              {HF_BANDS.map((b) => {
+                const active = Math.abs(localFreq - b.freq) < 100;
+                return (
+                    <button
+                        key={b.label}
+                        onClick={() => tune(b.freq, localMode)}
+                        className={`py-1.5 rounded text-[10px] uppercase transition-all ${
+                            active
+                            ? 'bg-amber-500/20 border border-amber-500/50 text-amber-500'
+                            : 'bg-black/20 border border-[#1a2b36] text-slate-600 hover:bg-black/40'
+                        }`}
+                    >
+                        {b.label}
+                    </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Row 2: mode selector + volume */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-slate-500 text-[9px] uppercase tracking-widest w-8">MODE</span>
-          <div className="flex gap-0.5">
-            {KIWI_MODES.map((m) => (
-              <button
-                key={m}
-                onClick={() => tune(localFreq, m)}
-                disabled={!canControl}
-                className={`px-2 py-0.5 text-[10px] border rounded uppercase font-semibold tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                  localMode === m
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'bg-slate-800/60 border-white/10 text-slate-400 hover:text-slate-200 hover:border-slate-600'
-                }`}
-              >
-                {m === 'nbfm' ? 'NFM' : m.toUpperCase()}
-              </button>
-            ))}
-          </div>
+        {/* Audio/Volume Footer */}
+        <div className="mt-auto p-6 bg-[#0d161d] border-t border-[#1a2b36]">
+            {!audioEnabled ? (
+                <button
+                    onClick={enableAudio}
+                    className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+                >
+                    <Zap className="w-4 h-4 fill-current" />
+                    ENABLE AUDIO LINK
+                </button>
+            ) : (
+                <div className="flex items-center gap-4">
+                    <button onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)}>
+                        {volume === 0 ? <VolumeX className="w-5 h-5 text-rose-500" /> : <Volume2 className="w-5 h-5 text-cyan-400" />}
+                    </button>
+                    <div className="flex-1 space-y-1">
+                        <div className="flex justify-between text-[9px] text-slate-500 uppercase">
+                            <span>Mute</span>
+                            <span>{Math.round(volume * 100)}%</span>
+                        </div>
+                        <input
+                            type="range"
+                            min={0} max={1.5} step={0.05}
+                            value={volume}
+                            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+                            className="w-full h-1 accent-cyan-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+      </div>
 
-          {/* Volume control */}
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
-              title={volume === 0 ? 'Unmute' : 'Mute'}
-            >
-              {volume === 0
-                ? <VolumeX className="w-3.5 h-3.5" />
-                : <Volume2 className="w-3.5 h-3.5" />}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={volume}
-              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-              className="w-20 h-1 accent-indigo-500 cursor-pointer"
-              title={`Volume: ${Math.round(volume * 100)}%`}
+      {/* ── MAIN AREA: WATERFALL ── */}
+      <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
+        
+        {/* Top Waterfall Controls */}
+        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10 pointer-events-none">
+            <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                    onClick={() => setWfMode('WIDE')}
+                    className={`px-3 py-1 rounded-l text-[10px] font-bold border ${wfMode === 'WIDE' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-black/80 border-[#1a2b36] text-slate-500'}`}
+                >
+                    PANORAMIC (WVM)
+                </button>
+                <button
+                    onClick={() => setWfMode('PASSBAND')}
+                    className={`px-3 py-1 rounded-r text-[10px] font-bold border ${wfMode === 'PASSBAND' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/80 border-[#1a2b36] text-slate-500'}`}
+                >
+                    PASSBAND (WS)
+                </button>
+            </div>
+
+            <div className="bg-black/80 border border-[#1a2b36] rounded px-3 py-1 pointer-events-auto text-cyan-500/80 font-bold group">
+                <span className="text-[10px] text-slate-500 mr-2">RX SOURCE:</span>
+                {activeKiwiConfig?.host || 'NO_LINK'}
+            </div>
+        </div>
+
+        <canvas
+          ref={canvasRef}
+          className="flex-1 w-full block bg-black"
+          style={{ imageRendering: 'pixelated' }}
+          width={1024}
+          height={600}
+        />
+
+        {/* Frequency Scale Overlay */}
+        <div className="absolute bottom-12 left-0 right-0 h-8 flex justify-between px-4 border-t border-cyan-500/20 bg-black/40 backdrop-blur-sm">
+            {wfMode === 'WIDE' ? (
+                [-4, -3, -2, -1, 0, 1, 2, 3, 4].map(v => (
+                    <div key={v} className="flex flex-col items-center pt-1">
+                        <div className="w-px h-2 bg-slate-700" />
+                        <span className="text-[9px] text-slate-500">{v > 0 ? `+${v}k` : v === 0 ? 'CF' : `${v}k`}</span>
+                    </div>
+                ))
+            ) : (
+                [0, 1000, 2000, 3000, 4000, 5000, 6000].map(v => (
+                    <div key={v} className="flex flex-col items-center pt-1">
+                        <div className="w-px h-2 bg-slate-700" />
+                        <span className="text-[9px] text-slate-500">{v/1000}k</span>
+                    </div>
+                ))
+            )}
+        </div>
+
+        {/* S-Meter Bar */}
+        <div className="h-12 bg-[#0a1218] border-t border-[#1a2b36] px-6 flex items-center gap-4">
+          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest w-16">SIGNAL</span>
+          <div className="flex-1 h-3 bg-black/50 border border-[#1a2b36] rounded-full overflow-hidden relative">
+            <div 
+              className={`h-full transition-all duration-300 ${smeter.pct > 70 ? 'bg-rose-500' : smeter.pct > 40 ? 'bg-amber-400' : 'bg-cyan-500'}`}
+              style={{ width: `${smeter.pct}%`, boxShadow: '0 0 10px currentColor' }}
             />
-            <span className="text-slate-600 text-[10px] w-8 text-right tabular-nums">
-              {Math.round(volume * 100)}%
-            </span>
+            <div className="absolute inset-0 flex justify-between items-center px-4 pointer-events-none opacity-20">
+                {[1,2,3,4,5,6,7,8,9].map(n => <span key={n} className="text-[7px]">S{n}</span>)}
+            </div>
+          </div>
+          <div className="flex items-center gap-4 w-40 justify-end">
+            <span className={`font-bold transition-colors ${smeter.color}`}>{smeter.label}</span>
+            <span className="text-slate-500 tabular-nums">{sMeterDbm?.toFixed(1) ?? '--'} dBm</span>
           </div>
         </div>
       </div>
 
-      {/* ── Band presets ─────────────────────────────────────────────────── */}
-      <div className="px-4 py-2 border-t border-white/10 bg-slate-950/60 shrink-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-slate-500 text-[9px] uppercase tracking-widest w-8">BAND</span>
-          <div className="flex gap-1 flex-wrap">
-            {HF_BANDS.map(({ label, freq }) => {
-              const active = activeKiwiConfig
-                ? Math.abs(activeKiwiConfig.freq - freq) < 200
-                : false;
-              return (
-                <button
-                  key={label}
-                  onClick={() => tune(freq, localMode)}
-                  disabled={!canControl}
-                  title={`${freq.toLocaleString()} kHz`}
-                  className={`px-2 py-0.5 text-[10px] border rounded font-semibold tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                    active
-                      ? 'bg-emerald-600/80 border-emerald-500/60 text-white'
-                      : 'bg-slate-800/40 border-white/10 text-slate-400 hover:text-slate-200 hover:border-slate-600'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+      {/* ── RIGHT SIDEBAR: WATERFALL SETTINGS ── */}
+      <div className="w-72 border-l border-[#1a2b36] bg-[#0a1218] flex flex-col pt-4 overflow-y-auto">
+        <div className="px-5 mb-6 flex items-center gap-2">
+            <Sliders className="w-3.5 h-3.5 text-slate-500" />
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Waterfall Settings</span>
+        </div>
+
+        <div className="px-5 space-y-8">
+            {/* Gain Setting */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">RF Gain</span>
+                    <span className="text-cyan-400 font-bold">{gain} dB</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                    {['Normal', 'Fast', 'Turbo', 'x2', 'x5', 'x10'].map(m => (
+                        <button 
+                            key={m} 
+                            onClick={(e) => { e.preventDefault(); setSpeed(m); }}
+                            className={`px-3 py-1 flex-1 rounded border text-[9px] font-bold ${speed === m ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                        >
+                            {m}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* SQN Control */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">SQN (Noise Flush)</span>
+                    <span className="text-rose-400 font-bold">{sqn}</span>
+                </div>
+                <input 
+                    type="range" min={0} max={100} value={sqn} 
+                    onChange={e => setSqn(parseInt(e.target.value))}
+                    className="w-full h-1 accent-rose-500 bg-[#1a2b36] rounded appearance-none cursor-pointer" 
+                />
+            </div>
+
+            {/* SQL Control */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">SQL (Squelch)</span>
+                    <span className="text-indigo-400 font-bold">{sql}%</span>
+                </div>
+                <input 
+                    type="range" min={0} max={100} value={sql} 
+                    onChange={e => setSql(parseInt(e.target.value))}
+                    className="w-full h-1 accent-indigo-500 bg-[#1a2b36] rounded appearance-none cursor-pointer" 
+                />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Scale Options */}
+            <div className="space-y-3">
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Waterfall Cadence</span>
+                <div className="flex flex-wrap gap-1">
+                    {['Slow', 'Normal', 'Squelch', 'Fast', 'x2', 'x5', 'Turbo'].map(m => (
+                        <button key={m} className="px-2 py-1 flex-1 rounded border border-[#1a2b36] text-[8px] font-bold bg-black/20 text-slate-600 hover:text-slate-400">
+                            {m}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+
+        {/* Global Stats Sidebar Bottom */}
+        <div className="mt-auto p-5 bg-[#0d161d] border-t border-[#1a2b36] space-y-3">
+            <div className="flex justify-between text-[10px]">
+                <span className="text-slate-500">ENGINE</span>
+                <span className="text-emerald-500/80 font-bold">WVM_V1.0</span>
+            </div>
+            <div className="flex justify-between text-[10px]">
+                <span className="text-slate-500">BITRATE</span>
+                <span className="text-slate-300 select-all">192.4 kbps</span>
+            </div>
+            <div className="bg-[#111d27] rounded p-3 border border-[#1a2b36] flex items-center justify-center gap-3">
+                <Target className="w-5 h-5 text-indigo-500/50" />
+                <div className="flex flex-col">
+                    <span className="text-[8px] text-slate-600 uppercase font-bold">Tuning Lock</span>
+                    <span className="text-[10px] text-slate-400 font-bold">PHASE_SYNC_OK</span>
+                </div>
+            </div>
         </div>
       </div>
     </div>
