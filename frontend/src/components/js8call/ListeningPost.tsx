@@ -389,7 +389,7 @@ export default function ListeningPost({
                     onClick={() => setWfMode('WIDE')}
                     className={`px-3 py-1 rounded-l text-[10px] font-bold border ${wfMode === 'WIDE' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-black/80 border-[#1a2b36] text-slate-500'}`}
                 >
-                    PANORAMIC (WVM)
+                    PANORAMIC (WF)
                 </button>
                 <button
                     onClick={() => setWfMode('PASSBAND')}
@@ -565,7 +565,7 @@ export default function ListeningPost({
         <div className="mt-auto p-5 bg-[#0d161d] border-t border-[#1a2b36] space-y-3">
             <div className="flex justify-between text-[10px]">
                 <span className="text-slate-500">ENGINE</span>
-                <span className="text-emerald-500/80 font-bold">WVM_V1.0</span>
+                <span className="text-emerald-500/80 font-bold">KIWI_WF</span>
             </div>
             <div className="flex justify-between text-[10px]">
                 <span className="text-slate-500">BITRATE</span>

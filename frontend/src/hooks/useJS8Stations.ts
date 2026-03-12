@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, MutableRefObject } from 'react';
 import type { JS8Station, JS8LogEntry, JS8StatusLine } from '../types';
 
-const WS_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
+const WS_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8080/ws/js8';
 
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;

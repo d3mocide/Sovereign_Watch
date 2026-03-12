@@ -312,22 +312,23 @@ class KiwiClient:
         await self._send_mod(freq_khz, mode)
         await self._ws.send("SET compression=0")
         await self._ws.send("SET agc=1 hang=0 thresh=-100 slope=6 decay=1000 manGain=50")
+        # Required: KiwiSDR only begins sending SND frames after receiving SET AR OK.
+        # in=12000 is the KiwiSDR DSP output rate (always 12 kHz); out=44100 is ignored.
+        await self._ws.send("SET AR OK in=12000 out=44100")
 
     async def _send_mod(self, freq_khz: float, mode: str) -> None:
         lc, hc = MODE_FILTERS.get(mode, (-5000, 5000))
         # Must be sent as a single atomic command or the KiwiSDR stream will hang!
         await self._ws.send(f"SET mod={mode} low_cut={lc} high_cut={hc} freq={freq_khz:.3f}")
-        # Update passband for waterfall too
+        # Keep waterfall at full-band view on retune (cf= is not a valid WF parameter)
         if self._wf_ws:
-             await self._wf_ws.send(f"SET zoom=0 cf={freq_khz:.3f}")
+            await self._wf_ws.send("SET zoom=0 start=0")
 
     async def _receive_loop(self) -> None:
         """Read binary SND frames; dispatch PCM payload to on_audio callback."""
-        logger.info("!!! ENTERING KIWICLIENT RECEIVE LOOP !!!")
+        logger.debug("KiwiClient receive loop started")
         try:
             async for frame in self._ws:
-                if self._frame_count < 10:
-                    logger.info("KiwiClient SND frame: type=%s, len=%d, preview=%r", type(frame), len(frame), frame[:20] if isinstance(frame, bytes) else frame[:20])
                 if not isinstance(frame, bytes):
                     continue
                 
@@ -357,10 +358,10 @@ class KiwiClient:
                     if pcm:
                         self._on_audio(pcm)
         except asyncio.CancelledError:
-            logger.warning("!!! RECEIVE LOOP CANCELLED !!!")
+            logger.debug("KiwiClient receive loop cancelled")
             raise
         except BaseException as exc:
-            logger.error("!!! RECEIVE LOOP BASE EXCEPTION !!! %s", repr(exc))
+            logger.error("KiwiClient receive error: %s", repr(exc))
             # Distinguish clean close from unexpected disconnect
             closed_ok   = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedOK)
             closed_err  = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedError)
@@ -393,33 +394,32 @@ class KiwiClient:
     async def _start_waterfall(self, host: str, port: int) -> None:
         """Start the KiwiSDR waterfall stream (W/F).
 
-        KiwiSDR W/F handshake (minimal — only send commands the server understands):
+        Full W/F handshake per the KiwiSDR protocol reference:
           1. SET auth t=kiwi p=
-          2. SET zoom=N cf=F   (zoom level; cf in kHz)
-        Any extra SET commands not in the W/F protocol will be silently dropped or
-        cause the server to stop sending W/F frames entirely.
+          2. SET zoom=0 start=0   (full 0–30 MHz view)
+          3. SET maxdb=-10 mindb=-110   (colour scale)
+          4. SET wf_speed=4   (rows/second; 0 = no output, must be > 0)
+          5. SET wf_comp=0   (uncompressed pixel bytes)
         """
         wf_uri = f"ws://{host}:{port}/{int(time.time() * 1000)}/W/F"
         try:
             ws = await websockets.connect(wf_uri, open_timeout=CONNECT_TIMEOUT, ping_interval=None)
             self._wf_ws = ws
             await ws.send("SET auth t=kiwi p=")
-            # zoom=0 → full HF spectrum; cf is center frequency in kHz
-            await ws.send(f"SET zoom=0 cf={self._freq_khz:.3f}")
+            await ws.send("SET zoom=0 start=0")       # full 0–30 MHz view
+            await ws.send("SET maxdb=-10 mindb=-110")  # colour scale
+            await ws.send("SET wf_speed=4")            # 4 rows/second; must be >0 to receive frames
+            await ws.send("SET wf_comp=0")             # uncompressed pixel bytes
 
             self._wf_recv_task = asyncio.create_task(self._wf_receive_loop(), name="kiwi-wf-recv")
-            logger.info("KiwiClient waterfall started @ %.3f kHz", self._freq_khz)
+            logger.info("KiwiClient waterfall started")
         except Exception as exc:
             logger.warning("KiwiClient waterfall startup failed: %s", exc)
 
     async def _wf_receive_loop(self) -> None:
         """Read binary W/F frames; dispatch waterfall rows to callback."""
         try:
-            _wf_count = 0
             async for frame in self._wf_ws:
-                _wf_count += 1
-                if _wf_count < 10:
-                    logger.info("KiwiClient W/F frame: type=%s, len=%d, preview=%r", type(frame), len(frame), frame[:20] if isinstance(frame, bytes) else frame[:20])
                 if not isinstance(frame, bytes):
                     continue
                 # W/F frame layout: [0-2] "W/F" [3] flags [4-7] seq [8-9] reserved [10+] pixels

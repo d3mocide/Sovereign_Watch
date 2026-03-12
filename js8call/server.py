@@ -1174,6 +1174,8 @@ async def ws_audio(websocket: WebSocket) -> None:
         if websocket in _audio_ws_clients:
             _audio_ws_clients.remove(websocket)
         logger.info("Audio WebSocket removed: %s  (remaining: %d)", remote, len(_audio_ws_clients))
+
+
 @app.websocket("/ws/waterfall")
 async def ws_waterfall(websocket: WebSocket) -> None:
     """
