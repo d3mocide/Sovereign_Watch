@@ -116,12 +116,14 @@ graph TD
         H3[H3 Coverage: Live Poller Pulse] -->|JSON| B
         JS[Sovereign JS8Call] -->|UDP Bridge| B
         RF[RF Pulse: ARD/NOAA/RepBook/RadioRef] -->|REST API/SOAP| B
+        IN[Infra Poller: IODA/Cables] -->|REST API| B
         B -->|TAK Protobuf| D(Redpanda Bus)
     end
 
-    subgraph "Persistence (TimescaleDB)"
-        D -->|Stream| E[(Tracks Hypertable)]
-        D -->|Stream| F[(Vector Store)]
+    subgraph "State & Persistence"
+        D -->|Stream| E[(TimescaleDB)]
+        RS[(Redis Cache)]
+        B -->|Cache| RS
     end
 
     subgraph "Cognition (LiteLLM)"
@@ -134,15 +136,14 @@ graph TD
         FE[MainHUD Shell] --> L[Intelligence Feed]
         FE --> M[Projective Velocity Blending]
         M -->|WebGL 3D| N[Mapbox / MapLibre Overlay]
-        FE --> O[Radio Terminal]
         FE --> SYS[System Settings Widget]
         FE --> INF[Infrastructure Layers]
-        SC[Submarine Cables] -->|REST API| FE
     end
 
     NG -->|/| FE
     NG -->|/api/| G
     NG -->|/js8/| JS
+    G -->|Read Cache| RS
 ```
 
 ## 🗂️ Data Sources
@@ -188,20 +189,19 @@ Sovereign Watch uses the public KiwiSDR directory to find optimal listening node
 
 ### 📻 RF Infrastructure (Repeaters)
 
-| Feed             | URL                                                                 | Notes                                                                                                     |
-| :--------------- | :------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------- |
-| **RepeaterBook** | [repeaterbook.com/api](https://www.repeaterbook.com/api/export.php) | API Key required. Proxied server-side via `rf_pulse`.                                                     |
-| **RadioReference**| [radioreference.com](https://www.radioreference.com)               | App Key, Username, and Password required via `.env`. Requires SOAP (`zeep`).                              |
-| **Amateur Radio Dir**| [amateur-radio-directory.com](https://amateur-radio-directory.com) | Open web scraping source using `beautifulsoup4` and `lxml`.                                             |
-| **NOAA NWR**     | [weather.gov/nwr](https://www.weather.gov/nwr/)                     | Publicly accessible NOAA Weather Radio master list CSV parsing.                                           |
+| Feed                  | URL                                                                 | Notes                                                                        |
+| :-------------------- | :------------------------------------------------------------------ | :--------------------------------------------------------------------------- |
+| **RepeaterBook**      | [repeaterbook.com/api](https://www.repeaterbook.com/api/export.php) | API Key required. Proxied server-side via `rf_pulse`.                        |
+| **RadioReference**    | [radioreference.com](https://www.radioreference.com)                | App Key, Username, and Password required via `.env`. Requires SOAP (`zeep`). |
+| **Amateur Radio Dir** | [amateur-radio-directory.com](https://amateur-radio-directory.com)  | Open web scraping source using `beautifulsoup4` and `lxml`.                  |
+| **NOAA NWR**          | [weather.gov/nwr](https://www.weather.gov/nwr/)                     | Publicly accessible NOAA Weather Radio master list CSV parsing.              |
 
-> **Note**: These four sources are aggregated continuously by the internal **`rf_pulse`** ingestion poller, a Python microservice with asynchronous Kafka-streaming orchestrated with `redis` caching, `zeep` (SOAP), and `beautifulsoup4/lxml` dependencies.
+### 🌐 Global Connectivity
 
-### 🌊 Undersea Infrastructure (Submarine Cables)
-
-| Feed                    | URL                                                                    | Notes                                                                           |
-| :---------------------- | :--------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| **Submarine Cable Map** | [submarinecablemap.com/api](https://www.submarinecablemap.com/api/v3/) | No key required. Includes cable routes & landing points. 24h client-side cache. |
+| Feed                    | URL                                                                    | Notes                                                                                 |
+| :---------------------- | :--------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| **IODA (Georgia Tech)** | [ioda.inetintel.cc.gatech.edu](https://ioda.inetintel.cc.gatech.edu)   | Real-time global internet outage data. Proxied via `infra_poller` with Redis caching. |
+| **Submarine Cable Map** | [submarinecablemap.com/api](https://www.submarinecablemap.com/api/v3/) | Proxied via `infra_poller`. Includes cable routes & landing points.                   |
 
 ## 🛡️ Tactical Design ("Sovereign Glass")
 
@@ -256,22 +256,24 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 
 - 🟢 **Emerald**: RF Infrastructure (Amateur Radio Repeaters, JS8Call Stations)
 - 🔵 **Cyan**: Undersea Infrastructure (Submarine Cables, Landing Stations)
+- 🔴 **Red/Amber**: Active Internet Outages (High/Medium Severity)
 
 ## 🔍 Core Capabilities
 
-| Capability                       | Tactical Description                                                                                                                     |
-| :------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| **Deep Vessel Classification**   | Real-time parsing of Maritime `ShipStaticData` to classify tankers, cargo, military, SAR, and passenger vessels with absolute precision. |
-| **Orbital Pulse Tracking**       | End-to-end satellite tracking using Celestrak TLE ingestion and live SGP4 propagation (60fps PVB motion & Ground tracks).                |
-| **Undersea Infrastructure**      | Global visualization of the submarine cable network and strategic landing stations with access to operational status.                    |
-| **RF Infrastructure Awareness**  | Comprehensive mapping of amateur radio repeater networks across the theater for immediate access to communication relays.                |
-| **JS8Call Signal Intelligence**  | Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications.                        |
-| **Projective Velocity Blending** | Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings.                         |
-| **H3 Coverage Visualization**    | Real-time H3-based coverage mesh visualization for monitoring sensor footprints and poller status across the AOR.                        |
-| **Cross-Domain Tactical Alerts** | Automated detection and HUD notification of emergency squawks, maritime distress (AIS-SART), and imminent intel-satellite flyovers.      |
-| **Granular Filtering Matrix**    | Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., Drones or Military).                    |
-| **System Settings HUD**          | Centralized configuration interface for real-time tactical layer toggles and poller visualization controls.                               |
-| **Time-Travel (Historian)**      | All positional data is written to TimescaleDB. Operators can replay tactical situations from hours or days ago locally.                  |
+| Capability                       | Tactical Description                                                                                                                       |
+| :------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Deep Vessel Classification**   | Real-time parsing of Maritime `ShipStaticData` to classify tankers, cargo, military, SAR, and passenger vessels with absolute precision.   |
+| **Orbital Pulse Tracking**       | End-to-end satellite tracking using Celestrak TLE ingestion and live SGP4 propagation (60fps PVB motion & Ground tracks).                  |
+| **Undersea Infrastructure**      | Global visualization of the submarine cable network and strategic landing stations with access to operational status.                      |
+| **RF Infrastructure Awareness**  | Comprehensive mapping of amateur radio repeater networks across the theater for immediate access to communication relays.                  |
+| **JS8Call Signal Intelligence**  | Integrated HF digital mode (JS8) radio bridge and interactive HUD terminal for real-time tactical communications.                          |
+| **Projective Velocity Blending** | Physics-based kinematic rendering ensures fast-moving aircraft coast smoothly between delayed transponder pings.                           |
+| **H3 Coverage Visualization**    | Real-time H3-based coverage mesh visualization for monitoring sensor footprints and poller status across the AOR.                          |
+| **Cross-Domain Tactical Alerts** | Automated detection and HUD notification of emergency squawks, maritime distress (AIS-SART), and imminent intel-satellite flyovers.        |
+| **Granular Filtering Matrix**    | Advanced HUD tools to strip away visual noise. Filter the theater by specific sub-classes (e.g., Drones or Military).                      |
+| **System Settings HUD**          | Centralized configuration interface for real-time tactical layer toggles and poller visualization controls.                                |
+| **Time-Travel (Historian)**      | All positional data is written to TimescaleDB. Operators can replay tactical situations from hours or days ago locally.                    |
+| **Infrastructure Caching**       | High-latency external infrastructure APIs are fetched in the background and served from a local Redis cache for instantaneous UI response. |
 
 ## 📂 Directory Structure
 
@@ -279,7 +281,7 @@ The Tactical Map uses dynamic "thermal" gradients to visualize critical metadata
 | :------------------- | :--------------------------------------------------- | :---------- |
 | `/AGENTS.md`         | **Master Guide for AI Developers (Read This First)** | **Tracked** |
 | `/.agent`            | Agent memory, skills, and global project rules.      | **Tracked** |
-| `/backend/ingestion` | Python multi-source polling frameworks.              | **Tracked** |
+| `/backend/ingestion` | multi-source polling frameworks (ADS-B, AIS, Infra). | **Tracked** |
 | `/backend/db`        | Database schema (`init.sql`) and migration scripts.  | **Tracked** |
 | `/backend/api`       | Python FastAPI service for Fusion and Analysis.      | **Tracked** |
 | `/js8call`           | JS8Call HF Radio Terminal container and bridge.      | **Tracked** |
