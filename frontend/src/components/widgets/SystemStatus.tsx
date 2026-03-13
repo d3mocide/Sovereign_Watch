@@ -30,15 +30,20 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
   return (
     <div className="flex flex-col overflow-hidden widget-panel">
       {/* System Status Header with Layers toggle */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 cursor-pointer transition-colors"
-        onClick={() => setShowLayers(!showLayers)}>
-        <div className="flex items-center gap-2">
-          <Layers size={13} className="text-cyan-400" />
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 transition-colors relative">
+        <button
+          className="absolute inset-0 w-full h-full text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none cursor-pointer"
+          onClick={() => setShowLayers(!showLayers)}
+          aria-expanded={showLayers}
+          aria-label="Toggle Map Layers"
+        />
+        <div className="flex items-center gap-2 relative pointer-events-none">
+          <Layers size={13} className="text-cyan-400" aria-hidden="true" />
           <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
             Map Layers
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 relative">
           {/* Quick layer toggle icon */}
           {filters && onFilterChange && (
             <div className="flex items-center gap-2 mr-2">
@@ -52,8 +57,10 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
                   }`}
                 title="Toggle Amateur Radio Repeaters"
+                aria-label="Toggle Amateur Radio Repeaters"
+                aria-pressed={filters.showRepeaters}
               >
-                <Radio size={12} className={filters.showRepeaters ? 'animate-pulse' : ''} />
+                <Radio size={12} className={filters.showRepeaters ? 'animate-pulse' : ''} aria-hidden="true" />
               </button>
               <button
                 onClick={(e: React.MouseEvent) => {
@@ -73,16 +80,18 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
                   }`}
                 title="Toggle Submarine Cables"
+                aria-label="Toggle Submarine Cables"
+                aria-pressed={filters.showCables !== false}
               >
-                <Network size={12} className={filters.showCables !== false ? 'animate-pulse' : ''} />
+                <Network size={12} className={filters.showCables !== false ? 'animate-pulse' : ''} aria-hidden="true" />
               </button>
             </div>
           )}
 
           {showLayers ? (
-            <ChevronUp size={14} className="text-white/40 group-hover:text-white/70 transition-colors" />
+            <ChevronUp size={14} className="text-white/40 pointer-events-none transition-colors relative" aria-hidden="true" />
           ) : (
-            <ChevronDown size={14} className="text-white/40 group-hover:text-white/70 transition-colors" />
+            <ChevronDown size={14} className="text-white/40 pointer-events-none transition-colors relative" aria-hidden="true" />
           )}
         </div>
       </div>
@@ -92,24 +101,25 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
           {/* RF Infrastructure Filter */}
           <div className="flex flex-col gap-1">
             <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-amber-400/30 bg-amber-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
-              <div
-                className="flex flex-1 items-center justify-between p-2 cursor-pointer"
+              <button
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   setRfExpanded(!rfExpanded);
                 }}
+                aria-expanded={rfExpanded}
               >
                 <div className="flex items-center gap-3">
-                  <Radio size={14} className={filters.showRepeaters ? 'text-amber-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} />
+                  <Radio size={14} className={filters.showRepeaters ? 'text-amber-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} aria-hidden="true" />
                   <div className="flex flex-col">
                     <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">RF Infrastructure</span>
                     <span className="text-[9px] font-mono text-amber-400/60">Ham / NOAA / Public Safety</span>
                   </div>
                 </div>
                 <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: rfExpanded ? 'rotate(90deg)' : 'none' }}>
-                  <ChevronRight size={14} className="text-white/40" />
+                  <ChevronRight size={14} className="text-white/40" aria-hidden="true" />
                 </div>
-              </div>
+              </button>
               <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
                 <input type="checkbox" className="sr-only" checked={filters.showRepeaters} onChange={() => onFilterChange('showRepeaters', !filters.showRepeaters)} />
                 <div
@@ -212,24 +222,25 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
           {/* Infra Filter */}
           <div className="flex flex-col gap-1">
             <div className={`group flex items-center justify-between rounded border transition-all ${filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
-              <div
-                className="flex flex-1 items-center justify-between p-2 cursor-pointer"
+              <button
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   setInfraExpanded(!infraExpanded);
                 }}
+                aria-expanded={infraExpanded}
               >
                 <div className="flex items-center gap-3">
-                  <Network size={14} className={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'text-cyan-400' : 'text-white/20'} />
+                  <Network size={14} className={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true ? 'text-cyan-400' : 'text-white/20'} aria-hidden="true" />
                   <div className="flex flex-col">
                     <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">GLOBAL NETWORK</span>
                     <span className="text-[9px] font-mono text-cyan-400/60">Undersea & Terrestrial Infra</span>
                   </div>
                 </div>
                 <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: infraExpanded ? 'rotate(90deg)' : 'none' }}>
-                  <ChevronRight size={14} className="text-white/40" />
+                  <ChevronRight size={14} className="text-white/40" aria-hidden="true" />
                 </div>
-              </div>
+              </button>
 
               <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
                 <input type="checkbox" className="sr-only" checked={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true} onChange={() => {

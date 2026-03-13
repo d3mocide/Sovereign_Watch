@@ -27,3 +27,7 @@
 ## 2024-05-24 - Pass Predictor Polish
 **Learning:** Icon-only or minimal buttons often lack tactile feedback, making them feel unresponsive.
 **Action:** Adding `hover:bg-white/10`, consistent rounding (`rounded`), and `active:scale-95` dramatically improves the micro-interaction of small utility buttons like CSV exports and menu toggles.
+
+## 2024-05-24 - Accessible Accordion Headers with Nested Actions
+**Learning:** This app's design system frequently places quick-toggle icon buttons inside accordion headers (like in SystemStatus.tsx). Converting the entire header to a standard `<button>` causes invalid HTML nesting (button inside button) and accessibility tree confusion.
+**Action:** Use the "absolute inset button" pattern: Make the header container `relative`. Add an `absolute inset-0 z-0` main `<button>` for the accordion expansion. Place the text and icons in a `relative z-10 pointer-events-none` container, and the nested interactive quick-toggle buttons in a `relative z-20 pointer-events-auto` container to separate click targets semantically and avoid nesting.
