@@ -42,12 +42,15 @@ ALTER TABLE tracks SET (
     timescaledb.compress_orderby = 'time DESC'
 );
 
--- Add Compression Policy (Compress data older than 24 hours)
-SELECT add_compression_policy('tracks', INTERVAL '24 hours');
+-- Add Compression Policy (Compress data older than 1 hour)
+-- Compressing early means ~71 of the 72 retained hours sit in columnar form,
+-- reducing storage significantly vs. compressing at the retention boundary.
+SELECT add_compression_policy('tracks', INTERVAL '1 hour');
 
--- Add Retention Policy (Auto-delete data older than 24 hours)
--- This runs every hour and drops chunks outside the retention window
-SELECT add_retention_policy('tracks', INTERVAL '24 hours');
+-- Add Retention Policy (Auto-delete data older than 72 hours)
+-- Matches TRACK_HISTORY_MAX_HOURS=72 in the API config.
+-- 1-day chunks → 3 chunks retained; retention job drops the oldest daily.
+SELECT add_retention_policy('tracks', INTERVAL '72 hours');
 
 -- Indices
 CREATE INDEX IF NOT EXISTS ix_tracks_geom ON tracks USING GIST (geom);
