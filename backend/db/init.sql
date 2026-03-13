@@ -55,6 +55,43 @@ CREATE INDEX IF NOT EXISTS ix_tracks_entity_time ON tracks (entity_id, time DESC
 CREATE INDEX IF NOT EXISTS ix_tracks_entity_id_trgm ON tracks USING gin (entity_id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_tracks_meta_callsign_trgm ON tracks USING gin ((meta->>'callsign') gin_trgm_ops);
 
+-- TABLE: orbital_tracks (High-velocity satellite position updates, 12 h retention)
+-- Option C+D: TLE strings are NOT stored here — they live in `satellites`.
+-- Row footprint ~160 bytes vs ~600 bytes if TLE were duplicated per row.
+CREATE TABLE IF NOT EXISTS orbital_tracks (
+    time        TIMESTAMPTZ      NOT NULL,
+    entity_id   TEXT             NOT NULL,   -- "SAT-{norad_id}"
+    lat         DOUBLE PRECISION,
+    lon         DOUBLE PRECISION,
+    alt         DOUBLE PRECISION,
+    speed       DOUBLE PRECISION,
+    heading     DOUBLE PRECISION,
+    geom        GEOMETRY(POINT, 4326)
+);
+
+SELECT create_hypertable(
+    'orbital_tracks',
+    'time',
+    if_not_exists       => TRUE,
+    chunk_time_interval => INTERVAL '6 hours'
+);
+
+ALTER TABLE orbital_tracks SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'entity_id',
+    timescaledb.compress_orderby   = 'time DESC'
+);
+
+SELECT add_compression_policy('orbital_tracks', INTERVAL '2 hours');
+SELECT add_retention_policy('orbital_tracks', INTERVAL '12 hours');
+
+CREATE INDEX IF NOT EXISTS ix_orbital_tracks_entity_time
+    ON orbital_tracks (entity_id, time DESC);
+CREATE INDEX IF NOT EXISTS ix_orbital_tracks_geom
+    ON orbital_tracks USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_orbital_tracks_entity_id_trgm
+    ON orbital_tracks USING gin (entity_id gin_trgm_ops);
+
 -- TABLE: satellites (Latest TLE + orbital metadata per NORAD ID)
 -- No hypertable, no retention — plain lookup table upserted by the Historian.
 CREATE TABLE IF NOT EXISTS satellites (

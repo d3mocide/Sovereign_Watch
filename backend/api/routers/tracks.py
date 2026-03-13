@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -59,14 +60,26 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
-    query = """
-        SELECT time, lat, lon, alt, speed, heading, meta
-        FROM tracks
-        WHERE entity_id = $1
-        AND time > NOW() - INTERVAL '1 hour' * $2
-        ORDER BY time DESC
-        LIMIT $3
-    """
+    # Option C+D: satellite entities are stored in orbital_tracks (no meta column).
+    # Route by entity_id prefix so each query hits only one hypertable.
+    if entity_id.startswith("SAT-"):
+        query = """
+            SELECT time, lat, lon, alt, speed, heading, NULL::jsonb AS meta
+            FROM orbital_tracks
+            WHERE entity_id = $1
+            AND time > NOW() - INTERVAL '1 hour' * $2
+            ORDER BY time DESC
+            LIMIT $3
+        """
+    else:
+        query = """
+            SELECT time, lat, lon, alt, speed, heading, meta
+            FROM tracks
+            WHERE entity_id = $1
+            AND time > NOW() - INTERVAL '1 hour' * $2
+            ORDER BY time DESC
+            LIMIT $3
+        """
     try:
         rows = await db.pool.fetch(query, entity_id, float(hours), limit)
         # Convert to dict to handle non-serializable types if any (asyncpg returns Record)
@@ -105,19 +118,40 @@ async def search_tracks(q: str, limit: int = 10):
     if len(q) < 2:
         return []
 
-    query = """
+    # Option C+D: also search orbital_tracks for satellite entity IDs.
+    # Orbital rows have no meta; callsign and classification come from satellites table.
+    tracks_query = """
         SELECT DISTINCT ON (entity_id) entity_id, type, time as last_seen, lat, lon, meta
         FROM tracks
         WHERE entity_id ILIKE $1 OR meta->>'callsign' ILIKE $1
         ORDER BY entity_id, time DESC
         LIMIT $2
     """
+    orbital_query = """
+        SELECT DISTINCT ON (ot.entity_id)
+            ot.entity_id,
+            'a-s-K'::text        AS type,
+            ot.time              AS last_seen,
+            ot.lat,
+            ot.lon,
+            NULL::jsonb          AS meta,
+            s.name               AS sat_name
+        FROM orbital_tracks ot
+        LEFT JOIN satellites s
+            ON s.norad_id = SPLIT_PART(ot.entity_id, '-', 2)
+        WHERE ot.entity_id ILIKE $1
+        ORDER BY ot.entity_id, ot.time DESC
+        LIMIT $2
+    """
     try:
-        rows = await db.pool.fetch(query, f"%{q}%", limit)
+        tracks_rows, orbital_rows = await asyncio.gather(
+            db.pool.fetch(tracks_query, f"%{q}%", limit),
+            db.pool.fetch(orbital_query, f"%{q}%", limit),
+        )
         results = []
-        for row in rows:
+
+        for row in tracks_rows:
             d = dict(row)
-            # Parse meta to extract callsign for convenience
             meta_json = d.get('meta')
             if meta_json:
                 try:
@@ -130,10 +164,16 @@ async def search_tracks(q: str, limit: int = 10):
             else:
                 d['callsign'] = None
                 d['classification'] = None
-
-            # Clean up response
             d.pop('meta', None)
             results.append(d)
+
+        for row in orbital_rows:
+            d = dict(row)
+            d['callsign'] = d.pop('sat_name', None)
+            d['classification'] = None
+            d.pop('meta', None)
+            results.append(d)
+
         return results
     except Exception as e:
         logger.error(f"Search query failed: {e}")
@@ -182,9 +222,16 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
+    # Option C+D: satellite positions live in orbital_tracks with a 12 h retention
+    # window.  UNION both tables so replay includes all entity types.
     query = """
         SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
         FROM tracks
+        WHERE time >= $1 AND time <= $2
+        UNION ALL
+        SELECT time, entity_id, 'a-s-K'::text AS type,
+               lat, lon, alt, speed, heading, NULL::jsonb AS meta
+        FROM orbital_tracks
         WHERE time >= $1 AND time <= $2
         ORDER BY time ASC
         LIMIT $3

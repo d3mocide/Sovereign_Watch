@@ -26,6 +26,7 @@ async def historian_task():
         await consumer.start()
 
         batch = []
+        orbital_batch = []   # Option C+D: satellite position rows go to orbital_tracks
         last_flush = time.time()
         BATCH_SIZE = 100
         FLUSH_INTERVAL = 2.0
@@ -34,6 +35,14 @@ async def historian_task():
         insert_sql = """
             INSERT INTO tracks (time, entity_id, type, lat, lon, alt, speed, heading, meta, geom)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ST_SetSRID(ST_MakePoint($5, $4), 4326))
+        """
+
+        # Option C+D: Orbital position insert — no meta/TLE columns.
+        # All satellite metadata (including TLE) stays in the `satellites` table.
+        # Row size: ~160 bytes vs ~600 bytes in the shared tracks table.
+        orbital_insert_sql = """
+            INSERT INTO orbital_tracks (time, entity_id, lat, lon, alt, speed, heading, geom)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($4, $3), 4326))
         """
 
         satellite_upsert_sql = """
@@ -90,15 +99,21 @@ async def historian_task():
                 # NEW: Capture classification in meta for historical search enrichment
                 classification = detail.get("classification", {})
 
-                meta = json.dumps({
-                    "callsign": callsign,
-                    "how": data.get("how"),
-                    "ce": point.get("ce"),
-                    "le": point.get("le"),
-                    "classification": classification
-                })
-
-                batch.append((ts, uid, etype, lat, lon, alt, speed, heading, meta))
+                # --- Option C+D: route orbital positions to orbital_tracks ---
+                # Satellite positions are written to orbital_tracks (no meta/TLE
+                # per row).  Non-orbital entities continue to use tracks with a
+                # full meta JSONB.
+                if msg.topic == "orbital_raw":
+                    orbital_batch.append((ts, uid, lat, lon, alt, speed, heading))
+                else:
+                    meta = json.dumps({
+                        "callsign": callsign,
+                        "how": data.get("how"),
+                        "ce": point.get("ce"),
+                        "le": point.get("le"),
+                        "classification": classification
+                    })
+                    batch.append((ts, uid, etype, lat, lon, alt, speed, heading, meta))
 
                 # --- Satellite TLE Upsert (orbital_raw messages only) ---
                 tle_line1 = classification.get("tle_line1")
@@ -127,32 +142,48 @@ async def historian_task():
 
                 # --- Batch Flush Logic ---
                 now = time.time()
-                if len(batch) >= BATCH_SIZE or (now - last_flush > FLUSH_INTERVAL and batch):
+                flush_needed = (
+                    len(batch) >= BATCH_SIZE
+                    or len(orbital_batch) >= BATCH_SIZE
+                    or (now - last_flush > FLUSH_INTERVAL and (batch or orbital_batch))
+                )
+                if flush_needed:
                     if db.pool:
                         try:
                             async with db.pool.acquire() as conn:
-                                await conn.executemany(insert_sql, batch)
-                            # BUG-009 / BUG-012: Only reset batch after a confirmed
-                            # successful write. If the write fails the batch is kept
-                            # so it will be retried on the next flush cycle.
+                                if batch:
+                                    await conn.executemany(insert_sql, batch)
+                                if orbital_batch:
+                                    await conn.executemany(orbital_insert_sql, orbital_batch)
+                            # BUG-009 / BUG-012: Only reset batches after a confirmed
+                            # successful write. If the write fails the batches are kept
+                            # so they will be retried on the next flush cycle.
                             batch = []
+                            orbital_batch = []
                             last_flush = now
                         except Exception as db_err:
                             logger.error(f"Historian DB Error: {db_err}")
-                            # Do NOT clear batch — retry on next cycle.
+                            # Do NOT clear batches — retry on next cycle.
                     else:
-                        # BUG-009: Pool not ready yet; retain the batch rather than
-                        # silently discarding it. Cap growth to avoid unbounded memory.
+                        # BUG-009: Pool not ready yet; retain batches rather than
+                        # silently discarding them. Cap growth to avoid unbounded memory.
+                        total_pending = len(batch) + len(orbital_batch)
                         logger.warning(
-                            f"Historian: DB pool not ready, retaining {len(batch)} records "
+                            f"Historian: DB pool not ready, retaining {total_pending} records "
                             "(will retry on next flush cycle)"
                         )
                         if len(batch) > BATCH_SIZE * 10:
                             logger.error(
-                                f"Historian: batch overflow ({len(batch)} records). "
+                                f"Historian: tracks batch overflow ({len(batch)} records). "
                                 "Dropping oldest entries to prevent OOM."
                             )
                             batch = batch[-BATCH_SIZE:]
+                        if len(orbital_batch) > BATCH_SIZE * 10:
+                            logger.error(
+                                f"Historian: orbital_batch overflow ({len(orbital_batch)} records). "
+                                "Dropping oldest entries to prevent OOM."
+                            )
+                            orbital_batch = orbital_batch[-BATCH_SIZE:]
 
             except Exception as e:
                 logger.error(f"Historian message processing error: {e}")
@@ -163,13 +194,19 @@ async def historian_task():
     except Exception as e:
         logger.error(f"Historian Fatal Error: {e}")
     finally:
-        # BUG-002: Flush any records still in the batch before the consumer stops.
+        # BUG-002: Flush any records still in the batches before the consumer stops.
         # Previously these were silently dropped on shutdown.
-        if batch and db.pool:
+        if (batch or orbital_batch) and db.pool:
             try:
                 async with db.pool.acquire() as conn:
-                    await conn.executemany(insert_sql, batch)
-                logger.info(f"Historian: flushed {len(batch)} records on shutdown")
+                    if batch:
+                        await conn.executemany(insert_sql, batch)
+                    if orbital_batch:
+                        await conn.executemany(orbital_insert_sql, orbital_batch)
+                logger.info(
+                    f"Historian: flushed {len(batch)} track records and "
+                    f"{len(orbital_batch)} orbital records on shutdown"
+                )
             except Exception as e:
                 logger.error(f"Historian shutdown flush error: {e}")
         await consumer.stop()
