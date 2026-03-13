@@ -79,7 +79,7 @@ export function buildEntityLayers(
       // wrapLongitude off in globe mode: billboard + wrapLongitude causes rendering artifacts in Deck.gl _full3d overlay
       wrapLongitude: !globeMode,
       // For MapLibre Globe, we need depthTest enabled to prevent bleeding through the Earth.
-      parameters: { depthTest: true, depthBias: 0 },
+      parameters: { depthTest: true, depthBias: -150.0 },
       // Enable globe occlusion for MapLibre since it lacks Mapbox's built-in hiding
       extensions: [], // In DeckGL v9, globe occlusion is applied automatically if projection is globe, unless interleaved
 
@@ -201,7 +201,7 @@ export function buildEntityLayers(
         getColor: (d: any) => entityColor(d as CoTEntity),
         pickable: true,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: true, depthBias: 0 },
+        parameters: { depthTest: true, depthBias: -100.0 },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onHover: (info: { object?: any; x: number; y: number }) => {
           if (info.object) {
@@ -317,7 +317,7 @@ export function buildEntityLayers(
         capRounded: true,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: false },
+        parameters: { depthTest: true, depthBias: -250.0 },
       }),
     );
   }

@@ -270,7 +270,7 @@ regenerate any historical position on demand. AIS/ADS-B tracks, which cannot be
 reproduced after the fact, are retained for 72 hours to match the API's
 `TRACK_HISTORY_MAX_HOURS` setting.
 
-See `docs/TIMESCALE_RETENTION.md` for the full retention reference including
+See `agent_docs/TIMESCALE_RETENTION.md` for the full retention reference including
 monitoring queries, manual cleanup commands, and migration scripts.
 
 ---

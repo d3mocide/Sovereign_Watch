@@ -1040,6 +1040,22 @@ async def ws_js8(websocket: WebSocket) -> None:
                         })
 
             # ------------------------------------------------------------------
+            # Action: SET_ZOOM – control KiwiSDR waterfall zoom level
+            # Payload: {"action": "SET_ZOOM", "zoom": 5}
+            # zoom: 0–14 (Standard KiwiSDR zoom levels)
+            # ------------------------------------------------------------------
+            elif action == "SET_ZOOM":
+                zoom = int(max(0, min(14, cmd.get("zoom", 5))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_zoom(zoom)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_ZOOM failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
             # Action: SET_SQUELCH – enable/disable KiwiSDR squelch gate
             # Payload: {"action": "SET_SQUELCH", "enabled": true, "threshold": 60}
             # threshold: 0–100 (UI units, mapped to 0–150 in the client)

@@ -5,6 +5,7 @@
 ## 1. Project Context
 
 **Sovereign Watch** is a distributed intelligence fusion platform.
+
 - **Frontend**: React (Vite), Tailwind CSS.
   - **Mapping**: Hybrid Architecture supporting **Mapbox GL JS** OR **MapLibre GL JS** (dynamic import based on env), overlaid with **Deck.gl** v9.
   - **Source**: `frontend/src/components/map/TacticalMap.tsx`
@@ -25,15 +26,15 @@
 
 Both frontend and backend have Hot Module Replacement (HMR) enabled:
 
-| Service       | Trigger                      | HMR Method                                               | Notes                                         |
-| ------------- | ---------------------------- | -------------------------------------------------------- | --------------------------------------------- |
-| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                          | No restart needed. Changes reflect instantly. |
-| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                          | No restart needed. Server auto-restarts.      |
-| **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart.|
+| Service       | Trigger                      | HMR Method                                                     | Notes                                          |
+| ------------- | ---------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
+| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                                | No restart needed. Changes reflect instantly.  |
+| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                                | No restart needed. Server auto-restarts.       |
+| **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart. |
 
 ## 4. Documentation & Change Tracking
 
-- **Requirement**: You **MUST** create a new file in `docs/tasks/` for all significant features, bug fixes, and architectural changes.
+- **Requirement**: You **MUST** create a new file in `agent_docs/tasks/` for all significant features, bug fixes, and architectural changes.
 - **Format**: Filename: `YYYY-MM-DD-{task-slug}.md`
 - **Content**:
   - **Issue**: Description of the problem or feature request.
@@ -83,8 +84,9 @@ python -m pytest
 │   ├── database/     # Database Policies (Retention)
 │   ├── db/           # Database Initialization (init.sql)
 │   └── scripts/      # Utility Scripts
-├── docs/             # Documentation
+├── agent_docs/       # Agent Documentation
 │   └── tasks/        # Task-specific change logs (YYYY-MM-DD-slug.md)
+├── Documentation/    # Project Wiki
 ├── docker-compose.yml
 └── AGENTS.md         # This file
 ```

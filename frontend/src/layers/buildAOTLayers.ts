@@ -39,7 +39,8 @@ export function buildAOTLayers(
         capRounded: true,
         wrapLongitude: !globeMode,
         billboard: !!globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        geodesic: true,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
       }),
     );
   }
@@ -58,7 +59,8 @@ export function buildAOTLayers(
         capRounded: true,
         wrapLongitude: !globeMode,
         billboard: !!globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        geodesic: true,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
       }),
     );
   }
@@ -80,7 +82,8 @@ export function buildAOTLayers(
         capRounded: true,
         wrapLongitude: !globeMode,
         billboard: !!globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        geodesic: true,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
         getDashArray: [8, 4],
       }),
     );
@@ -116,7 +119,8 @@ export function buildAOTLayers(
         capRounded: true,
         wrapLongitude: !globeMode,
         billboard: !!globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        geodesic: true,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
         getDashArray: [4, 4],
       }),
     );

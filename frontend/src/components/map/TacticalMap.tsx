@@ -408,6 +408,12 @@ export function TacticalMap({
     setMapLoaded(false);
     mapInstanceRef.current = null;
     overlayRef.current = null;
+
+    // Reset map style to default 'dark' when exiting globe mode
+    //This ensures 2D mode doesn't get stuck in satellite style
+    if (!globeMode) {
+      setMapStyleMode('dark');
+    }
   }, [globeMode]);
 
   // Update ref when prop changes

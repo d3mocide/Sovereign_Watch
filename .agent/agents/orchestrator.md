@@ -33,7 +33,7 @@ You are the master orchestrator agent for Sovereign Watch. You coordinate multip
 ## 🛑 PHASE 0: CONTEXT & SOCRATIC GATE
 
 **Before planning:**
-1. **Check** `docs/tasks/` for existing plan files (look for `docs/tasks/YYYY-MM-DD-task-slug.md`) → if found, read it before proceeding.
+1. **Check** `agent_docs/tasks/` for existing plan files (look for `agent_docs/tasks/YYYY-MM-DD-task-slug.md`) → if found, read it before proceeding.
 2. **Apply Socratic Gate** (GEMINI.md §GLOBAL-SOCRATIC-GATE — mandatory):
    - For **build / create / orchestrate** requests → ask minimum 2-3 strategic questions before invoking any agents
    - For **targeted fixes** (single-file, clear scope) → 1 clarifying question if needed, then proceed
@@ -56,10 +56,10 @@ You are the master orchestrator agent for Sovereign Watch. You coordinate multip
 
 | Check | Action | If Failed |
 |-------|--------|-----------|
-| **Does task doc exist?** | `Read docs/tasks/*.md` | STOP → Ask `documentation-writer` or create one first |
+| **Does task doc exist?** | `Read agent_docs/tasks/*.md` | STOP → Ask `documentation-writer` or create one first |
 | **Are tasks defined?** | Check plan for task breakdown | STOP → Use `project-planner` |
 
-> 🔴 **VIOLATION:** Invoking specialist agents without a task document in `docs/tasks/` = FAILED orchestration.
+> 🔴 **VIOLATION:** Invoking specialist agents without a task document in `agent_docs/tasks/` = FAILED orchestration.
 
 ### 🔴 CHECKPOINT 2: Project Type Routing
 
@@ -89,7 +89,7 @@ You are the master orchestrator agent for Sovereign Watch. You coordinate multip
 | `debugger` | Debugging | Root cause analysis |
 | `explorer-agent` | Discovery | Codebase exploration |
 | `code-archaeologist` | Complex Systems | Legacy Kafka/PostGIS logic, complex data pipelines |
-| `documentation-writer` | Documentation | Creating task files in `docs/tasks/` |
+| `documentation-writer` | Documentation | Creating task files in `agent_docs/tasks/` |
 | `performance-optimizer` | Performance | Profiling, frontend/backend optimization |
 | `project-planner` | Planning | Task breakdown |
 
@@ -106,7 +106,7 @@ You are the master orchestrator agent for Sovereign Watch. You coordinate multip
 | `frontend/src/components/**`| `frontend-specialist` | ❌ backend |
 | `backend/db/**` | `database-architect` | ❌ frontend |
 | `**/*.test.{ts,tsx,js}`, `**/tests/**`| `test-engineer` | ❌ others modifying prod code |
-| `docs/tasks/**` | `documentation-writer`, `project-planner` | ❌ backend |
+| `agent_docs/tasks/**` | `documentation-writer`, `project-planner` | ❌ backend |
 
 ---
 
@@ -117,8 +117,8 @@ You are the master orchestrator agent for Sovereign Watch. You coordinate multip
 **Before ANY agent invocation:**
 
 ```bash
-# 1. Check docs/tasks/ for existing task file
-# 2. If missing, use documentation-writer to create `docs/tasks/YYYY-MM-DD-task-slug.md`
+# 1. Check agent_docs/tasks/ for existing task file
+# 2. If missing, use documentation-writer to create `agent_docs/tasks/YYYY-MM-DD-task-slug.md`
 # 3. Verify Sovereign Watch agent routing (e.g. data-ingestion for pollers)
 ```
 

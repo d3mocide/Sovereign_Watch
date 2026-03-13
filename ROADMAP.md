@@ -10,7 +10,7 @@ Sovereign Watch defines a break from this dependency. It proposes a transition f
 
 ### 1.2 The Strategic Pivot: Research-Driven Architecture
 
-Following a rigorous technical audit (See `docs/research/`), the architecture has pivoted to address critical constraints in browser rendering and data volume:
+Following a rigorous technical audit (See `agent_docs/research/`), the architecture has pivoted to address critical constraints in browser rendering and data volume:
 
 1.  **Hybrid Rendering Engine**: Shifted from "Pure WebGPU" to **WebGL2 Interleaved Rendering** to solve depth occlusion (Z-buffering) issues with 3D terrain. WebGPU is retained solely as a headless compute engine for physics simulation ("Invisible WebGPU").
 2.  **Protocol Efficiency**: Standardization on **TAK Protocol V1 (Protobuf)** instead of XML/JSON. This reduces bandwidth by ~83% and eliminates main-thread parsing bottlenecks for high-volume tracks (100k+ entities).
@@ -148,6 +148,14 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **Security-01** | DoS Prevention        | Backend  | **DONE** (v0.17.x, PR #73). Input length limits, rate limiting hardening. |
 | **Backend-06** | Orbital Pass Prediction API | Backend + Frontend | **DONE** (v0.18.x). `satellites` table, Historian TLE upsert, `routers/orbital.py` (`/api/orbital/passes`, `/api/orbital/groundtrack`), `sgp4_utils.py`, `usePassPredictions` hook, fully wired to `PassPredictorWidget`/`DopplerWidget`/`PolarPlotWidget`. |
 | **Fix-01**     | CoT Event Tracking      | Frontend  | **DONE**. Cursor-on-Target events render on map and appear in IntelFeed. Confirmed operational. |
+| **Ingest-08**  | **Infra Caching**       | Data Eng  | **DONE**. Metadata caching for submarine cables and landing stations moved to backend Python service. |
+| **Ingest-09**  | P25 System Pulse        | Data Eng  | **DONE**. (v0.25.x). Integrated RadioReference SOAP API and RepeaterBook for P25 trunked/digital system ingestion. |
+| **Ingest-12**  | DMR Pulse               | Data Eng  | **DONE**. (v0.25.x). Brandmeister/RepeaterBook DMR mode ingestion active in `rf_pulse`. |
+| **Ingest-13**  | H3 Adaptive Poller      | Data Eng  | **DONE**. (v0.26.0). Replaced fixed-radius polling with H3 Resolution-4 adaptive sharding. Reduced API overlap by 40%. |
+| **FE-09**      | H3 Coverage Layer       | Frontend  | **DONE**. (v0.26.0). Hexagonal debug layer for real-time polling telemetry visualization. |
+| **FE-23**      | P25 System Layer        | Frontend  | **DONE**. (v0.25.x). `buildRFLayers.ts`: Agency-colored digital markers and mode-specific filtering. |
+| **FE-26**      | DMR Activity Layer      | Frontend  | **DONE**. (v0.25.x). `buildRFLayers.ts`: visualization of DMR repeaters and talkgroup status. |
+| **FE-27**      | Repeater Sub-Filters    | Frontend  | **DONE**. (v0.25.x). Expanded `LayerFilters` with FM/P25/DMR/Fusion/D-Star sub-toggles. |
 
 ### Version 1.0 Release Candidate Requirements
 
@@ -161,25 +169,14 @@ These core components, usability improvements, and collaborative features define
 | **FE-12**      | Settings UI             | Frontend  | **(Usability)**. Configure API keys and Poller internals via the UI rather than relying entirely on `.env` file modification.                                           |
 | **AI-01**      | AI Analyst Panel        | Frontend  | **(Intelligence)**. Surface the existing `/api/analyze/{uid}` LLM capability into a dedicated frontend widget for instant semantic analysis of tracked assets.          |
 | **FE-22**      | Drone Tactical Layer    | Frontend  | **(Tracking)**. Implement `DroneLayer.tsx` with rotor icon and `drone_class` color coding. Classifier is already complete in backend.                                   |
-| **FE-27**      | Repeater Sub-Filters    | Frontend  | **(Tracking)**. Expand REPEATERS section with FM/P25/DMR/D-Star/Fusion/Open sub-toggles utilizing existing API data.                                                    |
-| **FE-25a**     | NOAA Weather Radio      | Frontend  | **(Tracking)**. Static NOAA transmitter data, amber coverage circles, `useNoaaRadio` hook, INFRA toggle.                                                                |
 | **FE-25c**     | PSAP / 911 Centers      | Frontend  | **(Tracking)**. Bundled static GeoJSON of dispatch centers, red/amber markers by PSAP type.                                                                             |
 
 ### Backlog (P2)
 
 | ID             | Task Name        | Component | Description                                                                                    |
 | :------------- | :--------------- | :-------- | :--------------------------------------------------------------------------------------------- |
-| **Ingest-09**  | P25 System Pulse        | Data Eng  | RadioReference API → P25 trunked system sites, agency type tagging, Redis cache, `/api/p25/sites`. |
-| **FE-23**      | P25 System Layer        | Frontend  | `buildP25Layers.ts`: agency-colored site markers, coverage circles, COMMS section in LayerFilters. |
-| **Ingest-10**  | APRS Stream Poller      | Data Eng  | APRS-IS TCP connection → `aprs_raw` Kafka topic. iGate/digipeater/vehicle/weather classification. |
-| **FE-24**      | APRS Layer              | Frontend  | APRS entity routing in takWorker, `buildAprsLayers.ts` with infra/mobile/weather sub-filters. |
-| **Ingest-12**  | DMR Brandmeister Pulse  | Data Eng  | Brandmeister API proxy (1h server cache), `/api/dmr/repeaters` endpoint. |
-| **FE-26**      | DMR Activity Layer      | Frontend  | `buildDmrLayers.ts`: online/offline coloring, active-talkgroup glow. |
 | **Ingest-11**  | FCC ASR Tower Service   | Data Eng  | FCC public antenna structure DB → bounding-box filtered `/api/towers` endpoint. |
 | **FE-25b**     | FCC Tower Layer         | Frontend  | `buildTowerLayers.ts`: communication tower markers by height and type. |
-| **Ingest-08**  | **Infra Caching**       | Data Eng  | Move Submarine Cable/Landing Station caching to a backend Python service to replace client-side localStorage. |
-| **Ingest-13**  | H3 Adaptive Aviation Poller | Data Eng | Replace fixed 3-point polling in `service.py` with `H3PriorityManager`. Resolution-4 cells (~1770km²), Redis ZSET priority queue, adaptive intervals (10s active / 60s empty). See `docs/tasks/2026-03-08-h3-poller-plan.md`. |
-| **FE-09**      | Coverage Viz (H3 Debug Layer) | Frontend  | Deck.gl `H3HexagonLayer` fed by `/api/debug/h3_cells` SSE. Color = poll interval (green=active, grey=dormant), opacity = aircraft count. Pairs with Ingest-13. |
 | **FE-10**      | Payload Eval     | Frontend  | Raw JSON inspector (Terminal Mode).                                                            |
 | **FE-13**      | Mission Labels   | Frontend  | Floating text labels for coverage areas.                                                       |
 | **Ingest-07**  | Drone Remote ID  | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline → `drone_raw` Kafka topic. Requires RTL-SDR hardware. |
@@ -201,11 +198,11 @@ These core components, usability improvements, and collaborative features define
 
 ## Gap Analysis Reference
 
-See `docs/GAP_ANALYSIS_2026-03-06.md` for a full automated code review against this roadmap, including:
+See `agent_docs/GAP_ANALYSIS_2026-03-06.md` for a full automated code review against this roadmap, including:
 - Completed features not previously tracked (FE-28 through Infra-03a)
 - Confirmed completed features that planning docs described as pending (orbital pass prediction fully shipped)
 - Prioritized next steps and health assessment by domain
 
 ---
 
-_Updated 2026-03-08. Added Ingest-13 (H3 Adaptive Aviation Poller) and updated FE-09 (Coverage Viz) to P2 backlog. See `docs/tasks/2026-03-08-h3-poller-plan.md` for implementation and testing plan._
+_Updated 2026-03-12. Significant progress on P2 backlog: H3 Adaptive Poller, P25/DMR Ingestion, and sub-mode filtering finalized. See `agent_docs/tasks/2026-03-08-h3-poller-plan.md` for H3 implementation details._

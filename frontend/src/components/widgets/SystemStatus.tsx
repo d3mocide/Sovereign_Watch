@@ -43,10 +43,10 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
             Map Layers
           </span>
         </div>
-        <div className="flex items-center gap-3 relative">
+        <div className="flex items-center gap-3 relative pointer-events-none">
           {/* Quick layer toggle icon */}
           {filters && onFilterChange && (
-            <div className="flex items-center gap-2 mr-2">
+            <div className="flex items-center gap-2 mr-2 pointer-events-auto">
               <button
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
@@ -246,7 +246,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 <input type="checkbox" className="sr-only" checked={filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true} onChange={() => {
                   const isAnyOn = filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true;
                   onFilterChange('showCables', !isAnyOn);
-                  onFilterChange('showLandingStations', !isAnyOn);
+                  onFilterChange('showLandingStations', false); // Default to off on master toggle
                   onFilterChange('showOutages', !isAnyOn);
                 }} />
                 <div
@@ -255,7 +255,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                     e.stopPropagation();
                     const isAnyOn = filters.showCables !== false || filters.showLandingStations !== false || filters.showOutages === true;
                     onFilterChange('showCables', !isAnyOn);
-                    onFilterChange('showLandingStations', !isAnyOn);
+                    onFilterChange('showLandingStations', false); // Default to off on master toggle
                     onFilterChange('showOutages', !isAnyOn);
                   }}
                 >

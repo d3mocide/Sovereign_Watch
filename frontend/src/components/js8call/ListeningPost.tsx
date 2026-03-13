@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Volume2, VolumeX, Activity, Zap, 
-  Sliders, Target
+  Sliders, Target, ChevronUp, ChevronDown
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +33,20 @@ const HF_BANDS = [
   { label: '2m',   freq: 144000 },
 ] as const;
 
-const KIWI_MODES = ['usb', 'lsb', 'am', 'cw', 'nbfm'] as const;
+const KIWI_MODES = ['usb', 'lsb', 'am', 'amn', 'sam', 'cw', 'cwn', 'nbfm', 'iq'] as const;
 type KiwiMode = typeof KIWI_MODES[number];
+
+const MODE_INFO: Record<KiwiMode, { label: string; bw: number }> = {
+  usb:  { label: 'USB',  bw: 2.7 },
+  lsb:  { label: 'LSB',  bw: 2.7 },
+  am:   { label: 'AM',   bw: 6.0 },
+  amn:  { label: 'AMN',  bw: 4.0 },
+  sam:  { label: 'SAM',  bw: 6.0 },
+  cw:   { label: 'CW',   bw: 0.5 },
+  cwn:  { label: 'CWN',  bw: 0.2 },
+  nbfm: { label: 'FM',   bw: 12.0 },
+  iq:   { label: 'IQ',   bw: 30.0 }, // Viewport bandwidth for IQ usually wider
+};
 
 const WS_BASE_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
 const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, '/ws/waterfall');
@@ -42,6 +54,15 @@ const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, '/ws/waterfall');
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
+
+/** 
+ * Returns the total waterfall span in kHz for a given KiwiSDR zoom level (0-14). 
+ * Zoom 0 = ~30,000 kHz, Zoom 5 = ~937.5 kHz, etc. 
+ * Actual formula is ~30000 / (2^zoom). 
+ */
+function getWideSpan(zoom: number): number {
+  return 30000 / Math.pow(2, zoom);
+}
 
 function dbmToSmeter(dbm: number): { label: string; pct: number; color: string } {
   const pct = Math.min(100, Math.max(0, ((dbm + 127) / 97) * 100));
@@ -57,12 +78,15 @@ function dbmToSmeter(dbm: number): { label: string; pct: number; color: string }
   return { label, pct, color };
 }
 
-// Premium "Tactical" Waterfall Palette
-function tacticalColor(value: number): [number, number, number] {
-  if (value < 40) return [Math.round(value * 0.2), 0, Math.round(value * 0.5)]; // Deep shadow
-  if (value < 100) return [0, Math.round((value - 40) * 2.5), Math.round(255 - (value - 40) * 1.5)]; // Blue to Green
-  if (value < 180) return [Math.round((value - 100) * 3), 255, 0]; // Green to Yellow
-  return [255, Math.round(255 - (value - 180) * 3), 0]; // Yellow to Red
+// Authentic spectral SDR waterfall palette (Blue -> Cyan -> Green -> Yellow -> Red)
+// Refined thresholds for better contrast (higher floor, less "neon" washout)
+function sdrWaterfallColor(value: number): [number, number, number] {
+  if (value < 60) return [0, 0, Math.round(value * 0.4)]; // Deep Blue noise floor
+  if (value < 120) return [0, Math.round((value - 60) * 4.25), 255]; // Blue to Cyan
+  if (value < 165) return [0, 255, Math.round(255 - (value - 120) * 5.6)]; // Cyan to Green
+  if (value < 205) return [Math.round((value - 165) * 6.3), 255, 0]; // Green to Yellow
+  if (value < 240) return [255, Math.round(255 - (value - 205) * 7.28), 0]; // Yellow to Red
+  return [255, Math.round((value - 240) * 17), Math.round((value - 240) * 17)]; // Red to White
 }
 
 // ---------------------------------------------------------------------------
@@ -112,16 +136,18 @@ export default function ListeningPost({
   const wsRef = useRef<WebSocket | null>(null);
 
   // State
-  const [localFreq, setLocalFreq] = useState<number>(activeKiwiConfig?.freq ?? 14200);
+  const [localFreq, setLocalFreq] = useState<number>(activeKiwiConfig?.freq ?? 14074);
   const [localMode, setLocalMode] = useState<KiwiMode>((activeKiwiConfig?.mode as KiwiMode) ?? 'usb');
+  const [zoom, setZoom] = useState(5); // Default zoom level
   const [wfMode, setWfMode] = useState<'PASSBAND' | 'WIDE'>('WIDE');
   
   // Settings
   const [manGain, setManGain] = useState(50);   // 0-120 KiwiSDR manGain
   const [agcOn,   setAgcOn]   = useState(true);  // AGC enabled by default
   const [wfSkip,  setWfSkip]  = useState(1);     // client-side frame skip (1=all,2=every other,…)
-  const [sqn, setSqn] = useState(30);
-  const [sql, setSql] = useState(23);
+  const [sqn, setSqn] = useState(20);
+  const [sql, setSql] = useState(0);
+  const [wfOffset, setWfOffset] = useState(100); // Waterfall baseline calibration
   const wfFrameCountRef = useRef(0);
 
 
@@ -139,7 +165,8 @@ export default function ListeningPost({
 
     for (let i = 0; i < w; i++) {
         const bin = Math.floor(i * len / w);
-        const [r, g, b] = tacticalColor(pixels[bin]);
+        const val = Math.max(0, pixels[bin] - wfOffset);
+        const [r, g, b] = sdrWaterfallColor(val);
         const idx = i * 4;
         data[idx] = r;
         data[idx + 1] = g;
@@ -147,7 +174,7 @@ export default function ListeningPost({
         data[idx + 3] = 255;
     }
     ctx2d.putImageData(row, 0, 0);
-  }, []);
+  }, [wfOffset]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -204,7 +231,7 @@ export default function ListeningPost({
             }
         };
     }
-  }, [wfMode, analyserNode, drawRow, wfSkip]);
+  }, [wfMode, analyserNode, drawRow, wfSkip, wfOffset, zoom]); // Added zoom to dependencies
 
   // Sync local frequency and mode with active config from bridge
   // Use render-phase stabilization to avoid cascading render warnings in useEffect
@@ -240,6 +267,25 @@ export default function ListeningPost({
 
   const smeter = dbmToSmeter(sMeterDbm ?? -127);
 
+  const handleScaleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const padding = 16; // px-4
+    const width = rect.width - (padding * 2); // Corrected padding calculation
+    const clickX = Math.max(0, Math.min(width, x - padding));
+    
+    if (wfMode === 'WIDE') {
+      const span = getWideSpan(zoom);
+      const halfSpan = span / 2;
+      const offset = (clickX / width) * span - halfSpan;
+      tune(localFreq + offset, localMode);
+    } else {
+      // Span is 0 to 6000 Hz (6 kHz)
+      const offset = (clickX / width) * 6;
+      tune(localFreq + offset, localMode);
+    }
+  };
+
   return (
     <div className="flex-1 w-full flex h-full bg-[#05080a] text-slate-300 font-mono text-[11px] overflow-hidden select-none">
       
@@ -257,12 +303,12 @@ export default function ListeningPost({
         </div>
 
         {/* Freq Display Area */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 space-y-3">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] text-slate-500 uppercase tracking-widest text-left">Central Frequency</span>
-            <div className="flex items-baseline justify-between bg-black/40 border border-[#1a2b36] rounded-md px-4 py-3 group hover:border-cyan-500/30 transition-all duration-300">
+            <div className="flex items-baseline justify-between bg-black/40 border border-[#1a2b36] rounded-md px-3 py-2.5 group hover:border-cyan-500/30 transition-all duration-300">
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-cyan-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                <span className="text-3xl font-bold text-cyan-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
                   {localFreq.toFixed(2)}
                 </span>
                 <span className="text-xl font-bold text-cyan-900 uppercase">kHz</span>
@@ -277,42 +323,45 @@ export default function ListeningPost({
           </div>
 
           {/* Stepping Grid */}
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-1">
             {[100, 10, 1, -100, -10, -1].map((delta) => (
               <button
                 key={delta}
                 onClick={() => step(delta)}
-                className="py-3 bg-[#111d27] border border-[#1a2b36] rounded hover:bg-cyan-950/30 hover:border-cyan-500/50 transition-all active:scale-95 text-cyan-400 font-bold"
+                className="py-1.5 bg-[#111d27] border border-[#1a2b36] rounded hover:bg-cyan-950/30 hover:border-cyan-500/50 transition-all active:scale-95 text-cyan-400 font-bold text-[10px]"
               >
                 {delta > 0 ? `+${delta}` : delta}
               </button>
             ))}
           </div>
 
-          <div className="h-px bg-[#1a2b36] my-6" />
+          <div className="h-px bg-[#1a2b36] my-4" />
 
           {/* Mode Selector */}
           <div className="space-y-2">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest">SDR Mode</span>
-            <div className="flex flex-wrap gap-1.5">
-              {KIWI_MODES.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => tune(localFreq, m)}
-                  className={`flex-1 min-w-[60px] py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
-                    localMode === m
-                      ? 'bg-cyan-600/20 border border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                      : 'bg-black/30 border border-[#1a2b36] text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  {m === 'nbfm' ? 'NFM' : m}
-                </button>
-              ))}
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Modulation Mode</span>
+            <div className="grid grid-cols-3 gap-1">
+              {KIWI_MODES.map((m) => {
+                const info = MODE_INFO[m];
+                return (
+                  <button
+                    key={m}
+                    onClick={() => tune(localFreq, m)}
+                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                      localMode === m
+                        ? 'bg-emerald-600/20 border border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                        : 'bg-black/30 border border-[#1a2b36] text-slate-600 hover:text-slate-400'
+                    }`}
+                  >
+                    {info.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Bands Grid */}
-          <div className="space-y-2 mt-6">
+          <div className="space-y-2 mt-4">
             <span className="text-[10px] text-slate-500 uppercase tracking-widest">Global Bands</span>
             <div className="grid grid-cols-4 gap-1">
               {HF_BANDS.map((b) => {
@@ -383,26 +432,34 @@ export default function ListeningPost({
         )}
 
         {/* Top Waterfall Controls */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10 pointer-events-none">
-            <div className="flex items-center gap-2 pointer-events-auto">
-                <button
-                    onClick={() => setWfMode('WIDE')}
-                    className={`px-3 py-1 rounded-l text-[10px] font-bold border ${wfMode === 'WIDE' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-black/80 border-[#1a2b36] text-slate-500'}`}
-                >
-                    PANORAMIC (WF)
-                </button>
-                <button
-                    onClick={() => setWfMode('PASSBAND')}
-                    className={`px-3 py-1 rounded-r text-[10px] font-bold border ${wfMode === 'PASSBAND' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/80 border-[#1a2b36] text-slate-500'}`}
-                >
-                    PASSBAND (WS)
-                </button>
-            </div>
+        <div className="absolute bottom-12 left-0 right-0 p-4 flex items-center justify-between z-10 pointer-events-none">
+          <div className="flex items-center gap-2 pointer-events-auto">
+            <button 
+              onClick={() => setWfMode('WIDE')}
+              className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase transition-all ${wfMode === 'WIDE' ? 'bg-cyan-600/20 border border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-black/60 border border-[#1a2b36] text-slate-500 hover:text-slate-300'}`}
+            >
+              Panoramic (WF)
+            </button>
+            <button 
+              onClick={() => setWfMode('PASSBAND')}
+              className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase transition-all ${wfMode === 'PASSBAND' ? 'bg-indigo-600/20 border border-indigo-500 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'bg-black/60 border border-[#1a2b36] text-slate-500 hover:text-slate-300'}`}
+            >
+              Passband (WS)
+            </button>
+            <button 
+              onClick={() => {
+                if (bridgeConnected) sendAction({ action: 'DISCONNECT_KIWI' });
+              }}
+              className="px-3 py-1.5 rounded text-[9px] font-bold uppercase bg-rose-600/20 border border-rose-500 text-rose-300 hover:bg-rose-500 hover:text-white transition-all shadow-[0_0_10px_rgba(244,63,94,0.1)]"
+            >
+              Stop
+            </button>
+          </div>
 
-            <div className="bg-black/80 border border-[#1a2b36] rounded px-3 py-1 pointer-events-auto text-cyan-500/80 font-bold group">
-                <span className="text-[10px] text-slate-500 mr-2">RX SOURCE:</span>
-                {activeKiwiConfig?.host || 'NO_LINK'}
-            </div>
+          <div className="bg-black/80 border border-[#1a2b36] rounded px-3 py-1 pointer-events-auto text-cyan-500/80 font-bold group">
+            <span className="text-[10px] text-slate-500 mr-2">RX SOURCE:</span>
+            {activeKiwiConfig?.host || 'NO_LINK'}
+          </div>
         </div>
 
         <canvas
@@ -414,14 +471,49 @@ export default function ListeningPost({
         />
 
         {/* Frequency Scale Overlay */}
-        <div className="absolute bottom-12 left-0 right-0 h-8 flex justify-between px-4 border-t border-cyan-500/20 bg-black/40 backdrop-blur-sm">
+        <div 
+            className="absolute top-7 left-0 right-0 h-8 flex justify-between px-4 border-t border-cyan-500/20 bg-black/80 backdrop-blur-sm cursor-pointer z-20 pointer-events-auto"
+            onClick={handleScaleClick}
+        >
+            {/* Passband Indicator (Green Bar) */}
+            {activeKiwiConfig && (
+              <div 
+                className="absolute top-0 h-1 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] transition-all duration-300"
+                style={{
+                  left: wfMode === 'WIDE' 
+                    ? `calc(50% - ${(MODE_INFO[localMode as keyof typeof MODE_INFO].bw / getWideSpan(zoom)) * 50}%)`
+                    : `calc(16px + ${(0 / 6) * (100 - 32)}%)`, // Starting at 0Hz in PB mode
+                  width: wfMode === 'WIDE'
+                    ? `${(MODE_INFO[localMode as keyof typeof MODE_INFO].bw / getWideSpan(zoom)) * 100}%`
+                    : `${(MODE_INFO[localMode as keyof typeof MODE_INFO].bw / 6) * 100}%`,
+                  opacity: 0.8
+                }}
+              />
+            )}
+            
             {wfMode === 'WIDE' ? (
-                [-400, -300, -200, -100, 0, 100, 200, 300, 400].map(v => (
-                    <div key={v} className="flex flex-col items-center pt-1">
-                        <div className="w-px h-2 bg-slate-700" />
-                        <span className="text-[9px] text-slate-500">{v > 0 ? `+${v}k` : v === 0 ? 'CF' : `${v}k`}</span>
+                (() => {
+                  const span = getWideSpan(zoom);
+                  // Dynamic ticks based on span
+                  let tickStep = 100;
+                  if (span < 50) tickStep = 5;
+                  else if (span < 150) tickStep = 10;
+                  else if (span < 400) tickStep = 25;
+                  else if (span < 1000) tickStep = 100;
+                  else if (span < 4000) tickStep = 500;
+                  else tickStep = 1000;
+
+                  const sideTicks = Math.floor((span / 2) / tickStep);
+                  const ticks = [];
+                  for (let i = -sideTicks; i <= sideTicks; i++) ticks.push(i * tickStep);
+
+                  return ticks.map(v => (
+                    <div key={v} className="flex flex-col items-center pt-1" style={{ position: 'absolute', left: `calc(16px + ${(v + span/2) / span} * (100% - 32px))`, transform: 'translateX(-50%)' }}>
+                        <div className="w-px h-2 bg-slate-200" />
+                        <span className="text-[9px] text-slate-200">{v > 0 ? `+${v}k` : v === 0 ? 'CF' : `${v}k`}</span>
                     </div>
-                ))
+                  ));
+                })()
             ) : (
                 [0, 1000, 2000, 3000, 4000, 5000, 6000].map(v => (
                     <div key={v} className="flex flex-col items-center pt-1">
@@ -458,7 +550,7 @@ export default function ListeningPost({
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Waterfall Settings</span>
         </div>
 
-        <div className="px-5 space-y-8">
+        <div className="px-5 space-y-5">
             {/* RF Gain — sends SET agc/manGain to KiwiSDR */}
             <div className="space-y-3">
                 <div className="flex justify-between items-end">
@@ -492,7 +584,7 @@ export default function ListeningPost({
                 </div>
                 <input
                     type="range" min={0} max={120} value={manGain}
-                    onChange={e => {
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const val = parseInt(e.target.value);
                         setManGain(val);
                         if (activeKiwiConfig && bridgeConnected)
@@ -510,7 +602,7 @@ export default function ListeningPost({
                 </div>
                 <input
                     type="range" min={0} max={100} value={sql}
-                    onChange={e => {
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const val = parseInt(e.target.value);
                         setSql(val);
                         if (activeKiwiConfig && bridgeConnected) {
@@ -533,9 +625,61 @@ export default function ListeningPost({
                 </div>
                 <input
                     type="range" min={0} max={100} value={sqn}
-                    onChange={e => setSqn(parseInt(e.target.value))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSqn(parseInt(e.target.value))}
                     className="w-full h-1 accent-rose-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
                 />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Waterfall Offset — Local display only calibration */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">WF Baseline (Offset)</span>
+                    <span className="text-emerald-400 font-bold">{wfOffset}</span>
+                </div>
+                <input
+                    type="range" min={0} max={255} value={wfOffset}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWfOffset(parseInt(e.target.value))}
+                    className="w-full h-1 accent-emerald-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
+                />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Waterfall Zoom */}
+            <div className="space-y-2 pb-4">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Spectral Zoom</span>
+                    <span className="text-cyan-400 font-bold">LVL {zoom}</span>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => {
+                            const next = Math.max(0, zoom - 1);
+                            setZoom(next);
+                            sendAction({ action: 'SET_ZOOM', zoom: next });
+                        }}
+                        className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-slate-400 hover:text-white hover:bg-black/60 transition-all flex items-center justify-center gap-1"
+                    >
+                        <ChevronDown className="w-3 h-3" />
+                        OUT (-)
+                    </button>
+                    <button
+                        onClick={() => {
+                            const next = Math.min(10, zoom + 1);
+                            setZoom(next);
+                            sendAction({ action: 'SET_ZOOM', zoom: next });
+                        }}
+                        className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-900/20 transition-all flex items-center justify-center gap-1"
+                    >
+                        <ChevronUp className="w-3 h-3" />
+                        IN (+)
+                    </button>
+                </div>
+                <div className="text-[8px] text-slate-600 uppercase text-center tracking-tighter">
+                    Span: ~{getWideSpan(zoom).toFixed(1)} kHz
+                </div>
             </div>
 
             <div className="h-px bg-[#1a2b36]" />

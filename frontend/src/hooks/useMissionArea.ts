@@ -77,39 +77,43 @@ export function useMissionArea({
     const cosLat = Math.cos(targetLat * (Math.PI / 180));
     const safeCosLat = Math.max(Math.abs(cosLat), 0.0001);
 
-    // Maritime Box (only if actual mission exists)
-    const maritime = currentMission
-      ? [
-          [
-            targetLon - (radiusNm * NM_TO_DEG) / safeCosLat,
-            targetLat - radiusNm * NM_TO_DEG,
-          ],
-          [
-            targetLon + (radiusNm * NM_TO_DEG) / safeCosLat,
-            targetLat - radiusNm * NM_TO_DEG,
-          ],
-          [
-            targetLon + (radiusNm * NM_TO_DEG) / safeCosLat,
-            targetLat + radiusNm * NM_TO_DEG,
-          ],
-          [
-            targetLon - (radiusNm * NM_TO_DEG) / safeCosLat,
-            targetLat + radiusNm * NM_TO_DEG,
-          ],
-          [
-            targetLon - (radiusNm * NM_TO_DEG) / safeCosLat,
-            targetLat - radiusNm * NM_TO_DEG,
-          ],
-        ]
-      : [];
-
     // Aviation Circle
     const aviation: number[][] = [];
-    for (let i = 0; i <= 64; i++) {
-      const angle = (i / 64) * 2 * Math.PI;
+    const AVIATION_SEGMENTS = 256;
+    for (let i = 0; i <= AVIATION_SEGMENTS; i++) {
+      const angle = (i / AVIATION_SEGMENTS) * 2 * Math.PI;
       const dLat = radiusNm * NM_TO_DEG * Math.cos(angle);
       const dLon = ((radiusNm * NM_TO_DEG) / safeCosLat) * Math.sin(angle);
       aviation.push([targetLon + dLon, targetLat + dLat]);
+    }
+
+    // Maritime Box (interpolated for globe curvature)
+    const maritime: number[][] = [];
+    if (currentMission) {
+      const lonOffset = (radiusNm * NM_TO_DEG) / safeCosLat;
+      const latOffset = radiusNm * NM_TO_DEG;
+      
+      const corners = [
+        [targetLon - lonOffset, targetLat - latOffset], // SW
+        [targetLon + lonOffset, targetLat - latOffset], // SE
+        [targetLon + lonOffset, targetLat + latOffset], // NE
+        [targetLon - lonOffset, targetLat + latOffset], // NW
+        [targetLon - lonOffset, targetLat - latOffset], // Close
+      ];
+
+      for (let i = 0; i < corners.length - 1; i++) {
+        const start = corners[i];
+        const end = corners[i + 1];
+        const steps = 20; // 20 points per side
+        for (let j = 0; j < steps; j++) {
+          const t = j / steps;
+          maritime.push([
+            start[0] + (end[0] - start[0]) * t,
+            start[1] + (end[1] - start[1]) * t
+          ]);
+        }
+      }
+      maritime.push(corners[4]); // Final closing point
     }
 
     setAotShapes({ maritime, aviation });

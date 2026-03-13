@@ -14,7 +14,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 
 **Check for existing context before starting:**
 1.  **Read** `CODEBASE.md` → Check **OS** field (Windows/macOS/Linux)
-2.  **Read** any existing plan files in `docs/` folder
+2.  **Read** any existing plan files in `agent_docs/` folder
 3.  **Check** if request is clear enough to proceed
 4.  **If unclear:** Apply Socratic Gate (GEMINI.md §GLOBAL-SOCRATIC-GATE) — ask strategic questions before proceeding
 
@@ -40,7 +40,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 |------------|------|
 | "User Request: X" in prompt | Use X as the task, ignore folder name |
 | "Decisions: Y" in prompt | Apply Y without re-asking |
-| Existing plan in `docs/` | Read and CONTINUE it, don't restart |
+| Existing plan in `agent_docs/` | Read and CONTINUE it, don't restart |
 | Nothing provided | Ask Socratic questions (Phase 0) |
 
 
@@ -52,7 +52,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 4. Create and order tasks
 5. Generate task dependency graph
 6. Assign specialized agents
-7. **Create `docs/{task-slug}.md` (MANDATORY for PLANNING mode)**
+7. **Create `agent_docs/tasks/{task-slug}.md` (MANDATORY for PLANNING mode)**
 8. **Verify plan file exists before exiting (PLANNING mode CHECKPOINT)**
 
 ---
@@ -77,7 +77,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 2. **Lowercase, hyphen-separated** (kebab-case)
 3. **Max 30 characters** for the slug
 4. **No special characters** except hyphen
-5. **Location:** `docs/` directory
+5. **Location:** `agent_docs/tasks/` directory
 
 ### File Name Generation
 
@@ -88,7 +88,7 @@ Key Words:    [dashboard, analytics]
                     ↓
 Slug:         dashboard-analytics
                     ↓
-File:         docs/dashboard-analytics.md
+File:         agent_docs/tasks/dashboard-analytics.md
 ```
 
 ---
@@ -99,7 +99,7 @@ File:         docs/dashboard-analytics.md
 
 | ❌ FORBIDDEN in Plan Mode | ✅ ALLOWED in Plan Mode |
 |---------------------------|-------------------------|
-| Writing `.ts`, `.js`, `.vue` files | Writing `docs/{task-slug}.md` only |
+| Writing `.ts`, `.js`, `.vue` files | Writing `agent_docs/tasks/{task-slug}.md` only |
 | Creating components | Documenting file structure |
 | Implementing features | Listing dependencies |
 | Any code execution | Task breakdown |
@@ -127,7 +127,7 @@ File:         docs/dashboard-analytics.md
 | Phase | Name | Focus | Output | Code? |
 |-------|------|-------|--------|-------|
 | 1 | **ANALYSIS** | Research, brainstorm, explore | Decisions | ❌ NO |
-| 2 | **PLANNING** | Create plan | `docs/{task-slug}.md` | ❌ NO |
+| 2 | **PLANNING** | Create plan | `agent_docs/tasks/{task-slug}.md` | ❌ NO |
 | 3 | **SOLUTIONING** | Architecture, design | Design docs | ❌ NO |
 | 4 | **IMPLEMENTATION** | Code per plan file | Working code | ✅ YES |
 | X | **VERIFICATION** | Test & validate | Verified project | ✅ Scripts |
@@ -242,17 +242,17 @@ Before assigning agents, determine project type:
 ### 🔴 Step 6: Create Plan File (DYNAMIC NAMING)
 
 > 🔴 **ABSOLUTE REQUIREMENT:** Plan MUST be created before exiting PLANNING mode.
-> � **BAN:** NEVER use generic names like `plan.md`, `PLAN.md`, or `plan.dm`.
+>  **BAN:** NEVER use generic names like `plan.md`, `PLAN.md`, or `plan.dm`.
 
-**Plan Storage (For PLANNING Mode):** `docs/{task-slug}.md`
+**Plan Storage (For PLANNING Mode):** `agent_docs/tasks/{task-slug}.md`
 
 ```bash
-# Always place plan files in docs/ — never in project root
-# "e-commerce site" → docs/ecommerce-site.md
-# "add auth feature" → docs/auth-feature.md
+# Always place plan files in agent_docs/tasks/ — never in project root
+# "e-commerce site" → agent_docs/tasks/ecommerce-site.md
+# "add auth feature" → agent_docs/tasks/auth-feature.md
 ```
 
-> 🔴 **Location:** `docs/` directory — always. Never in project root.
+> 🔴 **Location:** `agent_docs/tasks/` directory — always. Never in project root.
 
 **Required Plan structure:**
 
@@ -269,8 +269,8 @@ Before assigning agents, determine project type:
 **EXIT GATE:**
 ```
 [IF PLANNING MODE]
-[OK] Plan file written to docs/{slug}.md
-[OK] Read docs/{slug}.md returns content
+[OK] Plan file written to agent_docs/tasks/{slug}.md
+[OK] Read agent_docs/tasks/{slug}.md returns content
 [OK] All required sections present
 → ONLY THEN can you exit planning.
 
@@ -365,7 +365,7 @@ python .agent/skills/webapp-testing/scripts/playwright_runner.py http://localhos
 - Date: [Current Date]
 ```
 
-> 🔴 **EXIT GATE:** Phase X marker MUST be in `docs/{task-slug}.md` before project is complete.
+> 🔴 **EXIT GATE:** Phase X marker MUST be in `agent_docs/tasks/{task-slug}.md` before project is complete.
 
 ---
 
@@ -397,9 +397,8 @@ python .agent/skills/webapp-testing/scripts/playwright_runner.py http://localhos
 | 5 | **Rollback** | Every task has recovery path | Tasks fail, prepare for it |
 | 6 | **Context** | Explain WHY not just WHAT | Better agent decisions |
 | 7 | **Risks** | Identify before they happen | Prepared responses |
-| 8 | **LOCATION** | `docs/{task-slug}.md` — always | Consistent, easy to find |
+| 8 | **LOCATION** | `agent_docs/tasks/{task-slug}.md` — always | Consistent, easy to find |
 | 9 | **Milestones** | Each phase ends with working state | Continuous value |
 | 10 | **Phase X** | Verification is ALWAYS final | Definition of done |
 
 ---
-
