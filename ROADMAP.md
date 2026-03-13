@@ -156,6 +156,9 @@ The frontend is the "Single Pane of Glass" for the analyst.
 | **FE-23**      | P25 System Layer        | Frontend  | **DONE**. (v0.25.x). `buildRFLayers.ts`: Agency-colored digital markers and mode-specific filtering. |
 | **FE-26**      | DMR Activity Layer      | Frontend  | **DONE**. (v0.25.x). `buildRFLayers.ts`: visualization of DMR repeaters and talkgroup status. |
 | **FE-27**      | Repeater Sub-Filters    | Frontend  | **DONE**. (v0.25.x). Expanded `LayerFilters` with FM/P25/DMR/Fusion/D-Star sub-toggles. |
+| **FE-32**      | Map Layer Depth Sorting | Frontend  | **DONE** (v0.28.1). Optimized Z-stack across tactical and infrastructure layers. |
+| **FE-33**      | Waterfall Zoom Suite    | Frontend  | **DONE** (v0.28.1). Dynamic spectrum scaling and audio frequency synchronization. |
+| **FE-34**      | Geodesic Indicators     | Frontend  | **DONE** (v0.28.1). Distortion-free AOT rendering for Globe projection. |
 
 ### Version 1.0 Release Candidate Requirements
 

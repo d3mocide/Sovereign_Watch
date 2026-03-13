@@ -1,3 +1,26 @@
+## [0.28.1] - 2026-03-12
+
+### Added
+
+- **Waterfall Zoom Suite**: Integrated dynamic zoom capabilities into the KiwiSDR waterfall.
+  - **Dynamic Scaling**: The waterfall now correctly follows the audio center frequency even when zoomed in.
+  - **Zoom Controls**: Added interactive zoom +/- buttons to the Listening Post panel.
+- **Global Network Master Toggle**: Refined the "Global Network" infrastructure toggle with a hierarchical master switch that controls Undersea Cables and Internet Outages as a group.
+
+### Fixed
+
+- **Map Depth Sorting Optimization**: Standardized depth stacking across the tactical stack. Entity icons and trails now correctly "float" above high-density infrastructure layers like Internet Outages and Submarine Cables.
+- **Globe Projection Refinements**:
+  - Fixed a visual glitch where AOT boundaries would "clip" or distort when transitioning to Globe mode by implementing geodesic path rendering.
+  - Fixed a mission-area rendering bug in maritime AOTs by implementing box-edge interpolation for the Earth's curvature.
+- **Map Style Lifecycle**: Resolved an issue where the map would remain stuck in satellite mode after exiting Globe view; it now correctly reverts to the tactical dark style.
+- **Waterfall Dynamic Range**: Improved waterfall contrast through precise dynamic range calibration and a refined spectral palette.
+
+### Changed
+
+- **Tactical HUD Condensation**: Optimized vertical spacing in the Listening Post sidebar to reduce scrolling and improve situational awareness.
+- **Documentation Migration**: Completed the transition of all persistent documentation from `docs/` to `agent_docs/` for better agent resonance.
+
 ## [0.28.0] - 2026-03-11
 
 ### Added

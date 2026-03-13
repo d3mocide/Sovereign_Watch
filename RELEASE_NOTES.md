@@ -1,22 +1,28 @@
-# Release - v0.28.0 - Infrastructure & Outage Awareness
+# Release - v0.28.1 - Tactical Depth & Spectral Clarity
 
-## Summary
-Version 0.28.0 introduces a massive update to the project's infrastructure intelligence capabilities. The centerpiece is a new **Global Internet Outage** layer, which provides real-time situational awareness of network disruptions worldwide. This release also marks the introduction of the `infra_poller` microservice, significantly improving the performance and reliability of static infrastructure data.
+This release focuses on refining the tactical visual stack and expanding the signal intelligence capabilities of the Listening Post. We've introduced dynamic spectrum zooming and resolved long-standing layer occlusion issues to ensure critical data remains visible and actionable.
 
-## Key Features
-- **Internet Outage Shading**: Real-time country-level disruption heatmap powered by IODA (Georgia Tech).
-- **`infra_poller` Microservice**: New dedicated background service for IODA and Submarine Cable synchronization.
-- **Polygon-Based Interaction**: Select entire countries to view detailed outage reports and severity scores.
-- **Master Network Toggle**: Unified control for Cables, Stations, and Outages in the System Status widget.
-- **Tactical Layer Rebalancing**: Recalibrated depth buffers to ensure infrastructure underlays never obscure tactical tracks or boundaries.
+## 🚀 Key Features
 
-## Technical Details
-- **Backend**: Python-based `infra_poller` service using `requests` and `redis`.
-- **Frontend**: Transitioned from `ScatterplotLayer` markers to high-performance `GeoJsonLayer` country shading.
-- **Rendering**: Established a consistent "tactical sandwich" using `depthBias` (-30 to -200).
+- **Waterfall Zoom Suite**: Operators can now zoom into the spectrum in the Listening Post. The system intelligently scales the spectral display while keeping the audio center frequency locked, enabling precise signal analysis.
+- **Hierarchical Global Network Mapping**: The "Global Network" infrastructure toggle has been re-engineered. A new master switch now controls Undersea Cables and Internet Outages as a unified group, allowing for cleaner layer management.
+- **Geodesic Indicator Rendering**: Tactical indicators (aviation/maritime mission areas) now use geodesic math to render perfectly on the 3D globe, eliminating visual distortion at the horizon.
 
-## Upgrade Instructions
+## 🔧 Technical Improvements
+
+- **Depth Stack Calibration**: Implemented a comprehensive `depthBias` strategy. Tactical entities (icons, trails, halos) now consistently render in front of high-density background layers like Internet Outages and Submarine Cables.
+- **Map Style Persistence**: Fixed the map style lifecycle so that exiting Globe view automatically reverts the basemap to the high-contrast Tactical Dark style.
+- **Spectral Palette Tuning**: Optimized the waterfall dynamic range and color palette for better signal-to-noise visualization in high-interference environments.
+
+## 📄 Upgrade Instructions
+
+To upgrade to v0.28.1, pull the latest changes and rebuild the frontend:
+
 ```bash
-docker compose pull
-docker compose up -d --build
+git pull origin main
+docker compose build frontend
+docker compose up -d
 ```
+
+---
+*Sovereign Watch - Distributed Intelligence Fusion*
