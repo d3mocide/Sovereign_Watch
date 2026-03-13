@@ -66,13 +66,19 @@ Returns historical track points for a specific entity.
 **Path Parameters:**
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `entity_id` | string | Entity UID (e.g., ICAO hex `a1b2c3` or MMSI `123456789`) |
+| `entity_id` | string | Entity UID (e.g., ICAO hex `a1b2c3`, MMSI `123456789`, or `SAT-25544` for a satellite) |
 
 **Query Parameters:**
 | Parameter | Type | Default | Constraints | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `limit` | int | `100` | 1 – MAX_LIMIT | Maximum number of track points to return |
 | `hours` | int | `24` | 1 – MAX_HOURS | Lookback window in hours |
+
+> **Data source routing:** Aircraft and vessel entities (`entity_id` not starting with `SAT-`)
+> are served from the `tracks` hypertable (72-hour retention). Satellite entities
+> (`SAT-*`) are served from `orbital_tracks` (12-hour retention). Requests for
+> satellite history beyond 12 hours will return an empty array — use
+> `GET /api/orbital/groundtrack/{norad_id}` to regenerate positions from TLE instead.
 
 **Response:** Array of track objects ordered by time descending:
 ```json
@@ -88,6 +94,10 @@ Returns historical track points for a specific entity.
   }
 ]
 ```
+
+> **Note:** For satellite entities (`SAT-*`), `meta` is always `null`. Satellite
+> metadata (name, category, constellation, TLE) is available via
+> `GET /api/orbital/passes` and `GET /api/orbital/groundtrack/{norad_id}`.
 
 ---
 
@@ -116,6 +126,11 @@ Search for entities by UID or callsign (substring match).
 ]
 ```
 
+> **Satellite results:** Matches against `SAT-*` entity IDs are sourced from
+> `orbital_tracks`. For these results `callsign` is the satellite name (from the
+> `satellites` table), and `classification` is always `null`. Both `tracks` and
+> `orbital_tracks` are searched in parallel and results are combined.
+
 ---
 
 ### `GET /api/tracks/replay`
@@ -133,7 +148,11 @@ Retrieve all track points within a time window for historical replay.
 - `end` must be after `start`
 - Time window cannot exceed `MAX_REPLAY_HOURS`
 
-**Response:** Array of track points ordered by time ascending, including all entity types within the time window:
+> **Data source:** Results are a UNION of `tracks` (72-hour retention) and
+> `orbital_tracks` (12-hour retention). Satellite track points older than 12 hours
+> will not appear in replay results.
+
+**Response:** Array of track points ordered by time ascending, including all entity types within the time window. Satellite rows (`type: "a-s-K"`) always have `meta: null`:
 ```json
 [
   {
@@ -145,7 +164,18 @@ Retrieve all track points within a time window for historical replay.
     "alt": 9144.0,
     "speed": 238.0,
     "heading": 265.0,
-    "meta": { ... }
+    "meta": { "callsign": "UAL123", "classification": { ... } }
+  },
+  {
+    "time": "2026-03-12T10:00:10Z",
+    "entity_id": "SAT-25544",
+    "type": "a-s-K",
+    "lat": 51.50,
+    "lon": -0.12,
+    "alt": 418000.0,
+    "speed": 7660.0,
+    "heading": 42.1,
+    "meta": null
   }
 ]
 ```

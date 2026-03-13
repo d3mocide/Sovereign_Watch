@@ -92,7 +92,7 @@ Each satellite publish includes:
 | `detail.period_min` | Orbital period in minutes |
 | `detail.inclination_deg` | Orbital inclination in degrees |
 | `detail.eccentricity` | Orbital eccentricity (0 = circular) |
-| `detail.tle_line1` / `tle_line2` | Raw TLE data for client-side re-propagation |
+| `detail.tle_line1` / `tle_line2` | Raw TLE strings (published to clients for re-propagation; **not** stored per track row — see Storage Architecture below) |
 
 ---
 
@@ -120,10 +120,33 @@ SatrecArray.sgp4(jd, fr)  →  TEME positions
     ↓
 teme_to_ecef_vectorized()  →  ecef_to_lla_vectorized()
     ↓
-compute_course()  →  TAK JSON events
+compute_course()  →  TAK JSON events  (includes TLE for client re-propagation)
     ↓
-Redpanda: orbital_raw topic  →  Backend API / TimescaleDB
+Redpanda: orbital_raw topic
+    ↓
+Backend Historian
+    ├── orbital_tracks hypertable  ←  position only (lat, lon, alt, speed, heading)
+    │                                  12-hour retention | no TLE stored per row
+    └── satellites table           ←  TLE upsert (norad_id, tle_line1/2, orbital params)
+                                       permanent lookup; no retention
 ```
+
+---
+
+## Storage Architecture
+
+Satellite data is split across two tables to avoid duplicating the 138-byte TLE
+string pair on every position update:
+
+| Table | What it holds | Retention |
+| :--- | :--- | :--- |
+| `orbital_tracks` | Position snapshots (`entity_id`, lat, lon, alt, speed, heading) | **12 hours** |
+| `satellites` | TLE catalogue (norad_id, tle_line1/2, category, constellation, orbital params) | Permanent |
+
+**Why 12 hours?** Orbital positions are 100% reproducible from the current TLE via
+SGP4. The `/api/orbital/groundtrack/{norad_id}` endpoint regenerates any historical
+ground track on demand, so there is no operational need to retain propagated
+positions beyond a short live-playback window.
 
 ---
 

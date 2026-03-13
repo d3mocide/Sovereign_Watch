@@ -2,213 +2,305 @@
 
 ## Overview
 
-Sovereign Watch's TimescaleDB is configured with **automatic data retention** to prevent unbounded storage growth. By default, track data older than **24 hours** is automatically deleted.
+Sovereign Watch uses **two separate hypertables** for time-series track data, each
+with its own retention and compression policy tuned to the nature of the data it
+holds:
+
+| Hypertable | Data | Chunk interval | Compression after | Retention |
+|---|---|---|---|---|
+| `tracks` | AIS vessels, ADS-B aircraft | 1 day | **1 hour** | **72 hours** |
+| `orbital_tracks` | Satellite positions | 6 hours | **2 hours** | **12 hours** |
+
+The `satellites` table (TLE catalogue) is a plain lookup table — no retention,
+no compression, upserted by the Historian every 6 hours.
+
+### Why two tables?
+
+Orbital positions are 100% mathematically reproducible from TLE data via SGP4.
+Holding them for 72 hours the same as an AIS track (which cannot be reproduced
+after the fact) would waste ~6× the storage for no operational benefit.
+The shorter window also keeps `orbital_tracks` lean enough to stay largely
+in-cache.
+
+### Why compress so early?
+
+The old policy compressed at the retention boundary — data was compressed right
+before being dropped, so it was never meaningfully compressed while live.
+Moving the trigger to 1 h / 2 h means the bulk of each table's retained window
+sits in columnar-compressed form (~42× ratio typical for TimescaleDB), keeping
+storage well within bounds despite the extended 72-hour window for `tracks`.
 
 ---
 
-## Automatic Retention Policy
+## Hypertable Policies
 
-### How It Works:
-
-- **Policy**: Runs every hour as a background job
-- **Retention Window**: 24 hours (configurable)
-- **Target**: `tracks` hypertable
-- **Action**: Drops chunks (time partitions) outside the retention window
-
-### Configuration:
-
-Defined in `backend/db/init.sql`:
+### `tracks` (AIS + ADS-B)
 
 ```sql
-SELECT add_retention_policy('tracks', INTERVAL '24 hours');
+-- 1-day chunks; 3 chunks retained inside the 72-hour window
+SELECT create_hypertable('tracks', 'time', chunk_time_interval => INTERVAL '1 day');
+
+-- Compress after 1 hour — ~71 of the 72 retained hours sit compressed
+SELECT add_compression_policy('tracks', INTERVAL '1 hour');
+
+-- Drop chunks older than 72 hours (matches TRACK_HISTORY_MAX_HOURS in config)
+SELECT add_retention_policy('tracks', INTERVAL '72 hours');
 ```
 
-### Verify Policy Status:
+### `orbital_tracks` (Satellite positions)
+
+```sql
+-- 6-hour chunks; 2 chunks retained inside the 12-hour window
+SELECT create_hypertable('orbital_tracks', 'time', chunk_time_interval => INTERVAL '6 hours');
+
+-- Compress after 2 hours
+SELECT add_compression_policy('orbital_tracks', INTERVAL '2 hours');
+
+-- Drop chunks older than 12 hours
+SELECT add_retention_policy('orbital_tracks', INTERVAL '12 hours');
+```
+
+---
+
+## Applying to an Existing Deployment
+
+Two idempotent migration scripts are provided. Apply them in order:
 
 ```bash
-# Connect to database
-docker exec -it sovereign-timescaledb psql -U postgres -d sovereign_watch
+# 1. Create orbital_tracks (Options C+D — strips TLE from track rows,
+#    adds the dedicated satellite-position hypertable)
+psql -d sovereign_watch -f backend/db/migrate_orbital_tracks_cd.sql
 
-# Check retention policy
-SELECT * FROM timescaledb_information.jobs
-WHERE proc_name = 'policy_retention';
+# 2. Extend AIS/ADS-B retention to 72 h and tighten compression trigger
+psql -d sovereign_watch -f backend/db/migrate_tracks_72h_retention.sql
+
+# Then restart the API / Historian containers so they route orbital_raw
+# messages to orbital_tracks instead of tracks.
+docker compose restart backend-api
 ```
+
+Or run both interactively:
+
+```bash
+docker exec -it sovereign-timescaledb psql -U postgres -d sovereign_watch
+```
+
+```sql
+-- tracks: 72 h retention, 1 h compression
+SELECT remove_compression_policy('tracks', if_exists => TRUE);
+SELECT add_compression_policy('tracks', INTERVAL '1 hour', if_not_exists => TRUE);
+SELECT remove_retention_policy('tracks', if_exists => TRUE);
+SELECT add_retention_policy('tracks', INTERVAL '72 hours', if_not_exists => TRUE);
+
+-- orbital_tracks: create if it doesn't exist (see migration file for full DDL)
+-- then 12 h retention, 2 h compression (already set by the migration)
+```
+
+---
+
+## Verify Policy Status
+
+```bash
+docker exec -it sovereign-timescaledb psql -U postgres -d sovereign_watch
+```
+
+```sql
+-- All active retention and compression jobs
+SELECT
+    j.job_id,
+    j.proc_name,
+    j.schedule_interval,
+    j.config,
+    s.last_run_status,
+    s.last_run_duration,
+    s.next_start
+FROM timescaledb_information.jobs j
+LEFT JOIN timescaledb_information.job_stats s USING (job_id)
+WHERE j.proc_name IN ('policy_retention', 'policy_compression')
+ORDER BY j.proc_name, j.config->>'hypertable_name';
+```
+
+Expected output (one row per policy per table):
+
+| proc_name | config hypertable_name | schedule_interval |
+|---|---|---|
+| policy_compression | orbital_tracks | 00:30:00 |
+| policy_compression | tracks | 00:30:00 |
+| policy_retention | orbital_tracks | 01:00:00 |
+| policy_retention | tracks | 01:00:00 |
 
 ---
 
 ## Manual Cleanup
 
-For immediate cleanup (e.g., after testing or before deployment):
-
-### Option 1: Python Script
-
-```bash
-# From host machine
-docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch -c "SELECT drop_chunks('tracks', INTERVAL '24 hours');"
-
-# Or use the Python script
-docker exec sovereign-backend python /app/scripts/cleanup_timescale.py
-```
-
-### Option 2: SQL Query
-
-```bash
-docker exec -it sovereign-timescaledb psql -U postgres -d sovereign_watch
-```
+Force-drop old chunks immediately (useful after testing or before a demo):
 
 ```sql
--- Drop chunks older than 24 hours
-SELECT drop_chunks('tracks', INTERVAL '24 hours');
+-- AIS/ADS-B: drop anything older than 72 hours
+SELECT drop_chunks('tracks', INTERVAL '72 hours');
 
--- Check database size
-SELECT pg_size_pretty(pg_database_size('sovereign_watch'));
-
--- Check chunk count
-SELECT COUNT(*) FROM timescaledb_information.chunks
-WHERE hypertable_name = 'tracks';
+-- Orbital: drop anything older than 12 hours
+SELECT drop_chunks('orbital_tracks', INTERVAL '12 hours');
 ```
 
----
-
-## Modify Retention Period
-
-To change the retention window (e.g., to 12 hours or 7 days):
-
-### Option 1: Update init.sql (New Deployments)
-
-Edit `backend/db/init.sql`:
-
-```sql
--- Change to 12 hours
-SELECT add_retention_policy('tracks', INTERVAL '12 hours');
-
--- Or 7 days
-SELECT add_retention_policy('tracks', INTERVAL '7 days');
-```
-
-### Option 2: Update Existing Database
+Or from the host:
 
 ```bash
-docker exec -it sovereign-timescaledb psql -U postgres -d sovereign_watch
-```
-
-```sql
--- Remove old policy
-SELECT remove_retention_policy('tracks');
-
--- Add new policy
-SELECT add_retention_policy('tracks', INTERVAL '12 hours');
+docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch \
+  -c "SELECT drop_chunks('tracks', INTERVAL '72 hours'); \
+      SELECT drop_chunks('orbital_tracks', INTERVAL '12 hours');"
 ```
 
 ---
 
 ## Storage Monitoring
 
-### Check Database Size:
+### Overall database size
 
 ```bash
 docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch -c \
   "SELECT pg_size_pretty(pg_database_size('sovereign_watch'));"
 ```
 
-### Check Chunk Information:
+### Per-hypertable size (uncompressed vs compressed)
 
 ```sql
 SELECT
-    chunk_schema,
+    hypertable_name,
+    pg_size_pretty(before_compression_total_bytes) AS uncompressed,
+    pg_size_pretty(after_compression_total_bytes)  AS compressed,
+    ROUND(
+        before_compression_total_bytes::numeric
+        / NULLIF(after_compression_total_bytes, 0), 1
+    ) AS ratio
+FROM timescaledb_information.compressed_hypertable_stats
+ORDER BY hypertable_name;
+```
+
+### Chunk inventory (both tables)
+
+```sql
+SELECT
+    hypertable_name,
     chunk_name,
     range_start,
     range_end,
-    pg_size_pretty(total_bytes) as chunk_size
+    compression_status,
+    pg_size_pretty(total_bytes) AS chunk_size
 FROM timescaledb_information.chunks
-WHERE hypertable_name = 'tracks'
-ORDER BY range_start DESC;
+WHERE hypertable_name IN ('tracks', 'orbital_tracks')
+ORDER BY hypertable_name, range_start DESC;
 ```
 
-### Check Compression Status:
+### Compression detail per chunk
 
 ```sql
 SELECT
-    chunk_name,
-    compression_status,
-    before_compression_total_bytes,
-    after_compression_total_bytes,
-    pg_size_pretty(before_compression_total_bytes) as before_size,
-    pg_size_pretty(after_compression_total_bytes) as after_size
-FROM timescaledb_information.compressed_chunk_stats
-ORDER BY chunk_name;
+    c.hypertable_name,
+    c.chunk_name,
+    c.range_start,
+    pg_size_pretty(cs.before_compression_total_bytes) AS before,
+    pg_size_pretty(cs.after_compression_total_bytes)  AS after
+FROM timescaledb_information.chunks c
+JOIN timescaledb_information.compressed_chunk_stats cs
+    ON cs.chunk_name = c.chunk_name
+WHERE c.hypertable_name IN ('tracks', 'orbital_tracks')
+ORDER BY c.hypertable_name, c.range_start DESC;
 ```
 
 ---
 
 ## Troubleshooting
 
-### Database Growing Too Large?
+### Database growing too large?
 
-1. **Verify retention policy is active**:
+1. **Confirm both policies are active and scheduled**:
 
    ```sql
-   SELECT * FROM timescaledb_information.jobs
-   WHERE proc_name = 'policy_retention' AND scheduled = true;
+   SELECT job_id, proc_name, config->>'hypertable_name' AS table,
+          scheduled, last_run_status
+   FROM timescaledb_information.jobs
+   LEFT JOIN timescaledb_information.job_stats USING (job_id)
+   WHERE proc_name IN ('policy_retention', 'policy_compression');
    ```
 
-2. **Check last run time**:
+2. **Check when each policy last ran**:
 
    ```sql
-   SELECT * FROM timescaledb_information.job_stats
+   SELECT job_id, last_run_status, last_run_duration, next_start
+   FROM timescaledb_information.job_stats
    WHERE job_id IN (
        SELECT job_id FROM timescaledb_information.jobs
-       WHERE proc_name = 'policy_retention'
+       WHERE proc_name IN ('policy_retention', 'policy_compression')
    );
    ```
 
-3. **Manually trigger policy**:
+3. **Manually trigger a specific policy**:
 
    ```sql
-   CALL run_job(<job_id>);  -- Use job_id from step 1
+   -- Find job_ids first, then run:
+   CALL run_job(<job_id>);
    ```
 
-4. **Force immediate cleanup**:
+4. **Force immediate drop**:
+
    ```sql
-   SELECT drop_chunks('tracks', INTERVAL '24 hours');
+   SELECT drop_chunks('tracks', INTERVAL '72 hours');
+   SELECT drop_chunks('orbital_tracks', INTERVAL '12 hours');
    ```
 
-### No Data Being Deleted?
+### Compressed chunks not being dropped?
 
-- Check if chunks are **compressed**. Compressed chunks aren't dropped until decompressed.
-- Verify the `time` column has recent data (policy only drops old chunks).
-- Ensure the policy interval is correct (24 hours = 1 day).
+TimescaleDB automatically decompresses chunks before dropping them when the
+retention policy fires — this is handled transparently. If you are manually
+calling `drop_chunks` and hitting errors, decompress first:
+
+```sql
+SELECT decompress_chunk(c.chunk_schema || '.' || c.chunk_name)
+FROM timescaledb_information.chunks c
+WHERE c.hypertable_name = 'tracks'
+  AND c.range_end < NOW() - INTERVAL '72 hours'
+  AND c.compression_status = 'Compressed';
+```
+
+### Replay missing satellite data beyond 12 hours?
+
+The `/api/tracks/replay` endpoint UNIONs both `tracks` and `orbital_tracks`.
+Orbital positions older than 12 hours are dropped by design — they are fully
+reproducible via the `/api/orbital/groundtrack/{norad_id}` endpoint using the
+current TLE from the `satellites` table.
 
 ---
 
 ## Best Practices
 
-1. **Development**: Use short retention (6-12 hours) to keep Docker volumes small
-2. **Production**: Use 24-48 hours for operational monitoring
-3. **Long-term Analysis**: Export historical data before it's dropped
-4. **Testing**: Run manual cleanup before/after load tests
+| Environment | `tracks` retention | `orbital_tracks` retention | Notes |
+|---|---|---|---|
+| Development | 6–12 h | 1–2 h | Keep Docker volumes small |
+| Staging | 24 h | 6 h | Representative of prod load |
+| Production | **72 h** | **12 h** | Default; matches API config |
+| Long-term analysis | — | — | Export to S3/Parquet before drop |
 
 ---
 
-## Related Documentation
-
-- [TimescaleDB Retention Policies](https://docs.timescale.com/use-timescale/latest/data-retention/)
-- [TimescaleDB Compression](https://docs.timescale.com/use-timescale/latest/compression/)
-- [Docker Volume Management](../docker-compose.yml)
-
----
-
-## Quick Commands Reference
+## Quick Reference
 
 ```bash
-# Check current database size
-docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch -c "SELECT pg_size_pretty(pg_database_size('sovereign_watch'));"
+# Current database size
+docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch \
+  -c "SELECT pg_size_pretty(pg_database_size('sovereign_watch'));"
 
-# Drop old data immediately
-docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch -c "SELECT drop_chunks('tracks', INTERVAL '24 hours');"
+# Active retention + compression jobs (both tables)
+docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch \
+  -c "SELECT proc_name, config->>'hypertable_name' AS table, schedule_interval \
+      FROM timescaledb_information.jobs \
+      WHERE proc_name IN ('policy_retention','policy_compression') \
+      ORDER BY proc_name, table;"
 
-# Verify retention policy
-docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch -c "SELECT * FROM timescaledb_information.jobs WHERE proc_name = 'policy_retention';"
+# Force immediate cleanup
+docker exec sovereign-timescaledb psql -U postgres -d sovereign_watch \
+  -c "SELECT drop_chunks('tracks', INTERVAL '72 hours'); \
+      SELECT drop_chunks('orbital_tracks', INTERVAL '12 hours');"
 
 # Check Docker volume size
 docker system df -v | grep postgres
@@ -216,5 +308,17 @@ docker system df -v | grep postgres
 
 ---
 
-**Last Updated**: 2026-02-04  
-**Retention Period**: 24 hours (default)
+## Related Files
+
+| File | Purpose |
+|---|---|
+| `backend/db/init.sql` | Base schema for clean installs |
+| `backend/db/migrate_orbital_tracks_cd.sql` | Creates `orbital_tracks` (Options C+D) |
+| `backend/db/migrate_tracks_72h_retention.sql` | Extends `tracks` to 72 h retention |
+| `backend/api/services/historian.py` | Routes orbital vs non-orbital writes |
+| `backend/api/core/config.py` | `TRACK_HISTORY_MAX_HOURS`, `TRACK_REPLAY_MAX_HOURS` |
+
+---
+
+**Last updated**: 2026-03-13
+**tracks retention**: 72 hours | **orbital_tracks retention**: 12 hours

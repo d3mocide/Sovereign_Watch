@@ -16,7 +16,7 @@
 **Minimum hardware:**
 - 4 CPU cores
 - 8 GB RAM
-- 20 GB disk (for TimescaleDB data retention)
+- 40 GB disk (for TimescaleDB data — 72-hour AIS/ADS-B retention with compression)
 
 ---
 
@@ -159,6 +159,15 @@ Check [RELEASE_NOTES.md](../RELEASE_NOTES.md) before upgrading.
 docker compose exec -T timescaledb psql -U postgres -d sovereign_watch < ./backend/db/migrate_rf_plus.sql
 ```
 
+**Available migrations** (applied in filename order where dependencies exist):
+
+| File | Purpose |
+| :--- | :--- |
+| `backend/db/migrate_add_constellation.sql` | Adds `constellation` column to `satellites` |
+| `backend/db/migrate_rf_plus.sql` | Creates RF infrastructure tables |
+| `backend/db/migrate_orbital_tracks_cd.sql` | Creates `orbital_tracks` hypertable; strips TLE from per-row storage |
+| `backend/db/migrate_tracks_72h_retention.sql` | Extends `tracks` retention to 72 h; tightens compression to 1 h |
+
 > **Fresh installations do not need to run migration scripts** — the full schema is applied automatically on first start via `backend/db/init.sql`.
 
 ### 4. Verify After Upgrade
@@ -248,12 +257,21 @@ The Nginx configuration is at `nginx/`. No changes are needed for standard deplo
 
 ## Data Retention
 
-TimescaleDB stores all track history. The default retention policy is managed by TimescaleDB's time-series compression and continuous aggregates.
+Sovereign Watch uses two separate hypertables, each with its own retention policy:
 
-See `docs/TIMESCALE_RETENTION.md` for the detailed retention strategy including:
-- Compression policies by data age
-- Continuous aggregate definitions for historical analysis
-- Manual retention adjustment via hypertable policies
+| Hypertable | Data | Retention | Compression |
+| :--- | :--- | :--- | :--- |
+| `tracks` | AIS vessels, ADS-B aircraft | **72 hours** | After 1 hour |
+| `orbital_tracks` | Satellite positions | **12 hours** | After 2 hours |
+
+Satellite positions are deterministic (reproducible from TLE via SGP4) so a short
+window is sufficient; the `/api/orbital/groundtrack/{norad_id}` endpoint can
+regenerate any historical position on demand. AIS/ADS-B tracks, which cannot be
+reproduced after the fact, are retained for 72 hours to match the API's
+`TRACK_HISTORY_MAX_HOURS` setting.
+
+See `docs/TIMESCALE_RETENTION.md` for the full retention reference including
+monitoring queries, manual cleanup commands, and migration scripts.
 
 ---
 
