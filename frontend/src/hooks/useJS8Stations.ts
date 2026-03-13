@@ -21,6 +21,7 @@ export interface UseJS8StationsResult {
   activeKiwiConfig: any;
   js8Mode: string;
   sMeterDbm: number | null;
+  adcOverload: boolean;
   sendMessage: (target: string, message: string) => void;
   sendAction: (payload: object) => void;
 }
@@ -45,6 +46,8 @@ export function useJS8Stations(): UseJS8StationsResult {
   const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
   const [js8Mode, setJs8Mode] = useState<string>('normal');
   const [sMeterDbm, setsMeterDbm] = useState<number | null>(null);
+  const [adcOverload, setAdcOverload] = useState(false);
+  const adcOverloadTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const syncStations = useCallback(() => {
     setStations(
@@ -181,6 +184,14 @@ export function useJS8Stations(): UseJS8StationsResult {
         return;
       }
 
+      if (type === 'KIWI.ADC_OVERLOAD') {
+        setAdcOverload(true);
+        clearTimeout(adcOverloadTimerRef.current);
+        // Auto-dismiss after 8 s — the operator has had time to notice
+        adcOverloadTimerRef.current = setTimeout(() => setAdcOverload(false), 8000);
+        return;
+      }
+
       if (type === 'RX.DIRECTED' || type === 'TX.SENT') {
         const entry: JS8LogEntry = {
           id: `${Date.now()}-${Math.random()}`,
@@ -229,5 +240,5 @@ export function useJS8Stations(): UseJS8StationsResult {
     };
   }, [connect]);
 
-  return { stationsRef, ownGridRef, kiwiNodeRef, stations, logEntries, statusLine, connected, js8Connected, kiwiConnecting, activeKiwiConfig, js8Mode, sMeterDbm, sendMessage, sendAction };
+  return { stationsRef, ownGridRef, kiwiNodeRef, stations, logEntries, statusLine, connected, js8Connected, kiwiConnecting, activeKiwiConfig, js8Mode, sMeterDbm, adcOverload, sendMessage, sendAction };
 }

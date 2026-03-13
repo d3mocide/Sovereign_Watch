@@ -112,6 +112,7 @@ interface ListeningPostProps {
   bridgeConnected: boolean;
   sendAction: (payload: object) => void;
   isConnected: boolean;
+  adcOverload?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ export default function ListeningPost({
   bridgeConnected,
   sendAction,
   isConnected,
+  adcOverload = false,
 }: ListeningPostProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
@@ -147,6 +149,11 @@ export default function ListeningPost({
   const [wfSkip,  setWfSkip]  = useState(1);     // client-side frame skip (1=all,2=every other,…)
   const [sqn, setSqn] = useState(20);
   const [sql, setSql] = useState(0);
+  const [sqHysteresis, setSqHysteresis] = useState(10); // squelch hysteresis (UI units 0-50)
+  const [nbEnabled, setNbEnabled] = useState(false);    // noise blanker on/off
+  const [nbGate, setNbGate]       = useState(500);      // gate µs (100-2000)
+  const [nbThresh, setNbThresh]   = useState(50);       // trigger % of peak (1-100)
+  const [deEmp, setDeEmp]         = useState(0);        // de-emphasis: 0=off, 1=50µs, 2=75µs
   const [wfOffset, setWfOffset] = useState(100); // Waterfall baseline calibration
   const wfFrameCountRef = useRef(0);
 
@@ -420,6 +427,16 @@ export default function ListeningPost({
       {/* ── MAIN AREA: WATERFALL ── */}
       <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
 
+        {/* ADC overload alert — dismissed automatically after 8 s */}
+        {adcOverload && (
+          <div className="absolute top-2 left-2 right-2 z-30 flex items-center gap-2 px-3 py-2 rounded bg-rose-900/80 border border-rose-500/60 backdrop-blur-sm">
+            <Zap className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="text-[10px] font-bold text-rose-200 uppercase tracking-wide">
+              ADC Overload — node input saturated. Switch nodes or reduce gain.
+            </span>
+          </div>
+        )}
+
         {/* No-connection overlay — shown when no KiwiSDR is linked */}
         {!activeKiwiConfig && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none select-none">
@@ -495,7 +512,7 @@ export default function ListeningPost({
                 (() => {
                   const span = getWideSpan(zoom);
                   // Dynamic ticks based on span
-                  let tickStep = 100;
+                  let tickStep: number;
                   if (span < 50) tickStep = 5;
                   else if (span < 150) tickStep = 10;
                   else if (span < 400) tickStep = 25;
@@ -610,10 +627,32 @@ export default function ListeningPost({
                                 action: 'SET_SQUELCH',
                                 enabled: val > 0,
                                 threshold: val,
+                                hysteresis: sqHysteresis,
                             });
                         }
                     }}
                     className="w-full h-1 accent-indigo-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
+                />
+                {/* Hysteresis — prevents rapid open/close cycling near threshold */}
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-600 uppercase">Hysteresis</span>
+                    <span className="text-slate-500 text-[9px]">{sqHysteresis}</span>
+                </div>
+                <input
+                    type="range" min={0} max={50} value={sqHysteresis}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const val = parseInt(e.target.value);
+                        setSqHysteresis(val);
+                        if (activeKiwiConfig && bridgeConnected && sql > 0) {
+                            sendAction({
+                                action: 'SET_SQUELCH',
+                                enabled: true,
+                                threshold: sql,
+                                hysteresis: val,
+                            });
+                        }
+                    }}
+                    className="w-full h-0.5 accent-indigo-400 bg-[#131e28] rounded appearance-none cursor-pointer"
                 />
             </div>
 
@@ -628,6 +667,80 @@ export default function ListeningPost({
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSqn(parseInt(e.target.value))}
                     className="w-full h-1 accent-rose-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
                 />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Noise Blanker — impulse noise suppression */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Noise Blanker</span>
+                    <button
+                        onClick={() => {
+                            const next = !nbEnabled;
+                            setNbEnabled(next);
+                            if (activeKiwiConfig && bridgeConnected)
+                                sendAction({ action: 'SET_NOISE_BLANKER', enabled: next, gate_usec: nbGate, thresh_percent: nbThresh });
+                        }}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${nbEnabled ? 'bg-amber-600/20 border-amber-500 text-amber-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                    >
+                        {nbEnabled ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-600 uppercase">Gate</span>
+                    <span className="text-slate-500 text-[9px]">{nbGate} µs</span>
+                </div>
+                <input
+                    type="range" min={100} max={2000} step={50} value={nbGate}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const val = parseInt(e.target.value);
+                        setNbGate(val);
+                        if (activeKiwiConfig && bridgeConnected && nbEnabled)
+                            sendAction({ action: 'SET_NOISE_BLANKER', enabled: true, gate_usec: val, thresh_percent: nbThresh });
+                    }}
+                    className="w-full h-0.5 accent-amber-500 bg-[#131e28] rounded appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-600 uppercase">Threshold</span>
+                    <span className="text-slate-500 text-[9px]">{nbThresh}%</span>
+                </div>
+                <input
+                    type="range" min={1} max={100} value={nbThresh}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const val = parseInt(e.target.value);
+                        setNbThresh(val);
+                        if (activeKiwiConfig && bridgeConnected && nbEnabled)
+                            sendAction({ action: 'SET_NOISE_BLANKER', enabled: true, gate_usec: nbGate, thresh_percent: val });
+                    }}
+                    className="w-full h-0.5 accent-amber-400 bg-[#131e28] rounded appearance-none cursor-pointer"
+                />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* De-emphasis — audio filter for AM/broadcast monitoring */}
+            <div className="space-y-3">
+                <span className="text-[9px] text-slate-500 uppercase font-bold">De-emphasis</span>
+                <div className="flex gap-1">
+                    {([['Off', 0], ['50µs', 1], ['75µs', 2]] as [string, number][]).map(([label, val]) => (
+                        <button
+                            key={val}
+                            onClick={() => {
+                                setDeEmp(val);
+                                if (activeKiwiConfig && bridgeConnected)
+                                    sendAction({ action: 'SET_DE_EMP', de_emp: val });
+                            }}
+                            className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${
+                                deEmp === val
+                                    ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
+                                    : 'bg-black/20 border-[#1a2b36] text-slate-600 hover:text-slate-400'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <div className="h-px bg-[#1a2b36]" />
