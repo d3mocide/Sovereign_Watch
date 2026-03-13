@@ -96,9 +96,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Layer 5: PulseAudio user daemon + ALSA compatibility shim
 #
 # PULSEAUDIO ROUTING ARCHITECTURE:
-#   KiwiSDR → kiwirecorder.py → stdout (raw S16LE PCM @ 12 kHz, mono)
-#                ↓ pipe
-#   pacat (playback) → PulseAudio null sink "KIWI_RX"
+#   KiwiSDR → kiwi_client.py (native async WebSocket) → S16LE PCM bytes
+#                ↓ pacat (playback)
+#   PulseAudio null sink "KIWI_RX"
 #                ↓ monitor source
 #   JS8Call QAudioInput → reads "KIWI_RX.monitor" as microphone input
 #
@@ -122,7 +122,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Layer 6: Python 3 runtime + kiwiclient dependencies
+# Layer 6: Python 3 runtime
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -131,15 +131,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     python3-wheel \
     && rm -rf /var/lib/apt/lists/*
-
-# Install kiwiclient Python dependencies:
-#   numpy  – fast array ops for PCM sample processing
-#   scipy  – DSP filters used by kiwirecorder's audio pipeline
-#   ws4py  – WebSocket client used by kiwiclient to stream from KiwiSDR nodes
-RUN pip3 install --no-cache-dir ws4py numpy scipy
-
-# Clone kiwiclient to /opt so it is available system-wide
-RUN git clone --depth 1 https://github.com/jks-prv/kiwiclient /opt/kiwiclient
 
 # -----------------------------------------------------------------------------
 # Layer 7: Download and install JS8Call-improved .deb package

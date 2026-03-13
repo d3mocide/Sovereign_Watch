@@ -62,16 +62,33 @@ class TestKiwiDebounce(unittest.IsolatedAsyncioTestCase):
     async def test_squelch_debounce(self):
         with patch.object(KiwiClient, 'is_connected', new_callable=unittest.mock.PropertyMock) as mock_connected:
             mock_connected.return_value = True
-            
+
             await self.client.set_squelch(True, 50)
             await self.client.set_squelch(True, 60)
+            # threshold=70, default hysteresis=10 → server close_t = 70 - 10 = 60
             await self.client.set_squelch(True, 70)
-            
+
             await asyncio.sleep(0.7)
-            
+
             self.client._ws.send.assert_called_once()
             args = self.client._ws.send.call_args[0][0]
-            self.assertIn("max=70", args)
+            # Server squelch is set to the close threshold (open_thresh - hysteresis)
+            self.assertIn("max=60", args)
+
+    async def test_squelch_hysteresis_thresholds(self):
+        """Verify client-side dBm thresholds are calculated correctly."""
+        with patch.object(KiwiClient, 'is_connected', new_callable=unittest.mock.PropertyMock) as mock_connected:
+            mock_connected.return_value = True
+
+            # threshold=100, hysteresis=20 → open=100, close=80 (KiwiSDR units)
+            await self.client.set_squelch(True, 100, hysteresis=20)
+            await asyncio.sleep(0.7)
+
+            # open thresh dBm:  0.1 * 100 - 127 = -117.0
+            # close thresh dBm: 0.1 *  80 - 127 = -119.0
+            self.assertAlmostEqual(self.client._squelch_open_thresh_dbm,  -117.0)
+            self.assertAlmostEqual(self.client._squelch_close_thresh_dbm, -119.0)
+            self.assertTrue(self.client._squelch_enabled)
 
 if __name__ == "__main__":
     unittest.main()
