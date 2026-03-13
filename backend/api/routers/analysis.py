@@ -1,4 +1,3 @@
-import json
 import logging
 from fastapi import APIRouter, HTTPException, Path
 from sse_starlette.sse import EventSourceResponse
@@ -19,8 +18,7 @@ async def analyze_track(
     """
     Fusion Analysis Endpoint:
     1. Fetch Track History (Hard Data)
-    2. Fetch Intel Reports (Soft Data)
-    3. Generate AI Assessment (Cognition)
+    2. Generate AI Assessment (Cognition)
     """
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
@@ -48,23 +46,7 @@ async def analyze_track(
     if not track_summary or track_summary['points'] == 0:
         return {"error": "No track data found for this entity within lookback period"}
 
-    # 2. Fetch Contextual Intel
-    # Calling the SQL function we defined in init.sql
-    # Note: In a real implementation, we need to generate an embedding for the "Query"
-    # "What is suspicious about this track?" -> Vector
-    # For now, we'll demonstrate the logic flow.
-    # To fix logic: We need an embedding service. LiteLLM embedding() call.
-
-    # Let's generate a query embedding using LiteLLM (Optional, or just mock for V1)
-    # response = completion(model="text-embedding-3-small", input=["suspicious activity"])
-    # query_vec = response['data'][0]['embedding']
-
-    # For this MVP, we will skip the vector query *execution* in python if we don't have the embedding model
-    # ready in the docker stack configs.
-    # We will pass a textual summary of reports if we had them.
-    intel_reports = [] # Mock for now
-
-    # 3. Construct Prompt
+    # 2. Construct Prompt
     system_prompt = """
     You are a Senior Intelligence Analyst. You are viewing a map of a decentralized sensor network.
     Analyze the provided track telemetry and correlated intelligence reports.
@@ -80,13 +62,10 @@ async def analyze_track(
     - Avg Alt: {track_summary['avg_alt'] or 0:.0f} m
     - Last Seen: {track_summary['last_seen']}
 
-    INTELLIGENCE CONTEXT:
-    {json.dumps(intel_reports)}
-
     ASSESSMENT:
     """
 
-    # 4. Resolve active model — prefer Redis-stored user selection, fall back to ENV default
+    # 3. Resolve active model — prefer Redis-stored user selection, fall back to ENV default
     active_model = AI_MODEL_DEFAULT
     if db.redis_client:
         try:
@@ -96,7 +75,7 @@ async def analyze_track(
         except Exception as e:
             logger.warning(f"Could not read AI model from Redis, using default: {e}")
 
-    # 5. Stream AI Response
+    # 4. Stream AI Response
     # NEW-003 (supersedes BUG-005): The prior asyncio.to_thread(completion, ...,
     # stream=True) fix only offloaded the initial HTTP handshake. The generator
     # returned immediately, but the chunk-by-chunk iteration ran synchronously

@@ -86,23 +86,9 @@ class PollerService:
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
-            # aclose() is the new async close method for redis-py 5.x+
-            await self.pubsub.aclose() if hasattr(self.pubsub, 'aclose') else await self.pubsub.close()
+            await self.pubsub.aclose()
         if self.redis_client:
-            await self.redis_client.aclose() if hasattr(self.redis_client, 'aclose') else await self.redis_client.close()
-
-    def calculate_polling_points(self):
-        """Calculate polling coverage points based on current mission area."""
-        # Optimization: For small tactical areas (< 50nm), a single point is sufficient
-        # and allows for higher update frequency (1.0s vs 3.0s latency).
-        if self.radius_nm < 50:
-            return [(self.center_lat, self.center_lon, self.radius_nm)]
-
-        return [
-            (self.center_lat, self.center_lon, self.radius_nm),           # Center
-            (self.center_lat + 0.5, self.center_lon - 0.5, min(100, self.radius_nm)),  # NW offset
-            (self.center_lat - 0.5, self.center_lon + 0.5, min(100, self.radius_nm)),  # SE offset
-        ]
+            await self.redis_client.aclose()
 
     async def navigation_listener(self):
         """Background task listening for mission area updates from Redis."""

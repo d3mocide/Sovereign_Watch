@@ -1,3 +1,4 @@
+import math
 import os
 import json
 import time
@@ -93,7 +94,6 @@ def fetch_internet_outages():
             # Based on IODA scores (e.g., 350G is 3.5e11), we'll use a log scale
             # log10(1,000) = 3 -> 10% severity
             # log10(1,000,000,000,000) = 12 -> 100% severity
-            import math
             log_score = math.log10(max(1, overall_score))
             severity = (log_score / 12.0) * 100
             severity = max(0, min(100, severity))
@@ -131,9 +131,6 @@ def fetch_internet_outages():
     except Exception as e:
         logger.error(f"Failed to fetch internet outages from summary: {e}")
         traceback.print_exc()
-
-    except Exception as e:
-        logger.error(f"Failed to fetch internet outages: {e}")
 
 
 def fetch_cables_and_stations():

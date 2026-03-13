@@ -22,7 +22,7 @@ class Database:
             cls.pool = None
 
         if cls.redis_client:
-            await cls.redis_client.aclose() if hasattr(cls.redis_client, 'aclose') else await cls.redis_client.close()
+            await cls.redis_client.aclose()
             cls.redis_client = None
 
 db = Database

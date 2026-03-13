@@ -32,7 +32,4 @@ class Settings:
     # Kafka
     KAFKA_BROKERS = os.getenv('KAFKA_BROKERS', 'sovereign-redpanda:9092')
 
-    # AI
-    LITELLM_MODEL = "deep-reasoner"
-
 settings = Settings()

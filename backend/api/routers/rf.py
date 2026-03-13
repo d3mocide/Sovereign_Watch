@@ -97,4 +97,4 @@ async def repeaters_alias(
 ):
     """Alias for backwards compatibility. Converts miles to NM."""
     radius_nm = radius * 0.868976
-    return await get_rf_sites(lat=lat, lon=lon, radius_nm=radius_nm, service="ham")
+    return await get_rf_sites(lat=lat, lon=lon, radius_nm=radius_nm, services=["ham"])

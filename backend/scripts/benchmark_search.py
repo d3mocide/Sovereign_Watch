@@ -1,7 +1,6 @@
 import asyncio
 import asyncpg
 import os
-import sys
 import random
 import time
 import json

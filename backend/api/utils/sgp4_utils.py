@@ -38,25 +38,6 @@ def teme_to_ecef(r_teme: np.ndarray, jd: float, fr: float) -> np.ndarray:
     ])
 
 
-def teme_to_ecef_vectorized(r: np.ndarray, jd: float, fr: float) -> np.ndarray:
-    """Vectorized version that accepts an (N, 3) array."""
-    d = (jd - 2451545.0) + fr
-    gmst = (18.697374558 + 24.06570982441908 * d) % 24.0
-    theta = gmst * 15.0 * math.pi / 180.0
-
-    cos_t = np.cos(theta)
-    sin_t = np.sin(theta)
-
-    x = r[:, 0]
-    y = r[:, 1]
-    z = r[:, 2]
-
-    return np.column_stack((
-        x * cos_t + y * sin_t,
-        -x * sin_t + y * cos_t,
-        z,
-    ))
-
 
 def ecef_to_lla_vectorized(r_ecef: np.ndarray):
     """

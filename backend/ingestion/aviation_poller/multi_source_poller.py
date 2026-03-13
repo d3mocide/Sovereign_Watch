@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import time
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 from dataclasses import dataclass, field
 import aiohttp
 from aiolimiter import AsyncLimiter
@@ -173,32 +173,3 @@ class MultiSourcePoller:
                 source.reset_cooldown()
                 return await resp.json()
 
-    async def poll_point(self, lat: float, lon: float, radius_nm: int) -> List[Dict]:
-        """
-        Polls a single point using the next available source.
-        Returns a list of raw aircraft objects (ADSBx v2 format).
-        """
-        source = self._get_next_source()
-        path = source.url_format.format(lat=lat, lon=lon, radius=radius_nm)
-        url = f"{source.base_url}{path}"
-
-        try:
-            data = await self._fetch(source, url)
-
-            # Normalize response (some return {ac: []}, some {aircraft: []})
-            aircraft = data.get("ac") or data.get("aircraft") or []
-
-            # Capture fetch time once for all aircraft in this response so they
-            # all share the same temporal anchor (used by normalize_to_tak for
-            # source_ts calculation — see Fix A in the jitter analysis).
-            fetched_at = time.time()
-            for ac in aircraft:
-                ac["_source"] = source.name
-                ac["_fetched_at"] = fetched_at
-
-            return aircraft
-
-        except Exception as e:
-            logger.error(f"Failed to poll {source.name}: {e}")
-            source.penalize()
-            return []
