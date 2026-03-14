@@ -48,6 +48,7 @@ interface ManualConfig {
   port: number;
   freq: number;
   mode: string;
+  password: string;
 }
 
 interface Props {
@@ -652,6 +653,15 @@ export default function KiwiNodeBrowser({
               <option value="am">AM</option>
               <option value="cw">CW</option>
             </select>
+            <input
+              type="password"
+              value={manualConfig.password}
+              onChange={(e) => onManualConfigChange({ password: e.target.value })}
+              placeholder="password"
+              disabled={!bridgeConnected || kiwiConnecting}
+              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-24 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+              title="Node password (leave blank for open nodes)"
+            />
             <button
               onClick={() => {
                 onManualConnect();

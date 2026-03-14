@@ -109,6 +109,7 @@ interface RadioTerminalProps {
   activeKiwiConfig: any;
   js8Mode: string;
   sMeterDbm: number | null;
+  adcOverload?: boolean;
   sendMessage: (target: string, message: string) => void;
   sendAction: (payload: object) => void;
 }
@@ -123,6 +124,7 @@ export default function RadioTerminal({
   activeKiwiConfig: sharedActiveKiwiConfig,
   js8Mode: sharedJs8Mode,
   sMeterDbm,
+  adcOverload = false,
   sendMessage,
   sendAction,
 }: RadioTerminalProps) {
@@ -140,6 +142,7 @@ export default function RadioTerminal({
     port: KIWI_DEFAULT_PORT,
     freq: KIWI_DEFAULT_FREQ,
     mode: 'usb',
+    password: '',
   });
 
   const [kiwiPanelOpen, setKiwiPanelOpen] = useState(false);
@@ -216,6 +219,7 @@ export default function RadioTerminal({
       port: Number(kiwiConfig.port),
       freq: Number(kiwiConfig.freq),
       mode: kiwiConfig.mode,
+      password: kiwiConfig.password,
     });
   }, [bridgeConnected, kiwiIsConnecting, kiwiConfig, sendAction]);
 
@@ -576,6 +580,7 @@ export default function RadioTerminal({
           bridgeConnected={bridgeConnected}
           sendAction={sendAction}
           isConnected={listenConnected}
+          adcOverload={adcOverload}
         />
       ) : (
         <>

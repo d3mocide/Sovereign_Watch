@@ -36,7 +36,6 @@ import logging
 import math
 import os
 import re
-import socket
 import subprocess
 import threading
 import time
@@ -409,6 +408,19 @@ def _kiwi_status_callback(status: dict) -> None:
 
 
 
+def _kiwi_adc_overload_callback() -> None:
+    """
+    Called by KiwiClient when the ADC overflow flag is set in an SND frame.
+    Broadcasts a KIWI.ADC_OVERLOAD event so the UI can warn the user that the
+    selected node's antenna input is saturated.
+    """
+    _enqueue_from_thread({
+        "type": "KIWI.ADC_OVERLOAD",
+        "message": "ADC overflow — node input overloaded; consider switching nodes or reducing gain",
+        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+    })
+
+
 def _kiwi_disconnect_callback(close_code: int) -> None:
     """
     Called by KiwiClient on unexpected disconnect.
@@ -709,6 +721,7 @@ async def lifespan(app: FastAPI):
             on_disconnect=_kiwi_disconnect_callback,
             on_rssi=_kiwi_rssi_callback,
             on_waterfall=_write_waterfall,
+            on_adc_overload=_kiwi_adc_overload_callback,
         )
         # Phase 1: start node directory background fetch (non-blocking).
         # The UI connects to a KiwiSDR node explicitly via the Node Browser — no
@@ -943,10 +956,11 @@ async def ws_js8(websocket: WebSocket) -> None:
             #           "port": 8073, "freq": 14074, "mode": "usb"}
             # ------------------------------------------------------------------
             elif action == "SET_KIWI":
-                host = str(cmd.get("host", "")).strip()
-                port = int(cmd.get("port", 8073))
-                freq = int(cmd.get("freq", 14074))
-                mode = str(cmd.get("mode", "usb")).lower().strip()
+                host     = str(cmd.get("host", "")).strip()
+                port     = int(cmd.get("port", 8073))
+                freq     = float(cmd.get("freq", 14074))
+                mode     = str(cmd.get("mode", "usb")).lower().strip()
+                password = str(cmd.get("password", ""))
 
                 if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
                     # Legacy subprocess path
@@ -983,7 +997,7 @@ async def ws_js8(websocket: WebSocket) -> None:
                             await _kiwi_native.tune(float(freq), mode)
                         else:
                             # Different node — full reconnect
-                            await _kiwi_native.connect(host, port, float(freq), mode)
+                            await _kiwi_native.connect(host, port, float(freq), mode, password=password)
                     except ValueError as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:
@@ -1007,6 +1021,42 @@ async def ws_js8(websocket: WebSocket) -> None:
                         })
 
             # ------------------------------------------------------------------
+            # Action: SET_NOISE_BLANKER – configure KiwiSDR impulse noise blanker
+            # Payload: {"action": "SET_NOISE_BLANKER", "enabled": true,
+            #           "gate_usec": 500, "thresh_percent": 50}
+            # gate_usec:      blanker gate duration in microseconds (100–2000)
+            # thresh_percent: trigger threshold as % of peak signal (20–80)
+            # ------------------------------------------------------------------
+            elif action == "SET_NOISE_BLANKER":
+                nb_enabled = bool(cmd.get("enabled", True))
+                nb_gate    = int(max(100, min(2000, cmd.get("gate_usec", 500))))
+                nb_thresh  = int(max(1,   min(100,  cmd.get("thresh_percent", 50))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_noise_blanker(nb_gate, nb_thresh, nb_enabled)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_NOISE_BLANKER failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_DE_EMP – set audio de-emphasis filter
+            # Payload: {"action": "SET_DE_EMP", "de_emp": 0}
+            # de_emp: 0=off, 1=50µs (EU FM), 2=75µs (US FM/AM BCB)
+            # ------------------------------------------------------------------
+            elif action == "SET_DE_EMP":
+                de_emp = int(max(0, min(2, cmd.get("de_emp", 0))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_de_emp(de_emp)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_DE_EMP failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
             # Action: SET_ZOOM – control KiwiSDR waterfall zoom level
             # Payload: {"action": "SET_ZOOM", "zoom": 5}
             # zoom: 0–14 (Standard KiwiSDR zoom levels)
@@ -1024,23 +1074,29 @@ async def ws_js8(websocket: WebSocket) -> None:
 
             # ------------------------------------------------------------------
             # Action: SET_SQUELCH – enable/disable KiwiSDR squelch gate
-            # Payload: {"action": "SET_SQUELCH", "enabled": true, "threshold": 60}
-            # threshold: 0–100 (UI units, mapped to 0–150 in the client)
+            # Payload: {"action": "SET_SQUELCH", "enabled": true,
+            #           "threshold": 60, "hysteresis": 10}
+            # threshold:  0–100 (UI units, mapped to 0–150 KiwiSDR S-meter units)
+            # hysteresis: 0–50 (UI units, mapped to 0–75 KiwiSDR units, default 10)
+            #   Gate opens  when RSSI ≥ threshold
+            #   Gate closes when RSSI < (threshold − hysteresis)
             # ------------------------------------------------------------------
             elif action == "SET_SQUELCH":
-                sq_enabled   = bool(cmd.get("enabled", False))
-                sq_threshold = int(max(0, min(100, cmd.get("threshold", 0))))
-                # Map 0-100 UI range → 0-150 KiwiSDR range
-                kiwi_threshold = int(sq_threshold * 1.5)
+                sq_enabled    = bool(cmd.get("enabled", False))
+                sq_threshold  = int(max(0, min(100, cmd.get("threshold", 0))))
+                sq_hysteresis = int(max(0, min(50,  cmd.get("hysteresis", 10))))
+                # Map 0–100 UI range → 0–150 KiwiSDR S-meter range
+                kiwi_threshold  = int(sq_threshold  * 1.5)
+                kiwi_hysteresis = int(sq_hysteresis * 1.5)
                 if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
                     try:
-                        await _kiwi_native.set_squelch(sq_enabled, kiwi_threshold)
+                        await _kiwi_native.set_squelch(sq_enabled, kiwi_threshold, kiwi_hysteresis)
                     except Exception as exc:
                         await websocket.send_json({
                             "type": "ERROR",
                             "message": f"SET_SQUELCH failed: {exc}",
                         })
-                # Subprocess path: squelch not supported (kiwirecorder handles it)
+                # Subprocess path: squelch not supported (subprocess handles it)
 
             # ------------------------------------------------------------------
             # Action: DISCONNECT_KIWI – stop the KiwiSDR connection
