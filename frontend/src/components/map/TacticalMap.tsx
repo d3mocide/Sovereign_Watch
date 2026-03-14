@@ -23,6 +23,7 @@ import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { StarField } from "./StarField";
+import { parseMissionHash, updateMissionHash } from "../../hooks/useMissionHash";
 
 // Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
 const SATELLITE_MAP_STYLE = {
@@ -249,9 +250,10 @@ export function TacticalMap({
   // Environment Fallbacks
   const envLat = import.meta.env.VITE_CENTER_LAT;
   const envLon = import.meta.env.VITE_CENTER_LON;
-  const initialLat = envLat ? parseFloat(envLat) : 45.5152;
-  const initialLon = envLon ? parseFloat(envLon) : -122.6784;
-  const initialZoom = 9.5;
+  const hashState = parseMissionHash();
+  const initialLat = hashState.lat !== null ? hashState.lat : (envLat ? parseFloat(envLat) : 45.5152);
+  const initialLon = hashState.lon !== null ? hashState.lon : (envLon ? parseFloat(envLon) : -122.6784);
+  const initialZoom = hashState.zoom !== null ? hashState.zoom : 9.5;
 
   // View State (Controlled for bearing tracking)
   const [viewState, setViewState] = useState({
@@ -261,6 +263,15 @@ export function TacticalMap({
     pitch: enable3d ? 50 : 0,
     bearing: 0,
   });
+
+  // Sync to hash on move
+  useEffect(() => {
+    updateMissionHash({
+      lat: viewState.latitude,
+      lon: viewState.longitude,
+      zoom: viewState.zoom
+    });
+  }, [viewState.latitude, viewState.longitude, viewState.zoom]);
 
   // Refs for transient state
   // Store previously active filters and notification states for Detecting transitions

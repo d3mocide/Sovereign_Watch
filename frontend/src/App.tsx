@@ -17,6 +17,7 @@ import { processReplayData } from './utils/replayUtils'
 import { AlertsWidget } from './components/widgets/AlertsWidget'
 import { useEntityWorker } from './hooks/useEntityWorker'
 import { useInfraData } from './hooks/useInfraData'
+import { parseMissionHash, updateMissionHash } from './hooks/useMissionHash'
 
 const NOOP = () => { };
 
@@ -172,6 +173,29 @@ function App() {
       showConstellation_Starlink: false,
       showH3Coverage: false,
     };
+
+    // First check hash
+    const hashState = parseMissionHash();
+    if (hashState.activeLayers.length > 0) {
+      // Create a new config setting everything to false initially, then enable hash layers
+      const hashFilters = { ...defaultFilters };
+      // Reset core layers to false, so only what's in hash is true
+      hashFilters.showAir = false;
+      hashFilters.showSea = false;
+      hashFilters.showSatellites = false;
+      hashFilters.showRepeaters = false;
+      hashFilters.showCables = false;
+
+      hashState.activeLayers.forEach(layer => {
+        if (layer in hashFilters) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (hashFilters as any)[layer] = true;
+        }
+      });
+      return hashFilters;
+    }
+
+    // Fallback to localStorage
     const saved = localStorage.getItem('mapFilters');
     if (saved) {
       try {
@@ -183,6 +207,11 @@ function App() {
     }
     return defaultFilters;
   });
+
+  // Sync filters to hash on change
+  useEffect(() => {
+    updateMissionHash(undefined, filters);
+  }, [filters]);
 
   // Isolated orbital satellite category filter state — never persisted to
   // mapFilters, so it never bleeds into the tactical map filter state.
