@@ -1,5 +1,3 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 export interface MissionAreaConfig {
   lat: number;
   lon: number;
@@ -15,7 +13,7 @@ export interface MissionAreaResponse extends MissionAreaConfig {
  * Triggers real-time poller pivot via Redis pub/sub.
  */
 export async function setMissionArea(config: MissionAreaConfig): Promise<MissionAreaResponse> {
-  const response = await fetch(`${API_BASE}/api/config/location`, {
+  const response = await fetch('/api/config/location', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +34,7 @@ export async function setMissionArea(config: MissionAreaConfig): Promise<Mission
  * Retrieve the current active surveillance area.
  */
 export async function getMissionArea(): Promise<MissionAreaResponse> {
-  const response = await fetch(`${API_BASE}/api/config/location`);
+  const response = await fetch('/api/config/location');
 
   if (!response.ok) {
     throw new Error('Failed to fetch mission area');

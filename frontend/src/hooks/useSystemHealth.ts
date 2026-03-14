@@ -25,7 +25,6 @@ export const useSystemHealth = (intervalMs = 5000) => {
                 
                 let status: 'online' | 'degraded' | 'offline' = 'online';
                 if (latency > 200) status = 'degraded';
-                if (latency > 1000) status = 'degraded'; // Strict
                 
                 setHealth({
                     latency,

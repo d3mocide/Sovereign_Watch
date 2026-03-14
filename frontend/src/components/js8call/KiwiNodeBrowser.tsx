@@ -206,7 +206,6 @@ export default function KiwiNodeBrowser({
 
   // Clear node popup when switching views
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedNode(null);
   }, [viewMode]);
 

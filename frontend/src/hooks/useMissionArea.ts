@@ -132,7 +132,6 @@ export function useMissionArea({
 
         // Clear old entities when changing mission area
         entitiesRef.current.clear();
-        console.log("🗑️ Cleared old entities for new mission area");
 
         // Fly map to new location
         if (mapRef.current) {
@@ -143,10 +142,6 @@ export function useMissionArea({
             easing: (t: number) => 1 - Math.pow(1 - t, 3),
           });
         }
-
-        console.log(
-          `📍 Mission area pivoted to: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${targetRadius}nm`,
-        );
       } catch (error) {
         console.error("Failed to set mission focus:", error);
       }
@@ -210,7 +205,6 @@ export function useMissionArea({
             Math.abs(prev.radius_nm - mission.radius_nm) > 0.1;
 
           if (isDiff) {
-            console.log("🔄 Syncing with active mission:", mission);
             // Update state (this will trigger the clear effect below)
             setCurrentMission({
               lat: mission.lat,
@@ -246,7 +240,6 @@ export function useMissionArea({
       // Update ref for polling comparison
       currentMissionRef.current = currentMission;
 
-      console.log("🧹 Clearing map entities for new mission parameters...");
       entitiesRef.current.clear();
       knownUidsRef.current.clear();
       prevCourseRef.current.clear();

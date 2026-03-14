@@ -54,7 +54,6 @@ function formatCountdown(isoTarget: string, now: number): string {
 
 function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
   const { lat: obsLat, lon: obsLon } = useMissionLocation();
-  // eslint-disable-next-line react-hooks/purity
   const [now, setNow] = useState(Date.now());
 
   // Prefer detail.norad_id; fall back to parsing from uid string e.g. "SAT-40044"
@@ -183,7 +182,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
   // Reset inspector when entity changes
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowInspector(false);
   }, [entity?.uid]);
 

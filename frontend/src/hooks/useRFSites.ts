@@ -8,9 +8,7 @@ const REFETCH_THRESHOLD_DEG = 0.25;
 
 export interface UseRFSitesResult {
   rfSitesRef: MutableRefObject<RFSite[]>;
-  rfSites: RFSite[];
   loading: boolean;
-  error: string | null;
 }
 
 export function useRFSites(
@@ -23,9 +21,7 @@ export function useRFSites(
   emcomm_only?: boolean
 ): UseRFSitesResult {
   const rfSitesRef = useRef<RFSite[]>([]);
-  const [rfSites, setRfSites] = useState<RFSite[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const lastFetchRef = useRef<{ lat: number; lon: number; radiusNm?: number; servicesStr?: string; modeStr?: string; emcommStr?: string } | null>(null);
 
@@ -53,7 +49,6 @@ export function useRFSites(
 
     const fetchSites = async () => {
       setLoading(true);
-      setError(null);
 
       // 1. Check local cache first
       try {
@@ -62,7 +57,6 @@ export function useRFSites(
         if (cached && cachedTs && (Date.now() - parseInt(cachedTs)) < CACHE_TTL) {
           const parsed = JSON.parse(cached);
           rfSitesRef.current = parsed;
-          setRfSites(parsed);
           setLoading(false);
           lastFetchRef.current = { lat: missionLat, lon: missionLon, radiusNm, servicesStr, modeStr, emcommStr };
           return;
@@ -93,17 +87,14 @@ export function useRFSites(
         if (!cancelled) {
           const results = data.results ?? [];
           rfSitesRef.current = results;
-          setRfSites(results);
           lastFetchRef.current = { lat: missionLat, lon: missionLon, radiusNm, servicesStr, modeStr, emcommStr };
 
           // Update cache
           localStorage.setItem(CACHE_KEY, JSON.stringify(results));
           localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
         }
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to fetch RF sites");
-        }
+      } catch {
+        // Fetch failed; rfSitesRef retains previous data
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -119,10 +110,9 @@ export function useRFSites(
   useEffect(() => {
     if (!enabled) {
       rfSitesRef.current = [];
-      setRfSites([]);
       lastFetchRef.current = null;
     }
   }, [enabled]);
 
-  return { rfSitesRef, rfSites, loading, error };
+  return { rfSitesRef, loading };
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, MutableRefObject } from "react";
+import React, { useEffect, useRef, MutableRefObject } from "react";
 import { CoTEntity, JS8Station, RFSite, DRState, VisualState } from "../types";
 import { getCompensatedCenter, maidenheadToLatLon } from "../utils/map/geoUtils";
 import { getOrbitalLayers, GroundTrackPoint } from "../layers/OrbitalLayer";
@@ -81,8 +81,6 @@ interface UseAnimationLoopOptions {
   worldCountriesData?: any;
   globeMode: boolean | undefined;
   enable3d: boolean;
-  mapToken: string;
-  mapStyle: string;
   mapLoaded: boolean;
   replayMode: boolean | undefined;
   onCountsUpdate: ((counts: { air: number; sea: number; orbital: number }) => void) | undefined;
@@ -104,6 +102,73 @@ interface UseAnimationLoopOptions {
   predictedGroundTrackRef?: MutableRefObject<GroundTrackPoint[]>;
   /** Observer position for the orbital AOI ring. radiusKm is the pass-prediction horizon. */
   observerRef?: MutableRefObject<{ lat: number; lon: number; radiusKm: number } | null>;
+}
+
+/** Returns 'sea', 'air', or null (=skip) based on entity type and active filters. */
+function filterEntity(
+  entity: CoTEntity,
+  filters: UseAnimationLoopOptions['filters'],
+): 'sea' | 'air' | null {
+  const isShip = entity.type?.includes('S');
+  if (isShip) {
+    if (!filters?.showSea) return null;
+    if (entity.vesselClassification) {
+      const cat = entity.vesselClassification.category;
+      if (cat === 'cargo' && filters?.showCargo === false) return null;
+      if (cat === 'tanker' && filters?.showTanker === false) return null;
+      if (cat === 'passenger' && filters?.showPassenger === false) return null;
+      if (cat === 'fishing' && filters?.showFishing === false) return null;
+      if (cat === 'military' && filters?.showSeaMilitary === false) return null;
+      if (cat === 'law_enforcement' && filters?.showLawEnforcement === false) return null;
+      if (cat === 'sar' && filters?.showSar === false) return null;
+      if (cat === 'tug' && filters?.showTug === false) return null;
+      if (cat === 'pleasure' && filters?.showPleasure === false) return null;
+      if (cat === 'hsc' && filters?.showHsc === false) return null;
+      if (cat === 'pilot' && filters?.showPilot === false) return null;
+      if ((cat === 'special' || cat === 'unknown') && filters?.showSpecial === false) return null;
+    }
+    return 'sea';
+  } else {
+    if (!filters?.showAir) return null;
+    if (entity.classification) {
+      const cls = entity.classification;
+      if (cls.platform === 'helicopter' && filters?.showHelicopter === false) return null;
+      if (cls.platform === 'drone' && filters?.showDrone === false) return null;
+      if (cls.affiliation === 'military' && filters?.showMilitary === false) return null;
+      if (cls.affiliation === 'government' && filters?.showGovernment === false) return null;
+      if (cls.affiliation === 'commercial' && filters?.showCommercial === false) return null;
+      if (cls.affiliation === 'general_aviation' && filters?.showPrivate === false) return null;
+    }
+    return 'air';
+  }
+}
+
+/** Returns true if the satellite should be visible given the current filters. */
+function filterSatellite(
+  sat: CoTEntity,
+  filters: UseAnimationLoopOptions['filters'],
+): boolean {
+  if (!filters?.showSatellites) return false;
+  const constellation = sat.detail?.constellation as string | undefined;
+  if (constellation && filters?.[`showConstellation_${constellation}`] === false) return false;
+  const cat = (sat.detail?.category as string)?.toLowerCase() || '';
+  if (cat.includes('gps') || cat.includes('gnss') || cat.includes('galileo') ||
+      cat.includes('beidou') || cat.includes('glonass')) {
+    return filters.showSatGPS !== false;
+  }
+  if (cat.includes('weather') || cat.includes('noaa') || cat.includes('meteosat') ||
+      cat.includes('fengYun')) {
+    return filters.showSatWeather !== false;
+  }
+  if (cat.includes('comms') || cat.includes('communications') || cat.includes('starlink') ||
+      cat.includes('iridium') || cat.includes('oneweb') || cat.includes('intelsat')) {
+    return filters.showSatComms !== false;
+  }
+  if (cat.includes('surveillance') || cat.includes('military') || cat.includes('isr') ||
+      cat.includes('intel') || cat.includes('earth observation') || cat.includes('imaging')) {
+    return filters.showSatSurveillance !== false;
+  }
+  return filters.showSatOther !== false;
 }
 
 export function useAnimationLoop({
@@ -136,8 +201,6 @@ export function useAnimationLoop({
   setSelectedInfra,
   globeMode,
   enable3d,
-  mapToken,
-  mapStyle,
   mapLoaded,
   replayMode,
   onCountsUpdate,
@@ -155,7 +218,6 @@ export function useAnimationLoop({
   currentMissionRef,
   worldCountriesData,
 }: UseAnimationLoopOptions): void {
-  // eslint-disable-next-line react-hooks/purity
   const lastFrameTimeRef = useRef<number>(Date.now());
   const rafRef = useRef<number>();
 
@@ -204,73 +266,10 @@ export function useAnimationLoop({
       if (replayMode) {
         // REPLAY MODE: Render static snapshots from parent
         for (const [, entity] of replayEntitiesRef.current) {
-          const isShip = entity.type?.includes("S");
-
-          // Filter
-          if (isShip) {
-            if (!filters?.showSea) continue;
-            if (entity.vesselClassification) {
-              const cat = entity.vesselClassification.category;
-              if (cat === "cargo" && filters?.showCargo === false) continue;
-              if (cat === "tanker" && filters?.showTanker === false) continue;
-              if (cat === "passenger" && filters?.showPassenger === false)
-                continue;
-              if (cat === "fishing" && filters?.showFishing === false) continue;
-              if (cat === "military" && filters?.showSeaMilitary === false)
-                continue;
-              if (
-                cat === "law_enforcement" &&
-                filters?.showLawEnforcement === false
-              )
-                continue;
-              if (cat === "sar" && filters?.showSar === false) continue;
-              if (cat === "tug" && filters?.showTug === false) continue;
-              if (cat === "pleasure" && filters?.showPleasure === false)
-                continue;
-              if (cat === "hsc" && filters?.showHsc === false) continue;
-              if (cat === "pilot" && filters?.showPilot === false) continue;
-              if (
-                (cat === "special" || cat === "unknown") &&
-                filters?.showSpecial === false
-              )
-                continue;
-            }
-            seaCount++;
-          } else {
-            if (!filters?.showAir) continue;
-            if (entity.classification) {
-              const cls = entity.classification;
-              if (
-                cls.platform === "helicopter" &&
-                filters?.showHelicopter === false
-              )
-                continue;
-              if (cls.platform === "drone" && filters?.showDrone === false)
-                continue;
-              if (
-                cls.affiliation === "military" &&
-                filters?.showMilitary === false
-              )
-                continue;
-              if (
-                cls.affiliation === "government" &&
-                filters?.showGovernment === false
-              )
-                continue;
-              if (
-                cls.affiliation === "commercial" &&
-                filters?.showCommercial === false
-              )
-                continue;
-              if (
-                cls.affiliation === "general_aviation" &&
-                filters?.showPrivate === false
-              )
-                continue;
-            }
-            airCount++;
-          }
-
+          const entityType = filterEntity(entity, filters);
+          if (!entityType) continue;
+          if (entityType === 'sea') seaCount++;
+          else airCount++;
           interpolated.push(entity);
         }
       } else {
@@ -287,69 +286,10 @@ export function useAnimationLoop({
           }
 
           // Filter
-          if (isShip) {
-            if (!filters?.showSea) continue;
-            if (entity.vesselClassification) {
-              const cat = entity.vesselClassification.category;
-              if (cat === "cargo" && filters?.showCargo === false) continue;
-              if (cat === "tanker" && filters?.showTanker === false) continue;
-              if (cat === "passenger" && filters?.showPassenger === false)
-                continue;
-              if (cat === "fishing" && filters?.showFishing === false) continue;
-              if (cat === "military" && filters?.showSeaMilitary === false)
-                continue;
-              if (
-                cat === "law_enforcement" &&
-                filters?.showLawEnforcement === false
-              )
-                continue;
-              if (cat === "sar" && filters?.showSar === false) continue;
-              if (cat === "tug" && filters?.showTug === false) continue;
-              if (cat === "pleasure" && filters?.showPleasure === false)
-                continue;
-              if (cat === "hsc" && filters?.showHsc === false) continue;
-              if (cat === "pilot" && filters?.showPilot === false) continue;
-              if (
-                (cat === "special" || cat === "unknown") &&
-                filters?.showSpecial === false
-              )
-                continue;
-            }
-            seaCount++;
-          } else {
-            if (!filters?.showAir) continue;
-            if (entity.classification) {
-              const cls = entity.classification;
-              if (
-                cls.platform === "helicopter" &&
-                filters?.showHelicopter === false
-              )
-                continue;
-              if (cls.platform === "drone" && filters?.showDrone === false)
-                continue;
-              if (
-                cls.affiliation === "military" &&
-                filters?.showMilitary === false
-              )
-                continue;
-              if (
-                cls.affiliation === "government" &&
-                filters?.showGovernment === false
-              )
-                continue;
-              if (
-                cls.affiliation === "commercial" &&
-                filters?.showCommercial === false
-              )
-                continue;
-              if (
-                cls.affiliation === "general_aviation" &&
-                filters?.showPrivate === false
-              )
-                continue;
-            }
-            airCount++;
-          }
+          const entityType = filterEntity(entity, filters);
+          if (!entityType) continue;
+          if (entityType === 'sea') seaCount++;
+          else airCount++;
 
           // Interpolate
           // Projective Velocity Blending (PVB)
@@ -414,7 +354,6 @@ export function useAnimationLoop({
             visual = { lat: targetLat, lon: targetLon, alt: entity.altitude };
             visualStateRef.current.set(uid, visual);
           } else {
-            const speedKts = entity.speed * 1.94384;
             // PVB handles smoothness, just filter micro-jitter.
             // FIX #3: Cap smoothDt to 2 frames (33ms). The outer `dt` is
             // already capped at 100ms (to prevent physics explosions after
@@ -429,7 +368,6 @@ export function useAnimationLoop({
             visual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
             visual.alt =
               visual.alt + (entity.altitude - visual.alt) * smoothFactor;
-            void speedKts; // unused after speed-based smoothing removed — keep for future
           }
 
           // Clamp to target if very close (prevent micro-jitter)
@@ -602,52 +540,7 @@ export function useAnimationLoop({
 
       // Count Orbitals (Satellites)
       for (const [, sat] of satellitesRef.current) {
-        if (!filters?.showSatellites) continue;
-
-        const cat = (sat.detail?.category as string)?.toLowerCase() || "";
-        const constellation = sat.detail?.constellation as string | undefined;
-
-        if (constellation && filters?.[`showConstellation_${constellation}`] === false) continue;
-
-        if (
-          cat.includes("gps") ||
-          cat.includes("gnss") ||
-          cat.includes("galileo") ||
-          cat.includes("beidou") ||
-          cat.includes("glonass")
-        ) {
-          if (filters?.showSatGPS === false) continue;
-        } else if (
-          cat.includes("weather") ||
-          cat.includes("noaa") ||
-          cat.includes("meteosat") ||
-          cat.includes("fengYun")
-        ) {
-          if (filters?.showSatWeather === false) continue;
-        } else if (
-          cat.includes("comms") ||
-          cat.includes("communications") ||
-          cat.includes("starlink") ||
-          cat.includes("iridium") ||
-          cat.includes("oneweb") ||
-          cat.includes("intelsat")
-        ) {
-          if (filters?.showSatComms === false) continue;
-        } else if (
-          cat.includes("surveillance") ||
-          cat.includes("military") ||
-          cat.includes("isr") ||
-          cat.includes("intel") ||
-          cat.includes("earth observation") ||
-          cat.includes("imaging")
-        ) {
-          if (filters?.showSatSurveillance === false) continue;
-        } else {
-          // Everything else (debris, active unclassified, etc.) falls to 'Other'
-          if (filters?.showSatOther === false) continue;
-        }
-
-        orbitalCount++;
+        if (filterSatellite(sat, filters)) orbitalCount++;
       }
 
       if (
@@ -671,51 +564,7 @@ export function useAnimationLoop({
 
       const filteredSatellites: CoTEntity[] = [];
       for (const [uid, sat] of satellitesRef.current.entries()) {
-        if (!filters?.showSatellites) continue;
-
-        const constellation = sat.detail?.constellation as string | undefined;
-        if (constellation && filters?.[`showConstellation_${constellation}`] === false) continue;
-
-        const cat = (sat.detail?.category as string)?.toLowerCase() || "";
-        let show: boolean;
-        if (
-          cat.includes("gps") ||
-          cat.includes("gnss") ||
-          cat.includes("galileo") ||
-          cat.includes("beidou") ||
-          cat.includes("glonass")
-        ) {
-          show = filters.showSatGPS !== false;
-        } else if (
-          cat.includes("weather") ||
-          cat.includes("noaa") ||
-          cat.includes("meteosat") ||
-          cat.includes("fengYun")
-        ) {
-          show = filters.showSatWeather !== false;
-        } else if (
-          cat.includes("comms") ||
-          cat.includes("communications") ||
-          cat.includes("starlink") ||
-          cat.includes("iridium") ||
-          cat.includes("oneweb") ||
-          cat.includes("intelsat")
-        ) {
-          show = filters.showSatComms !== false;
-        } else if (
-          cat.includes("surveillance") ||
-          cat.includes("military") ||
-          cat.includes("isr") ||
-          cat.includes("intel") ||
-          cat.includes("earth observation") ||
-          cat.includes("imaging")
-        ) {
-          show = filters.showSatSurveillance !== false;
-        } else {
-          show = filters.showSatOther !== false;
-        }
-
-        if (!show) continue;
+        if (!filterSatellite(sat, filters)) continue;
 
         // Apply PVB for satellite
         const dr = drStateRef.current.get(uid);
@@ -1042,8 +891,6 @@ export function useAnimationLoop({
     onEntitySelect,
     mapLoaded,
     enable3d,
-    mapToken,
-    mapStyle,
     replayMode,
     onEntityLiveUpdate,
     globeMode,

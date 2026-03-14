@@ -44,16 +44,9 @@ export const useMissionLocations = () => {
     setSavedMissions((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
-  const updateMission = useCallback((id: string, updates: Partial<Omit<MissionLocation, 'id' | 'created_at'>>) => {
-    setSavedMissions((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
-    );
-  }, []);
-
   return {
     savedMissions,
     saveMission,
     deleteMission,
-    updateMission,
   };
 };

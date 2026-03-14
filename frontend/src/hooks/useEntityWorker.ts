@@ -448,9 +448,8 @@ export function useEntityWorker({
         }
 
         // Directly use the computed course. No smoothing (to avoid lag).
-        const smoothedCourse = computedCourse;
-        prevCourseRef.current.set(entity.uid, smoothedCourse);
-        stored.course = smoothedCourse;
+        prevCourseRef.current.set(entity.uid, computedCourse);
+        stored.course = computedCourse;
 
         // Track known UIDs and emit new entity event
         if (isNew) {

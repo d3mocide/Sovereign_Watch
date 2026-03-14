@@ -60,43 +60,32 @@ describe('processReplayData', () => {
     expect(e1![1].time).toEqual(new Date(mockData[1].time).getTime());
   });
 
-  it('benchmarks processing speed', () => {
-    // Generate a large dataset
+  it('handles large datasets without data loss', () => {
     const largeDataset: any[] = [];
     const numEntities = 100;
-    const pointsPerEntity = 1000;
+    const pointsPerEntity = 100;
     const baseTime = new Date('2023-01-01T00:00:00Z').getTime();
 
-    // The backend returns data sorted by time globally, so we should generate it that way to simulate real conditions
-    // However, to test the sorting overhead, we need to consider that the sorting step runs regardless of input order.
-    // Timsort (V8's sort) is optimized for sorted data, so performance might be good already if data is sorted.
-    // But iterating and sorting 100 arrays of 1000 items still takes time.
-
     for (let i = 0; i < pointsPerEntity; i++) {
-        for (let e = 0; e < numEntities; e++) {
-            largeDataset.push({
-                entity_id: `entity-${e}`,
-                type: 'a-f-G',
-                lat: 0,
-                lon: 0,
-                alt: 0,
-                speed: 0,
-                heading: 0,
-                time: new Date(baseTime + i * 1000).toISOString(),
-                meta: JSON.stringify({ callsign: `Entity ${e}` })
-            });
-        }
+      for (let e = 0; e < numEntities; e++) {
+        largeDataset.push({
+          entity_id: `entity-${e}`,
+          type: 'a-f-G',
+          lat: 0,
+          lon: 0,
+          alt: 0,
+          speed: 0,
+          heading: 0,
+          time: new Date(baseTime + i * 1000).toISOString(),
+          meta: JSON.stringify({ callsign: `Entity ${e}` })
+        });
+      }
     }
 
-    // Total points: 100,000
-
-    const start = performance.now();
-    processReplayData(largeDataset);
-    const end = performance.now();
-
-    console.log(`Processing ${largeDataset.length} points took ${(end - start).toFixed(2)}ms`);
-
-    // We expect it to be reasonable, but we want to see improvement.
-    expect(end - start).toBeGreaterThan(0);
+    const result = processReplayData(largeDataset);
+    expect(result.size).toBe(numEntities);
+    for (let e = 0; e < numEntities; e++) {
+      expect(result.get(`entity-${e}`)).toHaveLength(pointsPerEntity);
+    }
   });
 });

@@ -58,7 +58,6 @@ function exportCsv(passes: Pass[]) {
 export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
   passes, homeLocation, onPassClick, isLoading, minElevation = 10, onMinElevationChange, emptyMessage,
 }) => {
-  // eslint-disable-next-line react-hooks/purity
   const [now, setNow] = useState(Date.now());
   const [showElMenu, setShowElMenu] = useState(false);
 

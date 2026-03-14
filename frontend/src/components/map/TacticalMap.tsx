@@ -404,7 +404,6 @@ export function TacticalMap({
     // Null out refs so stale instances aren't used after the adapter unmounts.
     // react-map-gl handles GL context destruction internally on unmount — do not
     // call map.remove() here as it races with react-map-gl's own cleanup.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMapLoaded(false);
     mapInstanceRef.current = null;
     overlayRef.current = null;
@@ -509,8 +508,6 @@ export function TacticalMap({
     },
     globeMode,
     enable3d,
-    mapToken: mapToken || "",
-    mapStyle: mapStyle || "",
     mapLoaded,
     replayMode,
     onCountsUpdate,

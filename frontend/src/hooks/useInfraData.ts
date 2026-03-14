@@ -123,7 +123,6 @@ export const useInfraData = () => {
         setCablesData(fallbackCables);
         setStationsData(fallbackStations);
         setOutagesData(fallbackEmpty);
-        setOutagesData(fallbackEmpty);
       }
     };
     fetchRealData();

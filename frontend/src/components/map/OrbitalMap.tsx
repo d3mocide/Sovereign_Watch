@@ -523,8 +523,6 @@ export function OrbitalMap({
     },
     globeMode,
     enable3d,
-    mapToken: mapToken || "",
-    mapStyle: mapStyle || "",
     mapLoaded,
     replayMode,
     onCountsUpdate,
