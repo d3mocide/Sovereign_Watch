@@ -1,4 +1,6 @@
-import urllib.request, json, re, traceback
+import json
+import re
+import urllib.request
 
 def test():
     raw = urllib.request.urlopen("http://rx.linkfanel.net/kiwisdr_com.js").read().decode("utf-8")

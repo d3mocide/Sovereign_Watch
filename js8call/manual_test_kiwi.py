@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import time
-import sys
 import logging
 
 logging.basicConfig(level=logging.INFO)

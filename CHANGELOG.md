@@ -1,3 +1,18 @@
+## [Unreleased]
+
+### Changed
+
+- **JS8Call — Dead Code Removal**: Audited all files in the `js8call/` poller for dead code, unused symbols, and structural redundancies.
+  - Removed unused `import shlex` from `server.py` (was made redundant when `shell=True` was replaced with secure subprocess pipelines).
+  - Removed unused `import sys` from `manual_test_kiwi.py`.
+  - Removed unused `import traceback` from `tests/test_json.py`.
+  - Removed three dead dummy-variable assignments (`callsign`, `grid`, `freq`) that were immediately overwritten in the WebSocket handler.
+  - Removed dead `haversine_distance_km()` function from `server.py` — duplicate of logic already present in `kiwi_directory.py` and never called.
+  - Removed no-op `if closed_ok: pass` branch from `kiwi_client.py` receive loop.
+  - Consolidated five repeated inline `socket.socket()` UDP send blocks in `server.py` into a single `_udp_send()` helper, reducing boilerplate and centralising error handling.
+  - Fixed type mismatch: `SET_KIWI` handler now correctly parses `freq` as `int` (was `float`), matching the `_start_kiwi_pipeline()` signature and validation logic.
+  - Renamed root-level `test_kiwi.py` → `manual_test_kiwi.py` and `test_wvm.py` → `manual_test_wvm.py` to clearly distinguish live integration/smoke scripts from the pytest unit test suite in `tests/`.
+
 ## [0.28.1] - 2026-03-12
 
 ### Added
