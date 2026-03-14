@@ -35,3 +35,7 @@
 ## 2025-03-09 - Accessible Custom Form Controls
 **Learning:** Custom form controls (like the spin buttons for the coverage radius in the SaveLocationForm) and modal dismiss actions often lack built-in accessibility features found in native inputs. Without `aria-label`s, screen readers cannot identify the purpose of these icon-only buttons. Without explicit `focus-visible` styles, keyboard users cannot see which control is currently focused, breaking the navigation experience.
 **Action:** Always ensure that custom form controls and modal dismiss buttons are fully accessible by adding appropriate `aria-label` attributes and `focus-visible:ring-* outline-none` classes, ensuring they can be confidently used by everyone.
+
+## 2025-03-09 - Accessible Loading and Empty States in Widgets
+**Learning:** High-density tactical widgets often fetch data asynchronously, resulting in temporary empty or loading states. If these states only rely on visual text (e.g., "Awaiting Satellite Data..."), screen reader users are left unaware of the widget's status or when the content finally arrives. Furthermore, visually empty areas without an icon can feel broken rather than intentional.
+**Action:** Always wrap async widget content areas with `aria-live="polite"` and `aria-busy={isLoading}`. When displaying an empty or loading state, pair the descriptive text with a relevant, low-opacity icon (e.g., `<Satellite className="text-white/10" aria-hidden="true" />`) to provide immediate visual confirmation that the state is intentional.

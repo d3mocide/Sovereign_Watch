@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Satellite } from 'lucide-react';
 
 interface Pass {
   norad_id: number;
@@ -124,19 +124,25 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
         </span>
       </div>
 
-      {isLoading ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-4 min-h-[150px]">
-          <div className="w-6 h-6 rounded-full border border-purple-400/20 border-t-purple-400 animate-spin mb-2"></div>
-          <span className="text-[8px] text-purple-400/50 font-mono tracking-widest uppercase">PREDICTING TRAJECTORIES...</span>
-        </div>
-      ) : passes.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center p-4 text-center">
-          <span className="text-[9px] text-white/20 font-mono tracking-widest uppercase">
-            {emptyMessage ?? 'No upcoming passes'}
-          </span>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-purple-400/20">
+      <div
+        className="flex-1 flex flex-col overflow-hidden"
+        aria-live="polite"
+        aria-busy={isLoading}
+      >
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 min-h-[150px]">
+            <div className="w-6 h-6 rounded-full border border-purple-400/20 border-t-purple-400 animate-spin mb-2"></div>
+            <span className="text-[8px] text-purple-400/50 font-mono tracking-widest uppercase">PREDICTING TRAJECTORIES...</span>
+          </div>
+        ) : passes.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 text-center gap-3">
+            <Satellite size={24} className="text-white/10" aria-hidden="true" />
+            <span className="text-[9px] text-white/20 font-mono tracking-widest uppercase">
+              {emptyMessage ?? 'No upcoming passes'}
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-purple-400/20 h-full">
           {passes.map((pass, i) => {
             const aosMs = new Date(pass.aos).getTime();
             const losMs = new Date(pass.los).getTime();
@@ -174,8 +180,9 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
               </button>
             );
           })}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
