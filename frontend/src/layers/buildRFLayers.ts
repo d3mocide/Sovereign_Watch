@@ -2,6 +2,7 @@ import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { RFSite, CoTEntity } from "../types";
 
 /** Colour by service type and digital mode availability */
+/** Colour by service type and digital mode availability */
 function rfSiteColor(r: RFSite, alpha: number): [number, number, number, number] {
   if (r.service === "noaa_nwr") {
     return [14, 165, 233, alpha]; // sky-500 — NOAA NWR
@@ -11,7 +12,7 @@ function rfSiteColor(r: RFSite, alpha: number): [number, number, number, number]
   }
 
   // Ham / GMRS
-  const modes = r.modes.map((m) => m.toLowerCase());
+  const modes = (r.modes || []).map((m) => (m || "").toLowerCase());
   if (modes.some((m) => m.includes("d-star") || m.includes("fusion") || m.includes("dmr") || m.includes("p25"))) {
     return [139, 92, 246, alpha]; // violet-500 — digital
   }
@@ -31,7 +32,7 @@ function rfSiteOutlineColor(r: RFSite): [number, number, number, number] | null 
 
 /** Wrap an RF site as a CoTEntity so it works with the existing hover/tooltip pipeline. */
 export function rfSiteToEntity(r: RFSite): CoTEntity {
-  const modesStr = r.modes.length ? r.modes.join(", ") : "FM";
+  const modesStr = (r.modes || []).length ? r.modes.join(", ") : "FM";
   const name = r.name || r.callsign || r.site_id;
 
   return {
@@ -116,10 +117,15 @@ export function buildRFLayers(
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   zoom: number,
 ): any[] {
-  if (sites.length === 0) return [];
+  if (!sites || sites.length === 0) return [];
 
   const modeKey = globeMode ? "globe" : "merc";
-  const depthParams = { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 };
+  // FIX: standardizing on depthTest: true and negative depthBias for all tactical layers.
+  // This is proven to work for entity icons and avoids Z-fighting/culling.
+  const depthParams = { 
+    depthTest: true, 
+    depthBias: -100.0 
+  };
   const layers: any[] = [];
 
   const { clusters, individuals } = clusterRFSites(sites, zoom);
@@ -132,9 +138,9 @@ export function buildRFLayers(
         id: `rf-cluster-halo-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
-        getRadius: (d: any) => 10 + Math.min(d.count / 3, 6),
+        getRadius: (d: any) => 12 + Math.min(d.count / 3, 8), // Slightly larger
         radiusUnits: "pixels" as const,
-        getFillColor: (d: any) => rfSiteColor(d.representative, 40),
+        getFillColor: (d: any) => rfSiteColor(d.representative, 80), // Doubled opacity from 40 to 80
         stroked: false,
         filled: true,
         pickable: false,
@@ -147,12 +153,12 @@ export function buildRFLayers(
         id: `rf-clusters-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
-        getRadius: (d: any) => 7 + Math.min(d.count / 5, 4),
+        getRadius: (d: any) => 8 + Math.min(d.count / 5, 5),
         radiusUnits: "pixels" as const,
         getFillColor: (d: any) => rfSiteColor(d.representative, 255),
         stroked: true,
         getLineColor: [255, 255, 255, 220],
-        getLineWidth: 1,
+        getLineWidth: 1.5,
         lineWidthUnits: "pixels" as const,
         filled: true,
         pickable: true,
@@ -188,10 +194,10 @@ export function buildRFLayers(
           id: `rf-halo-${modeKey}`,
           data: individuals,
           getPosition: (d: RFSite) => [d.lon, d.lat, 0],
-          getRadius: 9,
+          getRadius: 12,
           radiusUnits: "pixels" as const,
-          radiusMinPixels: 5,
-          getFillColor: (d: RFSite) => rfSiteColor(d, 40),
+          radiusMinPixels: 6,
+          getFillColor: (d: RFSite) => rfSiteColor(d, 80),
           stroked: false,
           filled: true,
           pickable: false,
@@ -207,13 +213,13 @@ export function buildRFLayers(
         id: `rf-dots-${modeKey}`,
         data: individuals,
         getPosition: (d: RFSite) => [d.lon, d.lat, 0],
-        getRadius: 5,
+        getRadius: 6,
         radiusUnits: "pixels" as const,
-        radiusMinPixels: 3,
-        getFillColor: (d: RFSite) => rfSiteColor(d, 220),
-        getLineColor: (d: RFSite) => rfSiteOutlineColor(d) || [0, 0, 0, 0],
+        radiusMinPixels: 4,
+        getFillColor: (d: RFSite) => rfSiteColor(d, 235),
+        getLineColor: (d: RFSite) => rfSiteOutlineColor(d) || [255, 255, 255, 180],
         stroked: true,
-        getLineWidth: (d: RFSite) => rfSiteOutlineColor(d) ? 2 : 0,
+        getLineWidth: 1.5,
         lineWidthUnits: "pixels" as const,
         filled: true,
         pickable: true,

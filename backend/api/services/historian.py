@@ -18,8 +18,8 @@ async def historian_task():
     consumer = AIOKafkaConsumer(
         "adsb_raw", "ais_raw", "orbital_raw", "rf_raw",
         bootstrap_servers=settings.KAFKA_BROKERS,
-        group_id="historian-writer",
-        auto_offset_reset="latest"
+        group_id="historian-writer-v2",
+        auto_offset_reset="earliest"
     )
 
     try:

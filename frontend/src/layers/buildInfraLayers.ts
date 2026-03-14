@@ -85,7 +85,7 @@ export function buildInfraLayers(
                     getFillColor: [outagesData]
                 },
                 wrapLongitude: !globeMode,
-                parameters: { depthTest: true, depthBias: 20.0 },
+                parameters: { depthTest: true, depthBias: -50.0 },
                 onHover: (info: any) => {
                     const iso2 = info.object?.properties?.["ISO3166-1-Alpha-2"];
                     const outage = iso2 ? activeOutageMap[iso2] : null;
@@ -157,7 +157,7 @@ export function buildInfraLayers(
                     getLineColor: 300,
                     getLineWidth: 300
                 },
-                parameters: { depthTest: true, depthBias: 15.0 },
+                parameters: { depthTest: true, depthBias: -100.0 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
             })
@@ -205,7 +205,7 @@ export function buildInfraLayers(
                 updateTriggers: {
                     getFillColor: [cablesData]
                 },
-                parameters: { depthTest: true, depthBias: 15.0 },
+                parameters: { depthTest: true, depthBias: -110.0 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
             })

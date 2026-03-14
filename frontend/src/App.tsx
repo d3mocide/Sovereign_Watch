@@ -303,10 +303,13 @@ function App() {
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
   // Compute active services list
-  const activeServices: string[] = [];
-  if (filters.showHam !== false) activeServices.push('ham'); // Assuming 'ham' fetches both Ham & GMRS from backend implicitly
-  if (filters.showNoaa !== false) activeServices.push('noaa_nwr');
-  if (filters.showPublicSafety !== false) activeServices.push('public_safety');
+  const activeServices = useMemo(() => {
+    const list: string[] = [];
+    if (filters.showHam !== false) list.push('ham');
+    if (filters.showNoaa !== false) list.push('noaa_nwr');
+    if (filters.showPublicSafety !== false) list.push('public_safety');
+    return list;
+  }, [filters.showHam, filters.showNoaa, filters.showPublicSafety]);
 
   // RF infrastructure layer
   const { rfSitesRef, loading: repeatersLoading } = useRFSites(

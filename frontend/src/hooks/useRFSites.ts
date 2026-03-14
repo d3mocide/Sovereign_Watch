@@ -32,7 +32,7 @@ export function useRFSites(
     const servicesStr = services && services.length > 0 ? services.sort().join(",") : "all";
     const emcommStr = emcomm_only ? "true" : "false";
 
-    const CACHE_KEY = `rf_sites_cache_v2_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}_${radiusNm}_${servicesStr}_${modeStr}_${emcommStr}`;
+    const CACHE_KEY = `rf_sites_cache_v3_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}_${radiusNm}_${servicesStr}_${modeStr}_${emcommStr}`;
     const CACHE_TS_KEY = `${CACHE_KEY}_ts`;
     const CACHE_TTL = 3600 * 1000; // 1 hour
 
@@ -42,7 +42,11 @@ export function useRFSites(
       const dLat = Math.abs(missionLat - last.lat);
       const dLon = Math.abs(missionLon - last.lon);
       const filtersMatch = last.servicesStr === servicesStr && last.modeStr === modeStr && last.emcommStr === emcommStr && last.radiusNm === radiusNm;
-      if (dLat < REFETCH_THRESHOLD_DEG && dLon < REFETCH_THRESHOLD_DEG && filtersMatch) return;
+      
+      // Only skip if we already have data in the ref. If it's empty, we should always try to fetch at least once.
+      if (dLat < REFETCH_THRESHOLD_DEG && dLon < REFETCH_THRESHOLD_DEG && filtersMatch && rfSitesRef.current.length > 0) {
+        return;
+      }
     }
 
     let cancelled = false;

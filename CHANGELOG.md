@@ -1,3 +1,16 @@
+## [0.28.5] - 2026-03-14
+
+### Fixed
+
+- **Tactical RF & Infrastructure Visibility**: Resolved multiple depth-fighting (Z-index) conflicts where RF Infrastructure and Internet Outage layers were buried beneath the map terrain or each other.
+  - **Depth Standardization**: Migrated all tactical underlays (RF, Outages, Cables) to a standardized `depthTest: true` and negative `depthBias` scheme (-50 to -110), pulling them explicitly into the foreground.
+  - **Outage Shading**: Fixed a bug where global outage polygons used a positive depth bias, effectively pushing them out of the viewport on 3D/Globe projections.
+  - **RF Dot Contrast**: Reintroduced white outlines and increased cluster halos to ensure radio stations remain visible across high-contrast satellite and dark-tactical backgrounds.
+- **Historian Data Recovery Race**: Fixed a race condition where the `historian` service would miss the initial ingestion burst from pollers during a fresh system start, leading to an empty database ("0 RF stations active").
+  - **Kafka Offset Management**: Changed `auto_offset_reset` to `earliest` and bumped the `group_id` to `historian-writer-v2`. This forces the historian to backfill all available events on the Kafka bus into TimescaleDB, ensuring zero data loss during reboots.
+- **RF Sidebar Notification Logic**: Refined the IntelliSense notification gating to prevent false-negative "0 RF Stations Active" alerts. The system now waits for a confirmed non-zero data set before broadcasting its availability to the operational feed.
+- **Filter Hook Performance**: Memoized the `activeServices` array in `App.tsx` to prevent the `useRFSites` hook from re-evaluating on every frame, reducing browser CPU usage and stabilizing API polling frequency.
+
 ## [0.28.4] - 2026-03-14
 
 ### Fixed

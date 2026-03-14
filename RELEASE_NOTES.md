@@ -1,39 +1,25 @@
-# Release - v0.28.4 - Radio & Maritime Refinements
+# Release - v0.28.5 - Signal Recovery Patch
 
-This release focuses on tactical stability improvements for the Listening Post, enhanced maritime platform identification, and critical fixes for track replay integrity.
+## High-Level Summary
+This patch restores full visibility of RF Infrastructure and Global Network status on the Tactical Map. It resolves a critical data-recovery race condition in the backend that could lead to an empty database on service restarts, and standardizes map rendering parameters to eliminate depth-fighting between underlay layers and the 3D terrain.
 
----
+## Key Features & Fixes
+- **Data Recovery Engine**: The `historian` now automatically backfills missing ingestion data from the Kafka bus using `earliest` offset resets. This guarantees that your RF site database remains populated even after container rebuilds or transient network partitions.
+- **Enhanced Map Visibility**: standardizing on negative `depthBias` for all tactical infrastructure. This "pulls" repeaters, cables, and outages to the foreground, preventing them from being buried under the map basemap or satellite terrain.
+- **Tactical RF Highlighting**: Increased cluster halo opacity and added high-contrast outlines to single RF dots to ensure visibility against the deep-blue and terrain textures.
+- **IntelliSense Refinement**: Elimined "0 stations" false-negative log entries by gating notifications behind actual data availability confirmed by the frontend hooks.
 
-## 📡 KiwiSDR Audio Stability & Restart Fix
+## Technical Details
+- **Kafka**: Migrated to `group_id: historian-writer-v2` to trigger a mandatory partition re-read.
+- **Deck.gl**: All infrastructure layer builders now use `depthTest: true` / `depthBias: -100` (or similar) to ensure Z-axis dominance over the Mapbox/MapLibre tiles.
+- **React**: Memoized filter arrays in `App.tsx` and bumped the `useRFSites` cache key to `v3` to force an immediate stale-cache invalidation for all clients.
 
-Resolved critical issues in the **Listening Post** that caused inconsistent audio playback and "stuck" connections.
-
-- **Infinite Loop Fix**: Eliminated a bug in the `useListenAudio` hook where the WebSocket connection would enter an infinite restart loop whenever the "Playing" state flickered.
-- **Improved Reconnection**: Refined `AudioContext` management to ensure the audio engine remains "warm" during temporary connection drops, enabling seamless reconnection.
-- **Resource Cleanup**: The backend now proactively terminates all associated audio processes (`pacat`) and socket streams on disconnect, preventing "phantom static" from playing after a station is stopped.
-
-## 🛳️ Enhanced AIS Vessel Identification
-
-The **Right Sidebar** now provides faster situational awareness for maritime contacts by prioritizing the vessel's radio callsign.
-
-- **Callsign Priority**: The **REGISTRATION** field now displays the vessel's callsign (e.g., `V7JJ2`) as the primary identifier, falling back to the IMO number if the callsign is unavailable.
-- **Trimmed Display**: Callsigns are automatically trimmed of trailing whitespace for a cleaner tactical look.
-
-## 🗂️ Fixed: Replay Category Filters (Ships & Aircraft)
-
-- Fixed a bug where maritime and aviation category filters (Cargo, Tanker, Military, etc.) were ignored during historical track replay.
-- Historical data now correctly maps vessel and aircraft classifications, ensuring that the Tactical Map filters correctly hide/show assets based on your selections in Replay mode.
-
----
-
-## 📄 Upgrade Instructions
-
-This release includes minor backend logic changes and frontend updates.
+## Upgrade Instructions
+This release updates both the backend logic (Historian) and the frontend rendering. A full rebuild is recommended.
 
 ```bash
 git pull origin main
-docker compose up -d --build js8call frontend
+docker compose down
+docker compose up -d --build
 ```
-
----
-*Sovereign Watch - Distributed Intelligence Fusion*
+The system will automatically hydrate the database from the Kafka event bus within 30-60 seconds of startup.
