@@ -120,12 +120,11 @@ export function buildRFLayers(
   if (!sites || sites.length === 0) return [];
 
   const modeKey = globeMode ? "globe" : "merc";
-  // FIX: standardizing on depthTest: true and negative depthBias for all tactical layers.
-  // This is proven to work for entity icons and avoids Z-fighting/culling.
-  const depthParams = { 
-    depthTest: true, 
-    depthBias: -100.0 
-  };
+  // ScatterplotLayer at z=0 requires depthTest:false in Mercator/2D to avoid being
+  // occluded by Mapbox's tile depth buffer at the same z-plane. Globe mode needs
+  // depthTest:true to prevent geometry bleeding through the Earth.
+  // (See buildEntityLayers ground-shadows for the same pattern.)
+  const depthParams = { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 };
   const layers: any[] = [];
 
   const { clusters, individuals } = clusterRFSites(sites, zoom);

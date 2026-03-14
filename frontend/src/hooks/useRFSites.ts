@@ -97,8 +97,10 @@ export function useRFSites(
           localStorage.setItem(CACHE_KEY, JSON.stringify(results));
           localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
         }
-      } catch {
-        // Fetch failed; rfSitesRef retains previous data
+      } catch (err: unknown) {
+        if (!cancelled) {
+          console.error("[useRFSites] fetch failed:", err instanceof Error ? err.message : err);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
