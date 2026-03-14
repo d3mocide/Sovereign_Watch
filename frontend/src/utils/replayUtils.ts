@@ -20,6 +20,11 @@ export function processReplayData(data: any[]): Map<string, CoTEntity[]> {
       meta = typeof pt.meta === 'string' ? JSON.parse(pt.meta) : pt.meta || {};
     } catch { /* ignore */ }
 
+    const cls = meta.classification || {};
+    // Ships: CoT type contains 'S'; classification lives in vesselClassification.
+    // Aircraft: CoT type contains 'A' (and not 'S'); classification lives in classification.
+    const isShip = (pt.type as string)?.includes('S');
+
     const entity: CoTEntity = {
       uid: pt.entity_id,
       type: pt.type,
@@ -32,7 +37,11 @@ export function processReplayData(data: any[]): Map<string, CoTEntity[]> {
       time: new Date(pt.time).getTime(),
       lastSeen: new Date(pt.time).getTime(),
       trail: [], // Replay doesn't need trails yet or we can generate them
-      uidHash: 0 // Will be computed by map
+      uidHash: 0, // Will be computed by map
+      // Map meta.classification into the correct top-level field so that
+      // filterEntity() in useAnimationLoop can apply category filters in replay.
+      vesselClassification: isShip && cls.category ? { category: cls.category } : undefined,
+      classification: !isShip && Object.keys(cls).length > 0 ? cls : undefined,
     };
 
     if (!cache.has(entity.uid)) cache.set(entity.uid, []);

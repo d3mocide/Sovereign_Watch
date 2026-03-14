@@ -60,6 +60,60 @@ describe('processReplayData', () => {
     expect(e1![1].time).toEqual(new Date(mockData[1].time).getTime());
   });
 
+  it('maps meta.classification to vesselClassification for ship entities', () => {
+    const row = {
+      entity_id: '123456789',
+      type: 'a-f-S-C-M',
+      lat: 47.6,
+      lon: -122.3,
+      alt: 0,
+      speed: 3,
+      heading: 90,
+      time: '2023-01-01T10:00:00Z',
+      meta: JSON.stringify({ callsign: 'MV TEST', classification: { category: 'cargo' } })
+    };
+    const result = processReplayData([row]);
+    const entity = result.get('123456789')![0];
+    expect(entity.vesselClassification?.category).toBe('cargo');
+    expect(entity.classification).toBeUndefined();
+  });
+
+  it('maps meta.classification to classification for aircraft entities', () => {
+    const row = {
+      entity_id: 'abc123',
+      type: 'a-f-A-C-F',
+      lat: 47.6,
+      lon: -122.3,
+      alt: 10000,
+      speed: 200,
+      heading: 270,
+      time: '2023-01-01T10:00:00Z',
+      meta: JSON.stringify({
+        callsign: 'UAL123',
+        classification: { affiliation: 'commercial', platform: 'fixed_wing', category: 'A3' }
+      })
+    };
+    const result = processReplayData([row]);
+    const entity = result.get('abc123')![0];
+    expect(entity.classification?.affiliation).toBe('commercial');
+    expect(entity.classification?.platform).toBe('fixed_wing');
+    expect(entity.vesselClassification).toBeUndefined();
+  });
+
+  it('handles missing meta.classification gracefully', () => {
+    const row = {
+      entity_id: 'e99',
+      type: 'a-f-S-C-M',
+      lat: 0, lon: 0, alt: 0, speed: 0, heading: 0,
+      time: '2023-01-01T10:00:00Z',
+      meta: JSON.stringify({ callsign: 'UNKNOWN' })
+    };
+    const result = processReplayData([row]);
+    const entity = result.get('e99')![0];
+    expect(entity.vesselClassification).toBeUndefined();
+    expect(entity.classification).toBeUndefined();
+  });
+
   it('handles large datasets without data loss', () => {
     const largeDataset: any[] = [];
     const numEntities = 100;
