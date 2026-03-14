@@ -41,26 +41,29 @@ def classify_vessel(ship_type: int, mmsi: int, name: str) -> Dict[str, Any]:
     elif ship_type == 90:
         category = "other"
 
-    # 2. Heuristics fallback for "unknown" or "other" types
+    # 2. Heuristics fallback for "unknown" or "other" types.
+    # Order matters: more specific / higher-precision patterns must come first
+    # so that unambiguous signals (e.g. "TRAWLER") beat broader keywords
+    # (e.g. "QUEEN") that appear later in a multi-word vessel name.
     if category in ("unknown", "other", "special"):
-        # Tug / Towing
+        # Tug / Towing (very specific prefixes)
         if any(x in name_upper for x in ["TUG", "TOW", "PUSH", "FOSS", "VALIANT", "TITAN"]):
             category = "tug"
-        # Passenger / Ferries
-        elif any(x in name_upper for x in ["FERRY", "WSF", "SPIRIT", "PASSENGER", "QUEEN", "BREEZE"]):
-            category = "passenger"
-        # Military
+        # Military (distinctive designators)
         elif any(x in name_upper for x in ["USS ", "USNS", "CGC", "WARSHIP", "NAVY", "RFA"]):
             category = "military"
-        # Pilot
-        elif any(x in name_upper for x in ["PILOT", "PLT"]):
-            category = "pilot"
-        # Fishing
+        # Fishing (specific vessel designators checked before broad passenger terms)
         elif any(x in name_upper for x in ["FISHING", "TRAWLER", "FV ", "F/V", "CRABBER"]):
             category = "fishing"
         # Search and Rescue
         elif any(x in name_upper for x in ["RESCUE", "LIFEBOAT", "SAR"]):
             category = "sar"
+        # Pilot
+        elif any(x in name_upper for x in ["PILOT", "PLT"]):
+            category = "pilot"
+        # Passenger / Ferries
+        elif any(x in name_upper for x in ["FERRY", "WSF", "SPIRIT", "PASSENGER", "QUEEN", "BREEZE"]):
+            category = "passenger"
         # Yachts / Pleasure
         elif any(x in name_upper for x in ["YACHT", "MY ", "M/Y", "SY ", "S/V", "SV "]):
             category = "pleasure"

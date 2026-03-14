@@ -177,6 +177,12 @@ class MaritimePollerService:
                                 f"({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
                             )
 
+                            # Cancel any pending reconnect so rapid preset clicks
+                            # collapse into a single reconnect (debounce).
+                            if self._bbox_debounce_task and not self._bbox_debounce_task.done():
+                                self._bbox_debounce_task.cancel()
+                                logger.debug("🕐 Debounce reset — new mission update received")
+
                             self._bbox_debounce_task = asyncio.create_task(
                                 self._schedule_bbox_reconnect()
                             )
@@ -320,6 +326,9 @@ class MaritimePollerService:
                         "draught": cached.get("draught", 0),
                         "length": dim_a + dim_b,
                         "beam": dim_c + dim_d
+                    },
+                    "classification": {
+                        "category": classification["category"]
                     }
                 }
             }
@@ -399,12 +408,6 @@ class MaritimePollerService:
             logger.error(f"Failed to transform AIS message: {e}")
             return None
 
-        """Callback for Kafka send errors."""
-        try:
-            future.result()
-        except Exception as e:
-            logger.error(f"❌ Failed to send to Kafka: {e}")
-
     async def publish_tak_event(self, tak_event: dict):
         """Unified helper to distance-filter and publish TAK events to Kafka."""
         # Evaluate distance and drop if outside current dynamic mission radius
@@ -420,10 +423,12 @@ class MaritimePollerService:
 
         # Send to Kafka
         try:
-            # BUG-FIX: Await the send coroutine
+            # BUG-FIX: Await the send coroutine; key pins each vessel to a
+            # consistent Kafka partition for ordered processing per MMSI.
             await self.kafka_producer.send(
                 "ais_raw",
                 value=tak_event,
+                key=tak_event["uid"].encode("utf-8"),
             )
             
             # Log sparingly (every 100th message)
@@ -436,11 +441,35 @@ class MaritimePollerService:
         """Main streaming loop - receives AIS messages and publishes to Kafka."""
         while self.running:
             try:
-                # 1. (Re)connect
+                # 1. Rate-limit protection: enforce minimum interval between reconnects
+                now = datetime.utcnow()
+                if self.last_reconnect_time:
+                    elapsed = (now - self.last_reconnect_time).total_seconds()
+                    if elapsed < MIN_RECONNECT_INTERVAL_SECONDS:
+                        wait_time = MIN_RECONNECT_INTERVAL_SECONDS - elapsed
+                        logger.info(f"⏳ Rate limit protection: waiting {wait_time:.1f}s before reconnect")
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # 2. Exponential backoff with jitter on repeated failures
+                if self.reconnect_attempts > 0:
+                    delay = min(
+                        BACKOFF_MAX_DELAY_SECONDS,
+                        BACKOFF_INITIAL_DELAY_SECONDS * (BACKOFF_FACTOR ** (self.reconnect_attempts - 1))
+                    )
+                    jitter = delay * 0.1
+                    actual_delay = delay + random.uniform(-jitter, jitter)
+                    logger.warning(f"🔄 AISStream retry backoff: attempt {self.reconnect_attempts}, waiting {actual_delay:.1f}s")
+                    await asyncio.sleep(actual_delay)
+
+                self.last_reconnect_time = datetime.utcnow()
+
+                # 3. (Re)connect
                 if not await self.connect_aisstream():
-                    await asyncio.sleep(BACKOFF_INITIAL_DELAY_SECONDS)
+                    self.reconnect_attempts += 1
                     continue
 
+                self.connection_start_time = datetime.utcnow()
                 self.reconnect_event.clear()
 
                 # Inner message loop
@@ -465,6 +494,14 @@ class MaritimePollerService:
                             break
 
                         if message_task in done:
+                            # Connection is healthy — reset backoff once stable
+                            if self.reconnect_attempts > 0 and self.connection_start_time:
+                                connected_for = (datetime.utcnow() - self.connection_start_time).total_seconds()
+                                if connected_for >= CONNECTION_STABILITY_THRESHOLD_SECONDS:
+                                    logger.info(f"✅ AISStream stable for {connected_for:.0f}s — resetting backoff")
+                                    self.reconnect_attempts = 0
+                                    self.connection_start_time = None
+
                             message = message_task.result()
                             data = json.loads(message)
                             msg_type = data.get("MessageType")
