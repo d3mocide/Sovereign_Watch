@@ -1,36 +1,34 @@
-# Release - v0.28.2 - Maritime Intelligence Restoration
+# Release - v0.28.3 - Waterfall Stream Fix
 
-This release resolves a critical regression in maritime vessel tracking and delivers a comprehensive cleanup of the frontend and backend codebases. Ships are now fully visible on the Tactical Map with significantly more accurate classification tags in the Intelligence Stream.
+This is a targeted bug-fix release resolving a regression that prevented the WIDE-mode panoramic waterfall from loading in the HF Listening Post.
 
-## 🚢 Maritime Intelligence Restoration
+## 📡 Waterfall Stream Restored
 
-A series of compounding bugs introduced during code cleanup caused all AIS maritime vessels to disappear from the Tactical Map. This release surgically repairs the full AIS data pipeline:
+The WIDE-mode waterfall WebSocket connection was failing immediately on every page load, cycling in a rapid connect → disconnect → reconnect loop with no data ever reaching the canvas. The browser console displayed:
 
-- **Silent Kafka Drop (Critical Fix)**: The `publish_tak_event` coroutine was being called without `await`, causing every Kafka message to be silently discarded. No data was reaching the historian or the frontend.
-- **Blocked Stream Loop**: The WebSocket receive loop was unable to react to mission area changes from Redis, locking the poller to the initial bounding box. The loop is now fully interruptible via an `asyncio.Event`.
-- **Classification Key Mismatch**: The Intelligence Feed backend expected a `classification` key while the poller only emitted `vesselClassification`. Both keys are now populated for full pipeline compatibility.
+> `WebSocket ws://localhost/js8/ws/waterfall failed: WebSocket is closed before the connection is established.`
 
-## 🏷️ Expanded Vessel Classification
+Two compounding issues were identified and resolved:
 
-Name-based heuristics in the AIS classification engine have been substantially expanded, dramatically reducing `[UNKNOWN]` tags in the Intelligence Stream for common PNW and global fleets:
+### 1. Over-specified `useEffect` Dependencies
 
-- **Washington State Ferries**: `WSF` prefix now maps to `passenger`.
-- **Foss Maritime / Tugs**: `FOSS`, `PUSH`, `VALIANT` map to `tug`.
-- **USCG / Military**: `CGC`, `RFA` added alongside existing `USS` / `USNS`.
-- **Pleasure Craft**: `MY`, `M/Y`, `SY` patterns added.
-- **Law Enforcement**: `POLICE`, `SHERIFF`, `PATROL` now recognized.
+In `ListeningPost.tsx`, the WebSocket lifecycle effect had `wfOffset` and `zoom` in its dependency array. Because `drawRow` closed directly over `wfOffset`, any slider interaction caused `drawRow` to be recreated — which triggered the effect to tear down the WebSocket and immediately reopen it, repeatedly, before any handshake could complete.
 
-## 🧹 Code Cleanup
+**Fix**: `drawRow` now reads `wfOffset` via a `wfOffsetRef` (kept in sync with a dedicated `useEffect`) and carries a stable `[]` dep array. The WebSocket effect deps are reduced to `[wfMode, analyserNode]` — the only two values that genuinely require a new connection.
 
-- Comprehensive dead code removal across the frontend (`useAnimationLoop`, `useEntityWorker`, `useMissionLocations`, `useRFSites`, `App.tsx`, and more).
-- Backend: Removed unreachable code, fixed stale imports, and deleted one-off debug scripts from `infra_poller/test/`.
-- JS8Call: Consolidated 5 duplicated UDP send blocks into a single `_udp_send()` helper; fixed `freq` int/float type mismatch.
+### 2. React StrictMode Close-Before-Open Race
+
+In development, React 18 `StrictMode` intentionally double-invokes effects: it mounts, runs cleanup, then remounts. The cleanup called `ws.close()` while the socket was still in `CONNECTING` state — the precise trigger for the browser error above.
+
+**Fix**: The effect cleanup now checks `ws.readyState`. If `CONNECTING`, it registers `ws.onopen = () => ws.close()` instead of calling `close()` immediately, allowing the handshake to complete before tearing down cleanly.
 
 ## 📄 Upgrade Instructions
 
+No service restart required — the fix is frontend-only and is delivered via Vite HMR. For a clean pull:
+
 ```bash
 git pull origin main
-docker compose up -d --build ais-poller
+docker compose up -d --build frontend
 ```
 
 ---

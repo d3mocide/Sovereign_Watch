@@ -1,4 +1,16 @@
+## [0.28.3] - 2026-03-13
+
+### Fixed
+
+- **Waterfall WebSocket — React StrictMode Race**: Resolved a compounding bug that caused the WIDE-mode waterfall stream to fail immediately on load.
+  - **Over-specified `useEffect` deps**: `wfOffset` and `zoom` were listed as dependencies of the WebSocket effect in `ListeningPost.tsx`. Since `drawRow` closed over `wfOffset` directly, every slider interaction recreated `drawRow`, which in turn triggered the effect to teardown (close the WS) and re-open — cycling before the first handshake could complete.
+  - **React StrictMode double-invoke**: In development, React 18 StrictMode intentionally runs effect cleanup then re-runs the effect to detect side effects. The cleanup called `ws.close()` while the socket was still in `CONNECTING` state, producing the browser error "WebSocket is closed before the connection is established."
+  - **Fix 1**: Introduced `wfOffsetRef` to mirror `wfOffset` state. `drawRow` now reads `wfOffsetRef.current` and carries an empty `[]` dep array, making it referentially stable across renders.
+  - **Fix 2**: The WS effect dep array reduced to `[wfMode, analyserNode]` — the only two values that actually require a new connection.
+  - **Fix 3**: The effect cleanup now checks `ws.readyState`. When `CONNECTING`, it schedules `ws.onopen = () => ws.close()` instead of calling `close()` immediately, satisfying StrictMode's double-invoke without producing a browser error.
+
 ## [0.28.2] - 2026-03-13
+
 
 Front End Updates
 

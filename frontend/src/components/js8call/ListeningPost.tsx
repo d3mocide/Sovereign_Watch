@@ -155,10 +155,15 @@ export default function ListeningPost({
   const [nbThresh, setNbThresh]   = useState(50);       // trigger % of peak (1-100)
   const [deEmp, setDeEmp]         = useState(0);        // de-emphasis: 0=off, 1=50µs, 2=75µs
   const [wfOffset, setWfOffset] = useState(100); // Waterfall baseline calibration
+  const wfOffsetRef = useRef(100); // Ref so drawRow always reads latest without re-creating the WS
   const wfFrameCountRef = useRef(0);
 
 
   // ── Waterfall Rendering Loop ──────────────────────────────────────────────
+
+  // Keep the ref in sync with the state so drawRow reads the latest value
+  // without being listed as a useEffect dependency (which would tear down the WS).
+  useEffect(() => { wfOffsetRef.current = wfOffset; }, [wfOffset]);
 
   const drawRow = useCallback((pixels: Uint8Array | number[], ctx2d: CanvasRenderingContext2D, w: number, h: number) => {
     // Scroll down
@@ -172,7 +177,7 @@ export default function ListeningPost({
 
     for (let i = 0; i < w; i++) {
         const bin = Math.floor(i * len / w);
-        const val = Math.max(0, pixels[bin] - wfOffset);
+        const val = Math.max(0, pixels[bin] - wfOffsetRef.current);
         const [r, g, b] = sdrWaterfallColor(val);
         const idx = i * 4;
         data[idx] = r;
@@ -181,7 +186,7 @@ export default function ListeningPost({
         data[idx + 3] = 255;
     }
     ctx2d.putImageData(row, 0, 0);
-  }, [wfOffset]);
+  }, []); // No wfOffset dep — reads live value via wfOffsetRef
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -232,13 +237,24 @@ export default function ListeningPost({
         return () => {
             active = false;
             if (reconnectTimeout) window.clearTimeout(reconnectTimeout);
-            if (wsRef.current) {
-                wsRef.current.close();
+            const ws = wsRef.current;
+            if (ws) {
                 wsRef.current = null;
+                if (ws.readyState === WebSocket.CONNECTING) {
+                    // Socket hasn't opened yet (React StrictMode double-invoke or rapid
+                    // re-render). Wait until it opens, then close it cleanly.
+                    ws.onopen = () => ws.close();
+                } else {
+                    ws.close();
+                }
             }
         };
     }
-  }, [wfMode, analyserNode, drawRow, wfSkip, wfOffset, zoom]); // Added zoom to dependencies
+  // Only re-create the WebSocket when wfMode or analyserNode changes.
+  // wfSkip is read via closure but doesn't need to close/reopen the socket;
+  // wfOffset is read via wfOffsetRef; zoom is sent separately via SET_ZOOM action.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wfMode, analyserNode]);
 
   // Sync local frequency and mode with active config from bridge
   // Use render-phase stabilization to avoid cascading render warnings in useEffect
