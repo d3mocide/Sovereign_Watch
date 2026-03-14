@@ -17,7 +17,7 @@ KiwiSDR SND binary frame layout:
 import asyncio
 import logging
 import time
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Optional, Dict
 
 try:
     import websockets
@@ -380,11 +380,8 @@ class KiwiClient:
         except BaseException as exc:
             logger.error("KiwiClient receive error: %s", repr(exc))
             # Distinguish clean close from unexpected disconnect
-            closed_ok   = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedOK)
-            closed_err  = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedError)
-            if closed_ok:
-                pass
-            elif closed_err:
+            closed_err = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedError)
+            if closed_err:
                 code = exc.code if hasattr(exc, 'code') else 0
                 logger.warning("KiwiClient closed unexpectedly (code=%s)", code)
                 if not self._disconnecting and self._on_disconnect:

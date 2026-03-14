@@ -31,3 +31,7 @@
 ## 2024-05-24 - Accessible Accordion Headers with Nested Actions
 **Learning:** This app's design system frequently places quick-toggle icon buttons inside accordion headers (like in SystemStatus.tsx). Converting the entire header to a standard `<button>` causes invalid HTML nesting (button inside button) and accessibility tree confusion.
 **Action:** Use the "absolute inset button" pattern: Make the header container `relative`. Add an `absolute inset-0 z-0` main `<button>` for the accordion expansion. Place the text and icons in a `relative z-10 pointer-events-none` container, and the nested interactive quick-toggle buttons in a `relative z-20 pointer-events-auto` container to separate click targets semantically and avoid nesting.
+
+## 2025-03-09 - Accessible Custom Form Controls
+**Learning:** Custom form controls (like the spin buttons for the coverage radius in the SaveLocationForm) and modal dismiss actions often lack built-in accessibility features found in native inputs. Without `aria-label`s, screen readers cannot identify the purpose of these icon-only buttons. Without explicit `focus-visible` styles, keyboard users cannot see which control is currently focused, breaking the navigation experience.
+**Action:** Always ensure that custom form controls and modal dismiss buttons are fully accessible by adding appropriate `aria-label` attributes and `focus-visible:ring-* outline-none` classes, ensuring they can be confidently used by everyone.

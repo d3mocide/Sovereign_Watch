@@ -48,7 +48,8 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
           </div>
           <button
             onClick={onCancel}
-            className="text-white/40 hover:text-white transition-colors"
+            aria-label="Close"
+            className="text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none rounded-sm"
           >
             <X size={18} />
           </button>
@@ -106,21 +107,23 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
             <div className="absolute right-1 top-1 bottom-1 flex flex-col w-6 gap-0.5 my-0.5">
                 <button 
                   type="button"
+                  aria-label="Increase radius"
                   onClick={() => {
                     const val = parseInt(radius) || 0;
                     if (val < 250) setRadius((val + 1).toString());
                   }}
-                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all"
+                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 >
                     <ChevronUp size={10} />
                 </button>
                 <button 
                   type="button"
+                  aria-label="Decrease radius"
                   onClick={() => {
                       const val = parseInt(radius) || 0;
                       if (val > 10) setRadius((val - 1).toString());
                   }}
-                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all"
+                  className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 >
                     <ChevronDown size={10} />
                 </button>
@@ -142,14 +145,14 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
-            className="flex-1 bg-hud-green/20 hover:bg-hud-green/30 border border-hud-green/50 text-hud-green text-sm font-medium py-2 rounded transition-all hover:shadow-lg hover:shadow-hud-green/20"
+            className="flex-1 bg-hud-green/20 hover:bg-hud-green/30 border border-hud-green/50 text-hud-green text-sm font-medium py-2 rounded transition-all hover:shadow-lg hover:shadow-hud-green/20 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
             Save Location
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white/60 hover:text-white text-sm py-2 rounded transition-all"
+            className="px-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white/60 hover:text-white text-sm py-2 rounded transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
             Cancel
           </button>
