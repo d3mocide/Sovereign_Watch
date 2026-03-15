@@ -81,7 +81,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   // JS8 station layers
   let js8Layers: any[] = [];
   if (js8Stations.length > 0 && ownGrid) {
-    let [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
+    const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
     const selectedJS8Callsign = currentSelected?.type === "js8" ? currentSelected.callsign : null;
     js8Layers = buildJS8Layers(
       js8Stations,
