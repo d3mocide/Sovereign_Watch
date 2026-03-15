@@ -205,10 +205,11 @@ export default function KiwiNodeBrowser({
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [isOpen, onClose, containerRef]);
 
-  // Clear node popup when switching views
-  useEffect(() => {
+  const [prevViewMode, setPrevViewMode] = useState(viewMode);
+  if (viewMode !== prevViewMode) {
+    setPrevViewMode(viewMode);
     setSelectedNode(null);
-  }, [viewMode]);
+  }
 
   if (!isOpen) return null;
 

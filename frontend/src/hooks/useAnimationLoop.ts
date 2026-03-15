@@ -146,7 +146,11 @@ export function useAnimationLoop({
   currentMissionRef,
   worldCountriesData,
 }: UseAnimationLoopOptions): void {
-  const lastFrameTimeRef = useRef<number>(Date.now());
+  const lastFrameTimeRef = useRef<number>(0);
+  useEffect(() => {
+    lastFrameTimeRef.current = Date.now();
+  }, []);
+
   const rafRef = useRef<number>();
 
   const countryOutageMap = React.useMemo(() => {

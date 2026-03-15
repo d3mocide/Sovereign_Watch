@@ -204,3 +204,9 @@ export interface VisualState {
   lat: number;
   alt: number;
 }
+
+export interface GroundTrackPoint {
+  lat: number;
+  lon: number;
+  alt?: number;
+}

@@ -52,8 +52,8 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   e.stopPropagation();
                   onFilterChange('showRepeaters', !filters.showRepeaters);
                 }}
-                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-amber-400 outline-none ${filters.showRepeaters
-                  ? 'bg-amber-400/20 text-amber-400 border border-amber-400/30'
+                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-emerald-400 outline-none ${filters.showRepeaters
+                  ? 'bg-emerald-400/20 text-emerald-400 border border-emerald-400/30'
                   : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
                   }`}
                 title="Toggle Amateur Radio Repeaters"
@@ -100,7 +100,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
         <div className="p-2 space-y-2 border-b border-white/10 bg-black/60 max-h-[60vh] overflow-y-auto">
           {/* RF Infrastructure Filter */}
           <div className="flex flex-col gap-1">
-            <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-amber-400/30 bg-amber-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+            <div className={`group flex items-center justify-between rounded border transition-all ${filters.showRepeaters ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
               <button
                 className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
                 onClick={(e) => {
@@ -110,10 +110,10 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 aria-expanded={rfExpanded}
               >
                 <div className="flex items-center gap-3">
-                  <Radio size={14} className={filters.showRepeaters ? 'text-amber-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} aria-hidden="true" />
+                  <Radio size={14} className={filters.showRepeaters ? 'text-emerald-400 animate-pulse' : 'text-white/30 group-hover:text-white/50'} aria-hidden="true" />
                   <div className="flex flex-col">
                     <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">RF Infrastructure</span>
-                    <span className="text-[9px] font-mono text-amber-400/60">Ham / NOAA / Public Safety</span>
+                    <span className="text-[9px] font-mono text-emerald-400/60">Ham / NOAA / Public Safety</span>
                   </div>
                 </div>
                 <div className="w-4 flex justify-center transition-transform duration-200 shrink-0" style={{ transform: rfExpanded ? 'rotate(90deg)' : 'none' }}>
@@ -123,7 +123,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
               <div className="border-l border-white/10 p-2" onClick={(e) => e.stopPropagation()}>
                 <input type="checkbox" className="sr-only" checked={filters.showRepeaters} onChange={() => onFilterChange('showRepeaters', !filters.showRepeaters)} />
                 <div
-                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showRepeaters ? 'bg-amber-400' : 'bg-white/10 hover:bg-white/20'}`}
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters.showRepeaters ? 'bg-emerald-400' : 'bg-white/10 hover:bg-white/20'}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onFilterChange('showRepeaters', !filters.showRepeaters);
@@ -183,14 +183,14 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                 <div className="mt-2 mb-2 p-1 border border-white/5 bg-white/5 rounded">
                   <div className="flex items-center justify-between gap-1 mb-1 px-1">
                     <span className="text-[9px] font-bold text-white/40 tracking-wider">RANGE</span>
-                    <span className="text-[9px] font-bold text-amber-400/80">{filters.rfRadius || 300} NM</span>
+                    <span className="text-[9px] font-bold text-emerald-400/80">{filters.rfRadius || 300} NM</span>
                   </div>
                   <div className="flex w-full gap-1">
                     {[100, 500, 1000, 2000].map(dist => (
                       <button
                         key={dist}
                         className={`flex-1 py-1 text-[9px] font-bold rounded border transition-all ${(filters.rfRadius || 300) === dist
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                           : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white/60'
                           }`}
                         onClick={() => onFilterChange('rfRadius', dist)}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, X, Plane, Ship, Clock, History } from 'lucide-react';
 import { CoTEntity, MapActions } from '../../types';
 
@@ -38,12 +38,14 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
 
     // Perform Search
     useEffect(() => {
-        if (!debouncedQuery || debouncedQuery.length < 2) {
-            setResults([]);
-            return;
-        }
+        let cancelled = false;
 
         const performSearch = async () => {
+            if (!debouncedQuery || debouncedQuery.length < 2) {
+                if (!cancelled) setResults([]);
+                return;
+            }
+
             setLoading(true);
             const combinedResults: SearchResult[] = [];
             const seenUids = new Set<string>();
@@ -76,10 +78,6 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                     historyMatches.forEach((item: any) => {
                         // Only add if not already found in live results
                         if (!seenUids.has(item.entity_id)) {
-                             // Backend returns 'time' or 'last_seen'? 
-                             // Schema said "time as last_seen".
-                             // Let's assume the API returns what we defined: entity_id, type, last_seen, lat, lon
-                             // Need to parse timestamp properly.
                              const ts = new Date(item.last_seen).getTime();
                              
                              combinedResults.push({
@@ -100,11 +98,14 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                 console.warn("History search failed:", err);
             }
 
-            setResults(combinedResults);
-            setLoading(false);
+            if (!cancelled) {
+                setResults(combinedResults);
+                setLoading(false);
+            }
         };
 
         performSearch();
+        return () => { cancelled = true; };
     }, [debouncedQuery, mapActions]);
 
     // Live Refresh Effect
@@ -153,7 +154,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
     };
 
     const formatTimeAgo = (ts: number) => {
-        const seconds = Math.floor((Date.now() - ts) / 1000);
+        const seconds = Math.floor((new Date().getTime() - ts) / 1000);
         if (seconds < 60) return `${seconds}s ago`;
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
         return `${Math.floor(seconds / 3600)}h ago`;

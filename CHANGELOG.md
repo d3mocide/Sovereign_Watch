@@ -1,3 +1,16 @@
+## [0.30.0] - 2026-03-15
+
+### Added
+- **RF Layer Legend Widget**: Introduced a dedicated legend widget for the RF infrastructure layer. It provides instant decoding of site service types (NOAA, Safety, Digital, Standard FM) and explicitly flags EMCOMM-active stations.
+- **HUD Asset Tags for KiwiSDR**: Restored high-tactical information labels for individual KiwiSDR nodes. Asset tags now feature the live host address (e.g., `kk6pr.ddns.net`) in the header for rapid identification.
+
+### Changed
+- **Tactical RF Symbology Overhaul**:
+  - Removed aggressive glow halos from RF sites to reduce map clutter and improve visual focus in high-density areas.
+  - Standardized "Silent Map" labeling: Most generic site labels are now hidden by default (accessible via tooltips) to maximize situational awareness.
+  - Reintegrated cluster counts into RF groupings, ensuring density information is preserved during zoom-out.
+- **Emerald Theme for RF Infrastructure**: Migrated the entire RF status suite and toggles to an "Emerald" green theme, providing better visual separation from Aviation (Blue/Cyan) and Public Safety (Amber) alerts.
+
 ## [0.29.1] - 2026-03-15
 
 ### Added

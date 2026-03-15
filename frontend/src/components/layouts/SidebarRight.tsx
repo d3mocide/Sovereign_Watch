@@ -31,7 +31,7 @@ function formatCountdown(isoTarget: string, now: number): string {
 
 function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
   const { lat: obsLat, lon: obsLon } = useMissionLocation();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   // Prefer detail.norad_id; fall back to parsing from uid string e.g. "SAT-40044"
   const noradIdStr =
@@ -158,11 +158,12 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   onOpenAnalystPanel
 }) => {
   const [showInspector, setShowInspector] = useState(false);
+  const [prevUid, setPrevUid] = useState<string | undefined>(entity?.uid);
 
-  // Reset inspector when entity changes
-  useEffect(() => {
+  if (entity?.uid !== prevUid) {
+    setPrevUid(entity?.uid);
     setShowInspector(false);
-  }, [entity?.uid]);
+  }
 
   if (!entity) return null;
 
@@ -435,7 +436,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   // ── Infrastructure branch (Cables & Stations) ──────────────────────────────────
   if (entity.type === 'infra') {
     const detail = entity.detail || {};
-    const props = detail.properties || {};
+    const props: any = detail.properties || {};
     const isStation = detail.geometry?.type === 'Point';
     const isOutage = props.entity_type === 'outage' || props.id?.includes('outage') || props.severity !== undefined;
     const severity = Number(props.severity || 0);

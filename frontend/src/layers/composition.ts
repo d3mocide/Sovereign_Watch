@@ -1,5 +1,5 @@
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import { CoTEntity, JS8Station, RFSite, GroundTrackPoint } from "../types";
+import { CoTEntity, JS8Station, RFSite } from "../types";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildInfraLayers } from "./buildInfraLayers";
@@ -81,7 +81,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   // JS8 station layers
   let js8Layers: any[] = [];
   if (js8Stations.length > 0 && ownGrid) {
-    let [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
+    const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
     const selectedJS8Callsign = currentSelected?.type === "js8" ? currentSelected.callsign : null;
     js8Layers = buildJS8Layers(
       js8Stations,
@@ -127,71 +127,43 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   const kiwiLayers: any[] = [];
   if (kiwiNode && kiwiNode.lat !== 0 && kiwiNode.lon !== 0) {
     const pulse = (Math.sin(now / 400) + 1) / 2;
-    const breathing = (Math.sin(now / 1500) + 1) / 2;
 
     kiwiLayers.push(
       new ScatterplotLayer({
-        id: 'kiwi-node-glow',
+        id: "kiwi-node-core",
         data: [kiwiNode],
         getPosition: (d: any) => [d.lon, d.lat],
-        getFillColor: [0, 220, 255, 15 + (pulse * 25)],
-        getRadius: 15000 + (pulse * 10000),
-        radiusUnits: 'meters',
-        pickable: false,
-      })
-    );
-
-    kiwiLayers.push(
-      new ScatterplotLayer({
-        id: 'kiwi-node-ring-outer',
-        data: [kiwiNode],
-        getPosition: (d: any) => [d.lon, d.lat],
-        getFillColor: [0, 0, 0, 0],
-        getLineColor: [0, 220, 255, 100 + (breathing * 100)],
-        getRadius: 10000,
-        radiusUnits: 'meters',
-        stroked: true,
-        getLineWidth: 800 + (pulse * 800),
-        lineWidthUnits: 'meters',
-        pickable: false,
-      })
-    );
-
-    kiwiLayers.push(
-      new ScatterplotLayer({
-        id: 'kiwi-node-core',
-        data: [kiwiNode],
-        getPosition: (d: any) => [d.lon, d.lat],
-        getFillColor: [251, 113, 133, 180 + (pulse * 75)],
+        getFillColor: [251, 113, 133, 180 + pulse * 75],
         getLineColor: [251, 113, 133, 200],
         getRadius: 4000,
-        radiusUnits: 'meters',
+        radiusUnits: "meters",
         stroked: true,
         getLineWidth: 1200,
-        lineWidthUnits: 'meters',
+        lineWidthUnits: "meters",
         pickable: true,
       })
     );
 
+    // Kiwi Node Label (re-enabled as requested by user - HUD style)
     kiwiLayers.push(
       new TextLayer({
-        id: 'kiwi-node-label',
+        id: "kiwi-node-label",
         data: [kiwiNode],
         getPosition: (d: any) => [d.lon, d.lat],
         getText: (d: any) => `LIVE SDR\n${d.host}`,
-        getColor: [255, 255, 255, 240],
         getSize: 10,
-        getTextAnchor: 'middle',
-        getAlignmentBaseline: 'bottom',
-        getPixelOffset: [0, -15],
-        fontFamily: 'Inter, monospace',
-        fontWeight: 700,
+        getColor: [240, 240, 240, 255],
         background: true,
-        getBorderWidth: 1.2,
-        getBorderColor: [251, 113, 133, 180],
-        getBackgroundColor: [0, 0, 0, 190],
-        backgroundPadding: [6, 3],
+        getBackgroundColor: [15, 15, 15, 190],
+        getBorderColor: [251, 113, 133, 200], // Rose border for SDR
+        getBorderWidth: 1,
+        backgroundPadding: [6, 4],
+        getPixelOffset: [0, -22],
+        fontFamily: "monospace",
+        fontWeight: 600,
+        billboard: true,
         pickable: false,
+        lineHeight: 1.2,
       })
     );
   }

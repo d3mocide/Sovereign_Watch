@@ -82,15 +82,15 @@ export function buildJS8Layers(
       id: `js8-stations-${modeKey}`,
       data: positioned,
       getPosition: (d: JS8Station) => [d.lon, d.lat, 0],
-      getRadius: (d: JS8Station) => (selectedCallsign === d.callsign ? 8 : 6),
+      getRadius: (d: JS8Station) => (selectedCallsign === d.callsign ? 9 : 6),
       radiusUnits: "pixels" as const,
-      radiusMinPixels: 4,
-      getFillColor: (d: JS8Station) => snrRgba(d.snr, 200),
+      radiusMinPixels: 5,
+      getFillColor: (d: JS8Station) => snrRgba(d.snr, 255),
       getLineColor: (d: JS8Station) =>
         selectedCallsign === d.callsign
-          ? [255, 255, 255, 200]
-          : ([0, 0, 0, 0] as [number, number, number, number]),
-      getLineWidth: 2,
+          ? [255, 255, 255, 255]
+          : ([10, 10, 10, 180] as [number, number, number, number]),
+      getLineWidth: 1.5,
       lineWidthUnits: "pixels" as const,
       stroked: true,
       filled: true,
@@ -119,8 +119,8 @@ export function buildJS8Layers(
       },
     }),
   );
-
-  // 3. Callsign labels (only at zoom >= 7 to avoid clutter)
+  
+  // 3. Callsign labels (re-enabled as requested by user - HUD style)
   if (zoom >= 7) {
     layers.push(
       new TextLayer({
@@ -128,16 +128,20 @@ export function buildJS8Layers(
         data: positioned,
         getPosition: (d: JS8Station) => [d.lon, d.lat, 0],
         getText: (d: JS8Station) => d.callsign,
-        getSize: 11,
-        getColor: (d: JS8Station) => snrRgba(d.snr, 210),
-        getPixelOffset: [0, -14],
+        getSize: 12,
+        getColor: [240, 240, 240, 255],
+        background: true,
+        getBackgroundColor: [15, 15, 15, 190],
+        getBorderColor: (d: JS8Station) => snrRgba(d.snr, 255),
+        getBorderWidth: 1,
+        backgroundPadding: [6, 3],
+        getPixelOffset: [0, -22],
         fontFamily: "monospace",
-        fontWeight: "bold",
+        fontWeight: 600,
         billboard: true,
         pickable: false,
         wrapLongitude: !globeMode,
-        // For MapLibre Globe, we need depthTest enabled to prevent bleeding through the Earth
-        parameters: { depthTest: true, depthBias: -210.0 },
+        parameters: { ...depthParams, depthBias: -220.0 }, // Ensure on top of dots
       }),
     );
   }

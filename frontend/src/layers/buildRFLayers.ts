@@ -132,22 +132,6 @@ export function buildRFLayers(
   // 1. Clusters (only if they exist)
   if (clusters.length > 0) {
     layers.push(
-      // Cluster Glow/Halo
-      new ScatterplotLayer({
-        id: `rf-cluster-halo-${modeKey}`,
-        data: clusters,
-        getPosition: (d: any) => [d.lon, d.lat, 0],
-        getRadius: (d: any) => 12 + Math.min(d.count / 3, 8), // Slightly larger
-        radiusUnits: "pixels" as const,
-        getFillColor: (d: any) => rfSiteColor(d.representative, 80), // Doubled opacity from 40 to 80
-        stroked: false,
-        filled: true,
-        pickable: false,
-        wrapLongitude: !globeMode,
-        billboard: true,
-        parameters: depthParams,
-      }),
-      // Cluster Core
       new ScatterplotLayer({
         id: `rf-clusters-${modeKey}`,
         data: clusters,
@@ -156,7 +140,7 @@ export function buildRFLayers(
         radiusUnits: "pixels" as const,
         getFillColor: (d: any) => rfSiteColor(d.representative, 255),
         stroked: true,
-        getLineColor: [255, 255, 255, 220],
+        getLineColor: [10, 10, 10, 180],
         getLineWidth: 1.5,
         lineWidthUnits: "pixels" as const,
         filled: true,
@@ -165,47 +149,28 @@ export function buildRFLayers(
         billboard: true,
         parameters: depthParams,
       }),
-      // Cluster Number Text
+      // Cluster Number Text (centered inside the icon)
       new TextLayer({
         id: `rf-cluster-labels-${modeKey}`,
         data: clusters,
         getPosition: (d: any) => [d.lon, d.lat, 0],
         getText: (d: any) => `${d.count}`,
-        getSize: 12,
+        getSize: 10,
         getColor: [255, 255, 255, 255],
-        getPixelOffset: [0, 0], // centre correction
+        getTextAnchor: "middle",
+        getAlignmentBaseline: "center",
         fontFamily: "monospace",
-        fontWeight: "bold",
+        fontWeight: 600,
         billboard: true,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: depthParams,
+        parameters: { ...depthParams, depthBias: -200.0 }, // Ensure it's on top of the circle
       })
     );
   }
 
   // 2. Individuals (Non-clustered points)
   if (individuals.length > 0) {
-    // Outer halo (non-pickable, decorative) - Skip in globe mode to reduce "bubble" clutter
-    if (!globeMode) {
-      layers.push(
-        new ScatterplotLayer({
-          id: `rf-halo-${modeKey}`,
-          data: individuals,
-          getPosition: (d: RFSite) => [d.lon, d.lat, 0],
-          getRadius: 12,
-          radiusUnits: "pixels" as const,
-          radiusMinPixels: 6,
-          getFillColor: (d: RFSite) => rfSiteColor(d, 80),
-          stroked: false,
-          filled: true,
-          pickable: false,
-          wrapLongitude: !globeMode,
-          parameters: depthParams,
-        }),
-      );
-    }
-
     // Core dot (pickable — hover tooltip + click to select)
     layers.push(
       new ScatterplotLayer({
@@ -214,9 +179,9 @@ export function buildRFLayers(
         getPosition: (d: RFSite) => [d.lon, d.lat, 0],
         getRadius: 6,
         radiusUnits: "pixels" as const,
-        radiusMinPixels: 4,
-        getFillColor: (d: RFSite) => rfSiteColor(d, 235),
-        getLineColor: (d: RFSite) => rfSiteOutlineColor(d) || [255, 255, 255, 180],
+        radiusMinPixels: 5,
+        getFillColor: (d: RFSite) => rfSiteColor(d, 255),
+        getLineColor: (d: RFSite) => rfSiteOutlineColor(d) || [10, 10, 10, 180],
         stroked: true,
         getLineWidth: 1.5,
         lineWidthUnits: "pixels" as const,
@@ -241,28 +206,6 @@ export function buildRFLayers(
         },
       }),
     );
-
-    // Callsign + freq labels (only at zoom >= 9)
-    if (zoom >= 9) {
-      layers.push(
-        new TextLayer({
-          id: `rf-labels-${modeKey}`,
-          data: individuals,
-          getPosition: (d: RFSite) => [d.lon, d.lat, 0],
-          getText: (d: RFSite) => `${d.name || d.callsign}\n${d.output_freq || ""}`,
-          getSize: 10,
-          getColor: (d: RFSite) => rfSiteColor(d, 200),
-          getPixelOffset: [0, -16],
-          fontFamily: "monospace",
-          fontWeight: "bold",
-          billboard: true,
-          pickable: false,
-          wrapLongitude: !globeMode,
-          parameters: { depthTest: true, depthBias: -100.0 },
-          lineHeight: 1.3,
-        }),
-      );
-    }
   }
 
   return layers;

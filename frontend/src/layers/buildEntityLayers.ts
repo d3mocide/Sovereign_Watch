@@ -231,31 +231,6 @@ export function buildEntityLayers(
     );
   }
 
-  layers.push(
-    new ScatterplotLayer({
-      id: `entity-glow-${globeMode ? "globe" : "merc"}`,
-      data: currentSelected
-        ? interpolated.filter((e) => e.uid === currentSelected.uid)
-        : [],
-      getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-      getRadius: (d: CoTEntity) => {
-        const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
-        return 20 * (1 + pulse * 0.1);
-      },
-      radiusUnits: "pixels" as const,
-      getFillColor: (d: CoTEntity) => {
-        const pulse = (Math.sin((now + d.uidHash) / 600) + 1) / 2;
-        const baseAlpha = 80;
-        const a = baseAlpha * (0.7 + pulse * 0.3);
-        return entityColor(d, a);
-      },
-      pickable: false,
-      wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -210.0 : 0 },
-      updateTriggers: { getRadius: [now], getFillColor: [now] },
-    }),
-  );
-
   if (currentSelected) {
     layers.push(
       new ScatterplotLayer({

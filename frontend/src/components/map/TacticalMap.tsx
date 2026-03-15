@@ -18,6 +18,7 @@ import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { AltitudeLegend } from "./AltitudeLegend";
 import { SpeedLegend } from "./SpeedLegend";
+import { RFLegend } from "./RFLegend";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
@@ -408,6 +409,15 @@ export function TacticalMap({
     }
   }, [replayEntities]);
 
+  const [prevGlobeMode, setPrevGlobeMode] = useState(globeMode);
+  if (globeMode !== prevGlobeMode) {
+    setPrevGlobeMode(globeMode);
+    setMapLoaded(false);
+    if (!globeMode) {
+      setMapStyleMode('dark');
+    }
+  }
+
   // Initialization Sync: Reset map state on projection toggle
   // This ensures that when the "Nuclear Remount" happens, all effects re-synchronize
   // correctly with the fresh map instance.
@@ -415,15 +425,8 @@ export function TacticalMap({
     // Null out refs so stale instances aren't used after the adapter unmounts.
     // react-map-gl handles GL context destruction internally on unmount — do not
     // call map.remove() here as it races with react-map-gl's own cleanup.
-    setMapLoaded(false);
     mapInstanceRef.current = null;
     overlayRef.current = null;
-
-    // Reset map style to default 'dark' when exiting globe mode
-    //This ensures 2D mode doesn't get stuck in satellite style
-    if (!globeMode) {
-      setMapStyleMode('dark');
-    }
   }, [globeMode]);
 
   // Update ref when prop changes
@@ -878,6 +881,7 @@ export function TacticalMap({
 
       <AltitudeLegend visible={filters?.showAir ?? true} />
       <SpeedLegend visible={filters?.showSea ?? true} />
+      <RFLegend visible={!!showRepeaters} />
     </>
   );
 }
