@@ -88,10 +88,12 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
     return (
       <button
         onClick={isActive ? () => setIsCollapsed(false) : handleRun}
+        aria-label={isActive ? "Expand AI Analyst" : "Run AI Analyst"}
+        aria-expanded="false"
         className={`flex-1 flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} hover:bg-white/10 rounded-sm group transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`}
       >
         <div className="flex items-center gap-2">
-          <BrainCircuit size={13} className={accentColor} />
+          <BrainCircuit size={13} className={accentColor} aria-hidden="true" />
           <span className="text-[10px] font-bold tracking-[.3em] text-white/50 group-hover:text-white/80 transition-colors">AI_ANALYST</span>
         </div>
       </button>
@@ -103,7 +105,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
       {/* Header row */}
       <div className={`flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} rounded-sm backdrop-blur-md`}>
         <div className="flex items-center gap-2">
-          <BrainCircuit size={13} className={accentColor} />
+          <BrainCircuit size={13} className={accentColor} aria-hidden="true" />
           <span className="text-[10px] font-bold tracking-[.3em] text-white/50">AI_ANALYST</span>
         </div>
 
@@ -112,6 +114,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
           {/* Lookback selector */}
           <div className="relative flex items-center">
             <select
+              aria-label="Select lookback duration"
               value={lookback}
               onChange={e => setLookback(Number(e.target.value))}
               disabled={isStreaming}
@@ -128,9 +131,10 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
             <button
               onClick={reset}
               title="Cancel analysis"
+              aria-label="Cancel analysis"
               className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 rounded text-[10px] text-white/40 hover:text-red-400 transition-colors focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
             >
-              <X size={10} />
+              <X size={10} aria-hidden="true" />
             </button>
           ) : (
             <button
@@ -145,9 +149,11 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
             <button
               onClick={() => setIsCollapsed(true)}
               title="Collapse"
+              aria-label="Collapse AI Analyst"
+              aria-expanded="true"
               className="flex items-center justify-center p-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-white/40 hover:text-white/70 transition-colors ml-1 focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
             >
-              <ChevronUp size={10} />
+              <ChevronUp size={10} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -172,9 +178,10 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
               <button
                 onClick={handleCopy}
                 title="Copy assessment"
+                aria-label={copied ? "Assessment copied to clipboard" : "Copy assessment to clipboard"}
                 className="p-1 hover:bg-white/10 rounded text-white/30 hover:text-white/70 transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
               >
-                {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
+                {copied ? <Check size={10} className="text-green-400" aria-hidden="true" /> : <Copy size={10} aria-hidden="true" />}
               </button>
             )}
           </div>
