@@ -33,20 +33,32 @@ const HF_BANDS = [
   { label: '2m',   freq: 144000 },
 ] as const;
 
-const KIWI_MODES = ['usb', 'lsb', 'am', 'amn', 'sam', 'cw', 'cwn', 'nbfm', 'iq'] as const;
+const KIWI_MODES = ['usb', 'lsb', 'am', 'amn', 'amw', 'sam', 'cw', 'cwn', 'nbfm', 'drm', 'iq'] as const;
 type KiwiMode = typeof KIWI_MODES[number];
 
 const MODE_INFO: Record<KiwiMode, { label: string; bw: number }> = {
   usb:  { label: 'USB',  bw: 2.7 },
   lsb:  { label: 'LSB',  bw: 2.7 },
-  am:   { label: 'AM',   bw: 6.0 },
-  amn:  { label: 'AMN',  bw: 4.0 },
-  sam:  { label: 'SAM',  bw: 6.0 },
+  am:   { label: 'AM',   bw: 9.0 },
+  amn:  { label: 'AMN',  bw: 5.0 },
+  amw:  { label: 'AMW',  bw: 16.0 },  // AM wideband (broadcast)
+  sam:  { label: 'SAM',  bw: 9.0 },
   cw:   { label: 'CW',   bw: 0.5 },
-  cwn:  { label: 'CWN',  bw: 0.2 },
-  nbfm: { label: 'FM',   bw: 12.0 },
-  iq:   { label: 'IQ',   bw: 30.0 }, // Viewport bandwidth for IQ usually wider
+  cwn:  { label: 'CWN',  bw: 0.3 },
+  nbfm: { label: 'FM',   bw: 16.0 },
+  drm:  { label: 'DRM',  bw: 10.0 },  // Digital Radio Mondiale
+  iq:   { label: 'IQ',   bw: 30.0 },  // Raw IQ — wider viewport
 };
+
+// Waterfall colour map labels (index matches KiwiSDR SET cmap= values)
+const WF_CMAPS = [
+  { label: 'Kiwi',   index: 0 },
+  { label: 'CSDR',   index: 1 },
+  { label: 'Grey',   index: 2 },
+  { label: 'Linear', index: 3 },
+  { label: 'Turbo',  index: 4 },
+  { label: 'SdrDx',  index: 5 },
+] as const;
 
 const WS_BASE_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
 const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, '/ws/waterfall');
@@ -158,6 +170,23 @@ export default function ListeningPost({
   const [nbGate, setNbGate]       = useState(500);      // gate µs (100-2000)
   const [nbThresh, setNbThresh]   = useState(50);       // trigger % of peak (1-100)
   const [deEmp, setDeEmp]         = useState(0);        // de-emphasis: 0=off, 1=50µs, 2=75µs
+
+  // Notch filter
+  const [notchEnabled, setNotchEnabled] = useState(false);
+  const [notchFreq,    setNotchFreq]    = useState(1000);  // Hz relative to carrier
+  const [notchBw,      setNotchBw]      = useState(100);   // Hz bandwidth
+
+  // Noise reduction / noise filter
+  const [nrEnabled, setNrEnabled] = useState(false);
+  const [nfEnabled, setNfEnabled] = useState(false);
+
+  // RF attenuator
+  const [rfAttn, setRfAttn] = useState(0);  // dB (0 = bypass)
+
+  // Waterfall colour map and aperture (sent to backend → KiwiSDR W/F stream)
+  const [wfCmap,    setWfCmap]    = useState(0);     // 0=Kiwi (default)
+  const [wfAperture, setWfAperture] = useState(true); // true = auto
+
   const [wfOffset, setWfOffset] = useState(100); // Waterfall baseline calibration
   const wfOffsetRef = useRef(100); // Ref so drawRow always reads latest without re-creating the WS
   const wfFrameCountRef = useRef(0);
@@ -768,6 +797,173 @@ export default function ListeningPost({
                             {label}
                         </button>
                     ))}
+                </div>
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Notch Filter — narrow interferer suppression */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Notch Filter</span>
+                    <button
+                        onClick={() => {
+                            const next = !notchEnabled;
+                            setNotchEnabled(next);
+                            if (activeKiwiConfig && bridgeConnected)
+                                sendAction({ action: 'SET_NOTCH', enabled: next, freq_hz: notchFreq, bw_hz: notchBw });
+                        }}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${notchEnabled ? 'bg-violet-600/20 border-violet-500 text-violet-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                    >
+                        {notchEnabled ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-600 uppercase">Freq</span>
+                    <span className="text-slate-500 text-[9px]">{notchFreq} Hz</span>
+                </div>
+                <input
+                    type="range" min={100} max={4000} step={50} value={notchFreq}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const val = parseInt(e.target.value);
+                        setNotchFreq(val);
+                        if (activeKiwiConfig && bridgeConnected && notchEnabled)
+                            sendAction({ action: 'SET_NOTCH', enabled: true, freq_hz: val, bw_hz: notchBw });
+                    }}
+                    className="w-full h-0.5 accent-violet-500 bg-[#131e28] rounded appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-600 uppercase">BW</span>
+                    <span className="text-slate-500 text-[9px]">{notchBw} Hz</span>
+                </div>
+                <input
+                    type="range" min={25} max={500} step={25} value={notchBw}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const val = parseInt(e.target.value);
+                        setNotchBw(val);
+                        if (activeKiwiConfig && bridgeConnected && notchEnabled)
+                            sendAction({ action: 'SET_NOTCH', enabled: true, freq_hz: notchFreq, bw_hz: val });
+                    }}
+                    className="w-full h-0.5 accent-violet-400 bg-[#131e28] rounded appearance-none cursor-pointer"
+                />
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* NR / NF — Noise reduction and noise filter toggles */}
+            <div className="space-y-3">
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Noise Processing</span>
+                <div className="flex gap-1">
+                    <button
+                        onClick={() => {
+                            const next = !nrEnabled;
+                            setNrEnabled(next);
+                            if (activeKiwiConfig && bridgeConnected)
+                                sendAction({ action: 'SET_NR', enabled: next, param: 0 });
+                        }}
+                        className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nrEnabled ? 'bg-teal-600/20 border-teal-500 text-teal-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                    >
+                        NR {nrEnabled ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                        onClick={() => {
+                            const next = !nfEnabled;
+                            setNfEnabled(next);
+                            if (activeKiwiConfig && bridgeConnected)
+                                sendAction({ action: 'SET_NF', enabled: next, param: 0 });
+                        }}
+                        className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nfEnabled ? 'bg-sky-600/20 border-sky-500 text-sky-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                    >
+                        NF {nfEnabled ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* RF Attenuator — reduce front-end gain to prevent ADC overload */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">RF Attenuator</span>
+                    <span className={`font-bold text-[9px] ${rfAttn < 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                        {rfAttn === 0 ? 'BYPASS' : `${rfAttn} dB`}
+                    </span>
+                </div>
+                <div className="flex gap-1">
+                    {([0, -10, -20, -30] as number[]).map(db => (
+                        <button
+                            key={db}
+                            onClick={() => {
+                                setRfAttn(db);
+                                if (activeKiwiConfig && bridgeConnected)
+                                    sendAction({ action: 'SET_RF_ATTN', db });
+                            }}
+                            className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${
+                                rfAttn === db
+                                    ? 'bg-amber-600/20 border-amber-500 text-amber-300'
+                                    : 'bg-black/20 border-[#1a2b36] text-slate-600 hover:text-slate-400'
+                            }`}
+                        >
+                            {db === 0 ? '0' : `${db}`}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Waterfall Colour Map — server-side palette (requires W/F stream) */}
+            <div className="space-y-3">
+                <span className="text-[9px] text-slate-500 uppercase font-bold">WF Colour Map</span>
+                <div className="grid grid-cols-3 gap-1">
+                    {WF_CMAPS.map(({ label, index }) => (
+                        <button
+                            key={index}
+                            onClick={() => {
+                                setWfCmap(index);
+                                if (activeKiwiConfig && bridgeConnected)
+                                    sendAction({ action: 'SET_CMAP', index });
+                            }}
+                            className={`py-1 rounded border text-[9px] font-bold transition-all ${
+                                wfCmap === index
+                                    ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
+                                    : 'bg-black/20 border-[#1a2b36] text-slate-600 hover:text-slate-400'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="h-px bg-[#1a2b36]" />
+
+            {/* Waterfall Aperture — dynamic range centering */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">WF Aperture</span>
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => {
+                                setWfAperture(true);
+                                if (activeKiwiConfig && bridgeConnected)
+                                    sendAction({ action: 'SET_APERTURE', auto: true, algo: 0, param: 0 });
+                            }}
+                            className={`px-2 py-0.5 rounded-l border text-[9px] font-bold transition-all ${wfAperture ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                        >
+                            AUTO
+                        </button>
+                        <button
+                            onClick={() => {
+                                setWfAperture(false);
+                                if (activeKiwiConfig && bridgeConnected)
+                                    sendAction({ action: 'SET_APERTURE', auto: false, algo: 0, param: 0 });
+                            }}
+                            className={`px-2 py-0.5 rounded-r border text-[9px] font-bold transition-all ${!wfAperture ? 'bg-amber-600/20 border-amber-500 text-amber-300' : 'bg-black/30 border-[#1a2b36] text-slate-600'}`}
+                        >
+                            MAN
+                        </button>
+                    </div>
                 </div>
             </div>
 

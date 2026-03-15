@@ -20,9 +20,19 @@ KiwiSDR W/F binary frame layout:
   [8:12]  flags_x_zoom_server (uint32 little-endian)
   [12:16] sequence number (uint32 little-endian)
   [16:]   waterfall pixel bytes (uint8, uncompressed when wf_comp=0)
+
+WebSocket URL compatibility:
+  Modern KiwiSDR (v1.550+): ws://host:port/ws/kiwi/<ts>/SND
+  Legacy KiwiSDR:            ws://host:port/<ts>/SND
+  Both formats are tried automatically (modern first).
+
+Authentication:
+  Open nodes (no password):         SET auth t=kiwi p=
+  Password-protected nodes (modern): SET auth t=kiwi pwd=<md5(password)>
 """
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Callable, Optional, Dict
@@ -50,19 +60,64 @@ SND_FLAG_LE_PCM     = 0x80  # PCM is little-endian (always set on current KiwiSD
 
 # ---------------------------------------------------------------------------
 # Mode → (low_cut_Hz, high_cut_Hz) filter passband
+# Full set from kiwi.js:103 modes_lc[] — covers all 18 demodulation modes.
 # ---------------------------------------------------------------------------
 
 MODE_FILTERS: dict[str, tuple[int, int]] = {
+    # Single-sideband voice
     "usb":  (300,   2700),
     "lsb":  (-2700, -300),
-    "am":   (-5000, 5000),
+    "usn":  (300,   1800),    # USB narrow
+    "lsn":  (-1800, -300),    # LSB narrow
+    # AM variants
+    "am":   (-4500, 4500),    # AM standard
+    "amn":  (-2500, 2500),    # AM narrow
+    "amw":  (-8000, 8000),    # AM wideband (broadcast)
+    # CW
     "cw":   (300,    800),
+    "cwn":  (300,    600),    # CW narrow
+    # FM
     "nbfm": (-8000, 8000),
+    "nnfm": (-4000, 4000),    # Very narrow FM
+    # Synchronous AM (passband mirrors standard AM)
+    "sam":  (-4500, 4500),    # Sync AM auto-phase
+    "sau":  (300,   4500),    # Sync AM upper sideband
+    "sal":  (-4500, -300),    # Sync AM lower sideband
+    "sas":  (-4500, 4500),    # Sync AM stereo
+    # Wideband / digital modes
+    "iq":   (-5000, 5000),    # Raw IQ (stereo L=I R=Q)
+    "drm":  (-5000, 5000),    # Digital Radio Mondiale
+    "qam":  (-5000, 5000),    # QAM
 }
+
+# WebSocket URL path templates — tried in order (modern KiwiSDR first).
+# Modern KiwiSDR (v1.550+) uses /ws/kiwi/<ts>/<stream>.
+# Legacy KiwiSDR uses /<ts>/<stream> directly.
+_WS_PATH_TEMPLATES = [
+    "ws://{host}:{port}/ws/kiwi/{ts}/{stream}",
+    "ws://{host}:{port}/{ts}/{stream}",
+]
 
 CONNECT_TIMEOUT    = 15  # seconds — WebSocket open timeout
 KEEPALIVE_INTERVAL = 5   # seconds — SET keepalive cadence
 MAX_REDIRECTS      = 3   # maximum redirect hops to follow
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def _make_auth_cmd(password: str) -> str:
+    """Build the SET auth command for the given password.
+
+    Open nodes (empty password) use the legacy ``p=`` form accepted by all
+    KiwiSDR versions.  Password-protected nodes use ``pwd=<md5>`` as required
+    by current KiwiSDR server code (rx/rx_cmd.cpp).
+    """
+    if not password:
+        return "SET auth t=kiwi p="
+    md5 = hashlib.md5(password.encode()).hexdigest()
+    return f"SET auth t=kiwi pwd={md5}"
 
 
 # ---------------------------------------------------------------------------
@@ -155,10 +210,16 @@ class KiwiClient:
     ) -> None:
         """Connect to a KiwiSDR node and start streaming audio.
 
+        Tries the modern URL format first (``/ws/kiwi/<ts>/SND``, used by
+        KiwiSDR v1.550+), then falls back to the legacy format (``/<ts>/SND``)
+        for older nodes.
+
         Parameters
         ----------
         password : Optional KiwiSDR password.  Required for password-protected
                    or private nodes; leave empty ("") for open public nodes.
+                   Non-empty passwords are hashed with MD5 per the current
+                   KiwiSDR auth protocol (``SET auth t=kiwi pwd=<md5>``).
         """
         if not _HAS_WEBSOCKETS:
             raise RuntimeError("websockets library not installed")
@@ -167,51 +228,39 @@ class KiwiClient:
             await self.disconnect()
 
         self._disconnecting = False
-        uri = f"ws://{host}:{port}/{int(time.time() * 1000)}/SND"
-        logger.info("KiwiClient connecting → %s", uri)
-
         self._ws   = None
         self._host = host
         self._port = port
+        self._password = password
 
-        # Follow redirects if necessary (common for proxied KiwiSDR nodes)
         extra_headers = {
             "Origin": f"http://{host}:{port}",
             "User-Agent": "Mozilla/5.0 (SovereignWatch/1.0; NativeKiwiClient)"
         }
 
-        current_uri = uri
-        for redirect_hop in range(MAX_REDIRECTS + 1):
+        ts = int(time.time() * 1000)
+        last_exc: Optional[Exception] = None
+        for template in _WS_PATH_TEMPLATES:
+            uri = template.format(host=host, port=port, ts=ts, stream="SND")
+            logger.info("KiwiClient trying %s", uri)
             try:
-                logger.info("KiwiClient connecting → %s (hop %d)", current_uri, redirect_hop)
-                
-                # Use aiohttp to follow redirects reliably for the handshake
-                http_uri = current_uri.replace("ws://", "http://").replace("wss://", "https://")
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(http_uri, headers=extra_headers, allow_redirects=False) as resp:
-                        if resp.status in (301, 302, 303, 307, 308):
-                            location = resp.headers.get("Location")
-                            if not location:
-                                raise RuntimeError(f"Redirect {resp.status} without Location")
-                            logger.info("KiwiClient redirect %d → %s", resp.status, location)
-                            if location.startswith("http"):
-                                location = location.replace("http", "ws", 1)
-                            current_uri = location
-                            continue
-                
-                # If not a redirect, or after following redirects, connect WebSocket
                 ws = await websockets.connect(
-                    current_uri,
+                    uri,
                     open_timeout=CONNECT_TIMEOUT,
                     ping_interval=None,
-                    additional_headers=extra_headers
+                    additional_headers=extra_headers,
                 )
                 self._ws = ws
+                logger.info("KiwiClient connected via %s", uri)
                 break
             except Exception as exc:
-                if redirect_hop == MAX_REDIRECTS:
-                    logger.warning("KiwiClient connect failed after %d redirects: %s", MAX_REDIRECTS, exc)
-                raise
+                logger.debug("KiwiClient: %s failed: %s", uri, exc)
+                last_exc = exc
+
+        if self._ws is None:
+            raise RuntimeError(
+                f"Could not connect to KiwiSDR at {host}:{port}: {last_exc}"
+            )
 
         await self._handshake(freq_khz, mode, password)
 
@@ -375,6 +424,161 @@ class KiwiClient:
 
         await self._debounce_command("squelch", 0.5, _do_set_squelch)
 
+    async def set_notch(
+        self, enabled: bool, freq_hz: float = 1000.0, bw_hz: float = 100.0
+    ) -> None:
+        """
+        Configure the notch filter to suppress a single narrow interferer.
+
+        Parameters
+        ----------
+        enabled : True to enable the notch, False to disable.
+        freq_hz : Notch centre frequency in Hz (relative to the carrier).
+                  Typical use: 1000 Hz to kill a 1 kHz heterodyne.
+        bw_hz   : Notch bandwidth in Hz (typical: 50–300 Hz).
+        """
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_notch() called while not connected")
+
+        async def _do_set_notch():
+            en = 1 if enabled else 0
+            await self._ws.send(f"SET notch={en} freq={freq_hz:.1f} bw={bw_hz:.1f}")
+            logger.info("KiwiClient notch → enabled=%s freq=%.1f Hz bw=%.1f Hz",
+                        enabled, freq_hz, bw_hz)
+
+        await self._debounce_command("notch", 0.3, _do_set_notch)
+
+    async def set_noise_reduction(self, enabled: bool, param: int = 0) -> None:
+        """
+        Enable or disable the KiwiSDR noise reduction filter.
+
+        Parameters
+        ----------
+        enabled : True to enable NR, False to disable.
+        param   : NR algorithm parameter (0 = default).  Server-specific;
+                  consult your KiwiSDR admin for available values.
+        """
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_noise_reduction() called while not connected")
+
+        async def _do_set_nr():
+            en = 1 if enabled else 0
+            await self._ws.send(f"SET nr={en} param={param}")
+            logger.info("KiwiClient NR → enabled=%s param=%d", enabled, param)
+
+        await self._debounce_command("nr", 0.3, _do_set_nr)
+
+    async def set_noise_filter(self, enabled: bool, param: int = 0) -> None:
+        """
+        Enable or disable the KiwiSDR noise filter (``SET nf``).
+
+        Complementary to noise reduction; targets stationary noise sources
+        distinct from impulsive interference (handled by the noise blanker).
+
+        Parameters
+        ----------
+        enabled : True to enable, False to disable.
+        param   : Filter parameter (0 = default).
+        """
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_noise_filter() called while not connected")
+
+        async def _do_set_nf():
+            en = 1 if enabled else 0
+            await self._ws.send(f"SET nf={en} param={param}")
+            logger.info("KiwiClient NF → enabled=%s param=%d", enabled, param)
+
+        await self._debounce_command("nf", 0.3, _do_set_nf)
+
+    async def set_rf_attn(self, db: int) -> None:
+        """
+        Set the front-end RF attenuator level.
+
+        Parameters
+        ----------
+        db : Attenuation in dB (typically 0, -10, -20, -30).
+             Negative values = attenuation; 0 = bypass.
+             Useful when the ADC overload flag fires (ADC_OVFL) — reduce gain
+             to protect the receiver front-end from strong local signals.
+        """
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_rf_attn() called while not connected")
+
+        async def _do_set_rf_attn():
+            await self._ws.send(f"SET rf_attn={db}")
+            logger.info("KiwiClient RF attn → %d dB", db)
+
+        await self._debounce_command("rf_attn", 0.3, _do_set_rf_attn)
+
+    async def set_passband(self, low_hz: int, high_hz: int) -> None:
+        """
+        Adjust the passband filter edges without changing frequency or mode.
+
+        Useful for fine-tuning the receive bandwidth after the initial ``tune()``
+        call without triggering a full mode/frequency update.
+
+        Parameters
+        ----------
+        low_hz  : Lower passband edge in Hz (relative to carrier).
+                  Use negative values for lower sideband (e.g. -2700 for LSB).
+        high_hz : Upper passband edge in Hz (relative to carrier).
+        """
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_passband() called while not connected")
+
+        async def _do_set_passband():
+            await self._ws.send(f"SET passband={low_hz} {high_hz}")
+            logger.info("KiwiClient passband → %d..%d Hz", low_hz, high_hz)
+
+        await self._debounce_command("passband", 0.2, _do_set_passband)
+
+    async def set_mute(self) -> None:
+        """Toggle server-side mute (silences audio without disconnecting)."""
+        if not self.is_connected:
+            raise RuntimeError("KiwiClient.set_mute() called while not connected")
+        await self._ws.send("SET mute")
+        logger.info("KiwiClient mute toggled")
+
+    async def set_cmap(self, index: int) -> None:
+        """
+        Set the waterfall colour map.
+
+        Parameters
+        ----------
+        index : Colour map index 0–11.
+                0=Kiwi (default), 1=CSDR, 2=Grey, 3=Linear, 4=Turbo,
+                5=SdrDx, 6–9=Custom 1–4, 10–11=reserved.
+        """
+        if not self._wf_ws:
+            return
+
+        async def _do_set_cmap():
+            c = max(0, min(11, index))
+            await self._wf_ws.send(f"SET cmap={c}")
+            logger.info("KiwiClient cmap → %d", c)
+
+        await self._debounce_command("cmap", 0.2, _do_set_cmap)
+
+    async def set_aperture(self, auto: bool, algo: int = 0, param: int = 0) -> None:
+        """
+        Control waterfall aperture (dynamic range centering).
+
+        Parameters
+        ----------
+        auto  : True = automatic aperture, False = manual.
+        algo  : Aperture algorithm index (0 = server default).
+        param : Algorithm-specific parameter.
+        """
+        if not self._wf_ws:
+            return
+
+        async def _do_set_aperture():
+            a = 1 if auto else 0
+            await self._wf_ws.send(f"SET aper={a} algo={algo} param={param}")
+            logger.info("KiwiClient aperture → auto=%s algo=%d param=%d", auto, algo, param)
+
+        await self._debounce_command("aperture", 0.3, _do_set_aperture)
+
     async def tune(self, freq_khz: float, mode: str) -> None:
         """
         Lossless retune — send new SET mod/freq commands over the live WebSocket.
@@ -470,13 +674,18 @@ class KiwiClient:
         self._command_tasks[name] = asyncio.create_task(_wrapper(), name=f"kiwi-db-{name}")
 
     async def _handshake(self, freq_khz: float, mode: str, password: str = "") -> None:
-        """Execute the KiwiSDR SND handshake sequence."""
+        """Execute the KiwiSDR SND handshake sequence.
+
+        Auth format follows the current KiwiSDR protocol:
+          - Open nodes (empty password): ``SET auth t=kiwi p=``
+          - Password-protected nodes:    ``SET auth t=kiwi pwd=<md5(password)>``
+        """
         self._freq_khz = freq_khz
         self._mode     = mode
-        # Authentication — empty password string is valid for open public nodes.
-        await self._ws.send(f"SET auth t=kiwi p={password}")
+        auth_cmd = _make_auth_cmd(password)
+        await self._ws.send(auth_cmd)
         await self._ws.send("SET squelch=0 max=0")
-        await self._ws.send("SET ident_user=js8bridge")
+        await self._ws.send("SET ident_user=SovereignWatch")
         await self._send_mod(freq_khz, mode)
         await self._ws.send("SET compression=0")
         await self._ws.send("SET agc=1 hang=0 thresh=-100 slope=6 decay=1000 manGain=50")
@@ -578,48 +787,41 @@ class KiwiClient:
         """Start the KiwiSDR waterfall stream (W/F).
 
         Full W/F handshake per the KiwiSDR protocol:
-          1. SET auth t=kiwi p=
-          2. SET zoom=<n> cf=<freq>   — centers waterfall on audio frequency
-          3. SET maxdb=-10 mindb=-110  — colour scale
+          1. SET auth t=kiwi p=       — authenticate (waterfall always open)
+          2. SET zoom=<n> cf=<freq>   — centres waterfall on audio frequency
+          3. SET maxdb=-10 mindb=-110 — colour scale
           4. SET wf_speed=4           — rows/second; must be > 0 to receive frames
           5. SET wf_comp=0            — uncompressed pixel bytes
+
+        Tries modern URL format first (/ws/kiwi/<ts>/W/F), falls back to legacy.
         """
-        uri = f"ws://{host}:{port}/{int(time.time() * 1000)}/W/F"
         extra_headers = {
             "Origin": f"http://{host}:{port}",
             "User-Agent": "Mozilla/5.0 (SovereignWatch/1.0; NativeKiwiClient)"
         }
+        ts = int(time.time() * 1000)
 
-        current_uri = uri
         try:
             ws = None
-            for _ in range(MAX_REDIRECTS + 1):
+            for template in _WS_PATH_TEMPLATES:
+                uri = template.format(host=host, port=port, ts=ts, stream="W/F")
                 try:
-                    http_uri = current_uri.replace("ws://", "http://").replace("wss://", "https://")
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(http_uri, headers=extra_headers, allow_redirects=False) as resp:
-                            if resp.status in (301, 302, 303, 307, 308):
-                                location = resp.headers.get("Location")
-                                if not location: break
-                                if location.startswith("http"):
-                                    location = location.replace("http", "ws", 1)
-                                current_uri = location
-                                continue
-
                     ws = await websockets.connect(
-                        current_uri,
+                        uri,
                         open_timeout=CONNECT_TIMEOUT,
                         ping_interval=None,
-                        additional_headers=extra_headers
+                        additional_headers=extra_headers,
                     )
+                    logger.info("KiwiClient waterfall connected via %s", uri)
                     break
-                except Exception:
-                    continue
+                except Exception as exc:
+                    logger.debug("KiwiClient waterfall: %s failed: %s", uri, exc)
 
             if not ws:
-                raise RuntimeError("Failed to connect to waterfall after redirects")
+                raise RuntimeError("Could not connect to waterfall on any URL format")
 
             self._wf_ws = ws
+            # Waterfall auth is always open (public endpoint regardless of node password)
             await ws.send("SET auth t=kiwi p=")
             await ws.send(f"SET zoom={self._zoom} cf={self._freq_khz:.3f}")
             await ws.send("SET maxdb=-10 mindb=-110")
