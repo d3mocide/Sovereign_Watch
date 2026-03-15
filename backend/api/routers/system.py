@@ -123,6 +123,46 @@ async def get_features_config():
         )
     }
 
+@router.get("/api/config/streams")
+async def get_streams_config():
+    """Return the health and configuration status of various data streams."""
+    # Check Maritime (AISStream)
+    ais_key = os.getenv("AISSTREAM_API_KEY")
+    maritime_status = "Active" if ais_key and ais_key != "your_key_here" else "Missing Key"
+
+    # Check Orbital (Always active, no key required currently for Celestrak/SpaceTrack basic)
+    orbital_status = "Active"
+
+    # Check Aviation (Always active, no key required for ADS-B Exchange public/local)
+    aviation_status = "Active"
+
+    # Check RF/Repeaters
+    rb_key = os.getenv("REPEATERBOOK_API_TOKEN")
+    rr_key = os.getenv("RADIOREF_APP_KEY")
+    rr_user = os.getenv("RADIOREF_USERNAME")
+    rr_pass = os.getenv("RADIOREF_PASSWORD")
+
+    rf_status = "Disabled"
+    if rb_key and rb_key != "your_token_here":
+        rf_status = "Active"
+    elif rr_key and rr_user and rr_pass and rr_key != "your_app_key_here":
+        rf_status = "Active"
+
+    # Check AI Analysis
+    anthropic = os.getenv("ANTHROPIC_API_KEY")
+    gemini = os.getenv("GEMINI_API_KEY")
+    ai_status = "Disabled"
+    if (anthropic and anthropic != "your_key_here") or (gemini and gemini != "your_key_here"):
+        ai_status = "Active"
+
+    return [
+        {"id": "aviation", "name": "Aviation Tracking", "status": aviation_status},
+        {"id": "maritime", "name": "Maritime AIS", "status": maritime_status},
+        {"id": "orbital", "name": "Orbital Assets", "status": orbital_status},
+        {"id": "rf", "name": "RF Infrastructure", "status": rf_status},
+        {"id": "ai", "name": "AI Analysis", "status": ai_status},
+    ]
+
 @router.post("/api/config/ai")
 async def set_ai_config(req: AIModelRequest):
     """Switch the active AI model used for track analysis."""

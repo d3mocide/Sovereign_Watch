@@ -28,6 +28,7 @@ function App() {
   const [followMode, setFollowMode] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
+  const [isSystemHealthOpen, setIsSystemHealthOpen] = useState(false);
 
   // Global COT State Refs
   const currentMissionRef = useRef<{
@@ -614,6 +615,9 @@ function App() {
           isSystemSettingsOpen={isSystemSettingsOpen}
           onSystemSettingsClick={() => setIsSystemSettingsOpen(!isSystemSettingsOpen)}
           onSystemSettingsClose={() => setIsSystemSettingsOpen(false)}
+          isSystemHealthOpen={isSystemHealthOpen}
+          onSystemHealthClick={() => setIsSystemHealthOpen(!isSystemHealthOpen)}
+          onSystemHealthClose={() => setIsSystemHealthOpen(false)}
         />
       }
       leftSidebar={
