@@ -36,6 +36,9 @@ message CotEvent {
 
   // Detail Data (Flexible)
   Detail detail = 12;
+
+  // Raw JSON Payload
+  string raw = 13;
 }
 
 message Detail {

@@ -15,6 +15,7 @@ export type CoTEntity = {
   trail: TrailPoint[]; // Position history for trail lines
   smoothedTrail?: number[][]; // Pre-calculated Chaikin-smoothed path for performance
   uidHash: number; // Pre-computed phase offset for glow animation (avoids per-frame string ops)
+  raw?: string; // Raw JSON payload
   detail?: Record<string, unknown>; // For extra properties that might be passed from the worker
   lastSourceTime?: number; // Latest timestamp from source (for ordering)
   classification?: EntityClassification;

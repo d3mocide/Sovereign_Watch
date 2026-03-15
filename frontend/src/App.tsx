@@ -19,6 +19,7 @@ import { useEntityWorker } from './hooks/useEntityWorker'
 import { useInfraData } from './hooks/useInfraData'
 import { parseMissionHash, updateMissionHash } from './hooks/useMissionHash'
 import { AIAnalystPanel } from './components/widgets/AIAnalystPanel'
+import { GlobalTerminalWidget } from './components/widgets/GlobalTerminalWidget'
 
 const NOOP = () => { };
 
@@ -31,6 +32,7 @@ function App() {
   const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
   const [isSystemHealthOpen, setIsSystemHealthOpen] = useState(false);
   const [isAIAnalystOpen, setIsAIAnalystOpen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [aiAnalystAutoRun, setAiAnalystAutoRun] = useState(0);
 
   // Global COT State Refs
@@ -595,6 +597,14 @@ function App() {
   }, []);
 
   return (
+    <>
+      {isTerminalOpen && (
+        <GlobalTerminalWidget
+          onClose={() => setIsTerminalOpen(false)}
+          entitiesRef={entitiesRef}
+          satellitesRef={satellitesRef}
+        />
+      )}
     <MainHud
       topBar={
         <TopBar
@@ -626,6 +636,8 @@ function App() {
           isSystemHealthOpen={isSystemHealthOpen}
           onSystemHealthClick={() => setIsSystemHealthOpen(!isSystemHealthOpen)}
           onSystemHealthClose={() => setIsSystemHealthOpen(false)}
+          isTerminalOpen={isTerminalOpen}
+          onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
         />
       }
       leftSidebar={
@@ -807,6 +819,7 @@ function App() {
         </div>
       )}
     </MainHud>
+    </>
   )
 }
 

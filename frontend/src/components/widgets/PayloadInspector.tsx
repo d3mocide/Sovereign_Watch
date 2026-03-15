@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CoTEntity } from '../../types';
 import { Terminal, Copy, Check, X } from 'lucide-react';
+import { syntaxHighlightJson } from '../../utils/syntaxHighlight';
 
 interface PayloadInspectorProps {
     entity: CoTEntity;
@@ -67,24 +68,39 @@ export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onCl
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar font-mono text-[10px] bg-black/80 backdrop-blur-md border border-t-0 border-white/10 rounded-b-sm">
-                {/* Hex View */}
-                <div className="mb-4">
-                    <div className="text-white/30 mb-1 font-bold">HEX_DUMP</div>
-                    <div className="p-2 bg-black/50 border border-white/5 rounded text-hud-green/80 break-all select-all leading-relaxed relative group">
-                        {entity.raw || "NO_RAW_DATA_AVAILABLE"}
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar font-mono text-[10px] bg-black/90 backdrop-blur-md border border-t-0 border-white/10 rounded-b-sm">
+                {/* Raw JSON Source */}
+                <div className="mb-4 relative">
+                    <div className="text-white/40 mb-1 font-bold flex items-center gap-2">
+                        <span>SOURCE_PAYLOAD</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                     </div>
+                    {entity.raw ? (
+                        <pre
+                            className="p-3 bg-black/60 border border-white/5 rounded text-white overflow-x-auto select-all"
+                            dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(entity.raw) }}
+                        />
+                    ) : (
+                        <div className="p-3 bg-black/60 border border-white/5 rounded text-white/30 animate-pulse">
+                            AWAITING_SOURCE_DATA...
+                        </div>
+                    )}
                 </div>
 
-                {/* JSON Interpretation */}
-                <div>
-                     <div className="text-white/30 mb-1 font-bold">DECODED_JSON</div>
-                     <pre className="p-2 bg-black/50 border border-white/5 rounded text-cyan-400/80 overflow-x-auto select-all">
-                        {JSON.stringify(entity, (key, value) => {
-                            if (key === 'raw' || key === 'trail') return undefined; // Hide raw/trail in JSON view to save space
-                            return value;
-                        }, 2)}
-                     </pre>
+                {/* State Interpretation */}
+                <div className="relative">
+                     <div className="text-white/40 mb-1 font-bold flex items-center gap-2">
+                        <span>INTERNAL_STATE</span>
+                     </div>
+                     <pre
+                         className="p-3 bg-black/60 border border-white/5 rounded text-white overflow-x-auto select-all opacity-80"
+                         dangerouslySetInnerHTML={{
+                             __html: syntaxHighlightJson(JSON.stringify(entity, (key, value) => {
+                                 if (key === 'raw' || key === 'trail' || key === 'smoothedTrail') return undefined;
+                                 return value;
+                             }, 2))
+                         }}
+                     />
                 </div>
             </div>
         </div>
