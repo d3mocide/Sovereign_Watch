@@ -1107,6 +1107,110 @@ async def ws_js8(websocket: WebSocket) -> None:
                 # Subprocess path: squelch not supported (subprocess handles it)
 
             # ------------------------------------------------------------------
+            # Action: SET_NOTCH – single narrow interferer notch filter
+            # Payload: {"action": "SET_NOTCH", "enabled": true,
+            #           "freq_hz": 1000.0, "bw_hz": 100.0}
+            # freq_hz: notch centre in Hz relative to carrier (e.g. 1000 to kill 1 kHz het)
+            # bw_hz:   notch bandwidth in Hz (typical 50–300)
+            # ------------------------------------------------------------------
+            elif action == "SET_NOTCH":
+                notch_enabled = bool(cmd.get("enabled", False))
+                notch_freq    = float(max(0.0, cmd.get("freq_hz", 1000.0)))
+                notch_bw      = float(max(10.0, min(3000.0, cmd.get("bw_hz", 100.0))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_notch(notch_enabled, notch_freq, notch_bw)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_NOTCH failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_NR – noise reduction filter
+            # Payload: {"action": "SET_NR", "enabled": true, "param": 0}
+            # param: algorithm parameter (0 = default)
+            # ------------------------------------------------------------------
+            elif action == "SET_NR":
+                nr_enabled = bool(cmd.get("enabled", False))
+                nr_param   = int(max(0, cmd.get("param", 0)))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_noise_reduction(nr_enabled, nr_param)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_NR failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_NF – noise filter (stationary noise, complements NB)
+            # Payload: {"action": "SET_NF", "enabled": true, "param": 0}
+            # ------------------------------------------------------------------
+            elif action == "SET_NF":
+                nf_enabled = bool(cmd.get("enabled", False))
+                nf_param   = int(max(0, cmd.get("param", 0)))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_noise_filter(nf_enabled, nf_param)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_NF failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_RF_ATTN – front-end RF attenuator
+            # Payload: {"action": "SET_RF_ATTN", "db": -20}
+            # db: attenuation in dB (typically 0, -10, -20, -30)
+            # Use when ADC_OVFL flag fires to reduce receiver overload.
+            # ------------------------------------------------------------------
+            elif action == "SET_RF_ATTN":
+                rf_attn_db = int(max(-60, min(0, cmd.get("db", 0))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_rf_attn(rf_attn_db)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_RF_ATTN failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_CMAP – waterfall colour map selection
+            # Payload: {"action": "SET_CMAP", "index": 4}
+            # index: 0=Kiwi, 1=CSDR, 2=Grey, 3=Linear, 4=Turbo, 5=SdrDx, 6-9=Custom
+            # ------------------------------------------------------------------
+            elif action == "SET_CMAP":
+                cmap_index = int(max(0, min(11, cmd.get("index", 0))))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_cmap(cmap_index)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_CMAP failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
+            # Action: SET_APERTURE – waterfall dynamic range centering
+            # Payload: {"action": "SET_APERTURE", "auto": true, "algo": 0, "param": 0}
+            # auto: true = automatic aperture, false = manual
+            # ------------------------------------------------------------------
+            elif action == "SET_APERTURE":
+                aper_auto  = bool(cmd.get("auto", True))
+                aper_algo  = int(max(0, cmd.get("algo", 0)))
+                aper_param = int(max(0, cmd.get("param", 0)))
+                if not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native:
+                    try:
+                        await _kiwi_native.set_aperture(aper_auto, aper_algo, aper_param)
+                    except Exception as exc:
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "message": f"SET_APERTURE failed: {exc}",
+                        })
+
+            # ------------------------------------------------------------------
             # Action: DISCONNECT_KIWI – stop the KiwiSDR connection
             # Payload: {"action": "DISCONNECT_KIWI"}
             # ------------------------------------------------------------------
