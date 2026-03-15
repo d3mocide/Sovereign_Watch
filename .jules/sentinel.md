@@ -24,3 +24,7 @@
 **Vulnerability:** Denial of Service (DoS)
 **Learning:** `backend/api/routers/analysis.py` accepted extremely long `uid` path parameters without bound, and `lookback_hours` was unbounded. Unbounded user inputs can be abused to process huge payloads, consuming memory or overwhelming the database.
 **Prevention:** Always enforce strict length and bounds limits on user inputs using `fastapi.Path` and `pydantic.Field` constraints.
+## 2025-05-24 - Rate Limit Missing on Resource-Intensive AI Endpoints
+**Vulnerability:** The `/api/analyze/{uid}` endpoint performs database aggregations and makes external LLM API calls via `litellm`. It lacked any rate limiting, creating a significant Denial of Service (DoS) and cost exhaustion risk, as malicious or buggy clients could spam the endpoint, driving up LLM provider costs and locking up the event loop with concurrent HTTP requests.
+**Learning:** Endpoints that bridge to third-party LLM or vector database APIs must be strictly rate-limited due to the compute cost and billing implications, even if they appear "internal".
+**Prevention:** Always implement IP-based or token-based rate limiting using Redis (`db.redis_client.incr` with `expire`) or standard FastAPI middleware on any route that invokes external AI models or performs heavy computation. Set safe defaults (e.g., 10 requests per minute).

@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Request
 from sse_starlette.sse import EventSourceResponse
 from litellm import acompletion
 from models.schemas import AnalyzeRequest
@@ -12,6 +12,7 @@ logger = logging.getLogger("SovereignWatch.Analysis")
 
 @router.post("/api/analyze/{uid}")
 async def analyze_track(
+    request: Request,
     req: AnalyzeRequest,
     uid: str = Path(..., max_length=100, description="Unique identifier for the track entity")
 ):
@@ -22,6 +23,23 @@ async def analyze_track(
     """
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
+
+    # 0. Rate Limiting to prevent LLM API exhaustion/DoS
+    if db.redis_client:
+        client_ip = request.client.host if request.client else "unknown"
+        rate_limit_key = f"rate_limit:analyze:{client_ip}"
+        try:
+            # Limit to 10 requests per minute per IP
+            requests = await db.redis_client.incr(rate_limit_key)
+            if requests == 1:
+                await db.redis_client.expire(rate_limit_key, 60)
+            if requests > 10:
+                logger.warning(f"Rate limit exceeded for AI analysis from {client_ip}")
+                raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Rate limiting failed: {e}")
 
     # 1. Fetch Track History Summary
     # We aggregate to reduce tokens: Start/End location, bounding box, avg speed/alt
