@@ -128,6 +128,7 @@ interface TacticalMapProps {
   cablesData: any;
   stationsData: any;
   outagesData: any;
+  towersData: any;
   worldCountriesData: any;
 }
 
@@ -165,6 +166,7 @@ export function TacticalMap({
   cablesData,
   stationsData,
   outagesData,
+  towersData,
   worldCountriesData,
 }: TacticalMapProps) {
 
@@ -532,6 +534,7 @@ export function TacticalMap({
     cablesData,
     stationsData,
     outagesData,
+    towersData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

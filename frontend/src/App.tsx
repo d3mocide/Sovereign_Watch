@@ -104,8 +104,6 @@ function App() {
     alertedEmergencyRef
   } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
 
-  // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
-  const { cablesData, stationsData, outagesData } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] = useState<any>(null);
 
   useEffect(() => {
@@ -175,6 +173,7 @@ function App() {
       showCables: false,
       showLandingStations: false,
       showOutages: true,
+      showTowers: false,
       cableOpacity: 0.6,
       showConstellation_Starlink: false,
       showH3Coverage: false,
@@ -191,6 +190,7 @@ function App() {
       hashFilters.showSatellites = false;
       hashFilters.showRepeaters = false;
       hashFilters.showCables = false;
+      hashFilters.showTowers = false;
 
       hashState.activeLayers.forEach(layer => {
         if (layer in hashFilters) {
@@ -308,6 +308,13 @@ function App() {
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
+  // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
+  const { cablesData, stationsData, outagesData, towersData } = useInfraData(
+    missionProps?.currentMission?.lat,
+    missionProps?.currentMission?.lon,
+    (filters.rfRadius as number) || 50
+  );
+
   // Compute active services list
   const activeServices = useMemo(() => {
     const list: string[] = [];
@@ -375,6 +382,7 @@ function App() {
       showTerminator: showTerminator,
       showCables: false,
       showLandingStations: false,
+      showTowers: false,
     };
   }, [filters, orbitalSatFilters, showTerminator]);
 
@@ -732,6 +740,7 @@ function App() {
             cablesData={cablesData}
             stationsData={stationsData}
             outagesData={outagesData}
+            towersData={towersData}
             worldCountriesData={worldCountriesData}
           />
 
@@ -798,6 +807,7 @@ function App() {
           cablesData={cablesData}
           stationsData={stationsData}
           outagesData={outagesData}
+          towersData={towersData}
           worldCountriesData={worldCountriesData}
         />
       ) : (

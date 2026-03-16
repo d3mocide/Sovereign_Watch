@@ -86,10 +86,11 @@ const fallbackEmpty = {
   features: []
 };
 
-export const useInfraData = () => {
+export const useInfraData = (lat: number = 0, lon: number = 0, radiusKm: number = 50) => {
   const [cablesData, setCablesData] = useState<any>(null);
   const [stationsData, setStationsData] = useState<any>(null);
   const [outagesData, setOutagesData] = useState<any>(null);
+  const [towersData, setTowersData] = useState<any>(null);
   
   useEffect(() => {
     const fetchCables = async () => {
@@ -137,10 +138,26 @@ export const useInfraData = () => {
       }
     };
 
+    const fetchTowers = async () => {
+      try {
+        const res = await fetch(`/api/infra/towers?lat=${lat}&lon=${lon}&radius_km=${radiusKm}`);
+        const data = await res.json();
+        if (data) {
+          setTowersData(data);
+        } else {
+          setTowersData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("Towers fetch failed:", err);
+        setTowersData(fallbackEmpty);
+      }
+    };
+
     const fetchAll = () => {
       fetchCables();
       fetchStations();
       fetchOutages();
+      fetchTowers();
     };
 
     fetchAll();
@@ -148,7 +165,7 @@ export const useInfraData = () => {
     // Refresh outages every 10 minutes from the backend (which caches every 30m)
     const interval = setInterval(fetchOutages, 10 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [lat, lon, radiusKm]);
 
-  return { cablesData, stationsData, outagesData };
+  return { cablesData, stationsData, outagesData, towersData };
 };

@@ -6,6 +6,10 @@ import logging
 import requests
 import redis
 import traceback
+import zipfile
+import io
+import psycopg2
+from psycopg2.extras import execute_values
 from datetime import datetime, timezone
 
 # Setup Logging
@@ -14,8 +18,13 @@ logger = logging.getLogger("InfraPoller")
 
 # Config
 REDIS_URL = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
+DB_URL = os.getenv("DB_DSN", "postgresql://sovereign:tactical123@sovereign-db:5432/sovereign")
 POLL_INTERVAL_CABLES_HOURS = 24
 POLL_INTERVAL_IODA_MINUTES = 30
+POLL_INTERVAL_FCC_HOURS = 168 # 1 week
+
+# FCC ASR
+FCC_ASR_URL = "https://wireless.fcc.gov/uls/data/complete/l_tower.zip"
 
 # IODA
 IODA_URL = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
@@ -149,11 +158,135 @@ def fetch_cables_and_stations():
     except Exception as e:
         logger.error(f"Failed to fetch cables/stations: {e}")
 
+def dms_to_dd(d, m, s, dir):
+    """Convert Degrees, Minutes, Seconds to Decimal Degrees."""
+    try:
+        dd = float(d) + float(m)/60 + float(s)/3600
+        if dir in ['S', 'W']:
+            dd *= -1
+        return dd
+    except ValueError:
+        return None
+
+def fetch_fcc_asr():
+    """Download and process the FCC ASR database (l_tower.zip)."""
+    logger.info(f"Downloading FCC ASR data from {FCC_ASR_URL} ...")
+    try:
+        resp = requests.get(FCC_ASR_URL, stream=True, timeout=60)
+        resp.raise_for_status()
+
+        # Read zip directly into memory
+        z = zipfile.ZipFile(io.BytesIO(resp.content))
+
+        # We need EN.dat (Entity/Owner), RA.dat (Registration/Status), CO.dat (Coordinates/Height)
+
+        owners = {}
+        if 'EN.dat' in z.namelist():
+            logger.info("Parsing EN.dat (Owners)...")
+            with z.open('EN.dat') as f:
+                for line in f:
+                    parts = line.decode('iso-8859-1').split('|')
+                    if len(parts) > 10 and parts[0] == 'EN':
+                        reg_num = parts[4].strip()
+                        # Use Entity Name, if empty try First/Last
+                        name = parts[7].strip()
+                        if not name:
+                            name = f"{parts[8].strip()} {parts[10].strip()}".strip()
+                        owners[reg_num] = name
+
+        # Map reg_num -> (type, height_m, lat, lon)
+        towers = {}
+
+        if 'CO.dat' in z.namelist():
+            logger.info("Parsing CO.dat (Coordinates/Heights)...")
+            with z.open('CO.dat') as f:
+                for line in f:
+                    parts = line.decode('iso-8859-1').split('|')
+                    if len(parts) > 20 and parts[0] == 'CO':
+                        reg_num = parts[4].strip()
+
+                        lat_d = parts[6].strip()
+                        lat_m = parts[7].strip()
+                        lat_s = parts[8].strip()
+                        lat_dir = parts[9].strip()
+
+                        lon_d = parts[10].strip()
+                        lon_m = parts[11].strip()
+                        lon_s = parts[12].strip()
+                        lon_dir = parts[13].strip()
+
+                        lat = dms_to_dd(lat_d, lat_m, lat_s, lat_dir)
+                        lon = dms_to_dd(lon_d, lon_m, lon_s, lon_dir)
+
+                        height = parts[14].strip() # Overall Height Above Ground (AGL)
+
+                        if lat is not None and lon is not None and height:
+                            try:
+                                height_m = float(height)
+                                towers[reg_num] = {
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "height_m": height_m,
+                                    "type": "UNKNOWN" # Will update from RA
+                                }
+                            except ValueError:
+                                pass
+
+        valid_towers = []
+        if 'RA.dat' in z.namelist():
+            logger.info("Parsing RA.dat (Registration/Status)...")
+            with z.open('RA.dat') as f:
+                for line in f:
+                    parts = line.decode('iso-8859-1').split('|')
+                    if len(parts) > 10 and parts[0] == 'RA':
+                        reg_num = parts[4].strip()
+                        status = parts[6].strip() # G = Granted, C = Constructed
+                        # Filter for active/constructed towers
+                        if status in ['G', 'C'] and reg_num in towers:
+                            struc_type = parts[34].strip() if len(parts) > 34 else "UNKNOWN"
+                            owner = owners.get(reg_num, "UNKNOWN")
+                            t = towers[reg_num]
+                            valid_towers.append((
+                                reg_num,
+                                struc_type,
+                                t["height_m"],
+                                owner,
+                                f"SRID=4326;POINT({t['lon']} {t['lat']})"
+                            ))
+
+        logger.info(f"Parsed {len(valid_towers)} valid FCC towers. Upserting to database...")
+
+        if valid_towers:
+            conn = psycopg2.connect(DB_URL)
+            cursor = conn.cursor()
+
+            insert_query = """
+                INSERT INTO infra_towers (reg_num, type, height_m, owner, geom)
+                VALUES %s
+                ON CONFLICT (reg_num) DO UPDATE SET
+                    type = EXCLUDED.type,
+                    height_m = EXCLUDED.height_m,
+                    owner = EXCLUDED.owner,
+                    geom = EXCLUDED.geom,
+                    updated_at = NOW()
+            """
+
+            execute_values(cursor, insert_query, valid_towers, page_size=5000)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            logger.info("Successfully updated FCC ASR towers in database.")
+
+    except Exception as e:
+        logger.error(f"Failed to fetch/process FCC ASR data: {e}")
+        traceback.print_exc()
+
 def main():
     logger.info("Starting InfraPoller...")
 
     last_ioda_fetch = 0
     last_cables_fetch = 0
+    last_fcc_fetch = 0
 
     while True:
         now = time.time()
@@ -166,6 +299,9 @@ def main():
             fetch_internet_outages()
             last_ioda_fetch = now
 
+        if now - last_fcc_fetch > POLL_INTERVAL_FCC_HOURS * 3600:
+            fetch_fcc_asr()
+            last_fcc_fetch = now
 
         time.sleep(60)
 

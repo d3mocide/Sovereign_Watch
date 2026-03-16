@@ -191,6 +191,19 @@ CREATE TABLE IF NOT EXISTS intel_reports (
 -- We will respect the plan's 384 check.
 ALTER TABLE intel_reports ALTER COLUMN embedding TYPE vector(384);
 
+-- TABLE: infra_towers (FCC ASR Antenna Structure Registration)
+CREATE TABLE IF NOT EXISTS infra_towers (
+    reg_num     TEXT PRIMARY KEY,
+    type        TEXT,           -- TOWER, POLE, MAST, BUILDING, etc.
+    height_m    FLOAT,
+    owner       TEXT,
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    geom        GEOMETRY(POINT, 4326)
+);
+
+CREATE INDEX IF NOT EXISTS ix_infra_towers_geom ON infra_towers USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_infra_towers_type ON infra_towers (type);
+
 -- Index: DiskANN via pgvectorscale (if available) or HNSW (standard pgvector fallback)
 -- creating a standard HNSW index for now as DiskANN requires specific pgvectorscale setup
 CREATE INDEX IF NOT EXISTS ix_intel_embedding ON intel_reports USING hnsw (embedding vector_cosine_ops);

@@ -24,13 +24,15 @@ interface InfraFilters {
     showCables?: boolean;
     showLandingStations?: boolean;
     showOutages?: boolean;
-        cableOpacity?: number;
+    showTowers?: boolean;
+    cableOpacity?: number;
 }
 
 export function buildInfraLayers(
     cablesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
     stationsData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
     outagesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
+    towersData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
     filters: InfraFilters | null,
     setHoveredInfra: (info: unknown) => void,
     setSelectedInfra: ((info: unknown) => void) | undefined,
@@ -165,6 +167,47 @@ export function buildInfraLayers(
                     depthTest: !!globeMode, 
                     depthMask: !!globeMode,
                     depthBias: globeMode ? -30.0 : 0 
+                },
+                onHover: setHoveredInfra,
+                onClick: setSelectedInfra,
+            })
+        );
+    }
+
+    // FCC ASR Towers Layer
+    if (towersData && filters?.showTowers !== false) {
+        layers.push(
+            new ScatterplotLayer({
+                id: `fcc-towers-layer-${globeMode ? "globe" : "merc"}`,
+                data: towersData.features || [],
+                pickable: true,
+                opacity: 0.8,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 3,
+                radiusMaxPixels: 20,
+                lineWidthMinPixels: 1,
+                getPosition: (d: unknown) => (d as GeoJsonFeature).geometry.coordinates as [number, number],
+                getRadius: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
+                    const height = (feature.properties?.height_m as number) || 50;
+                    return height * 2; // Scale visually by height
+                },
+                getFillColor: (d: unknown) => {
+                    const feature = d as GeoJsonFeature;
+                    const type = (feature.properties?.type as string) || "UNKNOWN";
+                    if (type === "TOWER") return [239, 68, 68, 200]; // Red
+                    if (type === "POLE") return [249, 115, 22, 200]; // Orange
+                    if (type === "MAST") return [234, 179, 8, 200]; // Yellow
+                    if (type === "BUILDING") return [56, 189, 248, 200]; // Blue
+                    return [156, 163, 175, 200]; // Gray fallback
+                },
+                getLineColor: [255, 255, 255, 100],
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: !!globeMode,
+                    depthBias: globeMode ? -40.0 : 0
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
