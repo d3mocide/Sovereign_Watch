@@ -1,0 +1,106 @@
+# Sovereign Watch — Cursor / Windsurf / Antigravity AI Context
+#
+# This file is auto-loaded by Cursor, Windsurf, and compatible VS Code forks.
+# For Claude Code sessions, see CLAUDE.md instead.
+# For full development rules, see AGENTS.md.
+
+## Project Overview
+
+Sovereign Watch is a self-hosted, distributed Multi-INT fusion platform that
+ingests and visualizes real-time aviation (ADS-B), maritime (AIS), orbital
+(TLE/SGP4), RF infrastructure, and internet infrastructure data on a WebGL
+tactical map.
+
+Stack:
+- Frontend: TypeScript · React 18.2 · Vite 7.3 · Deck.gl 9.0 · MapLibre/Mapbox
+- Backend API: Python 3.11 · FastAPI · asyncpg · LiteLLM · Redis · aiokafka
+- Database: TimescaleDB (PostgreSQL 16 + PostGIS + pgvector)
+- Message bus: Redpanda (Kafka-compatible)
+- Runtime: Docker Compose — all services containerised
+
+## Directory Map
+
+```
+frontend/src/
+  components/map/        — Deck.gl + MapLibre/Mapbox map components
+  components/layouts/    — HUD shell, sidebars, top bar
+  components/js8call/    — HF radio terminal UI
+  layers/                — Deck.gl layer definitions
+  hooks/                 — Custom React hooks
+  workers/               — Web workers (compute-heavy tasks)
+  types.ts               — Shared TypeScript types
+
+backend/api/
+  routers/               — FastAPI route handlers (tracks, analysis, orbital, rf, infra, system)
+  services/              — Business logic (historian, tak, broadcast, schema_context)
+  models/schemas.py      — Pydantic request/response models
+  core/config.py         — Settings (env vars via pydantic-settings)
+  core/database.py       — asyncpg pool + Redis client
+
+backend/ingestion/
+  aviation_poller/       — ADS-B ingest (adsb.fi, adsb.lol, airplanes.live)
+  maritime_poller/       — AIS ingest (AISStream WebSocket)
+  orbital_pulse/         — TLE fetch + SGP4 propagation
+  rf_pulse/              — RF repeaters + NOAA weather radio
+  infra_poller/          — Internet outages + submarine cables
+```
+
+## Architectural Rules
+
+1. **Container-first**: All services run in Docker Compose. Do not run the app
+   outside containers. Lint and unit tests may run on the host.
+
+2. **TAK Protocol**: All inter-service messages use the TAK Protocol (simplified
+   CoT serialised as JSON). See `Documentation/TAK_Protocol.md`.
+
+3. **Deck.gl layer ordering**: ALWAYS read `agent_docs/z-ordering.md` before
+   modifying any map layer. Incorrect z-order causes invisible layers or WebGL
+   depth conflicts that are hard to debug.
+
+4. **Ingestion pollers require rebuild**: Changes to any file in
+   `backend/ingestion/` require `docker compose up -d --build <poller-name>`.
+   Hot reload is NOT available for pollers.
+
+5. **AI analyst schema**: The LiteLLM-based analyst in
+   `backend/api/routers/analysis.py` uses `services/schema_context.py` to
+   inject field definitions and anomaly indicators into LLM prompts. Update
+   that file when adding new track fields or entity types.
+
+6. **LSP tooling**: `pyrightconfig.json` (Python) and `frontend/tsconfig.json`
+   (TypeScript) are at project root / frontend/. `.vscode/settings.json` is
+   pre-configured — no additional LSP setup needed for VS Code family editors.
+
+## Key Commands
+
+```bash
+# Frontend — hot reload active at http://localhost (via nginx)
+cd frontend && npm run lint
+cd frontend && npm run test
+
+# Backend API — hot reload active (uvicorn --reload)
+cd backend/api && ruff check .
+cd backend/api && python -m pytest
+
+# Any ingestion poller change
+docker compose up -d --build sovereign-adsb-poller   # example
+
+# Full stack
+docker compose up -d --build
+docker compose logs -f sovereign-backend
+```
+
+## Code Style
+
+- Python: ruff enforced (no explicit config — uses pyproject defaults). 4-space indent.
+- TypeScript: ESLint flat config (`frontend/eslint.config.js`) + Prettier.
+  2-space indent. Strict mode enabled in `tsconfig.json`.
+- Imports: absolute paths in Python, relative in TypeScript components.
+
+## Further Reading
+
+- Full development rules: `AGENTS.md`
+- Claude Code overrides: `CLAUDE.md`
+- Map layer ordering (MANDATORY for map work): `agent_docs/z-ordering.md`
+- Deployment: `Documentation/Deployment.md`
+- API reference: `Documentation/API_Reference.md`
+- Dev setup guide: `Documentation/Development.md`
