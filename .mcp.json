@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "lsp": {
+      "command": "mcp-language-server",
+      "args": ["--workspace", "/home/user/Sovereign_Watch"],
+      "env": {}
+    }
+  }
+}

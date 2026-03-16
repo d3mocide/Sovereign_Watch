@@ -1,14 +1,25 @@
 import logging
+import math
 from fastapi import APIRouter, HTTPException, Path, Request
 from sse_starlette.sse import EventSourceResponse
 from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from core.database import db
-from core.config import settings
 from routers.system import AI_MODEL_REDIS_KEY, AI_MODEL_DEFAULT
+from services.schema_context import get_schema_context
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Analysis")
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometres between two WGS84 points."""
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 
 @router.post("/api/analyze/{uid}")
 async def analyze_track(
@@ -42,18 +53,39 @@ async def analyze_track(
             logger.warning(f"Rate limiting failed: {e}")
 
     # 1. Fetch Track History Summary
-    # We aggregate to reduce tokens: Start/End location, bounding box, avg speed/alt
+    # Aggregate to reduce tokens: summary stats + trajectory endpoints + entity type + meta snapshot
     track_query = """
+        WITH ordered AS (
+            SELECT
+                time, lat, lon, alt, speed, heading, type, meta,
+                ROW_NUMBER() OVER (ORDER BY time ASC)  AS rn_asc,
+                ROW_NUMBER() OVER (ORDER BY time DESC) AS rn_desc,
+                COUNT(*) OVER ()                        AS total_points
+            FROM tracks
+            WHERE entity_id = $1
+              AND time > NOW() - INTERVAL '1 hour' * $2
+        )
         SELECT
-            min(time) as start_time,
-            max(time) as last_seen,
-            count(*) as points,
-            avg(speed) as avg_speed,
-            avg(alt) as avg_alt,
-            ST_AsText(ST_Centroid(ST_Collect(geom))) as centroid
-        FROM tracks
-        WHERE entity_id = $1
-        AND time > NOW() - INTERVAL '1 hour' * $2
+            MIN(time)                                       AS start_time,
+            MAX(time)                                       AS last_seen,
+            MAX(total_points)                               AS points,
+            AVG(speed)                                      AS avg_speed,
+            AVG(alt)                                        AS avg_alt,
+            MAX(alt)                                        AS max_alt,
+            MIN(alt)                                        AS min_alt,
+            MAX(speed)                                      AS max_speed,
+            ST_AsText(ST_Centroid(ST_Collect(
+                CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+                     THEN ST_MakePoint(lon, lat)::geometry END
+            )))                                             AS centroid,
+            MAX(CASE WHEN rn_asc  = 1 THEN lat  END)       AS start_lat,
+            MAX(CASE WHEN rn_asc  = 1 THEN lon  END)       AS start_lon,
+            MAX(CASE WHEN rn_desc = 1 THEN lat  END)       AS end_lat,
+            MAX(CASE WHEN rn_desc = 1 THEN lon  END)       AS end_lon,
+            MAX(CASE WHEN rn_desc = 1 THEN type END)       AS entity_type,
+            MAX(CASE WHEN rn_desc = 1 THEN meta::text END) AS latest_meta,
+            MAX(CASE WHEN rn_desc = 1 THEN heading END)    AS last_heading
+        FROM ordered
     """
     try:
         track_summary = await db.pool.fetchrow(track_query, uid, req.lookback_hours)
@@ -64,26 +96,62 @@ async def analyze_track(
     if not track_summary or track_summary['points'] == 0:
         return {"error": "No track data found for this entity within lookback period"}
 
-    # 2. Construct Prompt
-    system_prompt = """
-    You are a Senior Intelligence Analyst. You are viewing a map of a decentralized sensor network.
-    Analyze the provided track telemetry and correlated intelligence reports.
-    Identify anomalies (erratic flight, dark AIS, mismatches).
-    Return a concise tactical summary.
-    """
+    # 2. Derive trajectory displacement
+    displacement_km: float | None = None
+    start_lat = track_summary['start_lat']
+    start_lon = track_summary['start_lon']
+    end_lat   = track_summary['end_lat']
+    end_lon   = track_summary['end_lon']
+    if all(v is not None for v in (start_lat, start_lon, end_lat, end_lon)):
+        displacement_km = _haversine_km(start_lat, start_lon, end_lat, end_lon)
 
-    user_content = f"""
-    TARGET: {uid}
-    TELEMETRY SUMMARY ({req.lookback_hours}h):
-    - Points: {track_summary['points']}
-    - Avg Speed: {track_summary['avg_speed'] or 0:.1f} m/s
-    - Avg Alt: {track_summary['avg_alt'] or 0:.0f} m
-    - Last Seen: {track_summary['last_seen']}
+    entity_type: str = track_summary['entity_type'] or "unknown"
 
-    ASSESSMENT:
-    """
+    # 3. Construct Prompt with schema-aware context
+    schema_ctx = get_schema_context(entity_type if entity_type != "unknown" else None)
 
-    # 3. Resolve active model — prefer Redis-stored user selection, fall back to ENV default
+    system_prompt = f"""You are a Senior Intelligence Analyst on a distributed sensor network.
+You receive structured telemetry from a multi-INT fusion platform and must produce a concise tactical assessment.
+
+FIELD DEFINITIONS AND UNITS:
+{schema_ctx}
+
+ANALYTICAL GUIDANCE:
+- Convert units in your reasoning (alt m→ft, speed m/s→knots) but report both where helpful
+- Cross-reference meta fields against known anomaly indicators above
+- For displacement near zero with high point count: suspect loitering or holding pattern
+- For missing meta fields: note data gaps as they affect confidence
+- Return a structured assessment: ENTITY TYPE | IDENTITY | BEHAVIOR | ANOMALY FLAGS | CONFIDENCE
+"""
+
+    # Build meta summary block
+    latest_meta = track_summary['latest_meta'] or "{}"
+    avg_speed_ms  = track_summary['avg_speed'] or 0.0
+    avg_speed_kts = avg_speed_ms * 1.944
+    max_speed_kts = (track_summary['max_speed'] or 0.0) * 1.944
+    avg_alt_m     = track_summary['avg_alt'] or 0.0
+    avg_alt_ft    = avg_alt_m * 3.281
+    max_alt_ft    = (track_summary['max_alt'] or 0.0) * 3.281
+    min_alt_ft    = (track_summary['min_alt'] or 0.0) * 3.281
+
+    displacement_str = f"{displacement_km:.1f} km" if displacement_km is not None else "unknown"
+
+    user_content = f"""TARGET: {uid}
+ENTITY TYPE: {entity_type.upper()}
+WINDOW: {req.lookback_hours}h | OBSERVATIONS: {track_summary['points']}
+FIRST SEEN: {track_summary['start_time']} | LAST SEEN: {track_summary['last_seen']}
+
+TELEMETRY:
+  Speed (avg/max): {avg_speed_kts:.1f} kts / {max_speed_kts:.1f} kts  [{avg_speed_ms:.1f} m/s]
+  Altitude (avg/max/min): {avg_alt_ft:.0f} ft / {max_alt_ft:.0f} ft / {min_alt_ft:.0f} ft  [{avg_alt_m:.0f} m avg]
+  Last Heading: {track_summary['last_heading'] or 'N/A'}°
+  Net Displacement: {displacement_str}
+
+IDENTITY (latest meta): {latest_meta}
+
+ASSESSMENT:"""
+
+    # 4. Resolve active model — prefer Redis-stored user selection, fall back to ENV default
     active_model = AI_MODEL_DEFAULT
     if db.redis_client:
         try:
@@ -93,7 +161,7 @@ async def analyze_track(
         except Exception as e:
             logger.warning(f"Could not read AI model from Redis, using default: {e}")
 
-    # 4. Stream AI Response
+    # 5. Stream AI Response
     # NEW-003 (supersedes BUG-005): The prior asyncio.to_thread(completion, ...,
     # stream=True) fix only offloaded the initial HTTP handshake. The generator
     # returned immediately, but the chunk-by-chunk iteration ran synchronously

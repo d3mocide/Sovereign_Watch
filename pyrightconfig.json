@@ -1,0 +1,17 @@
+{
+  "include": ["backend/api", "backend/ingestion"],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.venv",
+    "**/dist"
+  ],
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingModuleSource": false,
+  "venvPath": ".",
+  "venv": ".venv"
+}
