@@ -34,8 +34,8 @@ export function processReplayData(data: any[]): Map<string, CoTEntity[]> {
       speed: pt.speed,
       course: pt.heading,
       callsign: meta.callsign || pt.entity_id,
-      time: new Date(pt.time).getTime(),
-      lastSeen: new Date(pt.time).getTime(),
+      time: Date.parse(pt.time),
+      lastSeen: Date.parse(pt.time),
       trail: [], // Replay doesn't need trails yet or we can generate them
       uidHash: 0, // Will be computed by map
       // Map meta.classification into the correct top-level field so that

@@ -27,7 +27,7 @@ interface PassPredictorWidgetProps {
 const MIN_EL_OPTIONS = [0, 5, 10, 15, 20, 30];
 
 function formatCountdown(targetIso: string, now: number): string {
-  const delta = Math.round((new Date(targetIso).getTime() - now) / 1000);
+  const delta = Math.round((Date.parse(targetIso) - now) / 1000);
   if (Math.abs(delta) < 5) return 'NOW';
   const sign = delta < 0 ? 'T+' : 'T-';
   const abs = Math.abs(delta);
@@ -144,8 +144,8 @@ export const PassPredictorWidget: React.FC<PassPredictorWidgetProps> = ({
         ) : (
           <div className="flex flex-col gap-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-purple-400/20 h-full">
           {passes.map((pass, i) => {
-            const aosMs = new Date(pass.aos).getTime();
-            const losMs = new Date(pass.los).getTime();
+            const aosMs = Date.parse(pass.aos);
+            const losMs = Date.parse(pass.los);
             const inProgress = now >= aosMs && now <= losMs;
             const countdown = formatCountdown(inProgress ? pass.los : pass.aos, now);
             const countdownLabel = inProgress ? 'LOS' : 'AOS';

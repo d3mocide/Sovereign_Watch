@@ -507,7 +507,7 @@ function App() {
     const now = Date.now();
     const ALERT_WINDOW_MS = 30 * 60 * 1000;
     for (const pass of intelPasses) {
-      const aosMs = new Date(pass.aos).getTime();
+      const aosMs = Date.parse(pass.aos);
       const passKey = `${pass.norad_id}-${pass.aos}`;
       if (aosMs > now && aosMs - now <= ALERT_WINDOW_MS && !alertedPassesRef.current.has(passKey)) {
         alertedPassesRef.current.add(passKey);
