@@ -612,15 +612,17 @@ export function useEntityWorker({
     workerRef.current = worker;
 
     // Robust WebSocket URL selection
-    let wsUrl: string;
-    if (import.meta.env.VITE_API_URL) {
-      const apiBase = import.meta.env.VITE_API_URL.replace("http", "ws");
-      wsUrl = `${apiBase}/api/tracks/live`;
-    } else {
-      // Default to proxy-friendly relative URL
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      wsUrl = `${protocol}//${window.location.host}/api/tracks/live`;
-    }
+    const getWsUrl = () => {
+      const envUrl = import.meta.env.VITE_API_URL;
+      if (envUrl && !envUrl.includes('localhost')) {
+        return envUrl.replace('http', 'ws') + '/api/tracks/live';
+      }
+      // Default to proxy-friendly relative URL based on current origin
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}/api/tracks/live`;
+    };
+
+    const wsUrl = getWsUrl();
 
     let ws: WebSocket | null = null;
     let reconnectAttempts = 0;

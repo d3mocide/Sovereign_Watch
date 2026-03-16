@@ -1,3 +1,16 @@
+## [0.32.2] - 2026-03-15
+
+### Fixed
+- **Deep Localhost Removal**: Eliminated remaining hardcoded `localhost` string references in `useEntityWorker.ts`, `useKiwiNodes.ts`, and `ListeningPost.tsx`.
+- **Intelligent URL Derivation**: Implemented fallback logic that automatically uses the current host IP for all API and WebSocket traffic when environment variables are set to local defaults, ensuring multi-node network deployments work out of the box.
+
+## [0.32.1] - 2026-03-15
+
+### Fixed
+- **Network Deployment & CORS**: Centralized `ALLOWED_ORIGINS` in `.env`, resolving Cross-Origin Resource Sharing blocks when running on a server inside a local network.
+- **Dynamic WebSocket Detection**: Updated frontend hooks to automatically derive backend WebSocket URLs from the current server IP, eliminating the need for manual `.env` configuration in many network environments.
+- **Non-Secure (HTTP) Support**: Implemented a fallback for `crypto.randomUUID()` in non-secure (HTTP) contexts, preventing application crashes when accessed via IP without SSL.
+
 ## [0.32.0] - 2026-03-15
 
 ### Added
