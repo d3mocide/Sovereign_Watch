@@ -14,6 +14,7 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
   const [logs, setLogs] = useState<{ id: string; time: number; type: string; raw: string; uid: string }[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [speed, setSpeed] = useState<1 | 2 | 5 | 10>(2); // Default to 2X slower (1000ms)
 
   const MAX_LOGS = 50;
   const logsRef = useRef(logs);
@@ -38,29 +39,17 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
         const newLogs: { id: string; time: number; type: string; raw: string; uid: string }[] = [];
 
         // Scan air/sea
-        entitiesRef.current.forEach((entity, uid) => {
-            // Find recent ones we haven't logged recently
-            if (entity.raw && entity.lastSeen > Date.now() - 2000) {
-                const logId = `${uid}-${entity.time || entity.lastSeen}`;
-                if (!lastKnownUids.has(logId)) {
-                    newLogs.push({
-                        id: logId,
-                        time: Date.now(),
-                        type: entity.type,
-                        raw: entity.raw,
-                        uid: entity.uid
-                    });
-                    lastKnownUids.add(logId);
-                }
-            }
-        });
+        let addedCount = 0;
+        const MAX_PER_TICK = 5;
 
-        // Scan sats (sampled, don't overwhelm)
-        let satCount = 0;
-        satellitesRef.current.forEach((entity, uid) => {
-             if (satCount > 5) return; // limit sat updates per tick
-             if (entity.raw && entity.lastSeen > Date.now() - 2000) {
-                const logId = `${uid}-${entity.time || entity.lastSeen}`;
+        // Convert to array and shuffle/sort to pick interesting samples if there are many
+        const allEntities = Array.from(entitiesRef.current.values());
+        
+        for (const entity of allEntities) {
+            if (addedCount >= MAX_PER_TICK) break;
+            
+            if (entity.raw && entity.lastSeen > Date.now() - 3000) {
+                const logId = `${entity.uid}-${entity.time || entity.lastSeen}`;
                 if (!lastKnownUids.has(logId)) {
                     newLogs.push({
                         id: logId,
@@ -70,18 +59,38 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
                         uid: entity.uid
                     });
                     lastKnownUids.add(logId);
-                    satCount++;
+                    addedCount++;
                 }
             }
-        });
+        }
+
+        // Scan sats (only if we have room)
+        if (addedCount < MAX_PER_TICK) {
+            satellitesRef.current.forEach((entity, uid) => {
+                if (addedCount >= MAX_PER_TICK) return;
+                if (entity.raw && entity.lastSeen > Date.now() - 3000) {
+                    const logId = `${uid}-${entity.time || entity.lastSeen}`;
+                    if (!lastKnownUids.has(logId)) {
+                        newLogs.push({
+                            id: logId,
+                            time: Date.now(),
+                            type: entity.type,
+                            raw: entity.raw,
+                            uid: entity.uid
+                        });
+                        lastKnownUids.add(logId);
+                        addedCount++;
+                    }
+                }
+            });
+        }
 
         if (newLogs.length > 0) {
             setLogs(prev => {
                 const combined = [...prev, ...newLogs];
-                return combined.slice(-MAX_LOGS); // Keep last 50
+                return combined.slice(-MAX_LOGS); 
             });
 
-            // Auto scroll
             setTimeout(() => {
                 if (logsEndRef.current) {
                     logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -89,15 +98,14 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
             }, 100);
         }
 
-        // Cleanup set
         if (lastKnownUids.size > 1000) {
             lastKnownUids = new Set(Array.from(lastKnownUids).slice(-500));
         }
 
-    }, 500);
+    }, 500 * speed);
 
     return () => clearInterval(pollInterval);
-  }, [entitiesRef, satellitesRef]);
+  }, [entitiesRef, satellitesRef, speed]);
 
 
   const handleCopy = () => {
@@ -112,7 +120,7 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
   };
 
   return (
-    <div className="absolute right-4 top-16 w-96 h-[600px] z-50 bg-black/90 backdrop-blur-md border border-tactical-border rounded shadow-2xl flex flex-col animate-in fade-in slide-in-from-top-4 duration-200">
+    <div className="absolute right-4 top-16 w-[800px] h-[600px] z-50 bg-black/90 backdrop-blur-md border border-tactical-border rounded shadow-2xl flex flex-col animate-in fade-in slide-in-from-top-4 duration-200">
 
       {/* Header */}
       <div className="flex items-center justify-between p-2 border-b border-white/10 bg-gradient-to-r from-hud-green/10 to-transparent">
@@ -123,6 +131,19 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
         </div>
 
         <div className="flex items-center gap-1">
+           {/* Speed Selectors */}
+           <div className="flex bg-white/5 rounded p-0.5 mr-2 border border-white/5">
+              {[1, 2, 5, 10].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSpeed(s as 1 | 2 | 5 | 10)}
+                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${speed === s ? 'bg-hud-green/20 text-hud-green' : 'text-white/30 hover:text-white/60'}`}
+                >
+                  {s === 1 ? 'REAL' : `${s}X`}
+                </button>
+              ))}
+           </div>
+
            <button
             onClick={() => setIsPaused(!isPaused)}
             className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors"

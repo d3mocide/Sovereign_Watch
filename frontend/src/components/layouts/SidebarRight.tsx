@@ -144,6 +144,29 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
   );
 }
 
+interface InfraProperties {
+  entity_type?: string;
+  id?: string;
+  severity?: string | number;
+  region?: string;
+  country?: string;
+  status?: string;
+  rfs?: string;
+  length_km?: string | number;
+  capacity?: string;
+  owners?: string;
+  datasource?: string;
+  landing_points?: string;
+  cables?: string;
+}
+
+interface InfraDetail {
+  properties?: InfraProperties;
+  geometry?: {
+    type: string;
+  };
+}
+
 interface SidebarRightProps {
   entity: CoTEntity | null;
   onClose: () => void;
@@ -267,15 +290,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
           <div className="flex gap-2 w-full">
             <AnalysisWidget accentColor="text-indigo-400" onOpenPanel={onOpenAnalystPanel} />
-            <button
-              onClick={() => setShowInspector(true)}
-              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-            >
-              <div className="flex items-center justify-between px-3">
-                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
-                <Terminal size={12} className="text-white/20" />
-              </div>
-            </button>
           </div>
           {/* Compact Metadata Footer */}
           <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
@@ -414,15 +428,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
           <div className="flex gap-2 w-full">
             <AnalysisWidget accentColor="text-teal-400" onOpenPanel={onOpenAnalystPanel} />
-            <button
-              onClick={() => setShowInspector(true)}
-              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-            >
-              <div className="flex items-center justify-between px-3">
-                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
-                <Terminal size={12} className="text-white/20" />
-              </div>
-            </button>
           </div>
           {/* Compact Metadata Footer */}
           <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
@@ -435,8 +440,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
   // ── Infrastructure branch (Cables & Stations) ──────────────────────────────────
   if (entity.type === 'infra') {
-    const detail = entity.detail || {};
-    const props: any = detail.properties || {};
+    const detail = (entity.detail || {}) as InfraDetail;
+    const props = detail.properties || {};
     const isStation = detail.geometry?.type === 'Point';
     const isOutage = props.entity_type === 'outage' || props.id?.includes('outage') || props.severity !== undefined;
     const severity = Number(props.severity || 0);
@@ -600,15 +605,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
           <div className="flex gap-2 w-full">
             <AnalysisWidget accentColor={accentColor} onOpenPanel={onOpenAnalystPanel} />
-            <button
-              onClick={() => setShowInspector(true)}
-              className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all"
-            >
-              <div className="flex items-center justify-between px-3">
-                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
-                <Terminal size={12} className="text-white/20" />
-              </div>
-            </button>
           </div>
           {/* Compact Metadata Footer */}
           <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
@@ -947,18 +943,20 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
       {/* 3. Footer Actions */}
       <div className="p-3 border border-t-0 border-tactical-border bg-black/40 backdrop-blur-md rounded-b-sm flex flex-col gap-2">
-        <div className="flex items-stretch gap-2 w-full grid grid-cols-2">
+        <div className={`flex items-stretch gap-2 w-full ${entity.raw ? 'grid grid-cols-2' : ''}`}>
           <AnalysisWidget accentColor={accentColor} onOpenPanel={onOpenAnalystPanel} />
 
-          <button
-            onClick={() => setShowInspector(true)}
-            className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all col-span-1"
-          >
-            <div className="flex items-center justify-between px-3 h-full">
-              <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
-              <Terminal size={12} className="text-white/20" />
-            </div>
-          </button>
+          {entity.raw && (
+            <button
+              onClick={() => setShowInspector(true)}
+              className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded group transition-all col-span-1"
+            >
+              <div className="flex items-center justify-between px-3 h-full">
+                <span className="text-[10px] font-bold tracking-[.2em] text-white/30 group-hover:text-white/60">RAW_PAYLOAD</span>
+                <Terminal size={12} className="text-white/20" />
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Compact Metadata Footer */}

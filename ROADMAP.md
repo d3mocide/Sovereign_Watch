@@ -31,7 +31,6 @@ The platform's "System of Systems" architecture is documented in detail within t
 | :------------ | :-------------------- | :-------- | :-------------------------------------------------------------------------- |
 | **Ingest-11** | FCC ASR Tower Service | Data Eng  | FCC antenna structure DB -> bounding-box filtered endpoints.                |
 | **FE-25b**    | FCC Tower Layer       | Frontend  | Visual markers for communication towers by height and type.                 |
-| **FE-10**     | Payload Eval          | Frontend  | Raw JSON inspector (Terminal Mode).                                         |
 | **FE-13**     | Mission Labels        | Frontend  | Floating text labels for coverage areas.                                    |
 | **Ingest-07** | Drone Remote ID       | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline (Requires RTL-SDR hardware).       |
 | **FE-22**     | Drone Tactical Layer  | Frontend  | Implement `DroneLayer.tsx` with rotor icons and `drone_class` color coding. |
