@@ -1,28 +1,22 @@
-# Release - v0.31.0 - Tactical SDR Evolution
+# Release - v0.32.0 - Payload Eval
 
-## High-Level Summary
-This release marks a significant milestone in Sovereign Watch's signals intelligence capabilities. Version 0.31.0 introduces comprehensive remote control for KiwiSDR nodes, expanding demodulation coverage to 18 modes and exposing professional-grade DSP filters (Notch, Noise Reduction, RF Attenuation) directly to the operator's HUD. Alongside these signal-path enhancements, we have resolved critical architectural instabilities in the map engine and radio terminal, ensuring a robust and performant experience for high-stakes monitoring.
+## Summary
+Version 0.32.0 introduces the **Payload Evaluation** suite, a critical investigative feature-set that surfaces the raw underlying data of the Sovereign Watch platform. This release bridges the gap between high-level tactical visualization and raw intelligence analysis.
 
 ## Key Features
-- **Professional Demodulation Suite**: Supported modes expanded from 5 to 18. Now supports AM wideband for broadcast intelligence, Sync AM for fading mitigation, and specialized digital IQ/DRM modes.
-- **HUD-Integrated DSP Control**: Real-time suppression of interferers via the new Notch Filter and adaptive noise reduction algorithms.
-- **Waterfall & Spectrogram Tuning**: 12 selectable color maps and automatic aperture centering for optimized spectral visualization across varying noise floors.
-- **Secure SDR Link**: Automatic MD5-based authentication and URL version fallback for connection to the latest high-security KiwiSDR firmware.
-- **Stable Terminator Layer**: Re-engineered day/night shadow rendering for full Deck.gl v9 compatibility, providing precise solar context for HF propagation analysis.
+- **Global Raw Stream Terminal**: A new "god-mode" terminal in the Top Bar that traces the live pulse of the entire ingestion bus.
+- **Adjustable Sampling Rates**: Hardware-inspired speed controls (Real-time to 10X decimation) to slow down high-traffic streams (e.g., near major hubs) for human analysis.
+- **Syntax Highlighted Inspectors**: Full JSON syntax highlighting for all inspected payloads, matching the project's tactical aesthetic.
+- **Context-Aware UI**: The sidebars now intelligently hide developmental/raw buttons when viewing static infrastructure like undersea cables, keeping the UI focused on operational data.
 
 ## Technical Details
-- **Architecture**: Implemented dual-format WebSocket pathing logic in `kiwi_client.py` for v1.550+ compatibility.
-- **Performance**: Validated all new SDR controls with a 23-test suite in `test_kiwi_compatibility.py`.
-- **Frontend**: Refactored `RadioTerminal.tsx` to satisfy React 19 purity requirements, isolating impure timestamp calculations from the render loop.
-- **Z-Ordering**: Standardized property access for `KiwiNode` metadata, resolving "undefined" field errors in the SDR browser.
+- Implements **FE-10** from the project roadmap.
+- High-performance polling mechanism in `GlobalTerminalWidget` ensures zero impact on the main rendering loop (60fps maintained).
+- Protobuf-to-JSON visual mapping consistency across all domain pollers.
 
 ## Upgrade Instructions
-To deploy this update to your local instance:
 ```bash
-# 1. Pull the latest code
-git pull origin main
-
-# 2. Rebuild the affected SDR and frontend services
-docker compose build frontend js8call
+docker compose pull
+docker compose build frontend
 docker compose up -d
 ```

@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import datetime
 from proto.tak_pb2 import TakMessage
 
@@ -52,6 +53,10 @@ def transform_to_proto(data: dict) -> bytes:
 
     # 3. Details
     src_detail = data.get("detail", {})
+    try:
+        cot.raw = json.dumps(data)
+    except Exception:
+        cot.raw = ""
 
     # Track
     src_track = src_detail.get("track", {})

@@ -207,6 +207,7 @@ export function useEntityWorker({
             trail,
             smoothedTrail: getSmoothedTrail(trail, existing),
             uidHash: existing ? existing.uidHash : uidToHash(entity.uid),
+            raw: entity.raw,
           };
 
           // PVB State Update for Satellites
@@ -379,9 +380,7 @@ export function useEntityWorker({
           trail,
           smoothedTrail: getSmoothedTrail(trail, existingEntity),
           uidHash: 0, // Will be set below
-          // NEW-005: Removed stale `raw: updateData.raw` — tak.worker.ts no
-          // longer attaches .raw after BUG-018 removed the hex debug string.
-          // It was always `undefined` and silently discarded by `as CoTEntity`.
+          raw: entity.raw, // Include raw JSON from parsed proto
           classification: classification
             ? {
               ...existingEntity?.classification,

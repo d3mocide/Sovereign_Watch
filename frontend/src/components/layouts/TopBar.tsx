@@ -10,7 +10,8 @@ import {
     ShieldAlert,
     ShieldCheck,
     Moon,
-    HeartPulse
+    HeartPulse,
+    Terminal
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
@@ -47,6 +48,8 @@ interface TopBarProps {
     isSystemHealthOpen?: boolean;
     onSystemHealthClick?: () => void;
     onSystemHealthClose?: () => void;
+    isTerminalOpen?: boolean;
+    onTerminalClick?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -58,7 +61,8 @@ export const TopBar: React.FC<TopBarProps> = ({
     viewMode = 'TACTICAL', onViewChange,
     onAlertsClick, isAlertsOpen, alerts, onAlertsClose,
     isSystemSettingsOpen, onSystemSettingsClick, onSystemSettingsClose,
-    isSystemHealthOpen, onSystemHealthClick, onSystemHealthClose
+    isSystemHealthOpen, onSystemHealthClick, onSystemHealthClose,
+    isTerminalOpen, onTerminalClick
 }) => {
     const [time, setTime] = useState(new Date());
 
@@ -229,6 +233,20 @@ export const TopBar: React.FC<TopBarProps> = ({
                             />
                         )}
                     </div>
+
+                    {/* Terminal Toggle */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onTerminalClick?.();
+                        }}
+                        className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${isTerminalOpen ? 'bg-hud-green/20 text-hud-green border border-hud-green/30 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                        title="Raw Data Terminal"
+                        aria-label="Toggle Raw Data Terminal"
+                        aria-pressed={isTerminalOpen}
+                    >
+                        <Terminal size={14} />
+                    </button>
 
                     {/* Replay Mode Toggle */}
                     {onToggleReplay && (

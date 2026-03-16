@@ -1,3 +1,11 @@
+## [0.32.0] - 2026-03-15
+
+### Added
+- **Global Raw Payload Stream**: Introduced a high-performance `GlobalTerminalWidget` accessible via the Top Bar. This "god-view" terminal samples the entire system data bus (Aviation, Maritime, Satellite) in real-time, providing deep investigative capabilities into the raw Protobuf/JSON ingestion flow.
+- **Dynamic Sampling Controls**: Integrated live bit-rate decimation controls (REAL, 2X, 5X, 10X) into the global terminal, allowing operators to downsample the high-speed data firehose for better human readability.
+- **Enhanced Entity Payload Inspector**: Re-engineered the individual entity `RAW_PAYLOAD` inspector with standard syntax highlighting and a refined tactical aesthetic.
+- **UI Hygiene for Infrastructure**: Implemented intelligent conditional rendering in the Right Sidebar to hide the "Raw Payload" button for static/aggregate infrastructure (Undersea Cables, Outages, Repeaters) where individual message payloads are not applicable.
+
 ## [0.31.0] - 2026-03-15
 
 ### Added
