@@ -88,7 +88,9 @@ function App() {
 
     setEvents((prev: IntelEvent[]) => [{
       ...event,
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function' 
+        ? crypto.randomUUID() 
+        : `fallback-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       time: new Date(),
     }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
   }, []);

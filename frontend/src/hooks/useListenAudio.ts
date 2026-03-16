@@ -17,8 +17,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Derive the audio WebSocket URL from the same origin as the JS8 WS.
-const JS8_WS_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8080/ws/js8';
-const AUDIO_WS_URL = JS8_WS_URL.replace(/\/ws\/js8$/, '/ws/audio');
+const getAudioWSUrl = () => {
+  const js8EnvUrl = import.meta.env.VITE_JS8_WS_URL;
+  if (js8EnvUrl && !js8EnvUrl.includes('localhost')) {
+    return js8EnvUrl.replace(/\/ws\/js8$/, '/ws/audio');
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/js8/ws/audio`;
+};
+
+const AUDIO_WS_URL = getAudioWSUrl();
 
 const SAMPLE_RATE   = 12000;  // KiwiSDR always outputs 12 kHz
 const FFT_SIZE      = 2048;

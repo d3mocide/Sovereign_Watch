@@ -202,7 +202,7 @@ services:
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
-      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
       - MODELS_YAML_PATH=/app/models.yaml
     volumes:
       - ./backend/api:/app
@@ -236,7 +236,7 @@ services:
       - JS8CALL_PORT=2442
       # FastAPI bridge port (exposed below)
       - BRIDGE_PORT=8080
-      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
     networks:
       - backend-net
     cap_add: []
@@ -261,15 +261,15 @@ services:
       - frontend-net
       - backend-net
     environment:
-      - VITE_API_URL=http://localhost
+      - VITE_API_URL=${VITE_API_URL:-http://localhost}
       - VITE_ENABLE_MAPBOX=${VITE_ENABLE_MAPBOX:-true}
       - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
       - VITE_CENTER_LAT=${CENTER_LAT:-45.5152}
       - VITE_CENTER_LON=${CENTER_LON:--122.6784}
       - VITE_COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
       - VITE_ENABLE_3D_TERRAIN=${VITE_ENABLE_3D_TERRAIN:-false}
-      - VITE_JS8_WS_URL=ws://localhost/js8/ws/js8
-      - VITE_JS8_BASE_URL=http://localhost/js8
+      - VITE_JS8_WS_URL=${VITE_JS8_WS_URL}
+      - VITE_JS8_BASE_URL=${VITE_JS8_BASE_URL}
 
   # --- Nginx Reverse Proxy (single entry point) ---
   nginx:
