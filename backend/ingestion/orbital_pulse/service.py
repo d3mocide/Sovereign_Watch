@@ -12,6 +12,16 @@ from sgp4.api import Satrec, SatrecArray, jday
 
 from utils import teme_to_ecef_vectorized, ecef_to_lla_vectorized, compute_course
 
+
+def read_file_sync(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_file_sync(path, content):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO,
@@ -189,8 +199,7 @@ class OrbitalPulseService:
 
                 data_text = ""
                 if use_cache:
-                    with open(cache_path, "r", encoding="utf-8") as f:
-                        data_text = f.read()
+                    data_text = await asyncio.to_thread(read_file_sync, cache_path)
                     logger.info(f"💾 Used cache for {param_val} ({endpoint})")
                 else:
                     url = f"https://celestrak.org/NORAD/elements/{endpoint}?{param_name}={param_val}&FORMAT=TLE"
@@ -198,8 +207,7 @@ class OrbitalPulseService:
                         async with session.get(url) as resp:
                             if resp.status == 200:
                                 data_text = await resp.text()
-                                with open(cache_path, "w", encoding="utf-8") as f:
-                                    f.write(data_text)
+                                await asyncio.to_thread(write_file_sync, cache_path, data_text)
                                 logger.info(f"🌐 Fetched {param_val} ({endpoint})")
                             elif resp.status in (403, 404):
                                 logger.warning(f"HTTP {resp.status} for {url}. Skipping.")
@@ -272,9 +280,7 @@ class OrbitalPulseService:
             r = r_raw.reshape(-1, 3)
             v = v_raw.reshape(-1, 3)
             
-            e_ago = e_ago_raw.reshape(-1)
             r_ago = r_ago_raw.reshape(-1, 3)
-            v_ago = v_ago_raw.reshape(-1, 3)
 
             # Filter errors
             valid_idx = np.where(e == 0)[0]

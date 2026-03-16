@@ -55,3 +55,4 @@ docs/research/
 **/node_modules/
 **/dist/
 **/__pycache__/
+cache/
