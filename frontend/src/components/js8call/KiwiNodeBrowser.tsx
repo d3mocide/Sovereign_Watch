@@ -48,7 +48,7 @@ interface ManualConfig {
   port: number;
   freq: number;
   mode: string;
-  password: string;
+  password?: string;
 }
 
 interface Props {

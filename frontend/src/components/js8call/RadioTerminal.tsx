@@ -35,12 +35,14 @@ import {
   Server,
   ChevronDown,
   Headphones,
+  MapPin,
 } from 'lucide-react';
 import type { 
   KiwiNode, 
   JS8Station, 
   JS8LogEntry, 
-  JS8StatusLine 
+  JS8StatusLine,
+  KiwiConfig
 } from '../../types';
 import KiwiNodeBrowser from './KiwiNodeBrowser';
 import ListeningPost from './ListeningPost';
@@ -55,10 +57,7 @@ import type { JS8SpeedMode } from '../../constants/js8Presets';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const WS_URL =
-  typeof import.meta !== 'undefined' && import.meta.env?.VITE_JS8_WS_URL
-    ? import.meta.env.VITE_JS8_WS_URL
-    : 'ws://localhost/js8/ws/js8';
+// WS_URL removed (unused)
 
 const KIWI_DEFAULT_HOST =
   typeof import.meta !== 'undefined' && import.meta.env?.VITE_KIWI_HOST
@@ -73,10 +72,7 @@ const KIWI_DEFAULT_FREQ =
     ? Number(import.meta.env.VITE_KIWI_FREQ)
     : 14074;
 
-const RECONNECT_BASE_MS = 2000;
-const RECONNECT_MAX_MS = 30000;
-const MAX_LOG_ENTRIES = 500;
-const MAX_STATIONS = 100;
+// Reconnect constants removed (unused)
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -95,9 +91,76 @@ function snrColor(snr: number | null): string {
   return 'text-red-400';
 }
 
+function formatAge(tsUnix: number): string {
+  const age = Math.floor(Date.now() / 1000) - tsUnix;
+  if (age < 60) return `${age}s`;
+  if (age < 3600) return `${Math.floor(age / 60)}m`;
+  return `${Math.floor(age / 3600)}h`;
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function LogEntry({ entry }: { entry: JS8LogEntry }) {
+  const isTx = entry.type === 'TX.SENT';
+  const isErr = entry.type === 'ERROR';
+  
+  return (
+    <div className={`text-xs font-mono border-l-2 pl-3 py-1.5 transition-all hover:bg-white/5 ${
+      isTx ? 'border-amber-500/50 bg-amber-500/5' : 
+      isErr ? 'border-red-500/50 bg-red-500/5' :
+      'border-indigo-500/30'
+    }`}>
+      <div className="flex items-center justify-between mb-1 opacity-50 text-[10px] uppercase font-bold tracking-tighter">
+         <span className={isTx ? 'text-amber-400' : isErr ? 'text-red-400' : 'text-indigo-400'}>
+           {isTx ? 'Transmit' : isErr ? 'System' : 'Heard'}
+         </span>
+         <span>{entry.timestamp}</span>
+      </div>
+      <div className="break-words">
+        {entry.from && <span className="text-indigo-300 font-bold mr-2">{entry.from}</span>}
+        {entry.to && <span className="text-slate-500 mr-2">▶ {entry.to}</span>}
+        <span className={isErr ? 'text-red-300 italic' : 'text-slate-200'}>{entry.text}</span>
+        {entry.snr !== undefined && (
+          <span className={`ml-2 text-[10px] font-bold ${snrColor(entry.snr)}`}>
+            [{entry.snr > 0 ? '+' : ''}{entry.snr} dB]
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StationCard({ station }: { station: JS8Station; isNew?: boolean }) {
+  const ageStr = formatAge(station.ts_unix);
+
+  return (
+    <div className="group flex flex-col p-2.5 rounded-lg border border-white/5 hover:border-indigo-500/30 hover:bg-white/5 transition-all cursor-default relative overflow-hidden">
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-bold text-indigo-300 tracking-wider font-mono">{station.callsign}</span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold ${snrColor(station.snr)}`}>
+            {station.snr > 0 ? '+' : ''}{station.snr} dB
+          </span>
+          <span className="text-[10px] text-slate-600 font-mono">{ageStr}</span>
+        </div>
+      </div>
+      
+      {station.grid && (
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+           <MapPin size={10} className="text-slate-600" />
+           <span className="font-mono">{station.grid}</span>
+           {station.distance_km !== undefined && (
+             <span className="text-indigo-400/50 ml-1">
+               {station.distance_km}km
+             </span>
+           )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface RadioTerminalProps {
   stations: JS8Station[];
@@ -106,7 +169,7 @@ interface RadioTerminalProps {
   connected: boolean;
   js8Connected: boolean;
   kiwiConnecting: boolean;
-  activeKiwiConfig: any;
+  activeKiwiConfig: KiwiConfig | null;
   js8Mode: string;
   sMeterDbm: number | null;
   adcOverload?: boolean;
@@ -166,7 +229,6 @@ export default function RadioTerminal({
   const {
     analyserNode,
     isConnected: listenConnected,
-    isPlaying: listenPlaying,
     audioEnabled,
     enableAudio,
     volume,
@@ -357,10 +419,10 @@ export default function RadioTerminal({
               onConnect={handleNodeConnect}
               onDisconnect={handleKiwiDisconnect}
               manualConfig={kiwiConfig}
-              onManualConfigChange={(patch) => setKiwiConfig((p: any) => ({ ...p, ...patch }))}
-              onManualConnect={handleKiwiConnect}
-              operatorGrid={sharedStatusLine.grid}
-            />
+                onManualConfigChange={(patch) => setKiwiConfig((p) => ({ ...p, ...patch }))}
+                onManualConnect={handleKiwiConnect}
+                operatorGrid={sharedStatusLine.grid}
+              />
           </div>
 
           {/* Divider */}

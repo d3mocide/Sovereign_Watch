@@ -115,6 +115,14 @@ export interface JS8StatusLine {
   freq: string;
 }
 
+export interface KiwiConfig {
+  host: string;
+  port: number;
+  freq: number;
+  mode: string;
+  password?: string;
+}
+
 export interface KiwiNode {
   host: string;
   port: number;
@@ -125,6 +133,8 @@ export interface KiwiNode {
   users: number;
   num_ch: number;
   distance_km: number;
+  sq?: number;
+  snr?: number;
 }
 
 export type RFService = 'ham' | 'gmrs' | 'public_safety' | 'noaa_nwr';

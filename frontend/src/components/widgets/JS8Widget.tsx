@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Radio, MapPin, ChevronDown, ChevronUp, Send, Terminal, Users, RadioReceiver, CheckCircle2, Activity } from 'lucide-react';
-import type { JS8Station, JS8LogEntry, JS8StatusLine, KiwiNode } from '../../types';
+import { Radio, MapPin, ChevronDown, ChevronUp, Send, Terminal, Users, RadioReceiver, Activity } from 'lucide-react';
+import type { JS8Station, JS8LogEntry, JS8StatusLine, KiwiConfig } from '../../types';
 import { useKiwiNodes } from '../../hooks/useKiwiNodes';
 
 /**
@@ -34,7 +34,7 @@ interface JS8WidgetProps {
   connected: boolean;
   js8Connected: boolean;
   kiwiConnecting?: boolean;
-  activeKiwiConfig?: any;
+  activeKiwiConfig?: KiwiConfig;
   sendMessage: (target: string, message: string) => void;
   sendAction?: (payload: object) => void;
 }
@@ -294,8 +294,8 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                             <div className="flex items-center gap-1.5">
                               {/* Simple signal load bar */}
                               <div className="flex gap-[1px]">
-                                {[...Array(Math.max(1, Math.min(5, Math.ceil((node.users || 0) / Math.max(1, node.sq || 1) * 5))))].map((_, i) => (
-                                  <div key={i} className={`w-0.5 h-1.5 rounded-full ${node.users && node.sq && node.users >= node.sq ? 'bg-red-500' : 'bg-indigo-500/80'}`} />
+                                {[...Array(Math.max(1, Math.min(5, Math.ceil((node.users || 0) / Math.max(1, node.sq || node.num_ch || 1) * 5))))].map((_, i) => (
+                                  <div key={i} className={`w-0.5 h-1.5 rounded-full ${node.users && (node.sq || node.num_ch) && node.users >= (node.sq || node.num_ch) ? 'bg-red-500' : 'bg-indigo-500/80'}`} />
                                 ))}
                               </div>
                               <span className="text-[8px] text-slate-500">
@@ -312,7 +312,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                             ) : (
                               <button
                                 onClick={() => sendAction({ action: 'SET_KIWI', host: node.host, port: node.port, freq: sdrFreq, mode: 'usb' })}
-                                disabled={kiwiConnecting || (node.users && node.sq && node.users >= node.sq) === true}
+                                disabled={kiwiConnecting || (node.users && (node.sq || node.num_ch) && node.users >= (node.sq || node.num_ch)) === true}
                                 className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-30 disabled:pointer-events-none pointer-events-auto focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
                               >
                                 Connect

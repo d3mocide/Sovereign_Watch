@@ -1,5 +1,26 @@
-import React, { useState, useEffect } from 'react';
 import { GeoJsonLayer } from '@deck.gl/layers';
+
+interface InlinePolygon {
+  type: 'Polygon';
+  coordinates: number[][][];
+}
+
+interface InlineFeature<G> {
+  type: 'Feature';
+  geometry: G;
+  properties: Record<string, unknown>;
+}
+
+interface InlineFeatureCollection<G> {
+  type: 'FeatureCollection';
+  features: InlineFeature<G>[];
+}
+
+/**
+ * Deck.gl v9 GeoJsonLayer 'data' type is strict about Promise vs Object.
+ * We cast to Internal GeoJSON types to satisfy the interface.
+ */
+type TerminatorGeoJson = InlineFeatureCollection<InlinePolygon>;
 
 // Helper to compute the terminator GeoJSON polygon
 function computeTerminator(date: Date) {
@@ -79,7 +100,7 @@ function computeTerminator(date: Date) {
         properties: {}
       }
     ]
-  };
+  } as TerminatorGeoJson;
 }
 
 export function getTerminatorLayer(visible: boolean) {
@@ -102,10 +123,7 @@ export function getTerminatorLayer(visible: boolean) {
     filled: true,
     // Add updateTriggers if we want it to react to time changes
     updateTriggers: {
-      data: [now.getTime()]
-    },
-    parameters: {
-      depthTest: false
+      getFillColor: [now.getTime()]
     }
   });
 }

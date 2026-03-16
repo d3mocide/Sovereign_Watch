@@ -1,3 +1,22 @@
+## [0.31.0] - 2026-03-15
+
+### Added
+- **Enhanced KiwiSDR Demodulation Coverage**: Expanded available modes from 5 to 18, including AM wideband/narrow variants (amn, amw), Sync AM family (sam, sau, sal, sas), and specialized digital modes (DRM, IQ, QAM).
+- **Advanced DSP & Waterfall Controls**: Integrated 8 new real-time DSP methods (Notch Filter, Noise Reduction, Noise Filter, RF Attenuator, Passband tuning, Mute) and 2 waterfall controls (Color Map selection, Aperture/Dynamic Range centering) through the full UI→backend→receiver signal path.
+- **Dual-Protocol SDR Link**: Implemented automatic WebSocket URL fallback for modern (v1.550+) and legacy KiwiSDR nodes, ensuring connectivity across the global hardware fleet.
+- **MD5 Secure SDR Authentication**: Integrated MD5-based password authentication for protected KiwiSDR nodes, matching current KiwiSDR server security protocols.
+
+### Changed
+- **Unified SDR State Model**: Standardized `KiwiConfig` and `ManualConfig` interfaces across the frontend to resolve type mismatches and ensure consistent connection state across all widgets.
+- **Radio Terminal UX Refinement**: Optimized vertical spacing and improved typography for station cards and message logs.
+
+### Fixed
+- **Deck.gl v9 & Terminator Layer Stability**: Resolved critical Deck.gl v9 compatibility issues in `TerminatorLayer`, including corrected coordinate wrap-around and type safety for GeoJSON assets.
+- **Radio Terminal Component Restoration**: Implemented missing `LogEntry` and `StationCard` components, resolving blank panels and reference errors in the Radio Terminal.
+- **React Purity for RTL Ops**: Refactored `Date.now()` logic in `RadioTerminal.tsx` to align with strict React purity rules, preventing unstable re-renders in high-traffic SDR sessions.
+- **JS8Call Intelligence Sync**: Fixed property access for signal quality (`sq`) and SNR levels in the SDR node browser, ensuring accurate load visualization.
+- **Task Documentation**: Established standardized task tracking in `agent_docs/tasks/` for all architectural and stability fixes.
+
 ## [0.30.0] - 2026-03-15
 
 ### Added

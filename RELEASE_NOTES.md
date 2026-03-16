@@ -1,20 +1,28 @@
-# Release - v0.30.0 - Emerald RF Update
+# Release - v0.31.0 - Tactical SDR Evolution
 
-## Summary
-The **Emerald RF Update** brings a significantly cleaner and more professional tactical map experience. This release focuses on balancing situational awareness with visual density, introducing a new legend system for RF infrastructure and refining how high-value asset data is surfaced to the operator.
+## High-Level Summary
+This release marks a significant milestone in Sovereign Watch's signals intelligence capabilities. Version 0.31.0 introduces comprehensive remote control for KiwiSDR nodes, expanding demodulation coverage to 18 modes and exposing professional-grade DSP filters (Notch, Noise Reduction, RF Attenuation) directly to the operator's HUD. Alongside these signal-path enhancements, we have resolved critical architectural instabilities in the map engine and radio terminal, ensuring a robust and performant experience for high-stakes monitoring.
 
 ## Key Features
-*   **Tactical RF Legend**: A new floating widget that decodes site colors and identifies critical emergency (EMCOMM) stations.
-*   **Infrastructure Color Pass**: The RF suite has been migrated to a premium Emerald theme, ensuring it no longer competes for attention with ADSB or public safety alerts.
-*   **HUD Asset Tags**: High-value nodes like **KiwiSDR Listening Posts** now feature color-coded "HUD Tags" with live host addresses, allowing for instant identification without needing to open the full inspector.
-*   **Silent Map Policy**: Generic site labels have been suppressed in favor of high-performance tooltips, dramatically reducing visual noise in cluttered operating areas.
+- **Professional Demodulation Suite**: Supported modes expanded from 5 to 18. Now supports AM wideband for broadcast intelligence, Sync AM for fading mitigation, and specialized digital IQ/DRM modes.
+- **HUD-Integrated DSP Control**: Real-time suppression of interferers via the new Notch Filter and adaptive noise reduction algorithms.
+- **Waterfall & Spectrogram Tuning**: 12 selectable color maps and automatic aperture centering for optimized spectral visualization across varying noise floors.
+- **Secure SDR Link**: Automatic MD5-based authentication and URL version fallback for connection to the latest high-security KiwiSDR firmware.
+- **Stable Terminator Layer**: Re-engineered day/night shadow rendering for full Deck.gl v9 compatibility, providing precise solar context for HF propagation analysis.
 
 ## Technical Details
-*   **New Component**: `RFLegend` integrated into the `TacticalMap` layout with glassmorphism styling.
-*   **Layer Optimization**: Modified `ScatterplotLayer` in `buildRFLayers.ts` to remove high-CPU glow effects.
-*   **Dynamic Labeling**: Conditional rendering logic in `composition.ts` now prioritizes specific asset types (KiwiSDR) for permanent tactical labels.
+- **Architecture**: Implemented dual-format WebSocket pathing logic in `kiwi_client.py` for v1.550+ compatibility.
+- **Performance**: Validated all new SDR controls with a 23-test suite in `test_kiwi_compatibility.py`.
+- **Frontend**: Refactored `RadioTerminal.tsx` to satisfy React 19 purity requirements, isolating impure timestamp calculations from the render loop.
+- **Z-Ordering**: Standardized property access for `KiwiNode` metadata, resolving "undefined" field errors in the SDR browser.
 
 ## Upgrade Instructions
-1. Pull the latest `dev` branch.
-2. Rebuild the frontend container: `docker compose build frontend`
-3. Restart the stack: `docker compose up -d`
+To deploy this update to your local instance:
+```bash
+# 1. Pull the latest code
+git pull origin main
+
+# 2. Rebuild the affected SDR and frontend services
+docker compose build frontend js8call
+docker compose up -d
+```
