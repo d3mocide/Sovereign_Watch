@@ -1,14 +1,36 @@
 import logging
+import os
+import yaml
 from fastapi import APIRouter, HTTPException, Path, Request
 from sse_starlette.sse import EventSourceResponse
 from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from core.database import db
-from core.config import settings
 from routers.system import AI_MODEL_REDIS_KEY, AI_MODEL_DEFAULT
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Analysis")
+
+# ---------------------------------------------------------------------------
+# Model alias → LiteLLM model string mapping (loaded from litellm_config.yaml)
+# Without this, acompletion("public-flash") fails — LiteLLM only understands
+# provider-prefixed strings like "gemini/gemini-1.5-flash".
+# ---------------------------------------------------------------------------
+_LITELLM_CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/litellm_config.yaml")
+
+def _load_model_map() -> dict:
+    try:
+        with open(_LITELLM_CONFIG_PATH) as f:
+            cfg = yaml.safe_load(f)
+        return {
+            m["model_name"]: m["litellm_params"]["model"]
+            for m in cfg.get("model_list", [])
+        }
+    except Exception as e:
+        logger.warning(f"Could not load LiteLLM config from {_LITELLM_CONFIG_PATH}: {e}")
+        return {}
+
+_MODEL_MAP = _load_model_map()
 
 @router.post("/api/analyze/{uid}")
 async def analyze_track(
@@ -100,18 +122,30 @@ async def analyze_track(
     # back in the event loop — recreating the blocking problem, one token at a
     # time. Switching to acompletion() + async for keeps the event loop fully
     # unblocked throughout the entire streaming response.
+    #
+    # Translate the stored model alias (e.g. "public-flash") to the LiteLLM
+    # provider-prefixed string (e.g. "gemini/gemini-1.5-flash") that acompletion
+    # actually understands. Falls back to the alias itself if not found so that
+    # unknown models fail with a clear LiteLLM error rather than silently.
+    litellm_model = _MODEL_MAP.get(active_model, active_model)
+    logger.info(f"Running analysis for {uid} with model {active_model!r} -> {litellm_model!r}")
+
     async def event_generator():
-        response = await acompletion(
-            model=active_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            stream=True
-        )
-        async for chunk in response:
-            content = chunk.choices[0].delta.content or ""
-            if content:
-                yield {"data": content}
+        try:
+            response = await acompletion(
+                model=litellm_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                stream=True
+            )
+            async for chunk in response:
+                content = chunk.choices[0].delta.content or ""
+                if content:
+                    yield {"data": content}
+        except Exception as e:
+            logger.error(f"AI analysis failed for {uid} (model={litellm_model!r}): {e}")
+            yield {"event": "error", "data": str(e)}
 
     return EventSourceResponse(event_generator())

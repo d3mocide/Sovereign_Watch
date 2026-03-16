@@ -204,9 +204,11 @@ services:
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
       - MODELS_YAML_PATH=/app/models.yaml
+      - LITELLM_CONFIG_PATH=/app/litellm_config.yaml
     volumes:
       - ./backend/api:/app
       - ./models.yaml:/app/models.yaml:ro
+      - ./backend/ai/litellm_config.yaml:/app/litellm_config.yaml:ro
     networks:
       - backend-net
       - ai-net
