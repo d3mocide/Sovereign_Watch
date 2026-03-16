@@ -6,6 +6,22 @@
 
 ---
 
+## JS8Call Binary: Intentional Exception
+
+The `js8call/Dockerfile` downloads the JS8Call application as a pre-built AppImage from:
+
+> **https://github.com/JS8Call-improved/JS8Call-improved**
+
+This is an **intentional exception** — the project uses the `JS8Call-improved` community fork, not the upstream `KD8CEC/js8call` official repo. Do not change this URL to the official JS8Call releases.
+
+Current version: **2.5.2** (latest release on the fork as of 2026-03-16; verified at `release/2.5.2` tag).
+
+To check for newer releases: https://github.com/JS8Call-improved/JS8Call-improved/releases
+
+When a new version is available, update the version string and download URL in `js8call/Dockerfile` Layer 7.
+
+---
+
 ## Summary of Changes
 
 | Area | What Changed |
