@@ -60,7 +60,16 @@ const WF_CMAPS = [
   { label: 'SdrDx',  index: 5 },
 ] as const;
 
-const WS_BASE_URL = import.meta.env.VITE_JS8_WS_URL || 'ws://localhost:8082/ws/js8';
+const getWsBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_JS8_WS_URL;
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl;
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/js8/ws/js8`;
+};
+
+const WS_BASE_URL = getWsBaseUrl();
 const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, '/ws/waterfall');
 
 // ---------------------------------------------------------------------------

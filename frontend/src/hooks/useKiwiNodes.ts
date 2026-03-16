@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { KiwiNode } from '../types';
 
-const NODES_URL =
-  typeof import.meta !== 'undefined' && import.meta.env?.VITE_JS8_BASE_URL
-    ? `${import.meta.env.VITE_JS8_BASE_URL}/api/kiwi/nodes`
-    : 'http://localhost:8080/api/kiwi/nodes';
+const getNODES_URL = () => {
+  const envUrl = import.meta.env.VITE_JS8_BASE_URL;
+  if (envUrl && !envUrl.includes('localhost')) {
+    return `${envUrl}/api/kiwi/nodes`;
+  }
+  return `${window.location.protocol}//${window.location.host}/js8/api/kiwi/nodes`;
+};
+
+const NODES_URL = getNODES_URL();
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // refresh every 5 minutes
 

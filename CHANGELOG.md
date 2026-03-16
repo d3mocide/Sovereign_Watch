@@ -1,3 +1,9 @@
+## [0.32.2] - 2026-03-15
+
+### Fixed
+- **Deep Localhost Removal**: Eliminated remaining hardcoded `localhost` string references in `useEntityWorker.ts`, `useKiwiNodes.ts`, and `ListeningPost.tsx`.
+- **Intelligent URL Derivation**: Implemented fallback logic that automatically uses the current host IP for all API and WebSocket traffic when environment variables are set to local defaults, ensuring multi-node network deployments work out of the box.
+
 ## [0.32.1] - 2026-03-15
 
 ### Fixed
