@@ -56,3 +56,7 @@ docs/research/
 **/node_modules/
 **/dist/
 **/__pycache__/
+
+# Vendored tool binaries — built locally from tools/mcp-language-server/build.sh
+# Binaries are architecture-specific and not committed to git.
+tools/bin/

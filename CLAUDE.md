@@ -44,11 +44,13 @@ This project is configured for LSP-powered navigation via `mcp-language-server`.
 
 ### One-Time Setup (host machine)
 
-Install the LSP servers before first use:
+The MCP language server binary is **vendored** in `tools/bin/` and built from
+pinned source. Do not `npm install -g mcp-language-server` — that resolves to
+an unrelated package.
 
 ```bash
-# MCP Language Server (bridges LSP → Claude Code MCP protocol)
-npm install -g mcp-language-server
+# Build mcp-language-server from pinned source (requires git + go 1.24+)
+./tools/mcp-language-server/build.sh
 
 # TypeScript/JavaScript LSP
 npm install -g typescript typescript-language-server
@@ -57,7 +59,8 @@ npm install -g typescript typescript-language-server
 npm install -g pyright
 ```
 
-The `.mcp.json` at the project root auto-registers `mcp-language-server` for all Claude Code sessions in this workspace. No additional config needed.
+`.mcp.json` points at `./tools/bin/mcp-language-server` — the locally built
+binary. No additional config needed after running the build script.
 
 ### Why This Matters Here
 

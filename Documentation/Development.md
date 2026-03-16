@@ -74,12 +74,19 @@ Point your editor's Python interpreter at `backend/api/.venv`. Pylance and pyrig
 
 Language Server Protocol gives your editor (and AI coding tools) **semantic understanding** of the codebase — exact symbol definitions, all call sites, accurate type information — instead of text-search guesses. On memory-constrained hardware like the Jetson Nano (4 GB RAM), it also eliminates expensive full-repo grep scans.
 
-Install three global packages on your host machine:
+**`mcp-language-server` is a Go binary, not an npm package.** It is vendored in `tools/bin/` and must be built from pinned source. Do not run `npm install -g mcp-language-server` — that package name resolves to something unrelated on the npm registry.
+
+**Step 1 — build the MCP bridge binary (requires `git` and `go 1.24+`):**
 
 ```bash
-# Bridges LSP servers into the MCP protocol used by Claude Code and other AI tools
-npm install -g mcp-language-server
+./tools/mcp-language-server/build.sh
+```
 
+This clones the upstream repo at the pinned tag, verifies the commit hash, builds a static binary, and writes it to `tools/bin/mcp-language-server`. The pinned version, expected commit, and sha256 are in `tools/mcp-language-server/VERSION`. If you cannot install Go, see the Docker alternative in `tools/mcp-language-server/Dockerfile`.
+
+**Step 2 — install the TypeScript and Python LSP servers globally:**
+
+```bash
 # TypeScript / JavaScript LSP
 npm install -g typescript typescript-language-server
 
@@ -87,7 +94,7 @@ npm install -g typescript typescript-language-server
 npm install -g pyright
 ```
 
-These only need to be installed once per machine. The project configuration files that consume them (`pyrightconfig.json`, `.vscode/settings.json`, `.mcp.json`) are already checked into the repository.
+These three pieces only need to be installed once per machine. `.mcp.json` points at `./tools/bin/mcp-language-server` and is already committed — no further config is needed.
 
 ---
 

@@ -1,0 +1,9 @@
+# Pinned version of isaacphi/mcp-language-server
+#
+# To rebuild: run build.sh in this directory
+# To verify the binary: sha256sum ../bin/mcp-language-server
+#   Expected (linux/amd64): 1cd60409edd7b154acd7370c3f6c8333ca23af07ee31c98569924c7bcb628a9a
+
+UPSTREAM_REPO=https://github.com/isaacphi/mcp-language-server
+TAG=v0.1.1
+COMMIT=46e2950b7969334780675e7797e13f140d2d42ac
