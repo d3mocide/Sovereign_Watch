@@ -400,7 +400,7 @@ function App() {
 
       console.log(`Loading replay data (${hours}h): ${start.toISOString()} - ${end.toISOString()}`);
 
-      const res = await fetch(`/api/tracks/replay?start=${start.toISOString()}&end=${end.toISOString()}`);
+      const res = await fetch(`/api/tracks/replay?start=${start.toISOString()}&end=${end.toISOString()}&limit=10000`);
       if (!res.ok) throw new Error('Failed to fetch history');
 
       const data = await res.json();
@@ -450,7 +450,7 @@ function App() {
 
       if (found) {
         // Stale check for replay? e.g. if point is > 5 mins old, don't show?
-        if (time - (found.time || 0) < 300000) { // 5 mins
+        if (time - (found.time || 0) < 600000) { // 10 mins — matches max 5-min bucket size used by adaptive replay query
           frameMap.set(uid, found);
         }
       }

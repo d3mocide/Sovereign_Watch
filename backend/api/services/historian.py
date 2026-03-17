@@ -191,8 +191,10 @@ async def historian_task():
 
     except asyncio.CancelledError:
         logger.info("Historian task cancelled")
+        raise  # Allow the supervisor / lifespan to observe the cancellation
     except Exception as e:
         logger.error(f"Historian Fatal Error: {e}")
+        raise  # Re-raise so the supervisor knows the task crashed
     finally:
         # BUG-002: Flush any records still in the batches before the consumer stops.
         # Previously these were silently dropped on shutdown.

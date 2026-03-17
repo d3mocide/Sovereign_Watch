@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
@@ -222,22 +222,53 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
+    # Adaptive time-bucket sampling: instead of a raw LIMIT that always returns
+    # the first N chronological rows (often just a few seconds of a long window),
+    # we bucket time by entity so the full window is covered evenly.
+    # Bucket size grows with window duration; capped at 5 min so the frontend
+    # 5-min stale-threshold never hides a live entity between buckets.
+    bucket_seconds: int
+    if duration_hours <= 1:
+        bucket_seconds = 30
+    elif duration_hours <= 2:
+        bucket_seconds = 60
+    elif duration_hours <= 6:
+        bucket_seconds = 120
+    elif duration_hours <= 12:
+        bucket_seconds = 180
+    else:
+        bucket_seconds = 300  # 5 min cap — matches frontend stale threshold
+
+    bucket_interval = timedelta(seconds=bucket_seconds)
+
     # Option C+D: satellite positions live in orbital_tracks with a 12 h retention
     # window.  UNION both tables so replay includes all entity types.
+    # DISTINCT ON (entity_id, bucket) keeps one representative point per entity
+    # per time bucket, then we merge and sort the two result sets.
     query = """
-        SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
-        FROM tracks
-        WHERE time >= $1 AND time <= $2
+        SELECT * FROM (
+            SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
+                time_bucket($4::interval, time) AS time,
+                entity_id, type, lat, lon, alt, speed, heading, meta
+            FROM tracks
+            WHERE time >= $1 AND time <= $2
+            ORDER BY entity_id, time_bucket($4::interval, time), time DESC
+        ) t
         UNION ALL
-        SELECT time, entity_id, 'a-s-K'::text AS type,
-               lat, lon, alt, speed, heading, NULL::jsonb AS meta
-        FROM orbital_tracks
-        WHERE time >= $1 AND time <= $2
+        SELECT * FROM (
+            SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
+                time_bucket($4::interval, time) AS time,
+                entity_id, 'a-s-K'::text AS type,
+                lat, lon, alt, speed, heading, NULL::jsonb AS meta
+            FROM orbital_tracks
+            WHERE time >= $1 AND time <= $2
+            ORDER BY entity_id, time_bucket($4::interval, time), time DESC
+        ) o
         ORDER BY time ASC
         LIMIT $3
     """
     try:
-        rows = await db.pool.fetch(query, dt_start, dt_end, limit)
+        rows = await db.pool.fetch(query, dt_start, dt_end, limit, bucket_interval)
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"Replay query failed: {e}")
