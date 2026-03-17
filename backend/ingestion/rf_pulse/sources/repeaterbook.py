@@ -29,6 +29,15 @@ class RepeaterBookSource:
         while True:
             try:
                 await self._fetch_and_publish()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 401:
+                    logger.warning(
+                        "RepeaterBook: 401 Unauthorized — API access restricted. "
+                        "Set REPEATERBOOK_API_TOKEN or apply for allowlist access. "
+                        "Skipping until next interval."
+                    )
+                else:
+                    logger.exception("RepeaterBook fetch error")
             except Exception:
                 logger.exception("RepeaterBook fetch error")
             await asyncio.sleep(self.interval_sec)
