@@ -241,10 +241,14 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
 
     bucket_interval = timedelta(seconds=bucket_seconds)
 
-    # Option C+D: satellite positions live in orbital_tracks with a 12 h retention
-    # window.  UNION both tables so replay includes all entity types.
-    # DISTINCT ON (entity_id, bucket) keeps one representative point per entity
-    # per time bucket, then we merge and sort the two result sets.
+    # Replay covers ADS-B and AIS data only.
+    # Orbital (satellite) tracks are excluded for two reasons:
+    #   1. The OrbitalMap is hardcoded to replayMode=false — orbital points
+    #      returned here are never rendered anywhere.
+    #   2. With ~10 000 tracked satellites, even one bucket per object would
+    #      exhaust the entire row budget, leaving no room for AIS/ADS-B data.
+    # Satellite positions are deterministic (SGP4 from stored TLEs) and can be
+    # recomputed on demand, so historical storage is not needed for replay.
     query = """
         SELECT * FROM (
             SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
@@ -253,17 +257,7 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
             FROM tracks
             WHERE time >= $1 AND time <= $2
             ORDER BY entity_id, time_bucket($4::interval, time), time DESC
-        ) t
-        UNION ALL
-        SELECT * FROM (
-            SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
-                time_bucket($4::interval, time) AS time,
-                entity_id, 'a-s-K'::text AS type,
-                lat, lon, alt, speed, heading, NULL::jsonb AS meta
-            FROM orbital_tracks
-            WHERE time >= $1 AND time <= $2
-            ORDER BY entity_id, time_bucket($4::interval, time), time DESC
-        ) o
+        ) s
         ORDER BY time ASC
         LIMIT $3
     """
