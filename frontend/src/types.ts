@@ -194,7 +194,7 @@ export interface MapFilters {
   showGovernment: boolean;
   showCommercial: boolean;
   showPrivate: boolean;
-  [key: string]: boolean | undefined;
+  [key: string]: any;
 }
 
 export interface DRState {

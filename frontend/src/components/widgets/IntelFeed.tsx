@@ -41,17 +41,23 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                 }
             }
 
-            // Affiliation filters (only if air is on)
+            // Air Filters
             if (event.entityType === 'air' && event.classification) {
-                const aff = event.classification.affiliation;
-                if (aff === 'military' && filters.showMilitary === false) return false;
-                if (aff === 'government' && filters.showGovernment === false) return false;
-                if (aff === 'commercial' && filters.showCommercial === false) return false;
-                if (aff === 'general_aviation' && filters.showPrivate === false) return false;
+                const cls = event.classification;
+                
+                // Platform overrides
+                if (cls.platform === 'helicopter') {
+                    return filters.showHelicopter !== false;
+                }
+                if (cls.platform === 'drone' || cls.platform === 'uav') {
+                    return filters.showDrone !== false;
+                }
 
-                // Platform filter
-                if (event.classification.platform === 'helicopter' && filters.showHelicopter === false) return false;
-                if (event.classification.platform === 'drone' && filters.showDrone === false) return false;
+                // Affiliation check
+                if (cls.affiliation === 'military' && filters.showMilitary === false) return false;
+                if (cls.affiliation === 'government' && filters.showGovernment === false) return false;
+                if (cls.affiliation === 'commercial' && filters.showCommercial === false) return false;
+                if (cls.affiliation === 'general_aviation' && filters.showPrivate === false) return false;
             }
 
             // Sea filters

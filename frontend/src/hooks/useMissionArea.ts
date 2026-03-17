@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import type { MapRef } from "react-map-gl/maplibre";
 import { CoTEntity, MissionProps } from "../types";
 import { useMissionLocations } from "./useMissionLocations";
 import { setMissionArea, getMissionArea } from "../api/missionArea";
 import { calculateZoom } from "../utils/map/geoUtils";
 
 interface UseMissionAreaOptions {
-  mapRef: React.RefObject<MapRef>;
+  flyTo?: (lat: number, lon: number, zoom?: number) => void;
   currentMissionRef: React.MutableRefObject<{
     lat: number;
     lon: number;
@@ -30,7 +29,7 @@ interface UseMissionAreaOptions {
 }
 
 export function useMissionArea({
-  mapRef,
+  flyTo,
   currentMissionRef,
   entitiesRef,
   knownUidsRef,
@@ -134,20 +133,15 @@ export function useMissionArea({
         entitiesRef.current.clear();
 
         // Fly map to new location
-        if (mapRef.current) {
-          mapRef.current.flyTo({
-            center: [lon, lat],
-            zoom: calculateZoom(targetRadius),
-            duration: 2000,
-            easing: (t: number) => 1 - Math.pow(1 - t, 3),
-          });
+        if (flyTo) {
+          flyTo(lat, lon, calculateZoom(targetRadius));
         }
       } catch (error) {
         console.error("Failed to set mission focus:", error);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [flyTo],
   );
 
   const handlePresetSelect = useCallback(
@@ -157,7 +151,7 @@ export function useMissionArea({
 
       await handleSetFocus(mission.lat, mission.lon, radius);
     },
-    [handleSetFocus],
+    [handleSetFocus, currentMissionRef],
   );
 
 
@@ -213,13 +207,8 @@ export function useMissionArea({
             });
 
             // Sync map view to active mission (Only on actual change)
-            if (mapRef.current) {
-              mapRef.current.flyTo({
-                center: [mission.lon, mission.lat],
-                zoom: calculateZoom(mission.radius_nm),
-                duration: 2000,
-                easing: (t: number) => 1 - Math.pow(1 - t, 3),
-              });
+            if (flyTo) {
+              flyTo(mission.lat, mission.lon, calculateZoom(mission.radius_nm));
             }
           }
         }
@@ -251,7 +240,7 @@ export function useMissionArea({
       // Clear selection to avoid ghost trails
       onEntitySelect(null);
     }
-  }, [currentMission, onCountsUpdate, onEntitySelect]);
+  }, [currentMission, onCountsUpdate, onEntitySelect, countsRef, currentMissionRef, drStateRef, entitiesRef, knownUidsRef, prevCourseRef, visualStateRef]);
 
   const handleReturnHome = useCallback(async () => {
     const defaultLat = parseFloat(import.meta.env.VITE_CENTER_LAT || "45.5152");

@@ -28,8 +28,16 @@ export function filterEntity(
     if (!filters?.showAir) return null;
     if (entity.classification) {
       const cls = entity.classification;
-      if (cls.platform === 'helicopter' && filters?.showHelicopter === false) return null;
-      if (cls.platform === 'drone' && filters?.showDrone === false) return null;
+      
+      // Platform overrides for specific asset types
+      if (cls.platform === 'helicopter') {
+        return filters?.showHelicopter !== false ? 'air' : null;
+      }
+      if (cls.platform === 'drone' || cls.platform === 'uav') {
+        return filters?.showDrone !== false ? 'air' : null;
+      }
+
+      // Affiliation filters for general tracks
       if (cls.affiliation === 'military' && filters?.showMilitary === false) return null;
       if (cls.affiliation === 'government' && filters?.showGovernment === false) return null;
       if (cls.affiliation === 'commercial' && filters?.showCommercial === false) return null;

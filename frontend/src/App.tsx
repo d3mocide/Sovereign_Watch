@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import TacticalMap from './components/map/TacticalMap'
 import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
@@ -15,12 +15,12 @@ import { useJS8Stations } from './hooks/useJS8Stations'
 import { useRFSites } from './hooks/useRFSites'
 import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
-import { AlertsWidget } from './components/widgets/AlertsWidget'
 import { useEntityWorker } from './hooks/useEntityWorker'
 import { useInfraData } from './hooks/useInfraData'
 import { parseMissionHash, updateMissionHash } from './hooks/useMissionHash'
 import { AIAnalystPanel } from './components/widgets/AIAnalystPanel'
 import { GlobalTerminalWidget } from './components/widgets/GlobalTerminalWidget'
+import { useMissionArea } from './hooks/useMissionArea'
 
 const NOOP = () => { };
 
@@ -106,6 +106,56 @@ function App() {
     prevCourseRef,
     alertedEmergencyRef
   } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
+  const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
+
+  // Background Data Maintenance (Cleanup & Counting)
+  // This runs regardless of viewMode, ensuring Dashboard counts are live.
+  useEffect(() => {
+    const maintenance = () => {
+      const now = Date.now();
+      const STALE_THRESHOLD_AIR_MS = 120 * 1000;
+      const STALE_THRESHOLD_SEA_MS = 300 * 1000;
+      
+      let air = 0;
+      let sea = 0;
+      let orbital = 0;
+      const stale: string[] = [];
+
+      // Clean/Count Air & Sea
+      entitiesRef.current.forEach((entity, uid) => {
+        const isShip = entity.type?.includes("S");
+        const threshold = isShip ? STALE_THRESHOLD_SEA_MS : STALE_THRESHOLD_AIR_MS;
+        
+        if (now - entity.lastSeen > threshold) {
+          stale.push(uid);
+        } else {
+          // Note: In a real app we'd filter by active layers here too, 
+          // but for the basic dashboard counters, matching TacticalMap's behavior is key.
+          if (isShip) sea++; else air++;
+        }
+      });
+
+      stale.forEach(uid => {
+        entitiesRef.current.delete(uid);
+        knownUidsRef.current.delete(uid);
+      });
+
+      // Count Orbital (Excluding Starlink which is suppressed for Dashboard)
+      satellitesRef.current.forEach((sat) => {
+        if (sat.detail?.constellation !== 'Starlink') {
+          orbital++;
+        }
+      });
+
+      if (air !== countsRef.current.air || sea !== countsRef.current.sea || orbital !== countsRef.current.orbital) {
+        countsRef.current = { air, sea, orbital };
+        setTrackCounts({ air, sea, orbital });
+      }
+    };
+
+    const timer = setInterval(maintenance, 1000);
+    return () => clearInterval(timer);
+  }, [entitiesRef, satellitesRef, knownUidsRef]);
 
   // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
   const { cablesData, stationsData, outagesData } = useInfraData();
@@ -141,7 +191,7 @@ function App() {
   const [mapActions, setMapActions] = useState<import('./types').MapActions | null>(null);
 
   // Filter state with persistence (tactical map only)
-  const [filters, setFilters] = useState<Record<string, boolean | string | number | string[]>>(() => {
+  const [filters, setFilters] = useState<import('./types').MapFilters>(() => {
     const defaultFilters = {
       showAir: true,
       showSea: true,
@@ -310,6 +360,23 @@ function App() {
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
+  // Lift Mission Area Logic to App Root so it persists across views
+  const missionArea = useMissionArea({
+    flyTo: mapActions?.flyTo,
+    currentMissionRef,
+    entitiesRef,
+    knownUidsRef,
+    prevCourseRef,
+    drStateRef,
+    visualStateRef,
+    countsRef,
+    onCountsUpdate: setTrackCounts,
+    onEntitySelect: handleSetSelectedSatNorad as any, // Simple stub for entity clearing
+    onMissionPropsReady: setMissionProps,
+    initialLat: parseMissionHash().lat ?? parseFloat(import.meta.env.VITE_CENTER_LAT || "45.5152"),
+    initialLon: parseMissionHash().lon ?? parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
+  });
+
   // Compute active services list
   const activeServices = useMemo(() => {
     const list: string[] = [];
@@ -430,13 +497,7 @@ function App() {
       // Simple scan from right for now (assuming linear playback usually)
       // But random seek needs binary search.
       // Let's do simple findLast equivalent.
-
       let found: CoTEntity | null = null;
-      // Optimization: If history is large (>100), use binary search.
-      // For <100, linear scan is fast.
-      // Assuming history resolution ~10s -> 360 points/hour. Linear is fine?
-      // Actually binary search is safer.
-
       let low = 0, high = history.length - 1;
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
@@ -536,7 +597,7 @@ function App() {
   }, []);
 
   const handleFilterChange = useCallback((key: string, value: any) => {
-    setFilters((prev: Record<string, any>) => {
+    setFilters((prev: import('./types').MapFilters) => {
       const next = { ...prev, [key]: value };
       localStorage.setItem('mapFilters', JSON.stringify(next));
 
@@ -665,7 +726,7 @@ function App() {
           />
         ) : viewMode === 'ORBITAL' ? (
           <OrbitalSidebarLeft
-            filters={orbitalSatFilters}
+            filters={orbitalFilters as any}
             onFilterChange={handleOrbitalFilterChange}
             selectedSatNorad={selectedSatNorad}
             setSelectedSatNorad={handleSetSelectedSatNorad}
@@ -702,11 +763,11 @@ function App() {
         <>
           <TacticalMap
             onCountsUpdate={setTrackCounts}
-            filters={{ ...filters, showTerminator: showTerminator }}
+            filters={{ ...filters, showTerminator } as any}
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
-            onMissionPropsReady={setMissionProps}
+            missionArea={missionArea}
             onMapActionsReady={setMapActions}
             showVelocityVectors={showVelocityVectors}
             showHistoryTails={showHistoryTails}
@@ -735,6 +796,7 @@ function App() {
             stationsData={stationsData}
             outagesData={outagesData}
             worldCountriesData={worldCountriesData}
+            showTerminator={showTerminator}
           />
 
           {/* Replay Controls Overlay */}
@@ -807,12 +869,17 @@ function App() {
           events={events}
           trackCounts={trackCounts}
           missionProps={missionProps}
-          health={health}
           js8LogEntries={js8LogEntries}
           js8Stations={js8Stations}
           js8Connected={js8Connected}
           entitiesRef={entitiesRef}
           satellitesRef={satellitesRef}
+          cablesData={cablesData}
+          stationsData={stationsData}
+          outagesData={outagesData}
+          worldCountriesData={worldCountriesData}
+          showTerminator={showTerminator}
+          drStateRef={drStateRef}
         />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">

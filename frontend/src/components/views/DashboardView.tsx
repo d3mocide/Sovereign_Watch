@@ -9,12 +9,7 @@ import {
   Plane,
   Ship,
   Signal,
-  Wifi,
-  WifiOff,
   Globe,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
   Antenna,
   TrendingUp,
 } from 'lucide-react';
@@ -24,11 +19,12 @@ import {
   JS8LogEntry,
   JS8Station,
   MissionProps,
+  DRState,
 } from '../../types';
-import { SystemHealth } from '../../hooks/useSystemHealth';
 import { usePassPredictions } from '../../hooks/usePassPredictions';
 import { calculateZoom } from '../../utils/map/geoUtils';
 import { NewsWidget } from '../widgets/NewsWidget';
+import { SituationGlobe } from '../map/SituationGlobe';
 
 const DARK_MAP_STYLE =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -201,7 +197,9 @@ const MiniTacticalMap: React.FC<MiniMapProps> = ({ mission, entitiesRef, satelli
     });
     const orb: GeoJSON.Feature[] = [];
     satellitesRef.current.forEach(e => {
-      orb.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: {} });
+      if (e.detail?.constellation !== 'Starlink') {
+        orb.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: {} });
+      }
     });
     (map.getSource('entities') as maplibregl.GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: airSea });
     (map.getSource('orbital') as maplibregl.GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: orb });
@@ -222,24 +220,34 @@ interface DashboardViewProps {
   events: IntelEvent[];
   trackCounts: { air: number; sea: number; orbital: number };
   missionProps: MissionProps | null;
-  health: SystemHealth;
   js8LogEntries: JS8LogEntry[];
   js8Stations: JS8Station[];
   js8Connected: boolean;
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
+  cablesData: any;
+  stationsData: any;
+  outagesData: any;
+  worldCountriesData: any;
+  showTerminator: boolean;
+  drStateRef: React.MutableRefObject<Map<string, DRState>>;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   events,
   trackCounts,
   missionProps,
-  health,
   js8LogEntries,
   js8Stations,
   js8Connected,
   entitiesRef,
   satellitesRef,
+  cablesData,
+  stationsData,
+  outagesData,
+  worldCountriesData,
+  showTerminator,
+  drStateRef,
 }) => {
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
@@ -250,7 +258,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [streamStatuses, setStreamStatuses] = useState<StreamStatus[]>([]);
   const [outages, setOutages] = useState<OutageItem[]>([]);
   const [rfEmcomm, setRfEmcomm] = useState<{ count: number; results: RFSiteResult[] }>({ count: 0, results: [] });
-  const [trackHistory, setTrackHistory] = useState<TrackSnapshot[]>([]);
+  const [trackHistory, setTrackHistory] = useState<{ air: number; sea: number; orbital: number }[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(t);
+  }, []);
 
   // Keep a ref to trackCounts so the sparkline interval reads the latest value
   const trackCountsRef = useRef(trackCounts);
@@ -317,7 +331,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       } catch { /* non-critical */ }
     };
     load();
-  }, [mission?.lat, mission?.lon, mission?.radius_nm]);
+  }, [mission]);
 
   // ── Sample track counts every 30s for sparkline ──
   useEffect(() => {
@@ -330,12 +344,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // ── Derived ──
   const alerts = events.filter(e => e.type === 'alert').slice(0, 20);
   const intelEvents = events.filter(e => e.type !== 'alert').slice(0, 30);
-  const healthOnline = health?.status === 'online';
 
   const fmtTime = (d: Date) => d.toISOString().split('T')[1].substring(0, 8);
   const fmtPassTime = (iso: string) => new Date(iso).toISOString().split('T')[1].substring(0, 5) + 'Z';
   const untilPass = (iso: string) => {
-    const diff = (new Date(iso).getTime() - Date.now()) / 60000;
+    const diff = (new Date(iso).getTime() - now) / 60000;
     if (diff <= 0) return 'NOW';
     if (diff < 60) return `${Math.round(diff)}m`;
     return `${Math.floor(diff / 60)}h${Math.round(diff % 60)}m`;
@@ -346,12 +359,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (type === 'sea') return <Ship size={9} className="text-cyan-400 flex-shrink-0" />;
     if (type === 'orbital') return <Satellite size={9} className="text-purple-400 flex-shrink-0" />;
     return <Activity size={9} className="text-white/30 flex-shrink-0" />;
-  };
-
-  const streamIcon = (status: string) => {
-    if (status === 'Active') return <CheckCircle2 size={9} className="text-hud-green" />;
-    if (status === 'Missing Key') return <AlertCircle size={9} className="text-amber-400" />;
-    return <XCircle size={9} className="text-white/25" />;
   };
 
   const passCategoryLabel: Record<PassCategory, string> = { intel: 'INTEL', weather: 'WEATHER', gps: 'GPS' };
@@ -408,7 +415,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Stream health dots */}
         <div className="flex items-center gap-1.5">
-          <span className="text-[8px] text-white/25 uppercase tracking-widest">Streams</span>
+          <span className="text-[10px] text-white/25 uppercase tracking-widest">Streams</span>
           <div className="flex items-center gap-1">
             {streamStatuses.length === 0 ? (
               <span className="text-[8px] text-white/15">—</span>
@@ -420,23 +427,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   title={`${s.name}: ${s.status}`}
                 >
                   <div className={`h-1.5 w-1.5 rounded-full ${streamDotClass(s.status)}`} />
-                  <span className={`text-[7px] ${streamTextClass(s.status)}`}>
+                  <span className={`text-[9px] ${streamTextClass(s.status)}`}>
                     {STREAM_ABBR[s.id] ?? s.id.toUpperCase()}
                   </span>
                 </div>
               ))
             )}
           </div>
-        </div>
-        <div className="h-3 w-px bg-white/10" />
-
-        {/* System health */}
-        <div className="flex items-center gap-1.5">
-          {healthOnline ? <Wifi size={10} className="text-hud-green" /> : <WifiOff size={10} className="text-alert-red" />}
-          <span className={`text-[10px] font-bold ${healthOnline ? 'text-hud-green' : 'text-alert-red'}`}>
-            {health?.status?.toUpperCase() ?? '---'}
-          </span>
-          {healthOnline && <span className="text-[9px] text-white/30 tabular-nums">{health.latency}ms</span>}
         </div>
         <div className="h-3 w-px bg-white/10" />
 
@@ -473,17 +470,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex flex-col border-b border-white/5 overflow-hidden" style={{ flex: '0 0 40%' }}>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-              <AlertTriangle size={11} className={alerts.length > 0 ? 'text-alert-red' : 'text-white/20'} />
-              <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">Alerts</span>
+              <AlertTriangle size={12} className={alerts.length > 0 ? 'text-alert-red' : 'text-white/20'} />
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Alerts</span>
               {alerts.length > 0 && (
-                <span className="ml-auto text-[8px] bg-alert-red/20 text-alert-red border border-alert-red/30 rounded px-1 font-bold">
+                <span className="ml-auto text-[10px] bg-alert-red/20 text-alert-red border border-alert-red/30 rounded px-1 font-bold">
                   {alerts.length}
                 </span>
               )}
             </div>
             <div className="flex-1 overflow-y-auto">
               {alerts.length === 0 ? (
-                <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
+                <div className="flex items-center justify-center h-10 text-[10px] text-white/15 uppercase tracking-widest">
                   No Active Alerts
                 </div>
               ) : (
@@ -505,7 +502,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
               <Activity size={11} className="text-hud-green/50" />
-              <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">Intel Feed</span>
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Intel Feed</span>
               <span className="ml-auto text-[8px] text-white/20 tabular-nums">{intelEvents.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -530,32 +527,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Center — Mini Tactical Map */}
-        <div className="relative overflow-hidden bg-black min-h-0">
-          {mission ? (
-            <MiniTacticalMap mission={mission} entitiesRef={entitiesRef} satellitesRef={satellitesRef} />
-          ) : (
-            <div className="flex flex-col items-center justify-center w-full h-full gap-3">
-              <Signal size={28} className="text-white/10" />
-              <span className="text-[10px] text-white/20 uppercase tracking-widest">Awaiting Mission Area</span>
-            </div>
-          )}
-          <div className="absolute top-2 left-2 text-[8px] text-hud-green/35 bg-black/70 px-1.5 py-0.5 rounded tracking-widest pointer-events-none select-none">
-            TACTICAL OVERVIEW
-          </div>
-          <div className="absolute bottom-2 right-2 flex gap-1 pointer-events-none">
-            <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">AIR {trackCounts.air}</span>
-            <span className="text-[8px] bg-black/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-400/20">SEA {trackCounts.sea}</span>
-            <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">ORB {trackCounts.orbital}</span>
-          </div>
-          <div className="absolute bottom-2 left-2 flex flex-col gap-0.5 pointer-events-none">
-            {[['#00ff41', 'AVIATION'], ['#22d3ee', 'MARITIME'], ['#a855f7', 'ORBITAL']].map(([c, l]) => (
-              <div key={l} className="flex items-center gap-1">
-                <div className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
-                <span className="text-[7px] text-white/25">{l}</span>
+        {/* Center — Split Map View (Tactical AO vs Global Situation) */}
+        <div className="relative overflow-hidden bg-black min-h-0 grid grid-cols-2">
+          
+          {/* Tactical Left */}
+          <div className="relative border-r border-white/5 overflow-hidden">
+            {mission ? (
+              <MiniTacticalMap mission={mission} entitiesRef={entitiesRef} satellitesRef={satellitesRef} />
+            ) : (
+              <div className="flex flex-col items-center justify-center w-full h-full gap-3">
+                <Signal size={28} className="text-white/10" />
+                <span className="text-[10px] text-white/20 uppercase tracking-widest">Awaiting Mission Area</span>
               </div>
-            ))}
+            )}
+            <div className="absolute top-2 left-2 text-[8px] text-hud-green/35 bg-black/70 px-1.5 py-0.5 rounded tracking-widest pointer-events-none select-none border border-hud-green/20">
+              TACTICAL OVERVIEW
+            </div>
+
+            {/* Track Counters (Moved here for better spatial grouping) */}
+            <div className="absolute bottom-2 left-2 flex gap-1 pointer-events-none z-10 animate-in fade-in slide-in-from-right-2 duration-700">
+              <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">AIR {trackCounts.air}</span>
+              <span className="text-[8px] bg-black/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-400/20">SEA {trackCounts.sea}</span>
+              <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">ORB {trackCounts.orbital}</span>
+            </div>
           </div>
+
+          {/* Global Right */}
+          <SituationGlobe 
+            satellitesRef={satellitesRef}
+            cablesData={cablesData}
+            stationsData={stationsData}
+            outagesData={outagesData}
+            worldCountriesData={worldCountriesData}
+            showTerminator={showTerminator}
+            drStateRef={drStateRef}
+            mission={missionProps?.currentMission ?? null}
+          />
+
         </div>
 
         {/* Right — JS8 Feed + Orbital Passes */}
@@ -565,7 +573,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-col border-b border-white/5 overflow-hidden" style={{ flex: '0 0 50%' }}>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
               <Radio size={11} className={js8Connected ? 'text-hud-green' : 'text-white/20'} />
-              <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">JS8 / HF Radio</span>
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">JS8 / HF Radio</span>
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-[8px] text-white/25">{js8Stations.length} stations</span>
                 <div className={`h-1.5 w-1.5 rounded-full ${js8Connected ? 'bg-hud-green shadow-[0_0_5px_#00ff41] animate-pulse' : 'bg-white/15'}`} />
@@ -656,9 +664,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex flex-col border-r border-white/5 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
             <Globe size={11} className="text-red-400/70" />
-            <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">Internet Outages</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Internet Outages</span>
             {outages.length > 0 && (
-              <span className="ml-auto text-[8px] text-alert-red/60">{outages.length} regions</span>
+              <span className="ml-auto text-[9px] text-alert-red/60">{outages.length} regions</span>
             )}
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -694,7 +702,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex flex-col border-r border-white/5 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
             <Antenna size={11} className="text-amber-400/70" />
-            <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">EmComm Sites</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Emergency Comm Sites</span>
             <span className="ml-auto text-[8px] text-amber-400/60">{rfEmcomm.count} in AO</span>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -739,11 +747,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* News Feed */}
         <div className="flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-            <span className="text-[8px] font-bold tracking-widest uppercase text-white/55">OSINT News</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">OSINT News</span>
           </div>
-          <div className="flex-1 min-h-0">
-            <NewsWidget compact />
-          </div>
+          <NewsWidget compact />
         </div>
       </div>
     </div>

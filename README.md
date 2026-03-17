@@ -38,6 +38,10 @@
 
 ![Sovereign Watch - Global Map Filters and Layers](assets/images/SovereignWatch-4.png)
 
+### Dashboard View
+
+![Sovereign Watch - Dashbaord View](assets/images/SovereignWatch-5.png)
+
 ---
 
 ## Quick Start

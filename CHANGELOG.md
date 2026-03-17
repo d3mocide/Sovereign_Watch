@@ -1,5 +1,12 @@
 ## [0.34.0] - 2026-03-17
 
+### Added
+
+- **Situation Globe (Dashboard)**: A new interactive, auto-rotating 3D globe integrated into the Dashboard view.
+    - **Split-View HUD**: Dashboard now displays a local tactical map alongside the situational globe for dual-scale awareness.
+    - **Geodesic Mission AO**: The active mission area is rendered as a projection-aware ring on the globe.
+- **Starfield Backdrop**: Cinematic deep-space starfield integrated into global map views.
+
 ### Changed
 
 - **Playback / Replay overhaul**: Fixed a cascade of bugs that caused the replay
@@ -38,6 +45,9 @@
   With ~10 000 tracked satellites, even one bucket per object would consume the
   entire row budget leaving no room for tactical data.
 
+- **Dashboard Smoothing**: Integrated Dead Reckoning (PVB) into the Situation Globe to ensure orbital and tactical assets glide smoothly during auto-rotation.
+- **Global Terminator Support**: The day/night terminator toggle is now synchronized across both the local tactical map and the global situated view.
+
 ### Fixed
 
 - Historian `CancelledError` was silently swallowed, preventing clean shutdown
@@ -45,6 +55,8 @@
 - `docker-compose.yml` does not declare `redpanda` as a health dependency for
   `backend-api`; the supervisor now retries automatically if Kafka is not yet
   ready when the API starts.
+- **Helicopter & Drone Filtering**: Fixed a precedence bug where platform-specific filters (Helo/Drone) were overridden by ownership filters (CIV/MIL). These filters now take absolute priority.
+- **Dashboard Prop Synchronization**: Fixed multiple React hook dependency and prop-drilling issues in the split-view dashboard.
 
 ## [0.33.0] - 2026-03-16
 
