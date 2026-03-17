@@ -42,7 +42,7 @@ async def main():
     end_time = time.time()
     measure_task.cancel()
 
-    print(f"\n--- Benchmark Results ---")
+    print("\n--- Benchmark Results ---")
     print(f"Total satellites loaded: {len(service.satrecs)}")
     print(f"Total time taken: {end_time - start_time - 0.01:.4f} seconds")
     print(f"Max event loop delay during fetch_tle_data: {max_delay:.4f} seconds")

@@ -7,6 +7,7 @@ import { TopBar } from './components/layouts/TopBar'
 import { OrbitalMap } from './components/map/OrbitalMap'
 import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
 import RadioTerminal from './components/js8call/RadioTerminal'
+import { DashboardView } from './components/views/DashboardView'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
@@ -258,16 +259,15 @@ function App() {
   });
 
   // View Mode Persistence
-  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL'>(() => {
+  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD'>(() => {
     const saved = localStorage.getItem('viewMode');
-    // Default to TACTICAL if nothing saved or on first load
-    if (saved === 'ORBITAL' || saved === 'TACTICAL') {
-      return saved as 'TACTICAL' | 'ORBITAL';
+    if (saved === 'ORBITAL' || saved === 'TACTICAL' || saved === 'RADIO' || saved === 'DASHBOARD') {
+      return saved as 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD';
     }
     return 'TACTICAL';
   });
 
-  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL') => {
+  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD') => {
     setViewModeState(mode);
     localStorage.setItem('viewMode', mode);
   }, []);
@@ -507,7 +507,7 @@ function App() {
     const now = Date.now();
     const ALERT_WINDOW_MS = 30 * 60 * 1000;
     for (const pass of intelPasses) {
-      const aosMs = new Date(pass.aos).getTime();
+      const aosMs = Date.parse(pass.aos);
       const passKey = `${pass.norad_id}-${pass.aos}`;
       if (aosMs > now && aosMs - now <= ALERT_WINDOW_MS && !alertedPassesRef.current.has(passKey)) {
         alertedPassesRef.current.add(passKey);
@@ -801,6 +801,18 @@ function App() {
           stationsData={stationsData}
           outagesData={outagesData}
           worldCountriesData={worldCountriesData}
+        />
+      ) : viewMode === 'DASHBOARD' ? (
+        <DashboardView
+          events={events}
+          trackCounts={trackCounts}
+          missionProps={missionProps}
+          health={health}
+          js8LogEntries={js8LogEntries}
+          js8Stations={js8Stations}
+          js8Connected={js8Connected}
+          entitiesRef={entitiesRef}
+          satellitesRef={satellitesRef}
         />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">

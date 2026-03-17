@@ -78,7 +78,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                     historyMatches.forEach((item: any) => {
                         // Only add if not already found in live results
                         if (!seenUids.has(item.entity_id)) {
-                             const ts = new Date(item.last_seen).getTime();
+                             const ts = Date.parse(item.last_seen);
                              
                              combinedResults.push({
                                  uid: item.entity_id,

@@ -11,7 +11,8 @@ import {
     ShieldCheck,
     Moon,
     HeartPulse,
-    Terminal
+    Terminal,
+    LayoutDashboard,
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
@@ -36,8 +37,8 @@ interface TopBarProps {
     onToggleTerminator?: () => void;
     isReplayMode?: boolean;
     onToggleReplay?: () => void;
-    viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL';
-    onViewChange?: (mode: 'TACTICAL' | 'RADIO' | 'ORBITAL') => void;
+    viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL' | 'DASHBOARD';
+    onViewChange?: (mode: 'TACTICAL' | 'RADIO' | 'ORBITAL' | 'DASHBOARD') => void;
     onAlertsClick?: () => void;
     isAlertsOpen?: boolean;
     alerts?: IntelEvent[];
@@ -167,6 +168,20 @@ export const TopBar: React.FC<TopBarProps> = ({
                     >
                         <Radio size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'RADIO' ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : ''} />
                         <span className={viewMode === 'RADIO' ? 'block drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]' : 'hidden'}>RADIO</span>
+                    </button>
+                    <button
+                        role="tab"
+                        aria-selected={viewMode === 'DASHBOARD'}
+                        aria-label="Dashboard View"
+                        title="Dashboard View"
+                        onClick={() => onViewChange?.('DASHBOARD')}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 focus-visible:ring-1 focus-visible:ring-amber-500 outline-none ${viewMode === 'DASHBOARD'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.35)] backdrop-blur-md'
+                            : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                            }`}
+                    >
+                        <LayoutDashboard size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'DASHBOARD' ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : ''} />
+                        <span className={viewMode === 'DASHBOARD' ? 'block drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'hidden'}>DASHBOARD</span>
                     </button>
                 </div>
             </div>

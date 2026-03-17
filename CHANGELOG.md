@@ -1,3 +1,15 @@
+## [0.33.0] - 2026-03-16
+
+### Added
+- **Global DASHBOARD View**: Introduced a high-tactical "at-a-glance" dashboard view accessible via the Top Bar. This view provides a unified perspective on system health, stream bitrates, active outages, and RF EmComm monitoring without needing full map immersion.
+- **Stream Health & Sparklines**: Integrated real-time sparkline visualizations for data ingestion rates across Aviation, Maritime, and Orbital domains.
+- **Orbital Constellation Tabs**: Enhanced orbital situational awareness with dedicated dashboard tabs for quick access to Starlink, GPS, and Intel constellation status.
+
+### Changed
+- **High-Frequency Performance Tuning**:
+  - **Optimized Date Parsing**: Drastically reduced CPU overhead in rendering and mapping loops by optimizing `Date` instantiation inside hot paths.
+  - **Async File I/O for Pollers**: Migrated synchronous file writes to non-blocking async operations in the Orbital Pulse service, preventing I/O stalls during high-volume TLE updates.
+
 ## [0.32.2] - 2026-03-15
 
 ### Fixed

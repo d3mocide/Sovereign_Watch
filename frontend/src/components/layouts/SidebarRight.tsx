@@ -18,7 +18,7 @@ import { SHIP_TYPE_MAP, NAV_STATUS_MAP } from '../../constants/maritime';
 // ---------------------------------------------------------------------------
 
 function formatCountdown(isoTarget: string, now: number): string {
-  const delta = Math.round((new Date(isoTarget).getTime() - now) / 1000);
+  const delta = Math.round((Date.parse(isoTarget) - now) / 1000);
   if (Math.abs(delta) < 5) return 'NOW';
   const sign = delta < 0 ? 'T+' : 'T-';
   const abs = Math.abs(delta);
@@ -58,7 +58,7 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
     : { az: 0, el: -90, rangeKm: 0 };
 
   // Next upcoming pass
-  const nextPass = passes.find(p => new Date(p.los).getTime() > now);
+  const nextPass = passes.find(p => Date.parse(p.los) > now);
 
   const inclination = entity.detail?.inclinationDeg != null
     ? Number(entity.detail.inclinationDeg).toFixed(2) + '°'
