@@ -1,3 +1,51 @@
+## [0.34.0] - 2026-03-17
+
+### Changed
+
+- **Playback / Replay overhaul**: Fixed a cascade of bugs that caused the replay
+  feature to show no data after running overnight with no client connected.
+  - Historian now uses adaptive time-bucket sampling (`DISTINCT ON (entity_id,
+    time_bucket(...))`) instead of a raw `LIMIT` that always returned the first
+    N chronological rows (typically the first few seconds of a 6-hour window).
+    Bucket sizes scale with window duration: 30 s (≤1 h) → 2 min (≤6 h) → 5 min
+    (>12 h), giving uniform temporal coverage across the entire requested window.
+  - Frontend now requests `limit=10000` (API max) instead of the default 1000.
+  - Frontend stale threshold raised from 5 min to 10 min to accommodate larger
+    bucket sizes without entities flickering out between data points.
+  - Historian supervisor added (`_historian_supervisor` in `main.py`): wraps the
+    historian task with exponential-backoff restart (5 s → 60 s) so a transient
+    Kafka outage at startup no longer permanently stops data persistence.
+  - `historian_task` now re-raises `CancelledError` and fatal exceptions so the
+    supervisor can distinguish clean shutdown from crash.
+
+- **Orbital tracks removed from database**: The `orbital_tracks` TimescaleDB
+  hypertable has been eliminated.  Satellite positions are deterministic (SGP4
+  from stored TLEs) and were generating ~2 000 write-rows per second with no
+  operational benefit.
+  - `orbital_tracks` table removed from `init.sql` and no longer created on
+    fresh installs.
+  - Historian no longer writes satellite positions; it continues to upsert TLE
+    metadata into the `satellites` table every 6-hour refresh cycle.
+  - `/api/tracks/history/{SAT-*}` now propagates positions on-demand via SGP4
+    from the stored TLE, giving unlimited historical depth (bounded only by TLE
+    age) instead of the previous 12-hour retention window.
+  - `/api/tracks/search` satellite results now query the `satellites` catalogue
+    directly and compute current positions via SGP4 at query time.
+  - `/api/tracks/replay` already excluded orbital data (satellites exhausted the
+    10 000-row budget and the OrbitalMap is hardcoded to `replayMode=false`).
+
+- **Orbital data excluded from replay**: Replay covers ADS-B and AIS only.
+  With ~10 000 tracked satellites, even one bucket per object would consume the
+  entire row budget leaving no room for tactical data.
+
+### Fixed
+
+- Historian `CancelledError` was silently swallowed, preventing clean shutdown
+  detection by the new supervisor.
+- `docker-compose.yml` does not declare `redpanda` as a health dependency for
+  `backend-api`; the supervisor now retries automatically if Kafka is not yet
+  ready when the API starts.
+
 ## [0.33.0] - 2026-03-16
 
 ### Added
