@@ -230,9 +230,10 @@ const IntelEventItem = React.memo(({
                             isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
 
     return (
-        <div
+        <button
             onClick={() => onClick(event)}
-            className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
+            aria-label={`View event: ${event.message}`}
+            className={`w-full text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
         >
             <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
 
@@ -276,7 +277,7 @@ const IntelEventItem = React.memo(({
                     isInfra ? <Network size={40} className="text-cyan-400" /> :
                         isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
             </div>
-        </div>
+        </button>
     );
 });
 
