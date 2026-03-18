@@ -47,6 +47,7 @@ export function useAnalysis(): UseAnalysisReturn {
       readerRef.current = reader;
 
       let buffer = '';
+      let currentEventType = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -60,9 +61,16 @@ export function useAnalysis(): UseAnalysisReturn {
         buffer = lines.pop() ?? ''; // keep incomplete trailing line
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith('event: ')) {
+            currentEventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
             const token = line.slice(6); // strip "data: " prefix
+            if (currentEventType === 'error') {
+              throw new Error(token);
+            }
             setState(prev => ({ ...prev, text: prev.text + token }));
+          } else if (line === '') {
+            currentEventType = ''; // reset after blank line (end of SSE event)
           }
         }
       }
