@@ -227,7 +227,7 @@ ENV XDG_RUNTIME_DIR=/run/user/1000
 # KiwiSDR connection defaults (override at runtime)
 ENV KIWI_HOST=kiwisdr.example.com
 ENV KIWI_PORT=8073
-ENV KIWI_FREQ=14074
+ENV KIWI_FREQ=14078
 ENV KIWI_MODE=usb
 
 # JS8Call API port

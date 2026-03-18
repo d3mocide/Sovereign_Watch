@@ -229,7 +229,7 @@ services:
       # KiwiSDR WebSDR source – override with your target node
       - KIWI_HOST=${KIWI_HOST:-kiwisdr.example.com}
       - KIWI_PORT=${KIWI_PORT:-8073}
-      - KIWI_FREQ=${KIWI_FREQ:-14074} # kHz – 20m JS8Call calling frequency
+      - KIWI_FREQ=${KIWI_FREQ:-14078} # kHz – 20m JS8Call calling frequency
       - KIWI_MODE=${KIWI_MODE:-usb}
       # Operator Maidenhead grid for distance/bearing calculations
       - MY_GRID=${MY_GRID:-CN85}

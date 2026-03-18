@@ -225,8 +225,6 @@ export QT_QPA_PLATFORM=xcb
 export QT_LOGGING_RULES="*.debug=false"
 export PULSE_PROP="media.role=phone"  # Hint to PulseAudio for priority routing
 
-export QT_QPA_PLATFORM=offscreen
-
 js8call --rig-name=KiwiSDR-Virtual &
 JS8CALL_PID=$!
 log "JS8Call PID: ${JS8CALL_PID}"
