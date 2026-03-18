@@ -313,14 +313,18 @@ Open the **Pass Predictor** panel (Orbital sidebar):
 
 ## JS8Call Terminal (HF Radio)
 
-The **JS8Call Terminal** is an integrated HF digital mode radio interface accessed via the JS8 icon in the TopBar.
+The **JS8Call Terminal** is an integrated HF digital mode radio interface accessed via the JS8 icon in the TopBar. It supports three operating modes:
 
-| Feature | Description |
+| Mode | Description |
 | :--- | :--- |
-| **Live Decode Feed** | Real-time JS8Call message decodes from the connected KiwiSDR node |
-| **Station Map** | Heard JS8 stations plotted by grid square on the tactical map |
-| **Message Log** | Scrolling log of decoded messages with station callsigns and SNR |
-| **KiwiSDR Node** | Configured via `KIWI_HOST` / `KIWI_PORT` in `.env` |
+| **JS8** | Real-time JS8Call message decodes and station map (requires connected KiwiSDR). |
+| **KiwiSDR** | Focused live audio + waterfall view for the connected KiwiSDR node (formerly "Listen"). |
+| **WebSDR** | **NEW:** Global node discovery map. Browse and connect to hundreds of WebSDR servers worldwide via integrated iframe. |
+
+### SDR Node Discovery
+
+- **KiwiSDR Browser**: Floating widget to search and connect to KiwiSDR.com nodes.
+- **WebSDR Discovery**: Integrated full-page map to browse the global WebSDR network without coverage restrictions.
 
 ---
 

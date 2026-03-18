@@ -212,6 +212,7 @@ WORKDIR /app
 COPY server.py /app/server.py
 COPY kiwi_client.py /app/kiwi_client.py
 COPY kiwi_directory.py /app/kiwi_directory.py
+COPY websdr_directory.py /app/websdr_directory.py
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

@@ -1,3 +1,23 @@
+## [0.36.0] - 2026-03-18
+
+### Added
+
+- **WebSDR Discovery Architecture**: Introduced a dedicated global node discovery system for the WebSDR network.
+    - **Global Map View**: A new full-page map interface for browsing available WebSDR nodes worldwide, removing previous radius and coverage restrictions.
+    - **Integrated Receiver**: Selecting a WebSDR node now transitions the terminal to a full-screen receiver view, unmounting automatically when switching modes to conserve resources.
+- **WebSDR Node Styling**: Implemented custom tactical themed popups for WebSDR nodes, removing default white outlines and ensuring consistency with the application's dark aesthetic.
+
+### Changed
+
+- **Radio Terminal Refactoring**:
+    - Renamed the base "Listen" mode to "**KiwiSDR**" for improved clarity and naming consistency across different SDR networks.
+    - Specialized the `KiwiNodeBrowser` widget to focus exclusively on KiwiSDR nodes, reducing UI clutter and state overlap.
+- **Documentation Overhaul**: Updated the UI Guide and Configuration Reference to reflect the new WebSDR capabilities and the KiwiSDR naming convention.
+
+### Fixed
+
+- **WebSDR Missing Module**: Resolved a container deployment issue where `websdr_directory.py` was missing from the `js8call` service Docker image, restoring node discovery functionality.
+
 ## [0.35.1] - 2026-03-18
 
 ### Changed

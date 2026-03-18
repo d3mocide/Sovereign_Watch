@@ -17,7 +17,7 @@
  *   usb, lsb, cw, am, fm, amsync
  */
 
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ExternalLink,
   Loader2,
@@ -80,6 +80,7 @@ interface Props {
   initialFreqKhz: number;
   initialMode: WebSDRMode;
   onClose: () => void;
+  fullScreen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ export default function WebSDRPanel({
   initialFreqKhz,
   initialMode,
   onClose,
+  fullScreen = false,
 }: Props) {
   const [freqKhz, setFreqKhz] = useState(initialFreqKhz);
   const [freqInput, setFreqInput] = useState(String(initialFreqKhz));
@@ -161,11 +163,15 @@ export default function WebSDRPanel({
   const bandChips = node.bands.slice(0, 5);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-end pointer-events-none">
+    <div className={fullScreen ? "w-full h-full" : "fixed inset-0 z-[200] flex items-end justify-end pointer-events-none"}>
       {/* Panel — anchored bottom-right, leaves room for other UI */}
       <div
-        className="pointer-events-auto m-4 flex flex-col bg-slate-950 border border-slate-700 rounded-xl shadow-2xl shadow-black/80 overflow-hidden"
-        style={{ width: 640, height: 560 }}
+        className={`bg-slate-950 border border-slate-700 shadow-2xl shadow-black/80 overflow-hidden ${
+          fullScreen 
+            ? "w-full h-full flex flex-col" 
+            : "pointer-events-auto m-4 flex flex-col rounded-xl"
+        }`}
+        style={fullScreen ? {} : { width: 640, height: 560 }}
       >
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800 shrink-0">

@@ -101,11 +101,13 @@ Sovereign Watch uses **LiteLLM** as a unified AI gateway. It supports a triple-m
 
 | Variable    | Default               | Description                                                                                      |
 | :---------- | :-------------------- | :----------------------------------------------------------------------------------------------- |
-| `KIWI_HOST` | `kiwisdr.example.com` | KiwiSDR node hostname or IP. Find public nodes at [kiwisdr.com](http://kiwisdr.com).             |
+| `KIWI_HOST` | `kiwisdr.example.com` | Primary KiwiSDR node for JS8Call decoding. Find nodes at [kiwisdr.com](http://kiwisdr.com).      |
 | `KIWI_PORT` | `8073`                | KiwiSDR node port (default 8073).                                                                |
 | `KIWI_FREQ` | `14074`               | Receive frequency in kHz. `14074` = 20m JS8Call calling frequency.                               |
 | `KIWI_MODE` | `usb`                 | Receive mode. Use `usb` for JS8Call.                                                             |
-| `MY_GRID`   | `CN85`                | Your Maidenhead grid square locator (4 or 6 characters). Used for distance/bearing calculations. |
+| `MY_GRID`   | `CN85`                | Your grid square locator. Used for distance/bearing and JS8 station plotting.                    |
+
+> **Note on WebSDR:** The WebSDR Discovery feature is global and does not require pre-configuration in `.env`. It utilizes an integrated crawler to discover available nodes in real-time.
 
 ---
 

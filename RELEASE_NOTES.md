@@ -1,20 +1,23 @@
-# Release - v0.35.1 - AI Documentation & Env Refinement
+# Release - v0.36.0 - WebSDR Discovery & Tactical UI Separation
 
 ## High-Level Summary
 
-This patch release focuses on strengthening the project's documentation and environment configuration, specifically targeting the newly implemented triple-model AI architecture. It ensures that operators have clear guidance on configuring and deploying the `secure-core` (local), `public-flash` (Gemini), and `deep-reasoner` (Claude) models, while also providing a more robust `.env.example` template for easier system stand-up.
+This feature release significantly refines the SDR (Software Defined Radio) node discovery architecture, introducing a global map-first WebSDR explorer and specializing the existing KiwiSDR widget. It resolves a long-standing "muddy" user experience by architecturally isolating the two receiver networks, ensuring that discovery tools and selection states remain clean and focused on their respective domains.
 
 ## Key Features
 
-- **AI Triple-Model Documentation**: A complete overhaul of the configuration guides to clearly explain the fail-closed routing and data sovereignty policies of the local AI core.
-- **Enhanced Environment Templates**: `.env.example` now includes comprehensive coverage for all LiteLLM and RF Pulse variables, reducing the "guesswork" for new deployments.
-- **Documentation Hygiene**: Fixed multiple broken internal links and stabilized table layouts for better readability across various Markdown viewers.
+- **Global WebSDR Discovery**: A new map-integrated explorer for the global WebSDR receiver network. It provides a full-page view without geographic restrictions, allowing operators to discover and connect to hundreds of nodes worldwide.
+- **Architectural Isolation**: Discovery tools for KiwiSDR and WebSDR are now fully separated. `KiwiNodeBrowser` has been specialized for KiwiSDR nodes, while a new `WebSDRDiscovery` component handles the WebSDR map.
+- **Tactical UI Separation**:
+    - Renamed the base "Listen" mode to "**KiwiSDR**" for clarity.
+    - WebSDR receiver now transitions to a dedicated full-page receiver view, unmounting automatically when not in use to conserve system resources.
+- **Themed SDR Popups**: WebSDR node popups have been styled with a custom violet tactical theme, consistent with the application's dark aesthetic and removing unwanted white default outlines.
 
 ## Technical Details
 
-- **Version Bump**: UI bumped to `0.35.1`.
-- **Config Schema**: Added explicit environment variables for `ANTHROPIC_MODEL`, `GEMINI_MODEL`, and `OPEN_API_MODEL` to allow finer control over model versions without changing the underlying backend code.
-- **Documentation**: Unified the formatting of intelligence poller tables across the entire `Documentation/` directory.
+- **Frontend Separation**: Created `WebSDRDiscovery.tsx` and updated `RadioTerminal.tsx` to handle the new full-screen mode state.
+- **Container Fix**: Updated the `js8call` service Dockerfile to include `websdr_directory.py`, resolving a discovery outage caused by a missing logic file in the container image.
+- **Documentation**: Comprehensive updates to the `UI_Guide.md` and `Configuration.md` to reflect the new Discovery architecture.
 
 ## Upgrade Instructions
 
@@ -23,10 +26,7 @@ This patch release focuses on strengthening the project's documentation and envi
    git pull origin dev
    ```
 
-2. **Update your `.env` file**:
-   Check `.env.example` for new variables related to AI model strings and ensure your local configuration matches the new triple-layer architecture.
-
-3. **Rebuild and Restart**:
+2. **Rebuild and Restart**:
    ```bash
-   docker compose up -d --build
+   docker compose up -d --build js8call frontend
    ```

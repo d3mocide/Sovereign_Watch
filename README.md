@@ -152,6 +152,7 @@ All upstream data is sourced from **public, open-access networks**.
 | Internet Outages  | IODA (Georgia Tech)                         | Every 30 minutes         |
 | Submarine Cables  | TeleGeography                               | Every 24 hours           |
 | RF Infrastructure | RepeaterBook, ARD, NOAA NWR, RadioReference | Every 6–168 hours        |
+| WebSDR            | Global Network                              | Discovery (on-demand)    |
 
 ---
 
