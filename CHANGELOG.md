@@ -1,3 +1,11 @@
+## [0.36.1] - 2026-03-18
+
+### Fixed
+
+- **AI Analyst Copy-Paste Formatting**: Resolved a bug where text copied from the AI Analyst panel lost its structure (one word per line) in external applications.
+    - Implemented robust text normalization for SSE carriage returns and spacing artifacts.
+    - Unified the cleaning logic between the UI renderer and the clipboard handler.
+
 ## [0.36.0] - 2026-03-18
 
 ### Added
