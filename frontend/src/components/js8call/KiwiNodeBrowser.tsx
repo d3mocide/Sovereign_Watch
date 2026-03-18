@@ -22,14 +22,16 @@ import {
   List,
   Loader2,
   Map as MapIcon,
+  Radio,
   RefreshCw,
   Server,
   X,
 } from "lucide-react";
 import { Map, Marker, Popup, Source, Layer, NavigationControl } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { KiwiNode } from "../../types";
+import type { KiwiNode, WebSDRNode } from "../../types";
 import { useKiwiNodes } from "../../hooks/useKiwiNodes";
+import { useWebSDRNodes } from "../../hooks/useWebSDRNodes";
 import { maidenheadToLatLon } from "../../utils/map/geoUtils";
 
 // ---------------------------------------------------------------------------
@@ -51,6 +53,9 @@ interface ManualConfig {
   password?: string;
 }
 
+// Source filter type
+type NodeSource = "kiwi" | "websdr" | "both";
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -65,6 +70,7 @@ interface Props {
   bridgeConnected: boolean;
   onConnect: (node: KiwiNode) => void;
   onDisconnect: () => void;
+  onOpenWebSDR?: (node: WebSDRNode) => void;
   manualConfig: ManualConfig;
   onManualConfigChange: (patch: Partial<ManualConfig>) => void;
   onManualConnect: () => void;
@@ -88,6 +94,20 @@ function markerColor(km: number): string {
   if (km < 500) return "#34d399"; // emerald-400
   if (km < 2000) return "#facc15"; // yellow-400
   return "#f87171"; // red-400
+}
+
+function webSDRMarkerColor(km: number): string {
+  if (km < 500) return "#a78bfa"; // violet-400
+  if (km < 2000) return "#c084fc"; // purple-400
+  return "#e879f9"; // fuchsia-400
+}
+
+function webSDRDistanceCls(km: number): string {
+  if (km < 500)
+    return "text-violet-400 bg-violet-500/10 border-violet-500/20";
+  if (km < 2000)
+    return "text-purple-400 bg-purple-500/10 border-purple-500/20";
+  return "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20";
 }
 
 function fmtDistance(km: number): string {
@@ -151,6 +171,7 @@ export default function KiwiNodeBrowser({
   bridgeConnected,
   onConnect,
   onDisconnect,
+  onOpenWebSDR,
   manualConfig,
   onManualConfigChange,
   onManualConnect,
@@ -158,8 +179,10 @@ export default function KiwiNodeBrowser({
 }: Props) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [radiusMode, setRadiusMode] = useState<"mission" | "regional" | "global">("mission");
+  const [nodeSource, setNodeSource] = useState<NodeSource>("kiwi");
   const [showManual, setShowManual] = useState(false);
   const [selectedNode, setSelectedNode] = useState<KiwiNode | null>(null);
+  const [selectedWebSDRNode, setSelectedWebSDRNode] = useState<WebSDRNode | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const radiusKm = useMemo(() => {
@@ -173,12 +196,34 @@ export default function KiwiNodeBrowser({
     return 50; // mission
   }, [radiusMode]);
 
+  const showKiwi = nodeSource === "kiwi" || nodeSource === "both";
+  const showWebSDR = nodeSource === "websdr" || nodeSource === "both";
+
   const { nodes, loading, error, refetch } = useKiwiNodes(
     currentFreqKhz,
-    isOpen,
+    isOpen && showKiwi,
     radiusKm,
     nodeLimit
   );
+
+  const {
+    nodes: webSDRNodes,
+    loading: webSDRLoading,
+    error: webSDRError,
+    refetch: webSDRRefetch,
+  } = useWebSDRNodes(
+    currentFreqKhz,
+    isOpen && showWebSDR,
+    radiusKm,
+    nodeLimit,
+  );
+
+  const isLoading = (showKiwi && loading) || (showWebSDR && webSDRLoading);
+
+  const handleRefetch = () => {
+    if (showKiwi) refetch();
+    if (showWebSDR) webSDRRefetch();
+  };
 
   const [operatorLat, operatorLon] = useMemo(
     () => maidenheadToLatLon(operatorGrid || "AA00"),
@@ -222,10 +267,10 @@ export default function KiwiNodeBrowser({
       <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">
         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
           <Server className="w-3.5 h-3.5 text-indigo-400" />
-          KiwiSDR Node Browser
-          {!loading && nodes.length > 0 && (
+          SDR Node Browser
+          {!isLoading && (showKiwi ? nodes.length : 0) + (showWebSDR ? webSDRNodes.length : 0) > 0 && (
             <span className="text-slate-600 font-normal normal-case tracking-normal">
-              — {nodes.length} nodes nearby
+              — {(showKiwi ? nodes.length : 0) + (showWebSDR ? webSDRNodes.length : 0)} nodes nearby
             </span>
           )}
         </div>
@@ -257,13 +302,13 @@ export default function KiwiNodeBrowser({
           <div className="w-px h-4 bg-slate-800 mx-0.5" />
 
           <button
-            onClick={refetch}
-            disabled={loading}
+            onClick={handleRefetch}
+            disabled={isLoading}
             title="Refresh node list"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+              className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
             />
           </button>
           <button
@@ -273,6 +318,50 @@ export default function KiwiNodeBrowser({
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+
+      {/* ── Source toggle bar ── */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-slate-950/80 border-b border-slate-800">
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider shrink-0">
+          Source
+        </span>
+        <div className="flex bg-slate-900 rounded p-0.5 border border-slate-800">
+          <button
+            onClick={() => setNodeSource("kiwi")}
+            className={`flex items-center gap-1 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+              nodeSource === "kiwi"
+                ? "bg-indigo-500/20 text-indigo-400"
+                : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+            }`}
+          >
+            <Server className="w-2.5 h-2.5" />
+            KiwiSDR
+          </button>
+          <button
+            onClick={() => setNodeSource("websdr")}
+            className={`flex items-center gap-1 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+              nodeSource === "websdr"
+                ? "bg-violet-500/20 text-violet-400"
+                : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+            }`}
+          >
+            <Radio className="w-2.5 h-2.5" />
+            WebSDR
+          </button>
+          <button
+            onClick={() => setNodeSource("both")}
+            className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+              nodeSource === "both"
+                ? "bg-slate-700 text-slate-200"
+                : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+            }`}
+          >
+            Both
+          </button>
+        </div>
+        {nodeSource === "websdr" && (
+          <span className="text-[9px] text-violet-500/70 italic">VHF/UHF + HF</span>
+        )}
       </div>
 
       {/* ── Radius filter bar ── */}
@@ -341,36 +430,41 @@ export default function KiwiNodeBrowser({
       {viewMode === "list" ? (
         <div className="max-h-72 overflow-y-auto">
           {/* Loading skeleton */}
-          {loading && nodes.length === 0 && (
+          {isLoading && nodes.length === 0 && webSDRNodes.length === 0 && (
             <div className="flex items-center justify-center gap-2 py-10 text-slate-500 text-xs">
               <Loader2 className="w-4 h-4 animate-spin" />
               Fetching nearby nodes…
             </div>
           )}
 
-          {/* Error notice */}
-          {error && !loading && (
+          {/* Error notices */}
+          {error && !loading && showKiwi && (
             <div className="px-4 py-2.5 text-xs text-red-400 bg-red-500/5 border-b border-red-500/10">
-              {error} — directory unavailable, use manual entry below.
+              KiwiSDR: {error}
+            </div>
+          )}
+          {webSDRError && !webSDRLoading && showWebSDR && (
+            <div className="px-4 py-2.5 text-xs text-red-400 bg-red-500/5 border-b border-red-500/10">
+              WebSDR: {webSDRError}
             </div>
           )}
 
           {/* Empty */}
-          {!loading && !error && nodes.length === 0 && (
+          {!isLoading && nodes.length === 0 && webSDRNodes.length === 0 && (
             <div className="py-10 text-center text-xs text-slate-600 italic">
               No nodes found covering {currentFreqKhz} kHz
               {radiusKm ? ` within ${radiusKm} km` : ""}
             </div>
           )}
 
-          {/* Node rows */}
-          {nodes.map((node, index) => {
+          {/* ── KiwiSDR node rows ── */}
+          {showKiwi && nodes.map((node, index) => {
             const isActive =
               activeConfig?.host === node.host &&
               activeConfig?.port === node.port;
             return (
               <div
-                key={`${node.host}:${node.port}-${index}`}
+                key={`kiwi-${node.host}:${node.port}-${index}`}
                 className={`
                 flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/50 transition-colors
                 ${
@@ -387,14 +481,19 @@ export default function KiwiNodeBrowser({
 
                 {/* Host + freq range + load */}
                 <div className="flex-1 min-w-0">
-                  <div
-                    className="font-mono text-xs text-slate-200 truncate"
-                    title={`${node.host}:${node.port}`}
-                  >
-                    {node.host}
-                    <span className="text-slate-600 ml-1 text-[10px]">
-                      :{node.port}
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1 py-0.5 rounded text-[9px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 uppercase shrink-0">
+                      KiwiSDR
                     </span>
+                    <div
+                      className="font-mono text-xs text-slate-200 truncate"
+                      title={`${node.host}:${node.port}`}
+                    >
+                      {node.host}
+                      <span className="text-slate-600 ml-1 text-[10px]">
+                        :{node.port}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-slate-600 font-mono">
@@ -433,11 +532,76 @@ export default function KiwiNodeBrowser({
               </div>
             );
           })}
+
+          {/* ── WebSDR node rows ── */}
+          {showWebSDR && webSDRNodes.map((node, index) => (
+            <div
+              key={`websdr-${node.url}-${index}`}
+              className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/50 hover:bg-slate-800/40 transition-colors"
+            >
+              {/* Type dot */}
+              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-violet-600" />
+
+              {/* Name + bands + freq range */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="px-1 py-0.5 rounded text-[9px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 uppercase shrink-0">
+                    WebSDR
+                  </span>
+                  <div
+                    className="font-mono text-xs text-slate-200 truncate"
+                    title={node.url}
+                  >
+                    {node.name || new URL(node.url).hostname}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-slate-600 font-mono">
+                    {node.freq_min_khz < 1000
+                      ? `${node.freq_min_khz.toFixed(0)}`
+                      : `${(node.freq_min_khz / 1000).toFixed(0)}M`}–
+                    {node.freq_max_khz >= 1000000
+                      ? `${(node.freq_max_khz / 1000).toFixed(0)}M`
+                      : node.freq_max_khz >= 1000
+                      ? `${(node.freq_max_khz / 1000).toFixed(0)}M`
+                      : `${node.freq_max_khz.toFixed(0)}`} kHz
+                  </span>
+                  {/* Band chips (first 3) */}
+                  {node.bands.slice(0, 3).map((b) => (
+                    <span key={b} className="text-[9px] text-violet-500/70 font-mono uppercase">
+                      {b}
+                    </span>
+                  ))}
+                  {node.bands.length > 3 && (
+                    <span className="text-[9px] text-slate-700">+{node.bands.length - 3}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Distance badge */}
+              <div
+                className={`px-1.5 py-0.5 rounded border text-[10px] font-mono shrink-0 ${webSDRDistanceCls(node.distance_km)}`}
+              >
+                {fmtDistance(node.distance_km)}
+              </div>
+
+              {/* Open button */}
+              <button
+                onClick={() => {
+                  onOpenWebSDR?.(node);
+                  onClose();
+                }}
+                className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/25"
+              >
+                Open
+              </button>
+            </div>
+          ))}
         </div>
       ) : (
         /* ── Map view ── */
         <div className="relative" style={{ height: 320 }}>
-          {loading && nodes.length === 0 && (
+          {isLoading && nodes.length === 0 && webSDRNodes.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 text-slate-500 text-xs bg-slate-950/80 z-10">
               <Loader2 className="w-4 h-4 animate-spin" />
               Fetching nodes…
@@ -494,8 +658,8 @@ export default function KiwiNodeBrowser({
               </Marker>
             )}
 
-            {/* Node markers */}
-            {nodes
+            {/* KiwiSDR node markers */}
+            {showKiwi && nodes
               .filter(node => !isNaN(node.lat) && !isNaN(node.lon))
               .map((node, index) => {
                 const isActive =
@@ -504,12 +668,13 @@ export default function KiwiNodeBrowser({
                 const color = isActive ? "#818cf8" : markerColor(node.distance_km);
                 return (
                   <Marker
-                    key={`${node.host}:${node.port}-${index}`}
+                    key={`kiwi-${node.host}:${node.port}-${index}`}
                     latitude={node.lat}
                     longitude={node.lon}
                     anchor="center"
                     onClick={(e) => {
                       e.originalEvent.stopPropagation();
+                      setSelectedWebSDRNode(null);
                       setSelectedNode(
                         selectedNode?.host === node.host &&
                           selectedNode?.port === node.port
@@ -519,13 +684,46 @@ export default function KiwiNodeBrowser({
                     }}
                   >
                     <div
-                      title={`${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
+                      title={`KiwiSDR: ${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
                       className={`w-2.5 h-2.5 rounded-full border-2 cursor-pointer transition-transform hover:scale-125 ${
                         isActive ? "animate-pulse" : ""
                       }`}
                       style={{
                         background: color + "40",
                         borderColor: color,
+                      }}
+                    />
+                  </Marker>
+                );
+              })}
+
+            {/* WebSDR node markers (diamonds — visually distinct from KiwiSDR circles) */}
+            {showWebSDR && webSDRNodes
+              .filter(node => node.lat !== 0 && node.lon !== 0 && !isNaN(node.lat) && !isNaN(node.lon))
+              .map((node, index) => {
+                const color = webSDRMarkerColor(node.distance_km);
+                return (
+                  <Marker
+                    key={`websdr-${node.url}-${index}`}
+                    latitude={node.lat}
+                    longitude={node.lon}
+                    anchor="center"
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation();
+                      setSelectedNode(null);
+                      setSelectedWebSDRNode(
+                        selectedWebSDRNode?.url === node.url ? null : node,
+                      );
+                    }}
+                  >
+                    <div
+                      title={`WebSDR: ${node.name || node.url} — ${fmtDistance(node.distance_km)}`}
+                      className="w-3 h-3 cursor-pointer transition-transform hover:scale-125"
+                      style={{
+                        background: color + "40",
+                        borderColor: color,
+                        border: `2px solid ${color}`,
+                        transform: "rotate(45deg)",
                       }}
                     />
                   </Marker>
@@ -591,6 +789,54 @@ export default function KiwiNodeBrowser({
                 </div>
               </Popup>
             )}
+            {/* WebSDR node detail popup */}
+            {selectedWebSDRNode && (
+              <Popup
+                latitude={selectedWebSDRNode.lat}
+                longitude={selectedWebSDRNode.lon}
+                anchor="bottom"
+                offset={12}
+                onClose={() => setSelectedWebSDRNode(null)}
+                closeButton={false}
+              >
+                <div className="bg-slate-900 border border-slate-700 rounded-md p-2 text-xs min-w-[180px]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-1 py-0.5 rounded text-[9px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 uppercase">
+                      WebSDR
+                    </span>
+                    <span className="text-slate-200 truncate font-semibold">
+                      {selectedWebSDRNode.name || new URL(selectedWebSDRNode.url).hostname}
+                    </span>
+                  </div>
+                  {selectedWebSDRNode.location && (
+                    <div className="text-[10px] text-slate-500 mb-1">{selectedWebSDRNode.location}</div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-slate-600 font-mono text-[10px]">
+                      {selectedWebSDRNode.freq_min_khz.toFixed(0)}–{selectedWebSDRNode.freq_max_khz.toFixed(0)} kHz
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`px-1.5 py-0.5 rounded border text-[10px] font-mono ${webSDRDistanceCls(selectedWebSDRNode.distance_km)}`}
+                    >
+                      {fmtDistance(selectedWebSDRNode.distance_km)}
+                    </span>
+                    <button
+                      onClick={() => {
+                        onOpenWebSDR?.(selectedWebSDRNode);
+                        setSelectedWebSDRNode(null);
+                        onClose();
+                      }}
+                      className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/25 transition-colors"
+                    >
+                      Open
+                    </button>
+                  </div>
+                </div>
+              </Popup>
+            )}
+
             <NavigationControl position="bottom-right" />
           </Map>
         </div>

@@ -138,6 +138,19 @@ export interface KiwiNode {
   snr?: number;
 }
 
+export interface WebSDRNode {
+  url: string;          // Full HTTP URL e.g. http://websdr.ewi.utwente.nl:8901/
+  name: string;         // Operator callsign / name
+  location: string;     // City/country
+  lat: number;
+  lon: number;
+  bands: string[];      // e.g. ["hf", "2m", "70cm"]
+  freq_min_khz: number;
+  freq_max_khz: number;
+  users: number;
+  distance_km: number;
+}
+
 export type RFService = 'ham' | 'gmrs' | 'public_safety' | 'noaa_nwr';
 export type RFMode = 'FM' | 'DMR' | 'P25' | 'D-Star' | 'Fusion' | 'NXDN' | 'TETRA';
 export type EmcommFlag = 'ARES' | 'RACES' | 'SKYWARN' | 'CERT' | 'WICEN';
