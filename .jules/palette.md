@@ -43,3 +43,6 @@
 ## 2025-03-09 - Preserving Layout when Converting Divs to Semantic Buttons
 **Learning:** When converting a non-semantic block element (like a `div`) to an inline-level semantic `<button>` in Tailwind to improve accessibility, the layout flow can unexpectedly break because buttons behave as inline-blocks by default and center their text.
 **Action:** Always remember to append utility classes like `w-full` and `text-left` to the new button to safely preserve the original layout and visual block-level flow while benefiting from the semantic markup.
+## 2024-05-18 - Tooltip-Only Icons are Insufficient
+**Learning:** Found multiple icon-only buttons (like Play/Pause, News Refresh) that relied entirely on the `title` attribute for accessibility. Screen reader users need explicit `aria-label` attributes because `title` is often ignored or inconsistently read by assistive technologies.
+**Action:** Always add explicit `aria-label` to icon-only buttons, even if a `title` tooltip is present. Ensure interactive buttons also have visible focus states (`focus-visible:ring-1 ...`) for keyboard users.

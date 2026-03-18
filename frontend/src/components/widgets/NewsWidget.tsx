@@ -84,8 +84,9 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({ compact = false }) => {
         <button
           onClick={fetchNews}
           disabled={loading}
-          className="ml-auto text-white/20 hover:text-white/60 transition-colors disabled:opacity-30"
+          className="ml-auto text-white/20 hover:text-white/60 transition-colors disabled:opacity-30 focus-visible:ring-1 focus-visible:ring-amber-400 outline-none"
           title="Refresh news feed"
+          aria-label="Refresh news feed"
         >
           <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
         </button>
