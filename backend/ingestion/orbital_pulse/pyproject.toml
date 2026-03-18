@@ -1,0 +1,13 @@
+[project]
+name = "sovereign-watch-orbital-pulse"
+version = "0.1.0"
+description = "Sovereign Watch orbital/satellite tracking poller"
+requires-python = ">=3.12"
+dependencies = [
+    # Note: asyncio is Python stdlib and must NOT be listed as a pip dependency
+    "aiohttp==3.13.3",
+    "aiokafka==0.13.0",
+    "redis==7.3.0",
+    "sgp4==2.25",
+    "numpy==2.4.3",
+]

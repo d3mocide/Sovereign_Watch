@@ -1,13 +1,17 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+# Install uv from the official distroless image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency manifests first for layer caching
+COPY pyproject.toml uv.lock ./
 
-# Copy application code
+# Install production dependencies only, using the exact lock file
+ENV UV_SYSTEM_PYTHON=1
+RUN uv sync --frozen --no-dev
+
 COPY . .
 
-# Run the poller
 CMD ["python", "-u", "main.py"]

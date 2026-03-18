@@ -1,6 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS 4.x: single @import replaces the three @tailwind directives */
+@import "tailwindcss";
+/* Load the JS theme config (colors, fonts, etc.) */
+@config "../tailwind.config.js";
 
 @layer base {
   body {
