@@ -1,24 +1,26 @@
-# Release - v0.34.1 - Stability & Performance Overhaul
+# Release - v0.35.0 - Oracle & Orbit
 
 ## High-Level Summary
-This release focuses on critical infrastructure stability and container performance after the migration to the `uv` Python package manager. We addressed several "cold-boot" regressions that were causing services to fail on startup or experience significant lag.
 
-## Key Fixes
-- **Unified Venv Path**: Moved all virtual environments to `/opt/venv` to prevent Docker volume masking, ensuring dependencies are always available regardless of source-mount configuration.
-- **Boot Optimization**: Implemented `--no-sync` and pre-compiled bytecode to reduce service startup times.
-- **Build Isolation**: Added comprehensive `.dockerignore` patterns to fix context transfer issues on Windows hosts.
+This release significantly enhances the platform's distributed intelligence fusion capabilities and orbital monitoring reliability. Key additions include a multi-mode AI Analyst supporting Tactical, OSINT, and SAR specializations, along with a major performance and stability overhaul for the global tracking telemetry system.
+
+## Key Features
+
+- **Specialized AI Analysis (Oracle)**: The AI Analyst now features selectable modes (Tactical, OSINT, SAR), allowing operators to tailor automated intelligence assessments to specific mission profiles.
+- **Orbital Tracking Performance**: Implemented an isolated filter state for the Orbital Map view, ensuring that even with 1,500+ active satellites, map performance remains fluid and counts remain stable.
+- **Stability & Reliability**: Squashed a persistent flicker bug in the global track counts and ensured the AI Analyst triggers reliably across all map view modes.
 
 ## Technical Details
-- **Dependency Management**: Standardized on `uv` patterns for all Python services (FastAPI + Pollers).
-- **Base Image Compatibility**: Relaxed `js8call` requirements to match Ubuntu 22.04 LTS system Python (3.10.x).
+
+- **Backend**: Enhanced `@router.post("/api/analyze/{uid}")` to handle mode-specific personas and synthesized satellite tracks from TLE data if no historical tracks are stored.
+- **Frontend**: Transitioned high-frequency map data threading to a more stable prop-memoization pattern to reduce React reconciliation overhead.
+- **Documentation**: New [AI Configuration Guide](./Documentation/AI_Configuration.md) added to support developers extending LiteLLM-based capabilities.
 
 ## Upgrade Instructions
-1. Pull the latest `dev` branch.
-2. Rebuild the core service stack:
-   ```bash
-   docker compose build backend-api adsb-poller ais-poller orbital-pulse infra-poller rf-pulse
-   ```
-3. Restart all services:
-   ```bash
-   docker compose up -d
-   ```
+
+Run the following commands to pull the latest changes and rebuild the environment:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```

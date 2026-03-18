@@ -234,8 +234,6 @@ export function useMissionArea({
       prevCourseRef.current.clear();
       drStateRef.current.clear();
       visualStateRef.current.clear();
-      countsRef.current = { air: 0, sea: 0, orbital: 0 };
-      onCountsUpdate?.({ air: 0, sea: 0, orbital: 0 });
 
       // Clear selection to avoid ghost trails
       onEntitySelect(null);

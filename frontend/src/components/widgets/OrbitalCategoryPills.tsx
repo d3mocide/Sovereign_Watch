@@ -16,7 +16,7 @@ const CATEGORIES = [
 ] as const;
 
 interface OrbitalStats {
-  gps: number; weather: number; comms: number; surveillance: number; other: number; total: number;
+  gps: number; weather: number; comms: number; intel: number; other: number; total: number;
 }
 
 // constellation-stats response: { [category]: { [constellation]: count } }
