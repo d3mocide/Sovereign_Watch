@@ -108,6 +108,20 @@ function App() {
   } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
+  // View Mode Persistence
+  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD'>(() => {
+    const saved = localStorage.getItem('viewMode');
+    if (saved === 'ORBITAL' || saved === 'TACTICAL' || saved === 'RADIO' || saved === 'DASHBOARD') {
+      return saved as 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD';
+    }
+    return 'TACTICAL';
+  });
+
+  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD') => {
+    setViewModeState(mode);
+    localStorage.setItem('viewMode', mode);
+  }, []);
+
   // Background Data Maintenance (Cleanup & Counting)
   // This runs regardless of viewMode, ensuring Dashboard counts are live.
   useEffect(() => {
@@ -140,22 +154,27 @@ function App() {
         knownUidsRef.current.delete(uid);
       });
 
-      // Count Orbital (Excluding Starlink which is suppressed for Dashboard)
+      // 3. Count Orbital (Excluding Starlink which is suppressed for Dashboard)
       satellitesRef.current.forEach((sat) => {
         if (sat.detail?.constellation !== 'Starlink') {
           orbital++;
         }
       });
 
-      if (air !== countsRef.current.air || sea !== countsRef.current.sea || orbital !== countsRef.current.orbital) {
-        countsRef.current = { air, sea, orbital };
-        setTrackCounts({ air, sea, orbital });
+      // 4. Update trackCounts state ONLY if we are in a non-map view.
+      // In TACTICAL and ORBITAL modes, useAnimationLoop handles high-frequency,
+      // filter-aware counts that provide a much better UX.
+      if (viewMode === 'DASHBOARD' || viewMode === 'RADIO') {
+        if (air !== countsRef.current.air || sea !== countsRef.current.sea || orbital !== countsRef.current.orbital) {
+          countsRef.current = { air, sea, orbital };
+          setTrackCounts({ air, sea, orbital });
+        }
       }
     };
 
     const timer = setInterval(maintenance, 1000);
     return () => clearInterval(timer);
-  }, [entitiesRef, satellitesRef, knownUidsRef]);
+  }, [entitiesRef, satellitesRef, knownUidsRef, viewMode]);
 
   // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
   const { cablesData, stationsData, outagesData } = useInfraData();
@@ -308,19 +327,7 @@ function App() {
     return saved !== null ? JSON.parse(saved) : true; // Default to true for better initial UX
   });
 
-  // View Mode Persistence
-  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD'>(() => {
-    const saved = localStorage.getItem('viewMode');
-    if (saved === 'ORBITAL' || saved === 'TACTICAL' || saved === 'RADIO' || saved === 'DASHBOARD') {
-      return saved as 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD';
-    }
-    return 'TACTICAL';
-  });
-
-  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD') => {
-    setViewModeState(mode);
-    localStorage.setItem('viewMode', mode);
-  }, []);
+  // History Tails Toggle
 
   const handleHistoryTailsToggle = useCallback(() => {
     setShowHistoryTails((prev: boolean) => {
@@ -446,6 +453,11 @@ function App() {
       showLandingStations: false,
     };
   }, [filters, orbitalSatFilters, showTerminator]);
+  
+  const tacticalFilters = useMemo(() => ({
+    ...filters,
+    showTerminator
+  }), [filters, showTerminator]);
 
   const [replayTime, setReplayTime] = useState<number>(Date.now());
   const [replayRange, setReplayRange] = useState({ start: Date.now() - 3600000, end: Date.now() });
@@ -763,7 +775,7 @@ function App() {
         <>
           <TacticalMap
             onCountsUpdate={setTrackCounts}
-            filters={{ ...filters, showTerminator } as any}
+            filters={tacticalFilters as any}
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
@@ -832,25 +844,18 @@ function App() {
           selectedEntity={selectedEntity}
           // The rest are dummy/no-ops for the layout shell
           onCountsUpdate={setTrackCounts as any}
-          onEvent={NOOP}
-          onMissionPropsReady={NOOP}
-          onMapActionsReady={NOOP}
+          onEvent={addEvent}
+          missionArea={missionArea}
+          onMissionPropsReady={setMissionProps}
+          onMapActionsReady={setMapActions}
           showVelocityVectors={false}
           showHistoryTails={showHistoryTails}
           onToggleGlobe={() => setOrbitalViewMode(orbitalViewMode === '3D' ? '2D' : '3D')}
           replayMode={false}
           replayEntities={new Map()}
-          followMode={false}
-          onFollowModeChange={NOOP}
-          onEntityLiveUpdate={handleEntityLiveUpdate}
-          js8StationsRef={js8StationsRef}
-          ownGridRef={js8OwnGridRef}
-          rfSitesRef={rfSitesRef}
-          showRepeaters={orbitalFilters.showRepeaters as boolean}
-          repeatersLoading={repeatersLoading}
-          onSatellitesRefReady={(ref) => {
-            orbitalSatellitesRef.current = ref;
-          }}
+          followMode={followMode}
+          onFollowModeChange={setFollowMode}
+          showTerminator={showTerminator}
           entitiesRef={entitiesRef}
           satellitesRef={satellitesRef}
           knownUidsRef={knownUidsRef}
@@ -863,6 +868,9 @@ function App() {
           stationsData={stationsData}
           outagesData={outagesData}
           worldCountriesData={worldCountriesData}
+          onSatellitesRefReady={(ref: any) => {
+            orbitalSatellitesRef.current = ref;
+          }}
         />
       ) : viewMode === 'DASHBOARD' ? (
         <DashboardView

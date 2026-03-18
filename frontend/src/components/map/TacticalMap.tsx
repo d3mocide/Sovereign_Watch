@@ -128,6 +128,7 @@ interface TacticalMapProps {
   stationsData: any;
   outagesData: any;
   worldCountriesData: any;
+  showTerminator?: boolean;
 }
 
 export function TacticalMap({

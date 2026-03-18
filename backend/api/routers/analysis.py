@@ -7,6 +7,10 @@ from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from core.database import db
 from routers.system import AI_MODEL_REDIS_KEY, AI_MODEL_DEFAULT
+from datetime import datetime, timezone, timedelta
+import numpy as np
+from sgp4.api import Satrec, jday
+from utils.sgp4_utils import teme_to_ecef, ecef_to_lla_vectorized
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Analysis")
@@ -22,10 +26,21 @@ def _load_model_map() -> dict:
     try:
         with open(_LITELLM_CONFIG_PATH) as f:
             cfg = yaml.safe_load(f)
-        return {
-            m["model_name"]: m["litellm_params"]["model"]
-            for m in cfg.get("model_list", [])
-        }
+        
+        model_map = {}
+        for m in cfg.get("model_list", []):
+            name = m["model_name"]
+            params = m.get("litellm_params", {}).copy()
+            
+            # Resolve environment variables for all parameters
+            for key, val in params.items():
+                if isinstance(val, str) and val.startswith("os.environ/"):
+                    env_var = val.split("/", 1)[1]
+                    params[key] = os.getenv(env_var, val)
+                
+            model_map[name] = params
+            
+        return model_map
     except Exception as e:
         logger.warning(f"Could not load LiteLLM config from {_LITELLM_CONFIG_PATH}: {e}")
         return {}
@@ -63,19 +78,33 @@ async def analyze_track(
         except Exception as e:
             logger.warning(f"Rate limiting failed: {e}")
 
-    # 1. Fetch Track History Summary
-    # We aggregate to reduce tokens: Start/End location, bounding box, avg speed/alt
+    # 1. Fetch Track History Summary & Metadata
     track_query = """
-        SELECT
-            min(time) as start_time,
-            max(time) as last_seen,
-            count(*) as points,
-            avg(speed) as avg_speed,
-            avg(alt) as avg_alt,
-            ST_AsText(ST_Centroid(ST_Collect(geom))) as centroid
-        FROM tracks
-        WHERE entity_id = $1
-        AND time > NOW() - INTERVAL '1 hour' * $2
+        WITH summary AS (
+            SELECT
+                min(time) as start_time,
+                max(time) as last_seen,
+                count(*) as points,
+                avg(speed) as avg_speed,
+                min(speed) as min_speed,
+                max(speed) as max_speed,
+                avg(alt) as avg_alt,
+                min(alt) as min_alt,
+                max(alt) as max_alt,
+                ST_Centroid(ST_Collect(geom)) as centroid_geom
+            FROM tracks
+            WHERE entity_id = $1
+            AND time > NOW() - INTERVAL '1 hour' * $2
+        ),
+        metadata AS (
+            SELECT type, meta
+            FROM tracks
+            WHERE entity_id = $1
+            ORDER BY time DESC
+            LIMIT 1
+        )
+        SELECT s.*, m.type, m.meta
+        FROM summary s, metadata m
     """
     try:
         track_summary = await db.pool.fetchrow(track_query, uid, req.lookback_hours)
@@ -83,25 +112,163 @@ async def analyze_track(
         logger.error(f"Analysis track query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    if not track_summary or track_summary['points'] == 0:
-        return {"error": "No track data found for this entity within lookback period"}
+    # 1.1 SATELLITE FALLBACK: If no hard tracks exist, but it's a known satellite, synthesize a track using SGP4
+    if (not track_summary or track_summary['points'] == 0) and uid.startswith("SAT-"):
+        norad_id = uid.replace("SAT-", "")
+        async with db.pool.acquire() as conn:
+            sat_row = await conn.fetchrow(
+                "SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id = $1",
+                norad_id
+            )
+        
+        if sat_row and sat_row['tle_line1'] and sat_row['tle_line2']:
+            try:
+                satrec = Satrec.twoline2rv(sat_row['tle_line1'], sat_row['tle_line2'])
+                now = datetime.now(timezone.utc)
+                
+                # Synthesize 10 points over the lookback period
+                points = []
+                for i in range(10):
+                    t = now - timedelta(hours=req.lookback_hours * (i / 10))
+                    jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second + t.microsecond / 1e6)
+                    e, r, v = satrec.sgp4(jd, fr)
+                    if e == 0:
+                        r_ecef = teme_to_ecef(np.array(r), jd, fr)
+                        lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                        speed = np.linalg.norm(np.array(v)) * 1000 # km/s to m/s
+                        points.append({
+                            "lat": lat[0], "lon": lon[0], "alt": alt[0] * 1000, "speed": speed, "time": t
+                        })
+                
+                if points:
+                    speeds = [p['speed'] for p in points]
+                    alts = [p['alt'] for p in points]
+                    
+                    # Construct a virtual track summary
+                    # Note: meta is formatted to match tracks table JSONB structure
+                    track_summary = {
+                        'start_time': points[-1]['time'],
+                        'last_seen': points[0]['time'],
+                        'points': len(points),
+                        'avg_speed': sum(speeds) / len(speeds),
+                        'min_speed': min(speeds),
+                        'max_speed': max(speeds),
+                        'avg_alt': sum(alts) / len(alts),
+                        'min_alt': min(alts),
+                        'max_alt': max(alts),
+                        'centroid_geom': f"SRID=4326;POINT({points[0]['lon']} {points[0]['lat']})",
+                        'type': 'a-s-K',
+                        'meta': {
+                            'callsign': sat_row['name'],
+                            'classification': {
+                                'category': sat_row['category'],
+                                'constellation': sat_row['constellation']
+                            }
+                        }
+                    }
+                    logger.info(f"Synthesized virtual track for satellite {uid} ({len(points)} points)")
+            except Exception as e:
+                logger.warning(f"Failed to synthesize satellite track for {uid}: {e}")
 
-    # 2. Construct Prompt
-    system_prompt = """
-    You are a Senior Intelligence Analyst. You are viewing a map of a decentralized sensor network.
-    Analyze the provided track telemetry and correlated intelligence reports.
-    Identify anomalies (erratic flight, dark AIS, mismatches).
-    Return a concise tactical summary.
+    if not track_summary or track_summary['points'] == 0:
+        # Instead of returning a naked dict (which fails as EventSourceResponse expects an iterable), 
+        # yield an error event in the stream
+        async def error_generator():
+            yield {"event": "error", "data": "No track data found for this entity within lookback period"}
+        return EventSourceResponse(error_generator())
+
+    # 1.5 Fetch Nearby Intel Reports (Fusion)
+    intel_context = ""
+    if track_summary['centroid_geom']:
+        intel_query = """
+            SELECT content, timestamp
+            FROM intel_reports
+            WHERE ST_DWithin(geom::geography, $1::geography, 50000) -- 50km radius
+            ORDER BY timestamp DESC
+            LIMIT 3
+        """
+        try:
+            intel_rows = await db.pool.fetch(intel_query, track_summary['centroid_geom'])
+            if intel_rows:
+                intel_context = "\nCORRELATED INTEL REPORTS (50km Radius):\n"
+                for r in intel_rows:
+                    intel_context += f"- [{r['timestamp'].strftime('%Y-%m-%d %H:%M')}] {r['content']}\n"
+        except Exception as e:
+            logger.warning(f"Failed to fetch intel for analysis: {e}")
+
+    # 2. Construct Prompt based on Mode
+    # Helper to decode CoT type (deterministic parse in Python)
+    cot_type = track_summary.get('type', 'u-u-U')
+    parts = cot_type.split('-')
+    
+    # Affiliation (2nd part) and Domain (3rd part) mapping
+    affiliation_map = {'f': 'FRIENDLY', 'h': 'HOSTILE', 's': 'SUSPECT', 'n': 'NEUTRAL', 'u': 'UNKNOWN'}
+    domain_map = {'A': 'AIR', 'S': 'SURFACE / MARITIME', 'G': 'GROUND', 's': 'SPACE / ORBITAL', 'p': 'INFRASTRUCTURE', 'K': 'SPACE / ORBITAL'}
+    
+    affil_char = parts[1] if len(parts) > 1 else 'u'
+    domain_char = parts[2] if len(parts) > 2 else 'u'
+    
+    resolved_affil = affiliation_map.get(affil_char, 'UNKNOWN')
+    resolved_domain = domain_map.get(domain_char, 'UNKNOWN')
+
+    # TAK/CoT Reference for LLM Context
+    COT_KNOWLEDGE = f"""
+    ENTITY CONTEXT (Derived from CoT ID '{uid}' and Type '{cot_type}'):
+    - DETECTED DOMAIN: {resolved_domain}
+    - DETECTED AFFILIATION: {resolved_affil}
+    
+    TAK/CoT DECODING RULES:
+    1. Type Hierarchy: atom-affiliation-domain-platform-subplatform (e.g., a-f-A-C-F)
+    2. Domains: A=Air, S=Surface(Sea), G=Ground, s=Space.
+    3. Platforms: C=Civilian, M=Military.
+    4. Identifiers: 
+       - 6-character hex string (e.g. a1b2c3) -> Aviation (ICAO Address).
+       - 9-digit numeric string (e.g. 123456789) -> Maritime (MMSI).
+       - SAT-XXXXX -> Satellite.
     """
+
+    personas = {
+        "tactical": {
+            "system": f"You are a Tactical Intelligence Analyst. Focus on telemetry anomalies, trajectory analysis, and speed/altitude fluctuations. Be concise and professional.\n{COT_KNOWLEDGE}",
+            "instruction": "Provide a tactical assessment. Use **Section Header:** format for clarity with two line breaks between sections."
+        },
+        "osint": {
+            "system": f"You are an OSINT Specialist. Focus on entity identification, callsign/registration matching, and identifying potential spoofing or 'ghost' behavior.\n{COT_KNOWLEDGE}",
+            "instruction": "Analyze the identity and metadata. Use **Section Header:** format for clarity with two line breaks between sections."
+        },
+        "sar": {
+            "system": f"You are a Search and Rescue Coordinator. Look for circular patterns, sudden stops, or rapid altitude changes that indicate distress.\n{COT_KNOWLEDGE}",
+            "instruction": "Evaluate if this track exhibits characteristics of a vehicle in distress. Use **Section Header:** format for clarity with two line breaks between sections."
+        }
+    }
+    
+    selected_persona = personas.get(req.mode.lower(), personas["tactical"])
+    system_prompt = selected_persona["system"]
+
+    meta = track_summary['meta'] or {}
+    if isinstance(meta, str):
+        import json
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = {}
+            
+    callsign = meta.get('callsign') or meta.get('flight') or "Unknown"
+    reg = meta.get('registration') or "Unknown"
 
     user_content = f"""
     TARGET: {uid}
-    TELEMETRY SUMMARY ({req.lookback_hours}h):
-    - Points: {track_summary['points']}
-    - Avg Speed: {track_summary['avg_speed'] or 0:.1f} m/s
-    - Avg Alt: {track_summary['avg_alt'] or 0:.0f} m
+    DATA SOURCE: {track_summary['type']}
+    IDENTIFIERS: Callsign: {callsign}, Reg: {reg}
+    
+    TELEMETRY SUMMARY ({req.lookback_hours}h window):
+    - Data Points: {track_summary['points']}
+    - Speed: Avg {track_summary['avg_speed'] or 0:.1f} m/s (Range: {track_summary['min_speed'] or 0:.1f} - {track_summary['max_speed'] or 0:.1f})
+    - Altitude: Avg {track_summary['avg_alt'] or 0:.0f} m (Range: {track_summary['min_alt'] or 0:.0f} - {track_summary['max_alt'] or 0:.0f})
     - Last Seen: {track_summary['last_seen']}
-
+    {intel_context}
+    
+    INSTRUCTION: {selected_persona['instruction']}
     ASSESSMENT:
     """
 
@@ -116,24 +283,16 @@ async def analyze_track(
             logger.warning(f"Could not read AI model from Redis, using default: {e}")
 
     # 4. Stream AI Response
-    # NEW-003 (supersedes BUG-005): The prior asyncio.to_thread(completion, ...,
-    # stream=True) fix only offloaded the initial HTTP handshake. The generator
-    # returned immediately, but the chunk-by-chunk iteration ran synchronously
-    # back in the event loop — recreating the blocking problem, one token at a
-    # time. Switching to acompletion() + async for keeps the event loop fully
-    # unblocked throughout the entire streaming response.
-    #
-    # Translate the stored model alias (e.g. "public-flash") to the LiteLLM
-    # provider-prefixed string (e.g. "gemini/gemini-1.5-flash") that acompletion
-    # actually understands. Falls back to the alias itself if not found so that
-    # unknown models fail with a clear LiteLLM error rather than silently.
-    litellm_model = _MODEL_MAP.get(active_model, active_model)
-    logger.info(f"Running analysis for {uid} with model {active_model!r} -> {litellm_model!r}")
+    # Resolve the model parameters (including base_url, api_key if provided)
+    model_params = _MODEL_MAP.get(active_model, {"model": active_model})
+    target_model_str = model_params.get("model", active_model)
+    
+    logger.info(f"Running analysis for {uid} with model {active_model!r} -> {target_model_str}")
 
     async def event_generator():
         try:
             response = await acompletion(
-                model=litellm_model,
+                **model_params,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
@@ -145,7 +304,7 @@ async def analyze_track(
                 if content:
                     yield {"data": content}
         except Exception as e:
-            logger.error(f"AI analysis failed for {uid} (model={litellm_model!r}): {e}")
+            logger.error(f"AI analysis failed for {uid} (model={target_model_str!r}): {e}")
             yield {"event": "error", "data": str(e)}
 
     return EventSourceResponse(event_generator())

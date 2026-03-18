@@ -12,16 +12,14 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps, RFSite } from "../../types";
+import { CoTEntity, JS8Station, MissionProps, RFSite, GroundTrackPoint } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
-import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { StarField } from "./StarField";
-import type { GroundTrackPoint } from "../../layers/OrbitalLayer";
 import { parseMissionHash, updateMissionHash } from "../../hooks/useMissionHash";
 
 // Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
@@ -128,6 +126,8 @@ interface TacticalMapProps {
   stationsData: any;
   outagesData: any;
   worldCountriesData: any;
+  showTerminator?: boolean;
+  missionArea: any;
 }
 
 export function OrbitalMap({
@@ -165,6 +165,8 @@ export function OrbitalMap({
   stationsData,
   outagesData,
   worldCountriesData,
+  showTerminator,
+  missionArea,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -473,21 +475,7 @@ export function OrbitalMap({
     setSaveFormCoords,
     handleSaveFormSubmit,
     handleSaveFormCancel,
-  } = useMissionArea({
-    mapRef,
-    currentMissionRef,
-    entitiesRef,
-    knownUidsRef,
-    prevCourseRef,
-    drStateRef,
-    visualStateRef,
-    countsRef,
-    onCountsUpdate,
-    onEntitySelect,
-    onMissionPropsReady,
-    initialLat,
-    initialLon,
-  });
+  } = missionArea;
 
   useAnimationLoop({
     entitiesRef,
@@ -721,12 +709,7 @@ export function OrbitalMap({
           maxPitch={globeMode ? 0 : 85}
           deckProps={{
             key: `overlay-${globeMode ? "globe" : "merc"}-${enable3d ? "3d" : "2d"}`, // Force remount on projection/3D change
-            id: "tactical-overlay",
-            // Globe mode: interleaved shares the Mapbox WebGL context and depth buffer.
-            // The globe sphere writes depth when rendered, so DeckGL layers that come
-            // after in the render pipeline correctly clip far-side geometry via depthTest.
-            // Previous attempts failed due to _full3d conflicts + per-frame projection
-            // being set — both are now removed, so this should work cleanly.
+            id: "orbital-overlay",
             interleaved: false,
             globeMode,
             onOverlayLoaded: handleOverlayLoaded,

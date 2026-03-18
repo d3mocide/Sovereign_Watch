@@ -7,6 +7,7 @@ class AIModelRequest(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     lookback_hours: int = Field(24, ge=1, le=168, description="Analysis window in hours (max 7 days)")
+    mode: str = Field("tactical", description="Analysis persona: tactical, osint, sar")
 
 class MissionLocation(BaseModel):
     lat: float

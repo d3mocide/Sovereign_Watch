@@ -1,3 +1,24 @@
+## [0.35.0] - 2026-03-18
+
+### Added
+
+- **Multi-Mode AI Analysis**: The AI Analyst now supports specialized operational modes:
+    - **Tactical**: Focuses on telemetry anomalies and trajectory analysis.
+    - **OSINT**: Focuses on entity identification and registration matching.
+    - **SAR**: Optimized for identifying distress patterns and search grids.
+- **Orbital Tracking Performance**: Implemented a specialized isolated filter state for the Orbital Map to prevent high-frequency satellite updates from impacting tactical map performance.
+- **AI Configuration Guide**: New documentation clarifying the distinction between the UI model catalog (`models.yaml`) and the Backend infrastructure (`litellm_config.yaml`).
+
+### Changed
+
+- **State Stability**: Memoized filter objects and stabilized prop references in `TacticalMap` and `OrbitalMap` to reduce unnecessary re-renders.
+
+### Fixed
+
+- **Orbital Count Flickering**: Resolved a race condition in the animation loop that caused the global tracker to intermittently jump to zero during filter transitions.
+- **Analyst Reliability**: Fixed a bug where the AI Analyst panel failed to auto-run when opened from the Orbital view.
+- **Text Formatting**: Cleaned up spacing artifacts in AI-generated reports (e.g., "it ' s" -> "it's").
+
 ## [0.34.1] - 2026-03-17
 
 ### Fixed

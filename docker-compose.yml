@@ -194,20 +194,28 @@ services:
       - CENTER_LAT=${CENTER_LAT:-45.5152}
       - CENTER_LON=${CENTER_LON:--122.6784}
       - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
-      - LITELLM_MODEL=deep-reasoner
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
       - REPEATERBOOK_API_TOKEN=${REPEATERBOOK_API_TOKEN}
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
+      - LITELLM_MODEL=${LITELLM_MODEL:-secure-core}
+      - OPEN_API_BASE=${OPEN_API_BASE:-http://host.docker.internal:11434}
+      - OPEN_API_KEY=${OPEN_API_KEY}
+      - OPEN_API_MODEL=${OPEN_API_MODEL:-llama3}
+      - OPEN_API_LABEL=${OPEN_API_LABEL:-Llama3}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - GEMINI_LABEL=${GEMINI_LABEL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - ANTHROPIC_LABEL=${ANTHROPIC_LABEL}
       - MODELS_YAML_PATH=/app/models.yaml
       - LITELLM_CONFIG_PATH=/app/litellm_config.yaml
     volumes:
       - ./backend/api:/app
-      - ./models.yaml:/app/models.yaml:ro
+      - ./backend/ai/models.yaml:/app/models.yaml:ro
       - ./backend/ai/litellm_config.yaml:/app/litellm_config.yaml:ro
     networks:
       - backend-net
