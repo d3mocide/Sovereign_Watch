@@ -89,6 +89,7 @@ Full documentation is in the [`Documentation/`](./Documentation/) folder:
 | [TAK Protocol Reference](./Documentation/TAK_Protocol.md)   | Internal message schema (CoT/Protobuf)   |
 | [API Reference](./Documentation/API_Reference.md)           | REST endpoints + WebSocket               |
 | [UI User Guide](./Documentation/UI_Guide.md)                | How to use the Tactical and Orbital maps |
+| [AI Configuration](./Documentation/AI_Configuration.md)     | How to configure the AI models           |
 
 ---
 
