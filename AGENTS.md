@@ -46,7 +46,7 @@ Both frontend and backend have Hot Module Replacement (HMR) enabled:
 
 ## 5. Verification & Quality Gates
 
-Before declaring a task complete, you **MUST** run the appropriate verification using standard tools for the repository.
+Before declaring a task complete, you **MUST** run the appropriate verification **once** using standard tools for the repository. Do NOT run lint/tests after each individual file edit — run them once at the end before marking the task done.
 
 ### Quick Checks
 

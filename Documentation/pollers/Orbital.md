@@ -125,28 +125,32 @@ compute_course()  →  TAK JSON events  (includes TLE for client re-propagation)
 Redpanda: orbital_raw topic
     ↓
 Backend Historian
-    ├── orbital_tracks hypertable  ←  position only (lat, lon, alt, speed, heading)
-    │                                  12-hour retention | no TLE stored per row
-    └── satellites table           ←  TLE upsert (norad_id, tle_line1/2, orbital params)
-                                       permanent lookup; no retention
+    └── satellites table  ←  TLE upsert only (norad_id, tle_line1/2, orbital params)
+                              permanent lookup; positions NOT stored
 ```
+
+Live satellite positions reach the frontend via the broadcast service
+(WebSocket), which also consumes `orbital_raw` independently.
 
 ---
 
 ## Storage Architecture
 
-Satellite data is split across two tables to avoid duplicating the 138-byte TLE
-string pair on every position update:
+Satellite data lives in a single table:
 
 | Table | What it holds | Retention |
 | :--- | :--- | :--- |
-| `orbital_tracks` | Position snapshots (`entity_id`, lat, lon, alt, speed, heading) | **12 hours** |
-| `satellites` | TLE catalogue (norad_id, tle_line1/2, category, constellation, orbital params) | Permanent |
+| `satellites` | TLE catalogue (norad_id, tle_line1/2, category, constellation, orbital params) | Permanent (upserted) |
 
-**Why 12 hours?** Orbital positions are 100% reproducible from the current TLE via
-SGP4. The `/api/orbital/groundtrack/{norad_id}` endpoint regenerates any historical
-ground track on demand, so there is no operational need to retain propagated
-positions beyond a short live-playback window.
+**Positions are not stored.**  Orbital positions are 100% reproducible from the
+current TLE via SGP4 at any historical timestamp.  Persisting ~2 000 rows/sec
+(~10 000 satellites × every 5 seconds) consumed significant I/O with no
+operational benefit:
+
+- `/api/tracks/history/{SAT-*}` — propagates positions on-demand via SGP4.
+- `/api/tracks/search` — computes current position per matched satellite via SGP4.
+- `/api/orbital/groundtrack/{norad_id}` — already computed positions via SGP4.
+- `/api/tracks/replay` — orbital data excluded; replay covers ADS-B and AIS only.
 
 ---
 

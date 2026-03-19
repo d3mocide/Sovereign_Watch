@@ -94,7 +94,7 @@ class RadioReferenceSource:
     # ------------------------------------------------------------------
 
     async def _fetch_and_publish(self):
-        transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0))
+        transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0, follow_redirects=True))
         client = zeep.AsyncClient(WSDL_URL, transport=transport)
 
         # Ensure we have a valid auth token before making data calls.

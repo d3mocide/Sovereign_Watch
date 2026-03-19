@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 
 interface StarFieldProps {
   active: boolean;
+  contained?: boolean;
 }
 
 interface Star {
@@ -13,7 +14,7 @@ interface Star {
   twinklePhase: number;
 }
 
-export function StarField({ active }: StarFieldProps) {
+export function StarField({ active, contained = false }: StarFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -38,8 +39,8 @@ export function StarField({ active }: StarFieldProps) {
     let lastH = 0;
 
     const render = () => {
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const W = contained ? canvas.parentElement?.clientWidth || window.innerWidth : window.innerWidth;
+      const H = contained ? canvas.parentElement?.clientHeight || window.innerHeight : window.innerHeight;
 
       // Only resize canvas when dimensions actually change
       if (W !== lastW || H !== lastH) {
@@ -67,7 +68,7 @@ export function StarField({ active }: StarFieldProps) {
 
     render();
     return () => cancelAnimationFrame(animId);
-  }, [active]);
+  }, [active, contained]);
 
   if (!active) return null;
 
@@ -75,7 +76,7 @@ export function StarField({ active }: StarFieldProps) {
     <canvas
       ref={canvasRef}
       style={{
-        position: 'fixed',
+        position: contained ? 'absolute' : 'fixed',
         inset: 0,
         zIndex: 0,
         pointerEvents: 'none',

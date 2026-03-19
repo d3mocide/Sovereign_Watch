@@ -297,16 +297,6 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                   <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showOutages === true ? 'bg-red-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showOutages === true ? 'left-2.5' : 'left-0.5'}`} /></div>
                 </label>
 
-                {/* FCC ASR Towers */}
-                <label className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showTowers === true ? 'border-orange-400/20 bg-orange-400/5' : 'border-white/5 bg-white/5'}`}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px]">🗼</span>
-                    <span className={`text-[9px] font-bold tracking-wide ${filters.showTowers === true ? 'text-orange-400/80' : 'text-orange-400/30'}`}>FCC TOWERS</span>
-                  </div>
-                  <input type="checkbox" className="sr-only" checked={filters.showTowers === true} onChange={(e) => onFilterChange('showTowers', e.target.checked)} />
-                  <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showTowers === true ? 'bg-orange-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showTowers === true ? 'left-2.5' : 'left-0.5'}`} /></div>
-                </label>
-
 
                 {/* Opacity Slider */}
                 <div className="group flex flex-col gap-1 rounded border border-white/5 bg-white/5 p-1.5 transition-all">

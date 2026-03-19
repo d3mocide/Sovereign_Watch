@@ -1,0 +1,42 @@
+{
+  "mcpServers": {
+    "graph-it-live": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "node $HOME/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs"
+      ],
+      "env": {
+        "WORKSPACE_ROOT": ".",
+        "EXCLUDE_NODE_MODULES": "true",
+        "MAX_DEPTH": "50"
+      }
+    },
+    "pyright": {
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "docker-compose-tools.yml",
+        "run",
+        "--rm",
+        "-i",
+        "mcp-lsp"
+      ],
+      "env": {}
+    },
+    "tsserver": {
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "docker-compose-tools.yml",
+        "run",
+        "--rm",
+        "-i",
+        "mcp-tsserver"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -36,16 +36,20 @@ import {
   ChevronDown,
   Headphones,
   MapPin,
+  Globe,
 } from 'lucide-react';
-import type { 
-  KiwiNode, 
-  JS8Station, 
-  JS8LogEntry, 
+import type {
+  KiwiNode,
+  WebSDRNode,
+  JS8Station,
+  JS8LogEntry,
   JS8StatusLine,
   KiwiConfig
 } from '../../types';
 import KiwiNodeBrowser from './KiwiNodeBrowser';
+import WebSDRDiscovery from './WebSDRDiscovery';
 import ListeningPost from './ListeningPost';
+import WebSDRPanel from './WebSDRPanel';
 import { useListenAudio } from '../../hooks/useListenAudio';
 import { 
   JS8_BAND_PRESETS, 
@@ -193,8 +197,8 @@ export default function RadioTerminal({
 }: RadioTerminalProps) {
   // ── State ──────────────────────────────────────────────────────────────────
 
-  // Radio operating mode: JS8 decode terminal vs. live audio listening post
-  const [radioMode, setRadioMode] = useState<'JS8' | 'LISTEN'>('JS8');
+  // Radio operating mode: JS8 decode terminal vs. live audio listening post vs. WebSDR
+  const [radioMode, setRadioMode] = useState<'JS8' | 'LISTEN' | 'WEBSDR'>('JS8');
 
   const [txTarget, setTxTarget] = useState('@ALLCALL');
   const [txMessage, setTxMessage] = useState('');
@@ -209,6 +213,9 @@ export default function RadioTerminal({
   });
 
   const [kiwiPanelOpen, setKiwiPanelOpen] = useState(false);
+
+  // WebSDR panel state
+  const [webSDRPanelNode, setWebSDRPanelNode] = useState<WebSDRNode | null>(null);
 
   const [isEditingFreq, setIsEditingFreq] = useState(false);
   const [isEditingCall, setIsEditingCall] = useState(false);
@@ -340,6 +347,11 @@ export default function RadioTerminal({
     sendAction({ action: 'SET_MODE', mode: modeId });
   }, [bridgeConnected, sendAction]);
 
+  const handleOpenWebSDR = useCallback((node: WebSDRNode) => {
+    setWebSDRPanelNode(node);
+    setRadioMode('WEBSDR');
+  }, []);
+
   // Connect to a node picked from the browser — keeps current freq/mode
   const handleNodeConnect = useCallback((node: KiwiNode) => {
     if (!bridgeConnected || kiwiIsConnecting) return;
@@ -384,7 +396,8 @@ export default function RadioTerminal({
         <div className="flex items-center gap-3 text-xs">
 
           {/* SDR node selector — opens the KiwiNodeBrowser floating panel */}
-          <div className="relative" ref={sdrContainerRef}>
+          {radioMode !== 'WEBSDR' && (
+            <div className="relative" ref={sdrContainerRef}>
             <button
               onClick={() => setKiwiPanelOpen(v => !v)}
               disabled={!bridgeConnected}
@@ -419,11 +432,12 @@ export default function RadioTerminal({
               onConnect={handleNodeConnect}
               onDisconnect={handleKiwiDisconnect}
               manualConfig={kiwiConfig}
-                onManualConfigChange={(patch) => setKiwiConfig((p) => ({ ...p, ...patch }))}
-                onManualConnect={handleKiwiConnect}
-                operatorGrid={sharedStatusLine.grid}
-              />
-          </div>
+              onManualConfigChange={(patch) => setKiwiConfig((p) => ({ ...p, ...patch }))}
+              onManualConnect={handleKiwiConnect}
+              operatorGrid={sharedStatusLine.grid}
+            />
+            </div>
+          )}
 
           {/* Divider */}
           <div className="w-px h-6 bg-slate-800 shrink-0" />
@@ -452,7 +466,19 @@ export default function RadioTerminal({
               }`}
             >
               <Headphones className="w-3 h-3" />
-              Listen
+              KiwiSDR
+            </button>
+            <button
+              onClick={() => setRadioMode('WEBSDR')}
+              title="WebSDR Discovery — browse global network"
+              className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-all duration-150 ${
+                radioMode === 'WEBSDR'
+                  ? 'bg-violet-700 text-white'
+                  : 'bg-black/30 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
+              }`}
+            >
+              <Globe className="w-3 h-3" />
+              WebSDR
             </button>
           </div>
 
@@ -643,6 +669,17 @@ export default function RadioTerminal({
           isConnected={listenConnected}
           adcOverload={adcOverload}
         />
+      ) : radioMode === 'WEBSDR' ? (
+        <div className="flex-1 overflow-hidden relative">
+          <WebSDRDiscovery
+            isOpen={true}
+            onClose={() => {}}
+            currentFreqKhz={sharedActiveKiwiConfig?.freq || kiwiConfig.freq}
+            onOpenWebSDR={handleOpenWebSDR}
+            operatorGrid={sharedStatusLine.grid}
+            inlineMode={true}
+          />
+        </div>
       ) : (
         <>
         {/* MESSAGE LOG – left, dominant, bottom-anchored like a chat terminal */}
@@ -781,6 +818,48 @@ export default function RadioTerminal({
         </div>
 
       </footer>
+      )}
+
+      {/* ── Band-aware WebSDR suggestion ── */}
+      {/* Shown when tuned to VHF/UHF (>30 MHz) and no KiwiSDR connected — KiwiSDR
+          hardware can't cover these frequencies; suggest WebSDR instead. */}
+      {kiwiConfig.freq > 30000 && !sharedActiveKiwiConfig && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-violet-950/90 border border-violet-500/40 shadow-xl backdrop-blur-sm text-xs">
+          <div className="flex items-center gap-1.5 text-violet-300">
+            <Radio className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              <span className="font-semibold">{kiwiConfig.freq.toLocaleString()} kHz</span> is above KiwiSDR's HF range
+            </span>
+          </div>
+          <button
+            onClick={() => setKiwiPanelOpen(true)}
+            className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-violet-300 bg-violet-500/20 border border-violet-500/30 hover:bg-violet-500/35 transition-colors whitespace-nowrap"
+          >
+            Browse WebSDR nodes
+          </button>
+          <button
+            onClick={() => setKiwiConfig(prev => ({ ...prev, freq: 14074 }))}
+            className="text-slate-500 hover:text-slate-400 transition-colors"
+            title="Dismiss (reset to 14074 kHz)"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── WebSDR Panel (iframe embed) ── */}
+      {radioMode === 'WEBSDR' && webSDRPanelNode && (
+        <WebSDRPanel
+          node={webSDRPanelNode}
+          initialFreqKhz={sharedActiveKiwiConfig?.freq || kiwiConfig.freq}
+          initialMode={
+            (["usb", "lsb", "am", "cw", "fm"].includes(kiwiConfig.mode)
+              ? kiwiConfig.mode
+              : "usb") as "usb" | "lsb" | "am" | "cw" | "fm"
+          }
+          onClose={() => setWebSDRPanelNode(null)}
+          fullScreen={true}
+        />
       )}
     </div>
   );

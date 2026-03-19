@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import TacticalMap from './components/map/TacticalMap'
 import { SidebarLeft } from './components/layouts/SidebarLeft'
 import { SidebarRight } from './components/layouts/SidebarRight'
@@ -7,6 +7,7 @@ import { TopBar } from './components/layouts/TopBar'
 import { OrbitalMap } from './components/map/OrbitalMap'
 import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
 import RadioTerminal from './components/js8call/RadioTerminal'
+import { DashboardView } from './components/views/DashboardView'
 import { CoTEntity, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
@@ -14,12 +15,12 @@ import { useJS8Stations } from './hooks/useJS8Stations'
 import { useRFSites } from './hooks/useRFSites'
 import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
-import { AlertsWidget } from './components/widgets/AlertsWidget'
 import { useEntityWorker } from './hooks/useEntityWorker'
 import { useInfraData } from './hooks/useInfraData'
 import { parseMissionHash, updateMissionHash } from './hooks/useMissionHash'
 import { AIAnalystPanel } from './components/widgets/AIAnalystPanel'
 import { GlobalTerminalWidget } from './components/widgets/GlobalTerminalWidget'
+import { useMissionArea } from './hooks/useMissionArea'
 
 const NOOP = () => { };
 
@@ -88,7 +89,9 @@ function App() {
 
     setEvents((prev: IntelEvent[]) => [{
       ...event,
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `fallback-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       time: new Date(),
     }, ...prev].filter(e => e.time.getTime() > oneHourAgo).slice(0, 500));
   }, []);
@@ -103,7 +106,78 @@ function App() {
     prevCourseRef,
     alertedEmergencyRef
   } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
+  const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
+  // View Mode Persistence
+  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD'>(() => {
+    const saved = localStorage.getItem('viewMode');
+    if (saved === 'ORBITAL' || saved === 'TACTICAL' || saved === 'RADIO' || saved === 'DASHBOARD') {
+      return saved as 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD';
+    }
+    return 'TACTICAL';
+  });
+
+  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL' | 'RADIO' | 'DASHBOARD') => {
+    setViewModeState(mode);
+    localStorage.setItem('viewMode', mode);
+  }, []);
+
+  // Background Data Maintenance (Cleanup & Counting)
+  // This runs regardless of viewMode, ensuring Dashboard counts are live.
+  useEffect(() => {
+    const maintenance = () => {
+      const now = Date.now();
+      const STALE_THRESHOLD_AIR_MS = 120 * 1000;
+      const STALE_THRESHOLD_SEA_MS = 300 * 1000;
+
+      let air = 0;
+      let sea = 0;
+      let orbital = 0;
+      const stale: string[] = [];
+
+      // Clean/Count Air & Sea
+      entitiesRef.current.forEach((entity, uid) => {
+        const isShip = entity.type?.includes("S");
+        const threshold = isShip ? STALE_THRESHOLD_SEA_MS : STALE_THRESHOLD_AIR_MS;
+
+        if (now - entity.lastSeen > threshold) {
+          stale.push(uid);
+        } else {
+          // Note: In a real app we'd filter by active layers here too,
+          // but for the basic dashboard counters, matching TacticalMap's behavior is key.
+          if (isShip) sea++; else air++;
+        }
+      });
+
+      stale.forEach(uid => {
+        entitiesRef.current.delete(uid);
+        knownUidsRef.current.delete(uid);
+      });
+
+      // 3. Count Orbital (Excluding Starlink which is suppressed for Dashboard)
+      satellitesRef.current.forEach((sat) => {
+        if (sat.detail?.constellation !== 'Starlink') {
+          orbital++;
+        }
+      });
+
+      // 4. Update trackCounts state ONLY if we are in a non-map view.
+      // In TACTICAL and ORBITAL modes, useAnimationLoop handles high-frequency,
+      // filter-aware counts that provide a much better UX.
+      if (viewMode === 'DASHBOARD' || viewMode === 'RADIO') {
+        if (air !== countsRef.current.air || sea !== countsRef.current.sea || orbital !== countsRef.current.orbital) {
+          countsRef.current = { air, sea, orbital };
+          setTrackCounts({ air, sea, orbital });
+        }
+      }
+    };
+
+    const timer = setInterval(maintenance, 1000);
+    return () => clearInterval(timer);
+  }, [entitiesRef, satellitesRef, knownUidsRef, viewMode]);
+
+  // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
+  const { cablesData, stationsData, outagesData } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] = useState<any>(null);
 
   useEffect(() => {
@@ -136,7 +210,7 @@ function App() {
   const [mapActions, setMapActions] = useState<import('./types').MapActions | null>(null);
 
   // Filter state with persistence (tactical map only)
-  const [filters, setFilters] = useState<Record<string, boolean | string | number | string[]>>(() => {
+  const [filters, setFilters] = useState<import('./types').MapFilters>(() => {
     const defaultFilters = {
       showAir: true,
       showSea: true,
@@ -173,7 +247,6 @@ function App() {
       showCables: false,
       showLandingStations: false,
       showOutages: true,
-      showTowers: false,
       cableOpacity: 0.6,
       showConstellation_Starlink: false,
       showH3Coverage: false,
@@ -190,7 +263,6 @@ function App() {
       hashFilters.showSatellites = false;
       hashFilters.showRepeaters = false;
       hashFilters.showCables = false;
-      hashFilters.showTowers = false;
 
       hashState.activeLayers.forEach(layer => {
         if (layer in hashFilters) {
@@ -255,20 +327,7 @@ function App() {
     return saved !== null ? JSON.parse(saved) : true; // Default to true for better initial UX
   });
 
-  // View Mode Persistence
-  const [viewMode, setViewModeState] = useState<'TACTICAL' | 'ORBITAL'>(() => {
-    const saved = localStorage.getItem('viewMode');
-    // Default to TACTICAL if nothing saved or on first load
-    if (saved === 'ORBITAL' || saved === 'TACTICAL') {
-      return saved as 'TACTICAL' | 'ORBITAL';
-    }
-    return 'TACTICAL';
-  });
-
-  const setViewMode = useCallback((mode: 'TACTICAL' | 'ORBITAL') => {
-    setViewModeState(mode);
-    localStorage.setItem('viewMode', mode);
-  }, []);
+  // History Tails Toggle
 
   const handleHistoryTailsToggle = useCallback(() => {
     setShowHistoryTails((prev: boolean) => {
@@ -308,12 +367,22 @@ function App() {
   // Mission management state
   const [missionProps, setMissionProps] = useState<MissionProps | null>(null);
 
-  // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
-  const { cablesData, stationsData, outagesData, towersData } = useInfraData(
-    missionProps?.currentMission?.lat,
-    missionProps?.currentMission?.lon,
-    (filters.rfRadius as number) || 50
-  );
+  // Lift Mission Area Logic to App Root so it persists across views
+  const missionArea = useMissionArea({
+    flyTo: mapActions?.flyTo,
+    currentMissionRef,
+    entitiesRef,
+    knownUidsRef,
+    prevCourseRef,
+    drStateRef,
+    visualStateRef,
+    countsRef,
+    onCountsUpdate: setTrackCounts,
+    onEntitySelect: handleSetSelectedSatNorad as any, // Simple stub for entity clearing
+    onMissionPropsReady: setMissionProps,
+    initialLat: parseMissionHash().lat ?? parseFloat(import.meta.env.VITE_CENTER_LAT || "45.5152"),
+    initialLon: parseMissionHash().lon ?? parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
+  });
 
   // Compute active services list
   const activeServices = useMemo(() => {
@@ -382,9 +451,13 @@ function App() {
       showTerminator: showTerminator,
       showCables: false,
       showLandingStations: false,
-      showTowers: false,
     };
   }, [filters, orbitalSatFilters, showTerminator]);
+
+  const tacticalFilters = useMemo(() => ({
+    ...filters,
+    showTerminator
+  }), [filters, showTerminator]);
 
   const [replayTime, setReplayTime] = useState<number>(Date.now());
   const [replayRange, setReplayRange] = useState({ start: Date.now() - 3600000, end: Date.now() });
@@ -406,7 +479,7 @@ function App() {
 
       console.log(`Loading replay data (${hours}h): ${start.toISOString()} - ${end.toISOString()}`);
 
-      const res = await fetch(`/api/tracks/replay?start=${start.toISOString()}&end=${end.toISOString()}`);
+      const res = await fetch(`/api/tracks/replay?start=${start.toISOString()}&end=${end.toISOString()}&limit=10000`);
       if (!res.ok) throw new Error('Failed to fetch history');
 
       const data = await res.json();
@@ -436,13 +509,7 @@ function App() {
       // Simple scan from right for now (assuming linear playback usually)
       // But random seek needs binary search.
       // Let's do simple findLast equivalent.
-
       let found: CoTEntity | null = null;
-      // Optimization: If history is large (>100), use binary search.
-      // For <100, linear scan is fast.
-      // Assuming history resolution ~10s -> 360 points/hour. Linear is fine?
-      // Actually binary search is safer.
-
       let low = 0, high = history.length - 1;
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
@@ -456,7 +523,7 @@ function App() {
 
       if (found) {
         // Stale check for replay? e.g. if point is > 5 mins old, don't show?
-        if (time - (found.time || 0) < 300000) { // 5 mins
+        if (time - (found.time || 0) < 600000) { // 10 mins — matches max 5-min bucket size used by adaptive replay query
           frameMap.set(uid, found);
         }
       }
@@ -513,7 +580,7 @@ function App() {
     const now = Date.now();
     const ALERT_WINDOW_MS = 30 * 60 * 1000;
     for (const pass of intelPasses) {
-      const aosMs = new Date(pass.aos).getTime();
+      const aosMs = Date.parse(pass.aos);
       const passKey = `${pass.norad_id}-${pass.aos}`;
       if (aosMs > now && aosMs - now <= ALERT_WINDOW_MS && !alertedPassesRef.current.has(passKey)) {
         alertedPassesRef.current.add(passKey);
@@ -542,7 +609,7 @@ function App() {
   }, []);
 
   const handleFilterChange = useCallback((key: string, value: any) => {
-    setFilters((prev: Record<string, any>) => {
+    setFilters((prev: import('./types').MapFilters) => {
       const next = { ...prev, [key]: value };
       localStorage.setItem('mapFilters', JSON.stringify(next));
 
@@ -671,7 +738,7 @@ function App() {
           />
         ) : viewMode === 'ORBITAL' ? (
           <OrbitalSidebarLeft
-            filters={orbitalSatFilters}
+            filters={orbitalFilters as any}
             onFilterChange={handleOrbitalFilterChange}
             selectedSatNorad={selectedSatNorad}
             setSelectedSatNorad={handleSetSelectedSatNorad}
@@ -708,11 +775,11 @@ function App() {
         <>
           <TacticalMap
             onCountsUpdate={setTrackCounts}
-            filters={{ ...filters, showTerminator: showTerminator }}
+            filters={tacticalFilters as any}
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
-            onMissionPropsReady={setMissionProps}
+            missionArea={missionArea}
             onMapActionsReady={setMapActions}
             showVelocityVectors={showVelocityVectors}
             showHistoryTails={showHistoryTails}
@@ -740,8 +807,8 @@ function App() {
             cablesData={cablesData}
             stationsData={stationsData}
             outagesData={outagesData}
-            towersData={towersData}
             worldCountriesData={worldCountriesData}
+            showTerminator={showTerminator}
           />
 
           {/* Replay Controls Overlay */}
@@ -777,25 +844,18 @@ function App() {
           selectedEntity={selectedEntity}
           // The rest are dummy/no-ops for the layout shell
           onCountsUpdate={setTrackCounts as any}
-          onEvent={NOOP}
-          onMissionPropsReady={NOOP}
-          onMapActionsReady={NOOP}
+          onEvent={addEvent}
+          missionArea={missionArea}
+          onMissionPropsReady={setMissionProps}
+          onMapActionsReady={setMapActions}
           showVelocityVectors={false}
           showHistoryTails={showHistoryTails}
           onToggleGlobe={() => setOrbitalViewMode(orbitalViewMode === '3D' ? '2D' : '3D')}
           replayMode={false}
           replayEntities={new Map()}
-          followMode={false}
-          onFollowModeChange={NOOP}
-          onEntityLiveUpdate={handleEntityLiveUpdate}
-          js8StationsRef={js8StationsRef}
-          ownGridRef={js8OwnGridRef}
-          rfSitesRef={rfSitesRef}
-          showRepeaters={orbitalFilters.showRepeaters as boolean}
-          repeatersLoading={repeatersLoading}
-          onSatellitesRefReady={(ref) => {
-            orbitalSatellitesRef.current = ref;
-          }}
+          followMode={followMode}
+          onFollowModeChange={setFollowMode}
+          showTerminator={showTerminator}
           entitiesRef={entitiesRef}
           satellitesRef={satellitesRef}
           knownUidsRef={knownUidsRef}
@@ -807,8 +867,27 @@ function App() {
           cablesData={cablesData}
           stationsData={stationsData}
           outagesData={outagesData}
-          towersData={towersData}
           worldCountriesData={worldCountriesData}
+          onSatellitesRefReady={(ref: any) => {
+            orbitalSatellitesRef.current = ref;
+          }}
+        />
+      ) : viewMode === 'DASHBOARD' ? (
+        <DashboardView
+          events={events}
+          trackCounts={trackCounts}
+          missionProps={missionProps}
+          js8LogEntries={js8LogEntries}
+          js8Stations={js8Stations}
+          js8Connected={js8Connected}
+          entitiesRef={entitiesRef}
+          satellitesRef={satellitesRef}
+          cablesData={cablesData}
+          stationsData={stationsData}
+          outagesData={outagesData}
+          worldCountriesData={worldCountriesData}
+          showTerminator={showTerminator}
+          drStateRef={drStateRef}
         />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">

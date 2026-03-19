@@ -20,7 +20,6 @@ interface LayerCompositionOptions {
   cablesData: any;
   stationsData: any;
   outagesData: any;
-  towersData: any;
   worldCountriesData: any;
   countryOutageMap: Record<string, any>;
   currentSelected: CoTEntity | null;
@@ -55,7 +54,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     cablesData,
     stationsData,
     outagesData,
-    towersData,
     worldCountriesData,
     countryOutageMap,
     currentSelected,
@@ -116,7 +114,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     cablesData,
     stationsData,
     outagesData,
-    towersData,
     filters || null,
     setHoveredInfra,
     setSelectedInfra,

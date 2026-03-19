@@ -1,13 +1,13 @@
 models:
   - id: deep-reasoner
-    label: Claude 3.5 Sonnet
+    label: os.environ/ANTHROPIC_LABEL
     provider: Anthropic
     local: false
   - id: public-flash
-    label: Gemini 1.5 Flash
+    label: os.environ/GEMINI_LABEL
     provider: Google
     local: false
   - id: secure-core
-    label: LLaMA3 (Ollama)
+    label: os.environ/OPEN_API_LABEL
     provider: Local
     local: true

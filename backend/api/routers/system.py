@@ -20,8 +20,16 @@ def load_ai_models():
     try:
         with open(MODELS_YAML_PATH, "r") as f:
             data = yaml.safe_load(f)
+
             if data and "models" in data:
-                return data["models"]
+                models = data["models"]
+                # Resolve environment variables
+                for model in models:
+                    for key, val in model.items():
+                        if isinstance(val, str) and val.startswith("os.environ/"):
+                            env_var = val.split("/", 1)[1]
+                            model[key] = os.getenv(env_var, val)
+                return models
     except Exception as e:
         logger.error(f"Failed to load {MODELS_YAML_PATH}: {e}")
     # Fallback default

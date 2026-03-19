@@ -41,17 +41,23 @@ export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilte
                 }
             }
 
-            // Affiliation filters (only if air is on)
+            // Air Filters
             if (event.entityType === 'air' && event.classification) {
-                const aff = event.classification.affiliation;
-                if (aff === 'military' && filters.showMilitary === false) return false;
-                if (aff === 'government' && filters.showGovernment === false) return false;
-                if (aff === 'commercial' && filters.showCommercial === false) return false;
-                if (aff === 'general_aviation' && filters.showPrivate === false) return false;
+                const cls = event.classification;
 
-                // Platform filter
-                if (event.classification.platform === 'helicopter' && filters.showHelicopter === false) return false;
-                if (event.classification.platform === 'drone' && filters.showDrone === false) return false;
+                // Platform overrides
+                if (cls.platform === 'helicopter') {
+                    return filters.showHelicopter !== false;
+                }
+                if (cls.platform === 'drone' || cls.platform === 'uav') {
+                    return filters.showDrone !== false;
+                }
+
+                // Affiliation check
+                if (cls.affiliation === 'military' && filters.showMilitary === false) return false;
+                if (cls.affiliation === 'government' && filters.showGovernment === false) return false;
+                if (cls.affiliation === 'commercial' && filters.showCommercial === false) return false;
+                if (cls.affiliation === 'general_aviation' && filters.showPrivate === false) return false;
             }
 
             // Sea filters
@@ -224,9 +230,10 @@ const IntelEventItem = React.memo(({
                             isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
 
     return (
-        <div
+        <button
             onClick={() => onClick(event)}
-            className={`group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
+            aria-label={`View event: ${event.message}`}
+            className={`w-full text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
         >
             <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
 
@@ -270,7 +277,7 @@ const IntelEventItem = React.memo(({
                     isInfra ? <Network size={40} className="text-cyan-400" /> :
                         isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
             </div>
-        </div>
+        </button>
     );
 });
 

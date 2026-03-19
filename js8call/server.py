@@ -65,6 +65,15 @@ except ImportError as _ie:
     KiwiDirectory = None    # type: ignore
     KiwiNode = None         # type: ignore
 
+# WebSDR directory module
+try:
+    from websdr_directory import WebSDRDirectory
+    _HAS_WEBSDR = True
+except ImportError as _ie:
+    logger.warning("WebSDR directory module not available: %s", _ie)
+    _HAS_WEBSDR = False
+    WebSDRDirectory = None  # type: ignore
+
 # pyjs8call has been removed and replaced with a native AsyncIO DatagramProtocol 
 # to mitigate the Qt headless socket thread crash bug on the TCP API.
 
@@ -130,6 +139,7 @@ _kiwi_config: dict = {}
 # Native KiwiSDR client state (Phase 2 — default when KIWI_USE_SUBPROCESS=0)
 _kiwi_native: Optional["KiwiClient"] = None
 _kiwi_directory: Optional["KiwiDirectory"] = None
+_websdr_directory: Optional["WebSDRDirectory"] = None
 _pacat_proc: Optional[subprocess.Popen] = None
 
 # Failover tracking (Phase 3)
@@ -707,7 +717,7 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _event_loop, _message_queue, js8_client_udp_transport
-    global _kiwi_native, _kiwi_directory, _pacat_proc
+    global _kiwi_native, _kiwi_directory, _websdr_directory, _pacat_proc
 
     _event_loop = asyncio.get_running_loop()
     _message_queue = asyncio.Queue(maxsize=500)
@@ -739,6 +749,14 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_kiwi_directory.refresh(), name="kiwi-dir-initial")
         asyncio.create_task(_kiwi_directory.auto_refresh_loop(), name="kiwi-dir-refresh")
         logger.info("KiwiSDR client ready — connect via the Node Browser in the UI")
+
+    # ── WebSDR directory (always started, supplement to KiwiSDR) ───────────
+    if _HAS_WEBSDR:
+        _websdr_directory = WebSDRDirectory()
+        # Seeds are loaded immediately; async refresh fetches live data
+        asyncio.create_task(_websdr_directory.refresh(), name="websdr-dir-initial")
+        asyncio.create_task(_websdr_directory.auto_refresh_loop(), name="websdr-dir-refresh")
+        logger.info("WebSDR directory ready — %d seed nodes loaded", _websdr_directory.node_count)
 
     # ── UDP listener (JS8Call) ─────────────────────────────────────────────
     for attempt in range(1, 6):
@@ -1451,6 +1469,44 @@ async def get_kiwi_nodes(freq: float = None, limit: int = 10, radius_km: float =
 
 
 # ===========================================================================
+# REST Endpoint  GET /api/websdr/nodes  — WebSDR node discovery
+# ===========================================================================
+
+@app.get("/api/websdr/nodes", summary="List available WebSDR nodes sorted by proximity")
+async def get_websdr_nodes(
+    freq: float = None,
+    limit: int = 20,
+    radius_km: float = None,
+    vhf_only: bool = False,
+) -> list:
+    """
+    Returns nearby WebSDR nodes from the cached directory, sorted by Haversine
+    distance from MY_GRID and optionally filtered by frequency coverage.
+
+    Query params:
+      freq       — target frequency in kHz (0 or omit = no freq filter)
+      limit      — max results to return (default: 20)
+      radius_km  — only return nodes within this distance in km (default: no limit)
+      vhf_only   — if true, only return nodes covering > 30 MHz
+    """
+    if _websdr_directory is None:
+        return []
+    target_freq = float(freq) if freq is not None else 0.0
+    limit = max(1, min(limit, 10000))
+    my_lat, my_lon = maidenhead_to_latlon(MY_GRID)
+
+    if vhf_only:
+        nodes = _websdr_directory.get_vhf_nodes(my_lat, my_lon, limit=limit)
+    else:
+        nodes = _websdr_directory.get_nodes(
+            target_freq, my_lat, my_lon,
+            limit=limit,
+            max_distance_km=radius_km,
+        )
+    return [n.to_dict() for n in nodes]
+
+
+# ===========================================================================
 # Health Check
 # ===========================================================================
 
@@ -1475,6 +1531,8 @@ async def health() -> dict:
         "failover_count": _failover_count,
         "last_failover_at": _last_failover_at,
         "candidate_nodes_available": _kiwi_directory.node_count if _kiwi_directory else 0,
+        "websdr_nodes_cached": _websdr_directory.node_count if _websdr_directory else 0,
+        "websdr_vhf_nodes": _websdr_directory.vhf_node_count if _websdr_directory else 0,
     }
 
 

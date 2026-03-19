@@ -1,6 +1,0 @@
-asyncio
-aiohttp
-aiokafka
-redis
-sgp4
-numpy

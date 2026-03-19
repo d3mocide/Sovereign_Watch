@@ -1,18 +1,18 @@
 model_list:
   - model_name: secure-core
     litellm_params:
-      model: ollama/llama3
-      api_base: "http://host.docker.internal:11434" # Assuming Ollama on host or sidecar
-      # If running in docker composition, might be http://ollama:11434
+      model: os.environ/OPEN_API_MODEL
+      api_base: os.environ/OPEN_API_BASE
+      api_key: os.environ/OPEN_API_KEY
 
   - model_name: public-flash
     litellm_params:
-      model: gemini/gemini-1.5-flash
+      model: os.environ/GEMINI_MODEL
       api_key: os.environ/GEMINI_API_KEY
 
   - model_name: deep-reasoner
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-20240620
+      model: os.environ/ANTHROPIC_MODEL
       api_key: os.environ/ANTHROPIC_API_KEY
 
 litellm_settings:

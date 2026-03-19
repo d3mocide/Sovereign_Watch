@@ -1,14 +1,24 @@
 import asyncio
 import json
 import logging
+import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
+import numpy as np
+from sgp4.api import Satrec, jday as sgp4_jday
 from core.database import db
 from core.config import settings
 from services.broadcast import broadcast_service
+from utils.sgp4_utils import teme_to_ecef, ecef_to_lla_vectorized
+
+
+def _jday(dt: datetime):
+    """Return (jd, fr) tuple from a UTC datetime for SGP4."""
+    return sgp4_jday(dt.year, dt.month, dt.day, dt.hour, dt.minute,
+                     dt.second + dt.microsecond / 1e6)
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Tracks")
@@ -60,29 +70,82 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
-    # Option C+D: satellite entities are stored in orbital_tracks (no meta column).
-    # Route by entity_id prefix so each query hits only one hypertable.
     if entity_id.startswith("SAT-"):
-        query = """
-            SELECT time, lat, lon, alt, speed, heading, NULL::jsonb AS meta
-            FROM orbital_tracks
-            WHERE entity_id = $1
-            AND time > NOW() - INTERVAL '1 hour' * $2
-            ORDER BY time DESC
-            LIMIT $3
-        """
-    else:
-        query = """
-            SELECT time, lat, lon, alt, speed, heading, meta
-            FROM tracks
-            WHERE entity_id = $1
-            AND time > NOW() - INTERVAL '1 hour' * $2
-            ORDER BY time DESC
-            LIMIT $3
-        """
+        # Satellite positions are no longer stored in a database hypertable.
+        # They are deterministic and computed on-demand via SGP4 from the current
+        # TLE in the `satellites` table.  This eliminates ~2 000 rows/sec of writes
+        # while giving unlimited historical reach (bounded only by TLE age).
+        norad_id = entity_id[4:]  # "SAT-25544" → "25544"
+        async with db.pool.acquire() as conn:
+            sat = await conn.fetchrow(
+                "SELECT tle_line1, tle_line2 FROM satellites WHERE norad_id = $1",
+                norad_id,
+            )
+        if not sat:
+            return []
+
+        try:
+            satrec = Satrec.twoline2rv(sat["tle_line1"], sat["tle_line2"])
+        except Exception as e:
+            logger.error(f"Malformed TLE for {entity_id}: {e}")
+            return []
+
+        # Walk backward from now in equal steps; step size ensures we hit `limit`
+        # points exactly across the requested window.
+        total_seconds = hours * 3600
+        step_seconds = max(10, total_seconds // limit)
+        end_dt = datetime.now(timezone.utc)
+
+        results = []
+        t = end_dt
+        while t >= end_dt - timedelta(hours=hours) and len(results) < limit:
+            jd, fr = _jday(t)
+            e, r, v = satrec.sgp4(jd, fr)
+            if e == 0:
+                r_ecef = teme_to_ecef(np.array(r), jd, fr)
+                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+
+                # Heading: bearing from 1 second ago to now
+                t_prev = t - timedelta(seconds=1)
+                jd2, fr2 = _jday(t_prev)
+                e2, r2, _ = satrec.sgp4(jd2, fr2)
+                heading = 0.0
+                if e2 == 0:
+                    r2_ecef = teme_to_ecef(np.array(r2), jd2, fr2)
+                    la2, lo2, _ = ecef_to_lla_vectorized(r2_ecef.reshape(1, 3))
+                    dlat = float(lat_arr[0]) - float(la2[0])
+                    dlon = float(lon_arr[0]) - float(lo2[0])
+                    heading = math.degrees(
+                        math.atan2(
+                            dlon * math.cos(math.radians(float(lat_arr[0]))),
+                            dlat,
+                        )
+                    ) % 360.0
+
+                results.append({
+                    "time": t,
+                    "lat": round(float(lat_arr[0]), 5),
+                    "lon": round(float(lon_arr[0]), 5),
+                    "alt": round(float(alt_arr[0]) * 1000.0, 1),   # km → m
+                    "speed": round(float(np.linalg.norm(v)) * 1000.0, 2),  # km/s → m/s
+                    "heading": round(heading, 2),
+                    "meta": None,
+                })
+            t -= timedelta(seconds=step_seconds)
+
+        return results  # already ordered DESC (newest first)
+
+    # ADS-B / AIS entities → tracks hypertable
+    query = """
+        SELECT time, lat, lon, alt, speed, heading, meta
+        FROM tracks
+        WHERE entity_id = $1
+        AND time > NOW() - INTERVAL '1 hour' * $2
+        ORDER BY time DESC
+        LIMIT $3
+    """
     try:
         rows = await db.pool.fetch(query, entity_id, float(hours), limit)
-        # Convert to dict to handle non-serializable types if any (asyncpg returns Record)
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"History query failed: {e}")
@@ -118,8 +181,7 @@ async def search_tracks(q: str, limit: int = 10):
     if len(q) < 2:
         return []
 
-    # Option C+D: also search orbital_tracks for satellite entity IDs.
-    # Orbital rows have no meta; callsign and classification come from satellites table.
+    # Search ADS-B / AIS tracks by entity_id or callsign
     tracks_query = """
         SELECT DISTINCT ON (entity_id) entity_id, type, time as last_seen, lat, lon, meta
         FROM tracks
@@ -127,26 +189,19 @@ async def search_tracks(q: str, limit: int = 10):
         ORDER BY entity_id, time DESC
         LIMIT $2
     """
-    orbital_query = """
-        SELECT DISTINCT ON (ot.entity_id)
-            ot.entity_id,
-            'a-s-K'::text        AS type,
-            ot.time              AS last_seen,
-            ot.lat,
-            ot.lon,
-            NULL::jsonb          AS meta,
-            s.name               AS sat_name
-        FROM orbital_tracks ot
-        LEFT JOIN satellites s
-            ON s.norad_id = SPLIT_PART(ot.entity_id, '-', 2)
-        WHERE ot.entity_id ILIKE $1
-        ORDER BY ot.entity_id, ot.time DESC
+    # Search satellites catalogue by NORAD entity UID ("SAT-<id>") or name.
+    # Positions are computed on-demand via SGP4 rather than read from a
+    # now-removed orbital_tracks hypertable.
+    satellites_query = """
+        SELECT norad_id, name, tle_line1, tle_line2
+        FROM satellites
+        WHERE ('SAT-' || norad_id) ILIKE $1 OR name ILIKE $1
         LIMIT $2
     """
     try:
-        tracks_rows, orbital_rows = await asyncio.gather(
+        tracks_rows, sat_rows = await asyncio.gather(
             db.pool.fetch(tracks_query, f"%{q}%", limit),
-            db.pool.fetch(orbital_query, f"%{q}%", limit),
+            db.pool.fetch(satellites_query, f"%{q}%", limit),
         )
         results = []
 
@@ -167,12 +222,30 @@ async def search_tracks(q: str, limit: int = 10):
             d.pop('meta', None)
             results.append(d)
 
-        for row in orbital_rows:
-            d = dict(row)
-            d['callsign'] = d.pop('sat_name', None)
-            d['classification'] = None
-            d.pop('meta', None)
-            results.append(d)
+        # For each matched satellite compute its current position via SGP4
+        now = datetime.now(timezone.utc)
+        for row in sat_rows:
+            lat, lon = None, None
+            try:
+                satrec = Satrec.twoline2rv(row["tle_line1"], row["tle_line2"])
+                jd, fr = _jday(now)
+                e, r, _ = satrec.sgp4(jd, fr)
+                if e == 0:
+                    r_ecef = teme_to_ecef(np.array(r), jd, fr)
+                    la, lo, _ = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                    lat = round(float(la[0]), 5)
+                    lon = round(float(lo[0]), 5)
+            except Exception:
+                pass
+            results.append({
+                "entity_id": f"SAT-{row['norad_id']}",
+                "type": "a-s-K",
+                "last_seen": now,
+                "lat": lat,
+                "lon": lon,
+                "callsign": row["name"],
+                "classification": None,
+            })
 
         return results
     except Exception as e:
@@ -222,22 +295,47 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
-    # Option C+D: satellite positions live in orbital_tracks with a 12 h retention
-    # window.  UNION both tables so replay includes all entity types.
+    # Adaptive time-bucket sampling: instead of a raw LIMIT that always returns
+    # the first N chronological rows (often just a few seconds of a long window),
+    # we bucket time by entity so the full window is covered evenly.
+    # Bucket size grows with window duration; capped at 5 min so the frontend
+    # 5-min stale-threshold never hides a live entity between buckets.
+    bucket_seconds: int
+    if duration_hours <= 1:
+        bucket_seconds = 30
+    elif duration_hours <= 2:
+        bucket_seconds = 60
+    elif duration_hours <= 6:
+        bucket_seconds = 120
+    elif duration_hours <= 12:
+        bucket_seconds = 180
+    else:
+        bucket_seconds = 300  # 5 min cap — matches frontend stale threshold
+
+    bucket_interval = timedelta(seconds=bucket_seconds)
+
+    # Replay covers ADS-B and AIS data only.
+    # Orbital (satellite) tracks are excluded for two reasons:
+    #   1. The OrbitalMap is hardcoded to replayMode=false — orbital points
+    #      returned here are never rendered anywhere.
+    #   2. With ~10 000 tracked satellites, even one bucket per object would
+    #      exhaust the entire row budget, leaving no room for AIS/ADS-B data.
+    # Satellite positions are deterministic (SGP4 from stored TLEs) and can be
+    # recomputed on demand, so historical storage is not needed for replay.
     query = """
-        SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
-        FROM tracks
-        WHERE time >= $1 AND time <= $2
-        UNION ALL
-        SELECT time, entity_id, 'a-s-K'::text AS type,
-               lat, lon, alt, speed, heading, NULL::jsonb AS meta
-        FROM orbital_tracks
-        WHERE time >= $1 AND time <= $2
+        SELECT * FROM (
+            SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
+                time_bucket($4::interval, time) AS time,
+                entity_id, type, lat, lon, alt, speed, heading, meta
+            FROM tracks
+            WHERE time >= $1 AND time <= $2
+            ORDER BY entity_id, time_bucket($4::interval, time), time DESC
+        ) s
         ORDER BY time ASC
         LIMIT $3
     """
     try:
-        rows = await db.pool.fetch(query, dt_start, dt_end, limit)
+        rows = await db.pool.fetch(query, dt_start, dt_end, limit, bucket_interval)
         return [dict(row) for row in rows]
     except Exception as e:
         logger.error(f"Replay query failed: {e}")

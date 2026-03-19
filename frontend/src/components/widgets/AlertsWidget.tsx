@@ -37,6 +37,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
                     <button
                         onClick={onClose}
                         className="p-1 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-alert-red outline-none"
+                        aria-label="Close Alerts"
                     >
                         <X size={14} />
                     </button>

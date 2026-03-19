@@ -6,13 +6,6 @@
  * node with a distance badge + channel-load bar, and dispatches SET_KIWI on
  * one-click connect.  Manual entry for private/unlisted nodes is tucked in a
  * collapsible section at the bottom.
- *
- * The panel supports two views:
- *  - List view (default): scrollable node list sorted by proximity
- *  - Map view: interactive mini-map showing node locations with click-to-connect
- *
- * A radius filter (in km) can optionally restrict results to nodes within a
- * given distance of the operator's location.
  */
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
@@ -57,7 +50,7 @@ interface Props {
   /** Ref to the container div that owns the trigger button — used for
    *  click-outside detection so clicks on the button itself don't
    *  immediately re-close the panel. */
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
   currentFreqKhz: number;
   activeConfig: ManualConfig | null;
   kiwiConnected: boolean;
@@ -198,7 +191,7 @@ export default function KiwiNodeBrowser({
     function onMouseDown(e: MouseEvent) {
       const target = e.target as Node;
       const inPanel = panelRef.current?.contains(target);
-      const inContainer = containerRef.current?.contains(target);
+      const inContainer = containerRef?.current?.contains(target);
       if (!inPanel && !inContainer) onClose();
     }
     document.addEventListener("mousedown", onMouseDown);
@@ -257,7 +250,7 @@ export default function KiwiNodeBrowser({
           <div className="w-px h-4 bg-slate-800 mx-0.5" />
 
           <button
-            onClick={refetch}
+            onClick={() => refetch()}
             disabled={loading}
             title="Refresh node list"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
@@ -348,29 +341,29 @@ export default function KiwiNodeBrowser({
             </div>
           )}
 
-          {/* Error notice */}
+          {/* Error notices */}
           {error && !loading && (
             <div className="px-4 py-2.5 text-xs text-red-400 bg-red-500/5 border-b border-red-500/10">
-              {error} — directory unavailable, use manual entry below.
+              {error}
             </div>
           )}
 
           {/* Empty */}
-          {!loading && !error && nodes.length === 0 && (
+          {!loading && nodes.length === 0 && (
             <div className="py-10 text-center text-xs text-slate-600 italic">
               No nodes found covering {currentFreqKhz} kHz
               {radiusKm ? ` within ${radiusKm} km` : ""}
             </div>
           )}
 
-          {/* Node rows */}
+          {/* ── KiwiSDR node rows ── */}
           {nodes.map((node, index) => {
             const isActive =
               activeConfig?.host === node.host &&
               activeConfig?.port === node.port;
             return (
               <div
-                key={`${node.host}:${node.port}-${index}`}
+                key={`kiwi-${node.host}:${node.port}-${index}`}
                 className={`
                 flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/50 transition-colors
                 ${
@@ -387,14 +380,19 @@ export default function KiwiNodeBrowser({
 
                 {/* Host + freq range + load */}
                 <div className="flex-1 min-w-0">
-                  <div
-                    className="font-mono text-xs text-slate-200 truncate"
-                    title={`${node.host}:${node.port}`}
-                  >
-                    {node.host}
-                    <span className="text-slate-600 ml-1 text-[10px]">
-                      :{node.port}
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1 py-0.5 rounded text-[9px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 uppercase shrink-0">
+                      KiwiSDR
                     </span>
+                    <div
+                      className="font-mono text-xs text-slate-200 truncate"
+                      title={`${node.host}:${node.port}`}
+                    >
+                      {node.host}
+                      <span className="text-slate-600 ml-1 text-[10px]">
+                        :{node.port}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-slate-600 font-mono">
@@ -455,6 +453,8 @@ export default function KiwiNodeBrowser({
             mapStyle={DARK_MAP_STYLE}
             attributionControl={false}
           >
+            <NavigationControl position="bottom-right" showCompass={false} />
+
             {/* Radius circle */}
             {circleGeoJSON && (
               <Source id="kiwi-radius" type="geojson" data={circleGeoJSON}>
@@ -494,7 +494,7 @@ export default function KiwiNodeBrowser({
               </Marker>
             )}
 
-            {/* Node markers */}
+            {/* KiwiSDR node markers */}
             {nodes
               .filter(node => !isNaN(node.lat) && !isNaN(node.lon))
               .map((node, index) => {
@@ -504,7 +504,7 @@ export default function KiwiNodeBrowser({
                 const color = isActive ? "#818cf8" : markerColor(node.distance_km);
                 return (
                   <Marker
-                    key={`${node.host}:${node.port}-${index}`}
+                    key={`kiwi-${node.host}:${node.port}-${index}`}
                     latitude={node.lat}
                     longitude={node.lon}
                     anchor="center"
@@ -519,7 +519,7 @@ export default function KiwiNodeBrowser({
                     }}
                   >
                     <div
-                      title={`${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
+                      title={`KiwiSDR: ${node.host}:${node.port} — ${fmtDistance(node.distance_km)}`}
                       className={`w-2.5 h-2.5 rounded-full border-2 cursor-pointer transition-transform hover:scale-125 ${
                         isActive ? "animate-pulse" : ""
                       }`}
@@ -541,7 +541,7 @@ export default function KiwiNodeBrowser({
                 offset={12}
                 onClose={() => setSelectedNode(null)}
                 closeButton={false}
-                className="kiwi-node-popup" // Add this class to target in CSS
+                className="kiwi-node-popup"
               >
                 <div className="bg-slate-900 border border-slate-700 rounded-md p-2 text-xs min-w-[180px]">
                   <div className="font-mono text-slate-200 truncate mb-1">
@@ -578,102 +578,70 @@ export default function KiwiNodeBrowser({
                         (activeConfig?.host === selectedNode.host &&
                           activeConfig?.port === selectedNode.port)
                       }
-                      className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors"
                     >
-                      {activeConfig?.host === selectedNode.host &&
-                      activeConfig?.port === selectedNode.port
-                        ? "Active"
-                        : kiwiConnecting
-                          ? "…"
-                          : "Connect"}
+                      Connect
                     </button>
                   </div>
                 </div>
               </Popup>
             )}
-            <NavigationControl position="bottom-right" />
           </Map>
         </div>
       )}
 
-      {/* ── Manual entry (collapsible) ── */}
+      {/* ── Manual entry section ── */}
       <div className="border-t border-slate-800">
         <button
-          onClick={() => setShowManual((v) => !v)}
-          className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-wider transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
+          onClick={() => setShowManual(!showManual)}
+          className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-800/40 transition-colors text-[10px] font-bold text-slate-500 uppercase tracking-widest"
         >
           {showManual ? (
             <ChevronDown className="w-3 h-3" />
           ) : (
             <ChevronRight className="w-3 h-3" />
           )}
-          Manual entry — private / unlisted nodes
+          Manual Entry — Private / Unlisted Nodes
         </button>
 
         {showManual && (
-          <div className="px-4 pb-3 flex items-center gap-1.5 flex-wrap">
-            <input
-              type="text"
-              value={manualConfig.host}
-              onChange={(e) => onManualConfigChange({ host: e.target.value })}
-              placeholder="sdr.host.com"
-              disabled={!bridgeConnected || kiwiConnecting}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-36 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-            />
-            <span className="text-slate-600 text-xs">:</span>
-            <input
-              type="number"
-              value={manualConfig.port}
-              onChange={(e) =>
-                onManualConfigChange({ port: Number(e.target.value) || 8073 })
-              }
-              placeholder="8073"
-              disabled={!bridgeConnected || kiwiConnecting}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-16 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-            />
-            <span className="text-slate-600 text-xs">@</span>
-            <input
-              type="number"
-              value={manualConfig.freq}
-              onChange={(e) =>
-                onManualConfigChange({ freq: Number(e.target.value) || 14074 })
-              }
-              placeholder="14074"
-              disabled={!bridgeConnected || kiwiConnecting}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-20 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-            />
-            <span className="text-slate-600 text-[10px]">kHz</span>
-            <select
-              value={manualConfig.mode}
-              onChange={(e) => onManualConfigChange({ mode: e.target.value })}
-              disabled={!bridgeConnected || kiwiConnecting}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-            >
-              <option value="usb">USB</option>
-              <option value="lsb">LSB</option>
-              <option value="am">AM</option>
-              <option value="cw">CW</option>
-            </select>
-            <input
-              type="password"
-              value={manualConfig.password}
-              onChange={(e) => onManualConfigChange({ password: e.target.value })}
-              placeholder="password"
-              disabled={!bridgeConnected || kiwiConnecting}
-              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-slate-300 w-24 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
-              title="Node password (leave blank for open nodes)"
-            />
+          <div className="px-4 pb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
+                  Host / IP
+                </label>
+                <input
+                  type="text"
+                  value={manualConfig.host}
+                  onChange={(e) =>
+                    onManualConfigChange({ host: e.target.value })
+                  }
+                  placeholder="e.g. sdr.example.com"
+                  className="w-full bg-black/40 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
+                  Port
+                </label>
+                <input
+                  type="number"
+                  value={manualConfig.port}
+                  onChange={(e) =>
+                    onManualConfigChange({ port: parseInt(e.target.value) })
+                  }
+                  className="w-full bg-black/40 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                />
+              </div>
+            </div>
+
             <button
-              onClick={() => {
-                onManualConnect();
-                onClose();
-              }}
-              disabled={
-                !bridgeConnected || kiwiConnecting || !manualConfig.host
-              }
-              className="px-3 py-1 rounded font-mono text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={onManualConnect}
+              disabled={!bridgeConnected || kiwiConnecting || !manualConfig.host}
+              className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase tracking-widest transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-40"
             >
-              {kiwiConnecting ? "Connecting…" : "Connect"}
+              {kiwiConnecting ? "Connecting…" : "Connect Manual Node"}
             </button>
           </div>
         )}

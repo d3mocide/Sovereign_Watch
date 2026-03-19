@@ -38,6 +38,10 @@
 
 ![Sovereign Watch - Global Map Filters and Layers](assets/images/SovereignWatch-4.png)
 
+### Dashboard View
+
+![Sovereign Watch - Dashbaord View](assets/images/SovereignWatch-5.png)
+
 ---
 
 ## Quick Start
@@ -85,6 +89,7 @@ Full documentation is in the [`Documentation/`](./Documentation/) folder:
 | [TAK Protocol Reference](./Documentation/TAK_Protocol.md)   | Internal message schema (CoT/Protobuf)   |
 | [API Reference](./Documentation/API_Reference.md)           | REST endpoints + WebSocket               |
 | [UI User Guide](./Documentation/UI_Guide.md)                | How to use the Tactical and Orbital maps |
+| [AI Configuration](./Documentation/AI_Configuration.md)     | How to configure the AI models           |
 
 ---
 
@@ -147,6 +152,7 @@ All upstream data is sourced from **public, open-access networks**.
 | Internet Outages  | IODA (Georgia Tech)                         | Every 30 minutes         |
 | Submarine Cables  | TeleGeography                               | Every 24 hours           |
 | RF Infrastructure | RepeaterBook, ARD, NOAA NWR, RadioReference | Every 6–168 hours        |
+| WebSDR            | Global Network                              | Discovery (on-demand)    |
 
 ---
 

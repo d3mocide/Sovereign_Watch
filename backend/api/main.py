@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, rf, orbital, infra
+from routers import system, tracks, analysis, rf, orbital, infra, news
 from core.database import db
 from services.historian import historian_task
 from services.broadcast import broadcast_service
@@ -13,6 +13,39 @@ from services.broadcast import broadcast_service
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("SovereignWatch")
 
+
+async def _historian_supervisor():
+    """
+    Wraps historian_task() with automatic restart on crash.
+
+    The historian must keep running as long as the API is up — if Kafka or the
+    DB is temporarily unavailable at startup (e.g. Redpanda not yet healthy),
+    or if an unexpected error occurs mid-run, the supervisor retries with
+    exponential backoff (5 s → 10 s → … capped at 60 s).
+
+    A clean asyncio.CancelledError (lifespan shutdown) is propagated immediately
+    without retrying.
+    """
+    backoff = 5.0
+    while True:
+        try:
+            logger.info("Historian supervisor: starting historian task")
+            await historian_task()
+            # historian_task returned without exception — this only happens if it
+            # exits cleanly after handling a CancelledError internally (shouldn't
+            # occur after the re-raise fix, but guard anyway).
+            logger.info("Historian supervisor: historian exited cleanly")
+            break
+        except asyncio.CancelledError:
+            logger.info("Historian supervisor: cancelled, shutting down")
+            raise
+        except Exception as e:
+            logger.error(
+                f"Historian supervisor: historian crashed ({e}). "
+                f"Restarting in {backoff:.0f}s..."
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60.0)
 
 
 # Global task handle
@@ -36,7 +69,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to auto-update TimescaleDB extension: {e}")
 
-    historian_task_handle = asyncio.create_task(historian_task())
+    historian_task_handle = asyncio.create_task(_historian_supervisor())
     await broadcast_service.start()
     logger.info("Database, Redis, Historian, and Broadcast Service started")
 
@@ -93,6 +126,7 @@ app.include_router(analysis.router)
 app.include_router(rf.router)
 app.include_router(orbital.router)
 app.include_router(infra.router)
+app.include_router(news.router)
 
 if __name__ == "__main__":
     import uvicorn

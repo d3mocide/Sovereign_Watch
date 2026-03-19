@@ -12,7 +12,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps, RFSite } from "../../types";
+import { CoTEntity, JS8Station, RFSite } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -20,7 +20,6 @@ import { AltitudeLegend } from "./AltitudeLegend";
 import { SpeedLegend } from "./SpeedLegend";
 import { RFLegend } from "./RFLegend";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
-import { useMissionArea } from "../../hooks/useMissionArea";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { StarField } from "./StarField";
@@ -94,10 +93,10 @@ interface TacticalMapProps {
   }) => void;
   selectedEntity: CoTEntity | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
-  onMissionPropsReady?: (props: MissionProps) => void;
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
   showHistoryTails?: boolean;
+  missionArea: any;
   globeMode?: boolean;
   onToggleGlobe?: () => void; // Added prop for Globe toggle
   replayMode?: boolean;
@@ -128,8 +127,8 @@ interface TacticalMapProps {
   cablesData: any;
   stationsData: any;
   outagesData: any;
-  towersData: any;
   worldCountriesData: any;
+  showTerminator?: boolean;
 }
 
 export function TacticalMap({
@@ -138,10 +137,10 @@ export function TacticalMap({
   onEvent,
   selectedEntity,
   onEntitySelect,
-  onMissionPropsReady,
   onMapActionsReady,
   showVelocityVectors,
   showHistoryTails,
+  missionArea,
   globeMode,
   onToggleGlobe,
   replayMode,
@@ -166,7 +165,6 @@ export function TacticalMap({
   cablesData,
   stationsData,
   outagesData,
-  towersData,
   worldCountriesData,
 }: TacticalMapProps) {
 
@@ -184,7 +182,7 @@ export function TacticalMap({
     lat: number;
     lon: number;
   } | null>(null);
-  const [hoveredInfra, setHoveredInfraState] = useState<any>(null);
+  const [_, setHoveredInfraState] = useState<any>(null);
   const handleHoveredInfra = useCallback((info: any) => {
     const obj = info?.object || null;
     setHoveredInfraState(obj);
@@ -348,7 +346,6 @@ export function TacticalMap({
 
     // 3. RF Repeaters Trigger
     if (currRepeaters) {
-      const dataReady = rfSitesRef?.current && rfSitesRef.current.length > 0;
       const loadFinished = !repeatersLoading;
 
       // Notify if loading has explicitly finished AND we have data.
@@ -444,35 +441,19 @@ export function TacticalMap({
     }
   }, [showHistoryTails]);
 
-
   // Mission Area: mission state, AOT geometry, entity clearing, save form
-  // currentMission/savedMissions/saveMission/deleteMission/handleSwitchMission/handlePresetSelect
-  // are consumed internally by useMissionArea (passed to onMissionPropsReady) — not needed here.
+  // Now provided by parent via missionArea prop
   const {
     aotShapes,
     handleSetFocus,
-    handleReturnHome,
     showSaveForm,
     setShowSaveForm,
     saveFormCoords,
     setSaveFormCoords,
     handleSaveFormSubmit,
     handleSaveFormCancel,
-  } = useMissionArea({
-    mapRef,
-    currentMissionRef,
-    entitiesRef,
-    knownUidsRef,
-    prevCourseRef,
-    drStateRef,
-    visualStateRef,
-    countsRef,
-    onCountsUpdate,
-    onEntitySelect,
-    onMissionPropsReady,
-    initialLat,
-    initialLon,
-  });
+    handleReturnHome,
+  } = missionArea;
 
   useAnimationLoop({
     entitiesRef,
@@ -527,6 +508,8 @@ export function TacticalMap({
     onEntitySelect,
     onEntityLiveUpdate,
     onFollowModeChange,
+    js8StationsRef,
+    ownGridRef,
     kiwiNodeRef,
     rfSitesRef,
     showRepeaters,
@@ -534,7 +517,6 @@ export function TacticalMap({
     cablesData,
     stationsData,
     outagesData,
-    towersData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
@@ -642,7 +624,7 @@ export function TacticalMap({
         },
       });
     }
-  }, [mapLoaded, onMapActionsReady]);
+  }, [mapLoaded, onMapActionsReady, entitiesRef]);
 
   return (
     <>

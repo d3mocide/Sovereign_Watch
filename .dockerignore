@@ -1,0 +1,16 @@
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.git
+**/.github
+**/.vscode
+node_modules
+dist
+build
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+!.env.example

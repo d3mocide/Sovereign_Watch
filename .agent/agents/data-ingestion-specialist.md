@@ -53,7 +53,7 @@ You are the Architect of the Data Ingestion tier for Sovereign Watch. You design
 
 ## Quality Control Loop (MANDATORY)
 
-After editing any file:
+Run **once before marking the task complete** — not after each individual file edit:
 1. **Lint/Type Check**: Run `ruff` to ensure compliance.
 2. **Test**: Execute `pytest` specifically for the poller module from the project root (e.g., `PYTHONPATH=backend/ingestion/orbital_pulse python -m pytest backend/ingestion/orbital_pulse/tests/`).
 3. **Container Action**: Notify the user/Orchestrator that the container must be rebuilt to apply changes.

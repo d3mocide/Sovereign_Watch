@@ -153,14 +153,17 @@ RUN wget -q -O /tmp/JS8Call-2.5.2-x86_64.AppImage "https://github.com/JS8Call-im
     && rm /tmp/JS8Call-2.5.2-x86_64.AppImage && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Layer 8: Python API middleware dependencies
+# Layer 7.5: Install uv for reproducible Python dependency installation
 # -----------------------------------------------------------------------------
-RUN pip3 install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    pyjs8call \
-    websockets \
-    aiohttp
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# -----------------------------------------------------------------------------
+# Layer 8: Python API middleware dependencies (pinned via uv lock file)
+# -----------------------------------------------------------------------------
+COPY pyproject.toml /tmp/py-deps/
+ENV UV_SYSTEM_PYTHON=1
+RUN cd /tmp/py-deps && uv pip install --system . && rm -rf /tmp/py-deps
+
 
 # -----------------------------------------------------------------------------
 # PulseAudio configuration: disable hardware detection
@@ -209,6 +212,7 @@ WORKDIR /app
 COPY server.py /app/server.py
 COPY kiwi_client.py /app/kiwi_client.py
 COPY kiwi_directory.py /app/kiwi_directory.py
+COPY websdr_directory.py /app/websdr_directory.py
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -224,7 +228,7 @@ ENV XDG_RUNTIME_DIR=/run/user/1000
 # KiwiSDR connection defaults (override at runtime)
 ENV KIWI_HOST=kiwisdr.example.com
 ENV KIWI_PORT=8073
-ENV KIWI_FREQ=14074
+ENV KIWI_FREQ=14078
 ENV KIWI_MODE=usb
 
 # JS8Call API port

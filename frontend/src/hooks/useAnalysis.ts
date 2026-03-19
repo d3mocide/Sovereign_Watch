@@ -9,7 +9,7 @@ export type AnalysisState = {
 };
 
 export type UseAnalysisReturn = AnalysisState & {
-  run: (uid: string, lookbackHours: number) => Promise<void>;
+  run: (uid: string, lookbackHours: number, mode?: string) => Promise<void>;
   reset: () => void;
 };
 
@@ -35,7 +35,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setState(INITIAL_STATE);
   }, []);
 
-  const run = useCallback(async (uid: string, lookbackHours: number) => {
+  const run = useCallback(async (uid: string, lookbackHours: number, mode: string = 'tactical') => {
     // Cancel any in-flight stream first
     readerRef.current?.cancel().catch(() => undefined);
     readerRef.current = null;
@@ -43,10 +43,11 @@ export function useAnalysis(): UseAnalysisReturn {
     setState({ text: '', isStreaming: true, error: null, generatedAt: null });
 
     try {
-      const reader = await streamAnalysis(uid, lookbackHours);
+      const reader = await streamAnalysis(uid, lookbackHours, mode);
       readerRef.current = reader;
 
       let buffer = '';
+      let currentEventType = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -59,10 +60,18 @@ export function useAnalysis(): UseAnalysisReturn {
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? ''; // keep incomplete trailing line
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        for (let line of lines) {
+          line = line.replace(/\r$/, '');
+          if (line.startsWith('event: ')) {
+            currentEventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
             const token = line.slice(6); // strip "data: " prefix
+            if (currentEventType === 'error') {
+              throw new Error(token);
+            }
             setState(prev => ({ ...prev, text: prev.text + token }));
+          } else if (line === '') {
+            currentEventType = ''; // reset after blank line (end of SSE event)
           }
         }
       }

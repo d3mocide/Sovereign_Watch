@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, JS8Station, RFSite, DRState, VisualState } from "../types";
+import { CoTEntity, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint } from "../types";
+import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 import { filterEntity, filterSatellite } from "../utils/filters";
 import { interpolatePVB } from "../utils/interpolation";
@@ -34,43 +35,11 @@ interface UseAnimationLoopOptions {
   setHoverPosition: (pos: { x: number; y: number } | null) => void;
   aotShapes: { maritime: number[][]; aviation: number[][] } | null;
   selectedEntity: CoTEntity | null;
-  filters: {
-    showAir: boolean;
-    showSea: boolean;
-    showHelicopter?: boolean;
-    showMilitary?: boolean;
-    showGovernment?: boolean;
-    showCommercial?: boolean;
-    showPrivate?: boolean;
-    showDrone?: boolean;
-    showCargo?: boolean;
-    showTanker?: boolean;
-    showPassenger?: boolean;
-    showFishing?: boolean;
-    showSeaMilitary?: boolean;
-    showLawEnforcement?: boolean;
-    showSar?: boolean;
-    showTug?: boolean;
-    showPleasure?: boolean;
-    showHsc?: boolean;
-    showPilot?: boolean;
-    showSpecial?: boolean;
-    showSatellites?: boolean;
-    showSatGPS?: boolean;
-    showSatWeather?: boolean;
-    showSatComms?: boolean;
-    showSatSurveillance?: boolean;
-    showSatOther?: boolean;
-    showCables?: boolean;
-    showLandingStations?: boolean;
-    cableOpacity?: number;
-    [key: string]: any;
-  } | undefined;
+  filters: import("../types").MapFilters | undefined;
   cablesData?: any;
   stationsData?: any;
   outagesData?: any;
-  towersData?: any;
-    setHoveredInfra?: (info: any) => void;
+  setHoveredInfra?: (info: any) => void;
   setSelectedInfra?: (info: any) => void;
   worldCountriesData?: any;
   globeMode: boolean | undefined;
@@ -126,7 +95,6 @@ export function useAnimationLoop({
   cablesData,
   stationsData,
   outagesData,
-  towersData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -399,9 +367,10 @@ export function useAnimationLoop({
       }
 
       if (
-        countsRef.current.air !== airCount ||
-        countsRef.current.sea !== seaCount ||
-        countsRef.current.orbital !== orbitalCount
+        (airCount > 0 || seaCount > 0 || orbitalCount > 0 || (countsRef.current.air === 0 && countsRef.current.sea === 0 && countsRef.current.orbital === 0)) &&
+        (countsRef.current.air !== airCount ||
+          countsRef.current.sea !== seaCount ||
+          countsRef.current.orbital !== orbitalCount)
       ) {
         countsRef.current = {
           air: airCount,
@@ -452,7 +421,6 @@ export function useAnimationLoop({
         cablesData,
         stationsData,
         outagesData,
-        towersData,
         worldCountriesData,
         countryOutageMap,
         currentSelected,
@@ -518,7 +486,6 @@ export function useAnimationLoop({
     cablesData,
     stationsData,
     outagesData,
-    towersData,
     worldCountriesData,
   ]);
 }

@@ -1,3 +1,183 @@
+## [0.37.1] - 2026-03-18
+
+### Added
+
+- **Multi-Domain Situational Intelligence**: Enhanced the AI Analyst with deep contextual awareness for fusion analysis.
+    - **Behavioral Trajectory Analysis**: The AI now receives the last 10 waypoints (lat/lon, alt, speed, time) for tracking complex patterns like loitering and interceptions.
+    - **Infrastructure Correlation**: Automated spatial cross-referencing with nearby RF Sites (within 10km) and Submarine Cable landing stations (within 20km).
+    - **Orbital Sensor Awareness**: Integrated real-time SGP4 propagation to identify active INTEL-category satellite overpasses during a target's operational window.
+    - **Satellite Fallback Synthesis**: Implemented on-demand trajectory synthesis for satellites using TLE-based SGP4 propagation when analytical telemetry is required.
+
+### Fixed
+
+- **Analysis Pipeline Reliability**: Resolved a critical `JSONDecodeError` in the waypoint history processing by implementing rigorous JSON string decoding in the unified analysis router.
+
+## [0.37.0] - 2026-03-18
+
+### Added
+
+- **Semantic Intelligence Integration**: Added Model Context Protocol (MCP) support for specialized LSP servers.
+    - **Pyright (Backend)**: Enabled deep semantic analysis and "Go to Definition" capabilities across the multi-poller backend services.
+    - **tsserver (Frontend)**: Standardized TypeScript/React symbol resolution for the 30+ Deck.gl and HUD components.
+- **Architectural Visualization**: Integrated the `graph-it-live` MCP server to provide real-time dependency graphing and structural analysis of the codebase.
+- **Developer Tooling Isolation**: Introduced `docker-compose-tools.yml` to run MCP and LSP services in isolated containers, eliminating host-side dependencies for AI analysis.
+- **Enhanced IDE Standardization**: Updated `.gitignore` to explicitly preserve `.vscode/settings.json`, ensuring consistent formatting (Black/Prettier) and analysis paths across all contributors.
+
+## [0.36.1] - 2026-03-18
+
+### Fixed
+
+- **AI Analyst Copy-Paste Formatting**: Resolved a bug where text copied from the AI Analyst panel lost its structure (one word per line) in external applications.
+    - Implemented robust text normalization for SSE carriage returns and spacing artifacts.
+    - Unified the cleaning logic between the UI renderer and the clipboard handler.
+
+## [0.36.0] - 2026-03-18
+
+### Added
+
+- **WebSDR Discovery Architecture**: Introduced a dedicated global node discovery system for the WebSDR network.
+    - **Global Map View**: A new full-page map interface for browsing available WebSDR nodes worldwide, removing previous radius and coverage restrictions.
+    - **Integrated Receiver**: Selecting a WebSDR node now transitions the terminal to a full-screen receiver view, unmounting automatically when switching modes to conserve resources.
+- **WebSDR Node Styling**: Implemented custom tactical themed popups for WebSDR nodes, removing default white outlines and ensuring consistency with the application's dark aesthetic.
+
+### Changed
+
+- **Radio Terminal Refactoring**:
+    - Renamed the base "Listen" mode to "**KiwiSDR**" for improved clarity and naming consistency across different SDR networks.
+    - Specialized the `KiwiNodeBrowser` widget to focus exclusively on KiwiSDR nodes, reducing UI clutter and state overlap.
+- **Documentation Overhaul**: Updated the UI Guide and Configuration Reference to reflect the new WebSDR capabilities and the KiwiSDR naming convention.
+
+### Fixed
+
+- **WebSDR Missing Module**: Resolved a container deployment issue where `websdr_directory.py` was missing from the `js8call` service Docker image, restoring node discovery functionality.
+
+## [0.35.1] - 2026-03-18
+
+### Changed
+
+- **AI Configuration Documentation**: Comprehensive overhaul of the AI triple-model architecture documentation, clarifying the roles of `secure-core`, `public-flash`, and `deep-reasoner` models.
+- **Environment Templates**: Updated `.env.example` with more descriptive comments and a complete set of LiteLLM and RF Pulse configuration variables.
+
+### Fixed
+
+- **Documentation Hygiene**: Corrected broken links and stabilized table formatting across the primary configuration and deployment guides.
+
+## [0.35.0] - 2026-03-18
+
+### Added
+
+- **Multi-Mode AI Analysis**: The AI Analyst now supports specialized operational modes:
+    - **Tactical**: Focuses on telemetry anomalies and trajectory analysis.
+    - **OSINT**: Focuses on entity identification and registration matching.
+    - **SAR**: Optimized for identifying distress patterns and search grids.
+- **Orbital Tracking Performance**: Implemented a specialized isolated filter state for the Orbital Map to prevent high-frequency satellite updates from impacting tactical map performance.
+- **AI Configuration Guide**: New documentation clarifying the distinction between the UI model catalog (`models.yaml`) and the Backend infrastructure (`litellm_config.yaml`).
+
+### Changed
+
+- **State Stability**: Memoized filter objects and stabilized prop references in `TacticalMap` and `OrbitalMap` to reduce unnecessary re-renders.
+
+### Fixed
+
+- **Orbital Count Flickering**: Resolved a race condition in the animation loop that caused the global tracker to intermittently jump to zero during filter transitions.
+- **Analyst Reliability**: Fixed a bug where the AI Analyst panel failed to auto-run when opened from the Orbital view.
+- **Text Formatting**: Cleaned up spacing artifacts in AI-generated reports (e.g., "it ' s" -> "it's").
+
+## [0.34.1] - 2026-03-17
+
+### Fixed
+
+- **Docker Stability (uv Migration)**: Resolved critical "executable not found" errors after the migration to `uv` by moving the virtual environment to `/opt/venv` to prevent masking by host-mount volumes.
+- **Container Performance Tuning**: Enabled bytecode compilation (`UV_COMPILE_BYTECODE=1`) and disabled redundant startup sync checks (`--no-sync`), reducing cold-boot lag by 3-5 seconds.
+- **JS8Call Compatibility**: Relaxed Python version requirement to `3.10` to match the Ubuntu 22.04 base image, ensuring bridge stability.
+- **Build Context Sanitization**: Implemented global and per-service `.dockerignore` files to prevent large host-side `.venv` folders from breaking Windows→Docker build context transfers.
+
+## [0.34.0] - 2026-03-17
+
+
+### Added
+
+- **Situation Globe (Dashboard)**: A new interactive, auto-rotating 3D globe integrated into the Dashboard view.
+    - **Split-View HUD**: Dashboard now displays a local tactical map alongside the situational globe for dual-scale awareness.
+    - **Geodesic Mission AO**: The active mission area is rendered as a projection-aware ring on the globe.
+- **Starfield Backdrop**: Cinematic deep-space starfield integrated into global map views.
+
+### Changed
+
+- **Playback / Replay overhaul**: Fixed a cascade of bugs that caused the replay
+  feature to show no data after running overnight with no client connected.
+  - Historian now uses adaptive time-bucket sampling (`DISTINCT ON (entity_id,
+    time_bucket(...))`) instead of a raw `LIMIT` that always returned the first
+    N chronological rows (typically the first few seconds of a 6-hour window).
+    Bucket sizes scale with window duration: 30 s (≤1 h) → 2 min (≤6 h) → 5 min
+    (>12 h), giving uniform temporal coverage across the entire requested window.
+  - Frontend now requests `limit=10000` (API max) instead of the default 1000.
+  - Frontend stale threshold raised from 5 min to 10 min to accommodate larger
+    bucket sizes without entities flickering out between data points.
+  - Historian supervisor added (`_historian_supervisor` in `main.py`): wraps the
+    historian task with exponential-backoff restart (5 s → 60 s) so a transient
+    Kafka outage at startup no longer permanently stops data persistence.
+  - `historian_task` now re-raises `CancelledError` and fatal exceptions so the
+    supervisor can distinguish clean shutdown from crash.
+
+- **Orbital tracks removed from database**: The `orbital_tracks` TimescaleDB
+  hypertable has been eliminated.  Satellite positions are deterministic (SGP4
+  from stored TLEs) and were generating ~2 000 write-rows per second with no
+  operational benefit.
+  - `orbital_tracks` table removed from `init.sql` and no longer created on
+    fresh installs.
+  - Historian no longer writes satellite positions; it continues to upsert TLE
+    metadata into the `satellites` table every 6-hour refresh cycle.
+  - `/api/tracks/history/{SAT-*}` now propagates positions on-demand via SGP4
+    from the stored TLE, giving unlimited historical depth (bounded only by TLE
+    age) instead of the previous 12-hour retention window.
+  - `/api/tracks/search` satellite results now query the `satellites` catalogue
+    directly and compute current positions via SGP4 at query time.
+  - `/api/tracks/replay` already excluded orbital data (satellites exhausted the
+    10 000-row budget and the OrbitalMap is hardcoded to `replayMode=false`).
+
+- **Orbital data excluded from replay**: Replay covers ADS-B and AIS only.
+  With ~10 000 tracked satellites, even one bucket per object would consume the
+  entire row budget leaving no room for tactical data.
+
+- **Dashboard Smoothing**: Integrated Dead Reckoning (PVB) into the Situation Globe to ensure orbital and tactical assets glide smoothly during auto-rotation.
+- **Global Terminator Support**: The day/night terminator toggle is now synchronized across both the local tactical map and the global situated view.
+
+### Fixed
+
+- Historian `CancelledError` was silently swallowed, preventing clean shutdown
+  detection by the new supervisor.
+- `docker-compose.yml` does not declare `redpanda` as a health dependency for
+  `backend-api`; the supervisor now retries automatically if Kafka is not yet
+  ready when the API starts.
+- **Helicopter & Drone Filtering**: Fixed a precedence bug where platform-specific filters (Helo/Drone) were overridden by ownership filters (CIV/MIL). These filters now take absolute priority.
+- **Dashboard Prop Synchronization**: Fixed multiple React hook dependency and prop-drilling issues in the split-view dashboard.
+
+## [0.33.0] - 2026-03-16
+
+### Added
+- **Global DASHBOARD View**: Introduced a high-tactical "at-a-glance" dashboard view accessible via the Top Bar. This view provides a unified perspective on system health, stream bitrates, active outages, and RF EmComm monitoring without needing full map immersion.
+- **Stream Health & Sparklines**: Integrated real-time sparkline visualizations for data ingestion rates across Aviation, Maritime, and Orbital domains.
+- **Orbital Constellation Tabs**: Enhanced orbital situational awareness with dedicated dashboard tabs for quick access to Starlink, GPS, and Intel constellation status.
+
+### Changed
+- **High-Frequency Performance Tuning**:
+  - **Optimized Date Parsing**: Drastically reduced CPU overhead in rendering and mapping loops by optimizing `Date` instantiation inside hot paths.
+  - **Async File I/O for Pollers**: Migrated synchronous file writes to non-blocking async operations in the Orbital Pulse service, preventing I/O stalls during high-volume TLE updates.
+
+## [0.32.2] - 2026-03-15
+
+### Fixed
+- **Deep Localhost Removal**: Eliminated remaining hardcoded `localhost` string references in `useEntityWorker.ts`, `useKiwiNodes.ts`, and `ListeningPost.tsx`.
+- **Intelligent URL Derivation**: Implemented fallback logic that automatically uses the current host IP for all API and WebSocket traffic when environment variables are set to local defaults, ensuring multi-node network deployments work out of the box.
+
+## [0.32.1] - 2026-03-15
+
+### Fixed
+- **Network Deployment & CORS**: Centralized `ALLOWED_ORIGINS` in `.env`, resolving Cross-Origin Resource Sharing blocks when running on a server inside a local network.
+- **Dynamic WebSocket Detection**: Updated frontend hooks to automatically derive backend WebSocket URLs from the current server IP, eliminating the need for manual `.env` configuration in many network environments.
+- **Non-Secure (HTTP) Support**: Implemented a fallback for `crypto.randomUUID()` in non-secure (HTTP) contexts, preventing application crashes when accessed via IP without SSL.
+
 ## [0.32.0] - 2026-03-15
 
 ### Added

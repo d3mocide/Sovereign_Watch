@@ -1,22 +1,29 @@
-# Release - v0.32.0 - Payload Eval
+# Release Notes - v0.37.1 (Situational Intelligence)
 
-## Summary
-Version 0.32.0 introduces the **Payload Evaluation** suite, a critical investigative feature-set that surfaces the raw underlying data of the Sovereign Watch platform. This release bridges the gap between high-level tactical visualization and raw intelligence analysis.
+## Multi-Domain AI Analyst Integration
 
-## Key Features
-- **Global Raw Stream Terminal**: A new "god-mode" terminal in the Top Bar that traces the live pulse of the entire ingestion bus.
-- **Adjustable Sampling Rates**: Hardware-inspired speed controls (Real-time to 10X decimation) to slow down high-traffic streams (e.g., near major hubs) for human analysis.
-- **Syntax Highlighted Inspectors**: Full JSON syntax highlighting for all inspected payloads, matching the project's tactical aesthetic.
-- **Context-Aware UI**: The sidebars now intelligently hide developmental/raw buttons when viewing static infrastructure like undersea cables, keeping the UI focused on operational data.
+v0.37.1 marks a critical advancement in our AI Analyst's cognitive capabilities, moving from simple telemetry summary to **true multi-domain situational awareness**. By fusing cross-referenced datasets at the analysis prompt level, the AI can now assess not just *where* a target is, but its **intent** relative to global infrastructure and the orbital sensor environment.
 
-## Technical Details
-- Implements **FE-10** from the project roadmap.
-- High-performance polling mechanism in `GlobalTerminalWidget` ensures zero impact on the main rendering loop (60fps maintained).
-- Protobuf-to-JSON visual mapping consistency across all domain pollers.
+### 🦾 Key Capabilities:
 
-## Upgrade Instructions
-```bash
-docker compose pull
-docker compose build frontend
-docker compose up -d
-```
+1. **Behavioral Trajectory Insight**:
+   - The AI Analyst now receives a detailed 10-point waypoint history (Lat/Lon, Alt, Speed, Time).
+   - This prevents "average-velocity" masking and helps the AI detect loitering, course shifts, and rendezvous behaviors.
+
+2. **Infrastructure Proximity Awareness**:
+   - **RF Pulse Correlation**: Automatically identifies if a target is hovering within 10km of a critical radio repeater or signal site.
+   - **Submarine Cable Intelligence**: Cross-references targets with world-wide undersea landing stations (cached in Redis), flagging potential security threats to global connectivity.
+
+3. **Orbital Domain Fusion**:
+   - **Overpass Detection**: The Analyst now "looks up." Using integrated SGP4 propagation, the AI determines if active INTEL-category satellites are currently overpassing the target's position.
+   - This provides the Analyst with the context of whether a target is being shadowed by an orbital sensor.
+
+4. **Synthetic Satellite Telemetry**:
+   - Added a fallback synthesis mode for satellites using TLE-based SGP4 propagation. This ensures that even without real-time telemetry, the Analyst can provide high-fidelity assessments based on predicted orbits.
+
+### 🛠️ Stability:
+- Fixed a JSON decoding issue that caused the Analyst to crash when processing waypoint historical data from the database.
+- Improved the LiteLLM dynamic model mapping to correctly handle environment-injected API keys from `litellm_config.yaml`.
+
+---
+*For a full list of changes, see the [CHANGELOG.md](CHANGELOG.md).*

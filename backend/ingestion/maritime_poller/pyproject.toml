@@ -1,0 +1,10 @@
+[project]
+name = "sovereign-watch-maritime-poller"
+version = "0.1.0"
+description = "Sovereign Watch maritime ingestion poller"
+requires-python = ">=3.12"
+dependencies = [
+    "aiokafka==0.13.0",
+    "redis==7.3.0",
+    "websockets==16.0",
+]

@@ -375,6 +375,8 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                       <button
                         type="submit"
                         disabled={!msgInput.trim() || !js8Connected}
+                        aria-label="Send message"
+                        title="Send message"
                         className="absolute right-1 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-300 disabled:opacity-30 p-0.5 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none rounded"
                       >
                         <Send size={11} />

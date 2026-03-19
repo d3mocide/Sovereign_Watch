@@ -56,8 +56,8 @@ describe('processReplayData', () => {
     const result = processReplayData(inputData);
     const e1 = result.get('e1');
     expect(e1).toBeDefined();
-    expect(e1![0].time).toEqual(new Date(mockData[0].time).getTime());
-    expect(e1![1].time).toEqual(new Date(mockData[1].time).getTime());
+    expect(e1![0].time).toEqual(Date.parse(mockData[0].time));
+    expect(e1![1].time).toEqual(Date.parse(mockData[1].time));
   });
 
   it('maps meta.classification to vesselClassification for ship entities', () => {
@@ -118,7 +118,7 @@ describe('processReplayData', () => {
     const largeDataset: any[] = [];
     const numEntities = 100;
     const pointsPerEntity = 100;
-    const baseTime = new Date('2023-01-01T00:00:00Z').getTime();
+    const baseTime = Date.parse('2023-01-01T00:00:00Z');
 
     for (let i = 0; i < pointsPerEntity; i++) {
       for (let e = 0; e < numEntities; e++) {

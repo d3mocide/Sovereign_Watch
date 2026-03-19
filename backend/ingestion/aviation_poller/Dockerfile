@@ -1,19 +1,32 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-WORKDIR /app
+# Install uv from the official distroless image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# System dependencies for H3 (if needed for compilation)
+# System dependencies required for H3 compilation on non-wheel platforms
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+
+# Copy dependency manifests first for layer caching
+COPY pyproject.toml uv.lock ./
+
+# Install production dependencies only, using the exact lock file
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+RUN uv sync --frozen --no-dev
+
+# Ensure the virtual environment's binaries are in the PATH
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 
 COPY . .
 
 # Run unbuffered for logs
 ENV PYTHONUNBUFFERED=1
-
-CMD ["python", "main.py"]
+CMD ["uv", "run", "--no-sync", "python", "main.py"]

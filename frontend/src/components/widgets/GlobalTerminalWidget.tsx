@@ -137,7 +137,7 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
                 <button
                   key={s}
                   onClick={() => setSpeed(s as 1 | 2 | 5 | 10)}
-                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${speed === s ? 'bg-hud-green/20 text-hud-green' : 'text-white/30 hover:text-white/60'}`}
+                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${speed === s ? 'bg-hud-green/20 text-hud-green' : 'text-white/30 hover:text-white/60'}`}
                 >
                   {s === 1 ? 'REAL' : `${s}X`}
                 </button>
@@ -146,29 +146,34 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
 
            <button
             onClick={() => setIsPaused(!isPaused)}
-            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title={isPaused ? "Resume Stream" : "Pause Stream"}
+            aria-label={isPaused ? "Resume Stream" : "Pause Stream"}
+            aria-pressed={isPaused}
           >
             {isPaused ? <Play size={14} className="text-amber-500" /> : <Pause size={14} />}
           </button>
           <button
             onClick={handleCopy}
-            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Copy All"
+            aria-label="Copy All stream logs"
           >
             {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
           </button>
            <button
             onClick={handleClear}
-            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title="Clear Stream"
+            aria-label="Clear Stream logs"
           >
             <Trash2 size={14} />
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-red-500/20 rounded text-white/50 hover:text-red-400 transition-colors ml-1"
+            className="p-1.5 hover:bg-red-500/20 rounded text-white/50 hover:text-red-400 transition-colors ml-1 focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
             title="Close Terminal"
+            aria-label="Close Terminal"
           >
             <X size={14} />
           </button>

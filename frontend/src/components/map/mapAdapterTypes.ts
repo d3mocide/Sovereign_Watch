@@ -2,18 +2,20 @@ import type { CSSProperties } from 'react';
 
 export interface MapAdapterProps {
     viewState: Record<string, number>;
-    onMove: (evt: any) => void;
-    onLoad: (evt: any) => void;
+    onMove?: (evt: any) => void;
+    onLoad?: (evt: any) => void;
     mapStyle: string;
     style: CSSProperties;
-    onContextMenu: (evt: any) => void;
-    onClick: () => void;
+    onContextMenu?: (evt: any) => void;
+    onClick?: () => void;
     globeMode?: boolean;
     deckProps: {
         id: string;
-        interleaved: boolean;
-        onOverlayLoaded: (overlay: any) => void;
+        interleaved?: boolean;
+        onOverlayLoaded?: (overlay: any) => void;
         key?: string;
         globeMode?: boolean;
+        layers?: any[];
+        [key: string]: any;
     };
 }

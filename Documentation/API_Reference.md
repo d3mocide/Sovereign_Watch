@@ -76,9 +76,9 @@ Returns historical track points for a specific entity.
 
 > **Data source routing:** Aircraft and vessel entities (`entity_id` not starting with `SAT-`)
 > are served from the `tracks` hypertable (72-hour retention). Satellite entities
-> (`SAT-*`) are served from `orbital_tracks` (12-hour retention). Requests for
-> satellite history beyond 12 hours will return an empty array — use
-> `GET /api/orbital/groundtrack/{norad_id}` to regenerate positions from TLE instead.
+> (`SAT-*`) have no stored position history — positions are computed on-demand via
+> SGP4 from the current TLE in the `satellites` table.  The `hours` and `limit`
+> parameters control the time window and point density of the computed track.
 
 **Response:** Array of track objects ordered by time descending:
 ```json
@@ -126,10 +126,11 @@ Search for entities by UID or callsign (substring match).
 ]
 ```
 
-> **Satellite results:** Matches against `SAT-*` entity IDs are sourced from
-> `orbital_tracks`. For these results `callsign` is the satellite name (from the
-> `satellites` table), and `classification` is always `null`. Both `tracks` and
-> `orbital_tracks` are searched in parallel and results are combined.
+> **Satellite results:** Matches are sourced directly from the `satellites` TLE
+> catalogue by `('SAT-' || norad_id) ILIKE` or `name ILIKE`.  `callsign` is the
+> satellite name, `classification` is always `null`, and the `lat`/`lon` fields
+> reflect the current computed position (SGP4 propagated at query time).  Both
+> `tracks` and `satellites` are searched in parallel and results are combined.
 
 ---
 
@@ -149,7 +150,7 @@ Retrieve all track points within a time window for historical replay.
 - Time window cannot exceed `MAX_REPLAY_HOURS`
 
 > **Data source:** Results are a UNION of `tracks` (72-hour retention) and
-> `orbital_tracks` (12-hour retention). Satellite track points older than 12 hours
+> the `tracks` hypertable. Satellite track points older than 72 hours (ADS-B/AIS)
 > will not appear in replay results.
 
 **Response:** Array of track points ordered by time ascending, including all entity types within the time window. Satellite rows (`type: "a-s-K"`) always have `meta: null`:
