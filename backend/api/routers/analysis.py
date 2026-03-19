@@ -47,6 +47,23 @@ async def analyze_track(
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
+    # Rate Limiting
+    if db.redis_client and request.client and request.client.host:
+        client_ip = request.client.host
+        rl_key = f"rate_limit:analyze:{client_ip}"
+        try:
+            # Atomic rate limit increment
+            req_count = await db.redis_client.incr(rl_key)
+            if req_count == 1:
+                await db.redis_client.expire(rl_key, 60)
+
+            if req_count > 10:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
+
     # 1. Fetch Track History (Intel Bump 2)
     track_query = """
         WITH summary AS (
