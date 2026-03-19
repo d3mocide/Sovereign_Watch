@@ -13,13 +13,13 @@
       }
     },
     "pyright": {
-      "command": "./tools/bin/mcp-language-server",
-      "args": ["-workspace", ".", "-lsp", "pyright-langserver", "--", "--stdio"],
+      "command": "bash",
+      "args": ["./tools/mcp-language-server/run-pyright.sh"],
       "env": {}
     },
     "tsserver": {
-      "command": "./tools/bin/mcp-language-server",
-      "args": ["-workspace", ".", "-lsp", "typescript-language-server", "--", "--stdio"],
+      "command": "bash",
+      "args": ["./tools/mcp-language-server/run-tsserver.sh"],
       "env": {}
     }
   }

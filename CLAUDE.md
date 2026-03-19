@@ -42,25 +42,32 @@ This project is configured for LSP-powered navigation via `mcp-language-server`.
 | Understand a symbol's type | `hover` → not reading the file manually |
 | Rename a symbol project-wide | `rename` → not sed across files |
 
-### One-Time Setup (host machine)
+### How the MCP servers start
 
-The MCP language server binary is **vendored** in `tools/bin/` and built from
-pinned source. Do not `npm install -g mcp-language-server` — that resolves to
-an unrelated package.
+`.mcp.json` calls wrapper scripts (`tools/mcp-language-server/run-*.sh`) that
+auto-select the right backend:
+
+```
+Docker daemon reachable?  ──yes──▶  docker compose run  (pinned LSP versions)
+                          ──no───▶  ./tools/bin/mcp-language-server  (local binary)
+```
+
+**Windows + Docker Desktop** — Docker is reachable, wrappers use Docker.
+No extra setup beyond having `bash` on PATH (Git Bash satisfies this).
+
+**Linux / macOS without Docker** — wrappers fall back to the local binary.
+One-time build required:
 
 ```bash
-# Build mcp-language-server from pinned source (requires git + go 1.24+)
+# Requires git + go 1.24+
 ./tools/mcp-language-server/build.sh
 
-# TypeScript/JavaScript LSP
+# Host LSP servers (if not already installed)
 npm install -g typescript typescript-language-server
-
-# Python LSP (Pyright — matches pyrightconfig.json at project root)
 npm install -g pyright
 ```
 
-`.mcp.json` points at `./tools/bin/mcp-language-server` — the locally built
-binary. No additional config needed after running the build script.
+Do not `npm install -g mcp-language-server` — that resolves to an unrelated package.
 
 ### Why This Matters Here
 
