@@ -14,12 +14,12 @@
     },
     "pyright": {
       "command": "./tools/bin/mcp-language-server",
-      "args": ["-workspace", "/home/user/Sovereign_Watch", "-lsp", "pyright-langserver", "--", "--stdio"],
+      "args": ["-workspace", ".", "-lsp", "pyright-langserver", "--", "--stdio"],
       "env": {}
     },
     "tsserver": {
       "command": "./tools/bin/mcp-language-server",
-      "args": ["-workspace", "/home/user/Sovereign_Watch", "-lsp", "typescript-language-server", "--", "--stdio"],
+      "args": ["-workspace", ".", "-lsp", "typescript-language-server", "--", "--stdio"],
       "env": {}
     }
   }
