@@ -1,3 +1,12 @@
+## [0.39.1] - 2026-03-19
+
+### Fixed
+
+- **RadioReference Ingestion**: Resolved a critical crash in the `rf_pulse` poller when RadioReference credentials were provided.
+  - Fixed Zeep `TransportError` (HTTP 403) by explicitly injecting `SovereignWatch/1.0` User-Agent headers into both async and sync WSDL fetch contexts.
+  - Removed calls to the deprecated `getAuthToken` method and appended `&v=9` to the WSDL URL to ensure access to the current API schema.
+  - Stubbed out the hallucinated `getCountrySystemList` method to prevent unhandled `AttributeError` exceptions, stabilizing the poller while a proper trunked-system fetch strategy is designed.
+
 ## [0.39.0] - 2026-03-19
 
 ### Added
