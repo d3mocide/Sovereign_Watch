@@ -1,5 +1,13 @@
 export type TrailPoint = [number, number, number, number, number?]; // [lon, lat, altitude, speed, timestamp?]
 
+/** One continuous segment of a historical track, in deck.gl path format. */
+export interface HistorySegment {
+  /** [lon, lat, alt_m][] oldest → newest */
+  path: [number, number, number][];
+  /** true = no ADS-B data in this interval; rendered as a ghost/dashed line */
+  isGap: boolean;
+}
+
 export type CoTEntity = {
   uid: string;
   lat: number;

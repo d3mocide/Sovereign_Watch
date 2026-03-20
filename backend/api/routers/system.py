@@ -1,9 +1,10 @@
 import json
 import logging
 import os
+import time as _time
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
-from models.schemas import MissionLocation, AIModelRequest
+from models.schemas import MissionLocation, AIModelRequest, WatchlistAddRequest
 from core.database import db
 
 router = APIRouter()
@@ -215,6 +216,78 @@ async def set_ai_config(req: AIModelRequest):
 
     logger.info(f"AI model switched to: {req.model_id}")
     return {"status": "ok", "active_model": req.model_id}
+
+_WATCHLIST_KEY = "opensky:watchlist"
+_PERMANENT_SCORE = 32_503_680_000.0  # 01-Jan-3000 — same sentinel used by the poller
+
+
+@router.get("/api/watchlist")
+async def get_watchlist():
+    """Return all active (non-expired) watchlist entries."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        raw = await db.redis_client.zrangebyscore(
+            _WATCHLIST_KEY, _time.time(), "+inf", withscores=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to read watchlist: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    result = []
+    for icao24, score in raw:
+        permanent = score >= _PERMANENT_SCORE - 1
+        result.append({
+            "icao24": icao24,
+            "permanent": permanent,
+            "expires_at": None if permanent else datetime.fromtimestamp(score, timezone.utc).isoformat(),
+        })
+    return result
+
+
+@router.post("/api/watchlist", status_code=201)
+async def add_to_watchlist(req: WatchlistAddRequest):
+    """Add or refresh an ICAO24 in the global watchlist."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    icao24 = req.icao24.lower().strip()
+    if not icao24 or len(icao24) != 6 or not all(c in "0123456789abcdef" for c in icao24):
+        raise HTTPException(status_code=400, detail="icao24 must be exactly 6 hex characters")
+
+    score = _PERMANENT_SCORE if req.ttl_days is None else _time.time() + req.ttl_days * 86400
+
+    try:
+        await db.redis_client.zadd(_WATCHLIST_KEY, {icao24: score})
+    except Exception as e:
+        logger.error(f"Failed to add watchlist entry: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    logger.info("Watchlist: added %s (permanent=%s)", icao24, req.ttl_days is None)
+    return {"status": "ok", "icao24": icao24, "permanent": req.ttl_days is None}
+
+
+@router.delete("/api/watchlist/{icao24}")
+async def remove_from_watchlist(icao24: str):
+    """Remove an ICAO24 from the global watchlist."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    icao24 = icao24.lower().strip()
+
+    try:
+        removed = await db.redis_client.zrem(_WATCHLIST_KEY, icao24)
+    except Exception as e:
+        logger.error(f"Failed to remove watchlist entry: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"'{icao24}' not found in watchlist")
+
+    logger.info("Watchlist: removed %s", icao24)
+    return {"status": "ok", "icao24": icao24}
+
 
 @router.get("/api/debug/h3_cells")
 async def get_h3_cells():

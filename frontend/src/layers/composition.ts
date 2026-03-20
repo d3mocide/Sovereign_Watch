@@ -1,5 +1,5 @@
-import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import { CoTEntity, JS8Station, RFSite } from "../types";
+import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { CoTEntity, HistorySegment, JS8Station, RFSite } from "../types";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildInfraLayers } from "./buildInfraLayers";
@@ -42,6 +42,8 @@ interface LayerCompositionOptions {
   setHoverPosition: (pos: { x: number; y: number } | null) => void;
   setHoveredInfra: (info: any) => void;
   setSelectedInfra: (info: any) => void;
+  /** Historical flight path segments from TrackHistoryPanel */
+  historySegments?: HistorySegment[];
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -76,6 +78,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     setHoverPosition,
     setHoveredInfra,
     setSelectedInfra,
+    historySegments,
   } = options;
 
   // JS8 station layers
@@ -208,6 +211,51 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     ),
     ...repeaterLayers,
     ...kiwiLayers,
+    // Historical flight path (solid coverage segments + ghost gap segments)
+    ...(historySegments && historySegments.length > 0 ? [
+      new PathLayer({
+        id: 'history-track-solid',
+        data: historySegments.filter(s => !s.isGap),
+        getPath: (d: HistorySegment) => d.path,
+        getColor: [0, 255, 65, 160],
+        getWidth: 2,
+        widthUnits: 'pixels',
+        jointRounded: true,
+        capRounded: true,
+        pickable: false,
+      }),
+      new PathLayer({
+        id: 'history-track-gap',
+        data: historySegments.filter(s => s.isGap),
+        getPath: (d: HistorySegment) => d.path,
+        getColor: [251, 191, 36, 80],
+        getWidth: 1,
+        widthUnits: 'pixels',
+        dashJustified: true,
+        getDashArray: [4, 4],
+        extensions: [],
+        pickable: false,
+      }),
+      // Start dot (oldest point) and end dot (current / newest)
+      new ScatterplotLayer({
+        id: 'history-track-endpoints',
+        data: (() => {
+          const solid = historySegments.filter(s => !s.isGap);
+          if (solid.length === 0) return [];
+          const firstSeg = solid[0];
+          const lastSeg = solid[solid.length - 1];
+          return [
+            { pos: firstSeg.path[0], color: [0, 255, 65, 220] as [number, number, number, number] },
+            { pos: lastSeg.path[lastSeg.path.length - 1], color: [255, 200, 0, 220] as [number, number, number, number] },
+          ];
+        })(),
+        getPosition: (d: { pos: [number, number, number]; color: [number, number, number, number] }) => d.pos,
+        getFillColor: (d: { pos: [number, number, number]; color: [number, number, number, number] }) => d.color,
+        getRadius: 5,
+        radiusUnits: 'pixels',
+        pickable: false,
+      }),
+    ] : []),
     ...buildTrailLayers(
       interpolatedEntities,
       currentSelected,

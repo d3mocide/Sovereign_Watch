@@ -8,7 +8,7 @@ import { OrbitalMap } from './components/map/OrbitalMap'
 import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
 import RadioTerminal from './components/js8call/RadioTerminal'
 import { DashboardView } from './components/views/DashboardView'
-import { CoTEntity, IntelEvent, MissionProps } from './types'
+import { CoTEntity, HistorySegment, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
@@ -28,6 +28,7 @@ function App() {
 
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
+  const [historySegments, setHistorySegments] = useState<HistorySegment[]>([]);
   const [followMode, setFollowMode] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
@@ -661,6 +662,7 @@ function App() {
 
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {
     setSelectedEntity(e);
+    setHistorySegments([]); // clear track path when selection changes
     // Always stop following when selection changes (user must re-engage)
     setFollowMode(false);
 
@@ -762,6 +764,7 @@ function App() {
             entity={selectedEntity}
             onClose={() => {
               setSelectedEntity(null);
+              setHistorySegments([]);
               setFollowMode(false);
             }}
             onCenterMap={() => {
@@ -771,6 +774,7 @@ function App() {
               }
             }}
             onOpenAnalystPanel={handleOpenAnalystPanel}
+            onHistoryLoaded={setHistorySegments}
           />
         ) : null
       }
@@ -793,6 +797,7 @@ function App() {
             onMapActionsReady={setMapActions}
             showVelocityVectors={showVelocityVectors}
             showHistoryTails={showHistoryTails}
+            historySegments={historySegments}
             globeMode={globeMode}
             onToggleGlobe={handleGlobeModeToggle}
             replayMode={replayMode}

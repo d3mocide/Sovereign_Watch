@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint } from "../types";
+import { CoTEntity, HistorySegment, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint } from "../types";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 import { filterEntity, filterSatellite } from "../utils/filters";
@@ -65,6 +65,8 @@ interface UseAnimationLoopOptions {
   predictedGroundTrackRef?: MutableRefObject<GroundTrackPoint[]>;
   /** Observer position for the orbital AOI ring. radiusKm is the pass-prediction horizon. */
   observerRef?: MutableRefObject<{ lat: number; lon: number; radiusKm: number } | null>;
+  /** Historical track segments loaded by TrackHistoryPanel — rendered as a PathLayer */
+  historySegmentsRef?: MutableRefObject<HistorySegment[]>;
 }
 
 /** Returns true if the satellite should be visible given the current filters. */
@@ -115,6 +117,7 @@ export function useAnimationLoop({
   observerRef,
   currentMissionRef,
   worldCountriesData,
+  historySegmentsRef,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -443,6 +446,7 @@ export function useAnimationLoop({
         setHoverPosition,
         setHoveredInfra: setHoveredInfra || (() => {}),
         setSelectedInfra: setSelectedInfra || (() => {}),
+        historySegments: historySegmentsRef?.current,
       });
 
       if (mapLoaded && overlayRef.current?.setProps) {

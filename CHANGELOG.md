@@ -1,3 +1,20 @@
+## [0.39.0] - 2026-03-19
+
+### Added
+
+- **Global Watchlist Management**: Added watchlist functionality for tracking specific ICAO24s globally, bypassing spatial filters.
+  - **Frontend UI**: Added a comprehensive watchlist management panel to `SystemSettingsWidget` with add/remove capability and visual indicators for permanent vs. expiring entries.
+  - **Frontend API**: Created `watchlist.ts` API client for GET/POST/DELETE operations and integrated polling into the `useEntityWorker` hook matching a 30-second sync interval.
+  - **Backend APIs**: Added three new REST endpoints to `system.py`: `GET /api/watchlist` to return active entries, `POST /api/watchlist` to add/refresh entries with optional TTL, and `DELETE /api/watchlist/{icao24}` to remove entries.
+  - **Persistence**: Powered by a Redis sorted set (`opensky:watchlist`) using timestamps as scores, with a far-future sentinel value (01-Jan-3000) for permanent entries.
+
+### Changed
+
+- **UI Refinements**:
+  - Moved the Track Log widget in the Right Sidebar to appear centrally before the Positional Telemetry section for improved visibility.
+  - Ensured specific actions like the Track Log button are expressly hidden for maritime vessels (AIS) where log functions are unsupported.
+  - Unified dynamic styling of the `CENTER_VIEW` / `TRACK_LOG` buttons and Compass widget to properly reflect physical agent colors (e.g., `sea-accent` for ships).
+
 ## [0.38.0] - 2026-03-19
 
 ### Added

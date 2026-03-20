@@ -129,6 +129,8 @@ interface TacticalMapProps {
   outagesData: any;
   worldCountriesData: any;
   showTerminator?: boolean;
+  /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
+  historySegments?: import("../../types").HistorySegment[];
 }
 
 export function TacticalMap({
@@ -166,6 +168,7 @@ export function TacticalMap({
   stationsData,
   outagesData,
   worldCountriesData,
+  historySegments,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -247,6 +250,12 @@ export function TacticalMap({
   const overlayRef = useRef<MapboxOverlay | null>(null);
   // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
   const mapInstanceRef = useRef<any>(null);
+
+  // History track segments ref — updated synchronously so the RAF loop picks it up
+  const historySegmentsRef = useRef<import("../../types").HistorySegment[]>(historySegments ?? []);
+  useEffect(() => {
+    historySegmentsRef.current = historySegments ?? [];
+  }, [historySegments]);
 
   // Environment Fallbacks
   const envLat = import.meta.env.VITE_CENTER_LAT;
@@ -517,6 +526,7 @@ export function TacticalMap({
     cablesData,
     stationsData,
     outagesData,
+    historySegmentsRef,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

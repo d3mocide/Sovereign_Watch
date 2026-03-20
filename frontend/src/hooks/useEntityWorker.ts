@@ -36,6 +36,7 @@ interface UseEntityWorkerReturn {
   visualStateRef: MutableRefObject<Map<string, VisualState>>;
   prevCourseRef: MutableRefObject<Map<string, number>>;
   alertedEmergencyRef: MutableRefObject<Map<string, string>>;
+  watchedIcaosRef: MutableRefObject<Set<string>>;
 }
 
 const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
@@ -98,6 +99,7 @@ export function useEntityWorker({
   // Tracks the last emitted emergency key per UID to avoid duplicate alerts
   const alertedEmergencyRef = useRef<Map<string, string>>(new Map());
   const workerRef = useRef<Worker | null>(null);
+  const watchedIcaosRef = useRef<Set<string>>(new Set());
 
   // Initial Data Generation (Mock) & Worker Setup
   useEffect(() => {
@@ -254,8 +256,10 @@ export function useEntityWorker({
           );
           const maxRadiusM = mission.radius_nm * 1852;
 
-          // Allow 5% buffer for edge cases, but drop outliers
-          if (distToCenter > maxRadiusM * 1.05) {
+          // Allow 5% buffer for edge cases, but drop outliers.
+          // Exception: ICAO24s on the global watchlist bypass the spatial gate —
+          // they are tracked worldwide via the OpenSky watchlist loop.
+          if (distToCenter > maxRadiusM * 1.05 && !watchedIcaosRef.current.has(entity.uid)) {
             // If it exists, remove it (it moved out of bounds)
             if (existing) {
               entitiesRef.current.delete(entity.uid);
@@ -682,11 +686,28 @@ export function useEntityWorker({
       };
     };
 
+    // Poll the watchlist so watched ICAO24s bypass the spatial gate.
+    // Best-effort: failures are silent to avoid noise when the API is starting up.
+    const syncWatchlist = async () => {
+      try {
+        const res = await fetch('/api/watchlist');
+        if (res.ok) {
+          const entries: Array<{ icao24: string }> = await res.json();
+          watchedIcaosRef.current = new Set(entries.map((e) => e.icao24.toLowerCase()));
+        }
+      } catch {
+        // intentionally silent
+      }
+    };
+    syncWatchlist();
+    const watchlistInterval = window.setInterval(syncWatchlist, 30_000);
+
     connect();
 
     return () => {
       isCleaningUp = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      clearInterval(watchlistInterval);
       worker.terminate();
       if (ws) ws.close();
     };
@@ -700,5 +721,6 @@ export function useEntityWorker({
     visualStateRef,
     prevCourseRef,
     alertedEmergencyRef,
+    watchedIcaosRef,
   };
 }

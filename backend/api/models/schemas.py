@@ -14,3 +14,7 @@ class MissionLocation(BaseModel):
     lon: float
     radius_nm: int
     updated_at: Optional[str] = None
+
+class WatchlistAddRequest(BaseModel):
+    icao24: str = Field(..., description="ICAO24 hex code (exactly 6 hex chars, e.g. 'a1b2c3')")
+    ttl_days: Optional[float] = Field(None, description="TTL in days; omit or null for permanent")

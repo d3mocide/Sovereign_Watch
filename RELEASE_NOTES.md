@@ -1,91 +1,24 @@
-# Release - v0.38.0 - OpenSky Global Tracking
+# Release - v0.39.0 - Watchlist & Tactical UI Updates
 
-## Summary
+This release officially deploys the highly anticipated Global Watchlist feature. Operators can now specify ICAO24 hex codes to track permanent or temporary air contacts globally, aggressively bypassing localized spatial filters. This enables seamless over-the-horizon tracking of critical assets without requiring direct bounding-box oversight. Additionally, multiple focused tactical UI adjustments address the placement, consistency, and contextual rendering of sidebar tools and action buttons.
 
-v0.38.0 introduces OpenSky Network integration as an optional supplemental aviation source, including a global ICAO24 watchlist that can continue tracking target aircraft beyond the local mission area.
+## Key Features
+- **Global Watchlist UI**: Easily add, monitor, and remove watched ICAO24s directly via the newly added management panel inside the `SystemSettingsWidget`.
+- **Global Watchlist API**: Three distinct new endpoints (`GET/POST/DELETE`) provide robust interaction with the Redis ZSET storage back-end, allowing operators to mark tracks as either persistent (01-Jan-3000) or TTL-expiring.
+- **Dynamic Track Filtering Bypass**: Selected targets on the watchlist are elevated to bypass AOR spatial filters natively within the `useEntityWorker` event loop, guaranteeing active painting on the map.
+- **UI & Interaction Hygiene**:
+  - Restructured the Right Sidebar to prioritize the Track Log placement for aircraft identities.
+  - Blocked arbitrary rendering of the "Track Log" button for non-relevant entries (such as maritime/AIS).
+  - Fixed Compass map generation and Action buttons (CENTER/TRACK) to adopt true dynamic `accentColor` schemes depending on the entity loaded into the inspector.
 
-This release adds:
-- OpenSky OAuth2/anonymous API client support.
-- OpenSky state-vector translation into the existing ADS-B normalization pipeline.
-- Redis-backed watchlist tracking with TTL and auto-seeding.
-- Docker Compose wiring for all OpenSky runtime environment variables.
-- Hardened authentication failure handling with anonymous fallback and retry backoff.
-
----
-
-## New Capabilities
-
-### OpenSky Supplemental Ingestion
-
-The aviation poller can now query OpenSky in parallel with ADSBx-compatible sources:
-- Bounding-box OpenSky polling for mission-area coverage.
-- Global watchlist polling for specific ICAO24 targets (no bbox restriction).
-
-OpenSky native state vectors are translated to the existing ADS-B shape before
-classification and TAK emission, so downstream systems required no interface
-changes.
-
-### Global ICAO24 Watchlist
-
-Introduced a Redis-backed watchlist manager:
-- O(log N) add/remove operations.
-- Expiry-aware active-entry queries.
-- Permanent entries for manually pinned aircraft.
-- Auto-seeding from mission-area detections (default: military/government/drone).
-
-### Auth Failure Hardening
-
-OpenSky token behavior has been hardened:
-- Startup mode now reflects effective auth state.
-- Invalid OAuth credentials fall back to anonymous mode.
-- Token-refresh failures use retry backoff to avoid log storms.
-- Credential env values are whitespace-trimmed before use.
-
----
-
-## Configuration
-
-The `adsb-poller` compose service now accepts the full OpenSky configuration set:
-- `OPENSKY_ENABLED`
-- `OPENSKY_CLIENT_ID`
-- `OPENSKY_CLIENT_SECRET`
-- `OPENSKY_RATE_LIMIT_PERIOD`
-- `OPENSKY_WATCHLIST_ENABLED`
-- `OPENSKY_WATCHLIST_AUTO_SEED`
-- `OPENSKY_WATCHLIST_SEED_TYPES`
-- `OPENSKY_WATCHLIST_TTL_DAYS`
-- `OPENSKY_WATCHLIST_BATCH_SIZE`
-
-See [.env.example](.env.example) for recommended defaults and descriptions.
-
----
+## Technical Details
+- Added `watchlist.ts` supporting the asynchronous poll-and-sync 30-second loop.
+- Ensured ICAO24 6-character validations actively protect Redis insertions.
+- `Compass.tsx` now utilizes explicit inline HTML styles alongside Hexadecimal alpha variables (`${hexColor}66`) to evade rigid Tailwind CSS purging mechanisms.
 
 ## Upgrade Instructions
-
 ```bash
-# Pull latest changes
-git pull origin dev
-
-# Set OpenSky values in .env (optional for anonymous mode)
-# OPENSKY_ENABLED=true
-# OPENSKY_WATCHLIST_ENABLED=true
-# OPENSKY_CLIENT_ID=...
-# OPENSKY_CLIENT_SECRET=...
-
-# Rebuild and restart the aviation poller
-docker compose up -d --build adsb-poller
-
-# Verify service health / logs
-docker compose logs -f adsb-poller
+git pull origin main
+docker compose build frontend backend-api
+docker compose up -d
 ```
-
----
-
-## Verification Snapshot
-
-- OpenSky targeted lint/tests: passed
-- `tests/test_opensky_client.py` and `tests/test_opensky_watchlist.py`: 55 passed
-
----
-
-For a full change list, see [CHANGELOG.md](CHANGELOG.md).

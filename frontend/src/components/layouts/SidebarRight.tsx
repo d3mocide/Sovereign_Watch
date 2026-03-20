@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CoTEntity } from '../../types';
+import { CoTEntity, HistorySegment } from '../../types';
 import { Compass } from '../widgets/Compass';
 import { PolarPlotWidget } from '../widgets/PolarPlotWidget';
+import { TrackHistoryPanel } from '../widgets/TrackHistoryPanel';
 import { Crosshair, Map as MapIcon, Network, Radio, Shield, Signal, Terminal } from 'lucide-react';
 import { TimeTracked } from './TimeTracked';
 import { PayloadInspector } from '../widgets/PayloadInspector';
@@ -172,20 +173,24 @@ interface SidebarRightProps {
   onClose: () => void;
   onCenterMap?: () => void;
   onOpenAnalystPanel?: () => void;
+  onHistoryLoaded?: (segments: HistorySegment[]) => void;
 }
 
 export const SidebarRight: React.FC<SidebarRightProps> = ({
   entity,
   onClose,
   onCenterMap,
-  onOpenAnalystPanel
+  onOpenAnalystPanel,
+  onHistoryLoaded,
 }) => {
   const [showInspector, setShowInspector] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [prevUid, setPrevUid] = useState<string | undefined>(entity?.uid);
 
   if (entity?.uid !== prevUid) {
     setPrevUid(entity?.uid);
     setShowInspector(false);
+    setShowHistory(false);
   }
 
   if (!entity) return null;
@@ -623,17 +628,29 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   let accentBase = 'air-accent';
   let accentBg = 'bg-gradient-to-br from-air-accent/20 to-air-accent/5';
   let accentBorder = 'border-air-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+  let btnGradient = 'from-air-accent/30 to-air-accent/10 hover:from-air-accent/40 hover:to-air-accent/20';
+  let btnBorder = 'border-air-accent/50';
+  let btnText = 'text-air-accent';
+  let btnShadow = 'shadow-[0_0_15px_rgba(0,255,65,0.1)]';
 
   if (isSat) {
     accentColor = 'text-purple-400';
     accentBase = 'purple-400';
     accentBg = 'bg-gradient-to-br from-purple-400/20 to-purple-400/5';
     accentBorder = 'border-purple-400/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+    btnGradient = 'from-purple-400/30 to-purple-400/10 hover:from-purple-400/40 hover:to-purple-400/20';
+    btnBorder = 'border-purple-400/50';
+    btnText = 'text-purple-400';
+    btnShadow = 'shadow-[0_0_15px_rgba(168,85,247,0.1)]';
   } else if (isShip) {
     accentColor = 'text-sea-accent';
     accentBase = 'sea-accent';
     accentBg = 'bg-gradient-to-br from-sea-accent/20 to-sea-accent/5';
     accentBorder = 'border-sea-accent/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]';
+    btnGradient = 'from-sea-accent/30 to-sea-accent/10 hover:from-sea-accent/40 hover:to-sea-accent/20';
+    btnBorder = 'border-sea-accent/50';
+    btnText = 'text-sea-accent';
+    btnShadow = 'shadow-[0_0_15px_rgba(0,255,255,0.1)]';
   }
 
   if (showInspector) {
@@ -791,21 +808,41 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 e.stopPropagation();
                 onCenterMap?.();
               }}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-hud-green/30 to-hud-green/10 hover:from-hud-green/40 hover:to-hud-green/20 border border-hud-green/50 py-1.5 rounded text-[10px] font-bold tracking-widest text-hud-green transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(0,255,65,0.1)]"
+              className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${btnGradient} border ${btnBorder} py-1.5 rounded text-[10px] font-bold tracking-widest ${btnText} transition-all active:scale-[0.98] ${btnShadow}`}
             >
               <Crosshair size={12} />
               CENTER_VIEW
             </button>
-            <button className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-white/10 to-transparent hover:from-white/20 hover:to-white/5 border border-white/10 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]">
-              <MapIcon size={12} />
-              TRACK_LOG
-            </button>
+            {!isShip && (
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-[10px] font-bold tracking-widest transition-all active:scale-[0.98] ${
+                  showHistory
+                    ? `bg-gradient-to-b ${btnGradient} border ${btnBorder} ${btnText} ${btnShadow}`
+                    : 'bg-gradient-to-b from-white/10 to-transparent hover:from-white/20 hover:to-white/5 border border-white/10 text-white/70'
+                }`}
+              >
+                <MapIcon size={12} />
+                TRACK_LOG
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {/* 2. Main Data Body */}
       <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
+
+        {/* Track History Panel — aircraft only, toggled by TRACK_LOG button */}
+        {showHistory && !isSat && !isShip && (
+          <>
+            <TrackHistoryPanel
+              entity={entity}
+              onHistoryLoaded={onHistoryLoaded ?? (() => {})}
+            />
+            <div className="h-px bg-white/5 w-full" />
+          </>
+        )}
 
         {/* Positional Group */}
         <section className="space-y-2">

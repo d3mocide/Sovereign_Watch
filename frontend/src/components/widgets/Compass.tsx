@@ -31,10 +31,11 @@ export const Compass: React.FC<CompassProps> = ({
       {/* Compass Circular Container - New structural wrap to fix absolute alignment */}
       <div className="relative flex items-center justify-center">
         <div 
-          className={`relative flex items-center justify-center rounded-full border border-${accentColor}/40 bg-black/40`}
+          className="relative flex items-center justify-center rounded-full border bg-black/40"
           style={{ 
             width: size, 
             height: size,
+            borderColor: `${hexColor}66`,
             boxShadow: `inset 0 0 20px ${hexColor}33` 
           }}
         >
@@ -43,14 +44,14 @@ export const Compass: React.FC<CompassProps> = ({
               {[...Array(6)].map((_, i) => (
                   <div 
                      key={i} 
-                     className={`absolute w-[0.5px] h-full bg-${accentColor}/10`}
-                     style={{ transform: `rotate(${i * 30}deg)` }}
+                     className="absolute w-[0.5px] h-full"
+                     style={{ backgroundColor: `${hexColor}1a`, transform: `rotate(${i * 30}deg)` }}
                   />
               ))}
           </div>
 
           {/* Outer Ring with degree markers */}
-          <div className={`absolute inset-[3px] rounded-full border border-${accentColor}/15`} />
+          <div className="absolute inset-[3px] rounded-full border" style={{ borderColor: `${hexColor}26` }} />
           
           {/* Key Direction Labels */}
           <div 
@@ -69,10 +70,10 @@ export const Compass: React.FC<CompassProps> = ({
           {[...Array(12)].map((_, i) => (
               <div 
                 key={i} 
-                className={`absolute h-full w-[1px]`}
+                className="absolute h-full w-[1px]"
                 style={{ transform: `rotate(${i * 30}deg)` }}
               >
-                <div className={`h-2.5 w-full bg-${accentColor}/60 shadow-[0_0_5px_${hexColor}a0]`} />
+                <div className="h-2.5 w-full" style={{ backgroundColor: `${hexColor}99`, boxShadow: `0 0 5px ${hexColor}a0` }} />
               </div>
           ))}
 
@@ -119,8 +120,8 @@ export const Compass: React.FC<CompassProps> = ({
       
       {/* Tactical Digital Readout Box - Moved below the ring */}
       <div className="z-20">
-          <div className={`bg-black/95 px-2.5 py-1 rounded-sm border border-${accentColor}/30 shadow-[0_0_15px_rgba(0,0,0,0.6)]`}>
-              <span className={`text-[12px] font-bold text-${accentColor} tracking-widest tabular-nums`}>
+          <div className="bg-black/95 px-2.5 py-1 rounded-sm border shadow-[0_0_15px_rgba(0,0,0,0.6)]" style={{ borderColor: `${hexColor}4d` }}>
+              <span className="text-[12px] font-bold tracking-widest tabular-nums" style={{ color: hexColor }}>
                   {Math.round(rotation).toString().padStart(3, '0')}°
               </span>
           </div>

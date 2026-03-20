@@ -2,11 +2,14 @@ import asyncio
 import json
 import logging
 import math
+import os
+import time as time_module
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
+import httpx
 import numpy as np
 from sgp4.api import Satrec, jday as sgp4_jday
 from core.database import db
@@ -345,3 +348,63 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     except Exception as e:
         logger.error(f"Replay query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/tracks/flight-info/{entity_id}")
+async def get_flight_info(entity_id: str):
+    """
+    Fetch the most recent departure/arrival airport for an aircraft from the
+    OpenSky flights API.  entity_id is the ICAO24 hex string (lowercase).
+
+    Returns:
+        departure: ICAO airport code of estimated departure (or null)
+        arrival:   ICAO airport code of estimated arrival (or null)
+        callsign:  Flight callsign from OpenSky (or null)
+        first_seen: Unix timestamp of takeoff
+        last_seen:  Unix timestamp of landing
+    """
+    # Satellites and non-ICAO24 entities are not supported
+    if entity_id.startswith("SAT-") or entity_id.startswith("infra-"):
+        return {"departure": None, "arrival": None, "callsign": None,
+                "first_seen": None, "last_seen": None}
+
+    end_ts = int(time_module.time())
+    begin_ts = end_ts - 7 * 24 * 3600  # 7-day lookback
+
+    client_id = os.getenv("OPENSKY_CLIENT_ID")
+    client_secret = os.getenv("OPENSKY_CLIENT_SECRET")
+
+    url = "https://opensky-network.org/api/flights/aircraft"
+    params = {"icao24": entity_id.lower(), "begin": begin_ts, "end": end_ts}
+    auth = (client_id, client_secret) if client_id and client_secret else None
+
+    empty = {"departure": None, "arrival": None, "callsign": None,
+             "first_seen": None, "last_seen": None}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await (
+                client.get(url, params=params, auth=auth)
+                if auth else
+                client.get(url, params=params)
+            )
+        if resp.status_code != 200:
+            logger.debug(f"OpenSky flights API returned {resp.status_code} for {entity_id}")
+            return empty
+
+        flights = resp.json()
+        if not flights:
+            return empty
+
+        # Return the most recently completed flight
+        latest = max(flights, key=lambda f: f.get("lastSeen") or 0)
+        return {
+            "departure": latest.get("estDepartureAirport"),
+            "arrival": latest.get("estArrivalAirport"),
+            "callsign": (latest.get("callsign") or "").strip() or None,
+            "first_seen": latest.get("firstSeen"),
+            "last_seen": latest.get("lastSeen"),
+        }
+    except Exception as e:
+        logger.warning(f"OpenSky flights API error for {entity_id}: {e}")
+        return empty
