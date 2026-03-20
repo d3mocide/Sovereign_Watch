@@ -39,6 +39,7 @@ interface UseAnimationLoopOptions {
   cablesData?: any;
   stationsData?: any;
   outagesData?: any;
+  towersData?: any[];
   setHoveredInfra?: (info: any) => void;
   setSelectedInfra?: (info: any) => void;
   worldCountriesData?: any;
@@ -97,6 +98,7 @@ export function useAnimationLoop({
   cablesData,
   stationsData,
   outagesData,
+  towersData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -424,6 +426,7 @@ export function useAnimationLoop({
         cablesData,
         stationsData,
         outagesData,
+        towersData,
         worldCountriesData,
         countryOutageMap,
         currentSelected,
@@ -490,6 +493,7 @@ export function useAnimationLoop({
     cablesData,
     stationsData,
     outagesData,
+    towersData,
     worldCountriesData,
   ]);
 }
