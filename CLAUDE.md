@@ -7,6 +7,21 @@
 Containers may not be running during Claude sessions. Use host tools directly for
 lint and unit tests — do NOT spin up docker compose just to verify:
 
+### Verification Decision Gate (Use This Order)
+
+1. **Host-first for inner-loop checks:**
+    - Lint, unit tests, static analysis.
+    - Default to host for speed and lower iteration cost.
+
+2. **Docker-required for parity-critical validation:**
+    - Build images, start services, integration/runtime checks, and any environment-sensitive behavior.
+
+3. **Poller runtime rule remains strict:**
+    - Ingestion poller code/config updates must be rebuilt/restarted in Docker for real validation.
+
+4. **Release confidence:**
+    - Before merge/release, run parity-critical checks in Docker even if host checks already passed.
+
 ```bash
 # Frontend
 cd frontend && npm run lint && npm run test
@@ -45,18 +60,20 @@ This project is configured for LSP-powered navigation via `mcp-language-server`.
 ### How the MCP servers start
 
 `.mcp.json` calls wrapper scripts (`tools/mcp-language-server/run-*.sh`) that
-auto-select the right backend:
+run through whichever `bash` is first on PATH:
 
 ```
-Docker daemon reachable?  ──yes──▶  docker compose run  (pinned LSP versions)
-                          ──no───▶  ./tools/bin/mcp-language-server  (local binary)
+bash (PATH) ──▶ run-*.sh wrappers ──▶ ./tools/bin/mcp-language-server + LSP stdio
 ```
 
-**Windows + Docker Desktop** — Docker is reachable, wrappers use Docker.
-No extra setup beyond having `bash` on PATH (Git Bash satisfies this).
+**Windows** — keep `.mcp.json` portable by ensuring `bash` resolves correctly:
+- If you want WSL bash, install a distro (`wsl --install -d Ubuntu`).
+- If you want Git Bash, place `C:\Program Files\Git\bin` before `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps` in PATH.
+- Verify with `Get-Command bash -All` (PowerShell) and ensure your preferred `bash.exe` appears first.
 
-**Linux / macOS without Docker** — wrappers fall back to the local binary.
-One-time build required:
+**Linux / macOS** — keep `bash` available on PATH (default on most systems).
+
+One-time local setup required on all hosts:
 
 ```bash
 # Requires git + go 1.24+
@@ -68,6 +85,16 @@ npm install -g pyright
 ```
 
 Do not `npm install -g mcp-language-server` — that resolves to an unrelated package.
+
+Quick local readiness check:
+
+```bash
+./tools/mcp-language-server/check.sh
+```
+
+This prints PASS/FAIL and exact commands to fix missing prerequisites.
+
+For token-efficient MCP usage after startup, read `agent_docs/mcp-agent-playbook.md`. Default order is: symbol tools first, file-level codemap/dependency tools second, graph impact tools third, broad grep/search last. After import/export edits, invalidate or rebuild graph data before trusting dependency results.
 
 ### Why This Matters Here
 

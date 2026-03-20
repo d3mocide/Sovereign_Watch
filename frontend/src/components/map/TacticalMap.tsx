@@ -1,29 +1,29 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  lazy,
-  Suspense,
-  MutableRefObject,
-} from "react";
-import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
-import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import "maplibre-gl/dist/maplibre-gl.css";
+import { ChevronDown, ChevronUp, Globe, Minus, Plus, RotateCcw } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, RFSite } from "../../types";
-import { MapTooltip } from "./MapTooltip";
-import { MapContextMenu } from "./MapContextMenu";
-import { SaveLocationForm } from "./SaveLocationForm";
-import { AltitudeLegend } from "./AltitudeLegend";
-import { SpeedLegend } from "./SpeedLegend";
-import { RFLegend } from "./RFLegend";
+import "maplibre-gl/dist/maplibre-gl.css";
+import React, {
+    lazy,
+    MutableRefObject,
+    Suspense,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
+import type { MapRef } from "react-map-gl/maplibre";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMapCamera } from "../../hooks/useMapCamera";
-import { getCompensatedCenter } from "../../utils/map/geoUtils";
-import { StarField } from "./StarField";
 import { parseMissionHash, updateMissionHash } from "../../hooks/useMissionHash";
+import { CoTEntity, JS8Station, RFSite } from "../../types";
+import { getCompensatedCenter } from "../../utils/map/geoUtils";
+import { AltitudeLegend } from "./AltitudeLegend";
+import { MapContextMenu } from "./MapContextMenu";
+import { MapTooltip } from "./MapTooltip";
+import { RFLegend } from "./RFLegend";
+import { SaveLocationForm } from "./SaveLocationForm";
+import { SpeedLegend } from "./SpeedLegend";
+import { StarField } from "./StarField";
 
 // Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
 const SATELLITE_MAP_STYLE = {
@@ -135,6 +135,23 @@ interface TacticalMapProps {
   historySegments?: import("../../types").HistorySegment[];
 }
 
+type InfraPickObject = {
+  id?: string;
+  type?: string;
+  geometry?: {
+    type?: string;
+    coordinates?: unknown;
+  };
+  properties?: Record<string, unknown>;
+};
+
+type InfraPickInfo = {
+  object?: InfraPickObject | null;
+  coordinate?: [number, number];
+  x?: number;
+  y?: number;
+};
+
 export function TacticalMap({
   onCountsUpdate,
   filters,
@@ -189,10 +206,8 @@ export function TacticalMap({
     lat: number;
     lon: number;
   } | null>(null);
-  const [_, setHoveredInfraState] = useState<any>(null);
-  const handleHoveredInfra = useCallback((info: any) => {
+  const handleHoveredInfra = useCallback((info: InfraPickInfo) => {
     const obj = info?.object || null;
-    setHoveredInfraState(obj);
     if (obj) {
       let lat = 0, lon = 0;
       if (info.coordinate) {
@@ -200,22 +215,24 @@ export function TacticalMap({
       } else {
         const geom = obj.geometry;
         if (geom.type === 'Point') {
-          [lon, lat] = geom.coordinates;
+          [lon, lat] = geom.coordinates as [number, number];
         } else if (geom.type === 'LineString') {
-          [lon, lat] = geom.coordinates[0];
+          [lon, lat] = (geom.coordinates as [number, number][])[0];
         } else if (geom.type === 'Polygon') {
-          [lon, lat] = geom.coordinates[0][0];
+          [lon, lat] = (geom.coordinates as [number, number][][])[0][0];
         } else if (geom.type === 'MultiPolygon') {
-          [lon, lat] = geom.coordinates[0][0][0];
+          [lon, lat] = (geom.coordinates as [number, number][][][])[0][0][0];
         }
       }
 
       const props = obj.properties || {};
       const isOutage = props.entity_type === 'outage' || props.severity !== undefined;
+      const isTower = obj.type === 'tower' || props.entity_type === 'tower';
+      const entityType = isTower ? 'tower' : (isOutage ? 'outage' : 'infra');
       const entity: CoTEntity = {
-        uid: props.id || String(obj.id),
-        type: isOutage ? 'outage' : 'infra',
-        callsign: props.name || props.region || (isOutage ? 'INTERNET OUTAGE' : 'Unknown Infra'),
+        uid: String(props.id || obj.id || `infra-${Date.now()}`),
+        type: entityType,
+        callsign: props.name || props.region || props.fcc_id || (isOutage ? 'INTERNET OUTAGE' : isTower ? 'FCC TOWER' : 'Unknown Infra'),
         lat,
         lon,
         altitude: 0,
@@ -227,10 +244,10 @@ export function TacticalMap({
         detail: obj
       };
       setHoveredEntity(entity);
-      setHoverPosition({ x: info.x, y: info.y });
+      setHoverPosition({ x: info.x || 0, y: info.y || 0 });
     } else {
-      // Clear tooltip only if current hovered item is infra or outage
-      setHoveredEntity((prev: CoTEntity | null) => (prev?.type === 'infra' || prev?.type === 'outage' ? null : prev));
+      // Clear tooltip only if current hovered item is infrastructure-derived
+      setHoveredEntity((prev: CoTEntity | null) => (prev?.type === 'infra' || prev?.type === 'outage' || prev?.type === 'tower' ? null : prev));
     }
   }, []);
 
@@ -493,18 +510,25 @@ export function TacticalMap({
     selectedEntity,
     filters,
     setHoveredInfra: handleHoveredInfra,
-    setSelectedInfra: (info: any) => {
+    setSelectedInfra: (info: InfraPickInfo) => {
       if (!info || !info.object) return;
 
+      const props = info.object.properties || {};
+      const isTower = info.object.type === 'tower' || props.entity_type === 'tower';
+      const entityType = isTower ? 'tower' : 'infra';
+      const callsign = String(
+        props.name || props.region || props.fcc_id || (props.entity_type === 'outage' ? 'INTERNET OUTAGE' : isTower ? 'FCC TOWER' : 'INFRA')
+      );
+
       const infraEntity: CoTEntity = {
-        uid: String(info.object.properties?.id || `infra-${Date.now()}`),
+        uid: String(props.id || info.object.id || `infra-${Date.now()}`),
         lat: info.coordinate?.[1] || 0,
         lon: info.coordinate?.[0] || 0,
         altitude: 0,
-        type: 'infra',
+        type: entityType,
         course: 0,
         speed: 0,
-        callsign: String(info.object.properties?.name || 'INFRA'),
+        callsign,
         lastSeen: Date.now(),
         trail: [],
         uidHash: 0,

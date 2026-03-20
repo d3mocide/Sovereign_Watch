@@ -2,10 +2,7 @@
   "mcpServers": {
     "graph-it-live": {
       "command": "bash",
-      "args": [
-        "-c",
-        "node $HOME/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs"
-      ],
+      "args": ["./tools/mcp-language-server/run-graph-it-live.sh"],
       "env": {
         "WORKSPACE_ROOT": ".",
         "EXCLUDE_NODE_MODULES": "true",

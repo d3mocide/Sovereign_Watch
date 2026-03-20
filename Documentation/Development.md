@@ -72,30 +72,37 @@ Point your editor's Python interpreter at `backend/api/.venv`. Pylance and pyrig
 
 ## LSP Server Installation (One-Time)
 
-Language Server Protocol gives your editor (and AI coding tools) **semantic understanding** of the codebase — exact symbol definitions, all call sites, accurate type information — instead of text-search guesses. On memory-constrained hardware like the Jetson Nano (4 GB RAM), it also eliminates expensive full-repo grep scans.
+Language Server Protocol gives your editor (and AI coding tools) **semantic understanding** of the codebase — exact symbol definitions, all call sites, accurate type information — instead of text-search guesses. On memory-constrained hardware, it also eliminates expensive full-repo grep scans.
 
-`.mcp.json` uses wrapper scripts (`tools/mcp-language-server/run-*.sh`) that automatically select the right backend at startup:
+`.mcp.json` uses wrapper scripts (`tools/mcp-language-server/run-*.sh`) and relies on whichever `bash` is first on PATH:
 
 ```
-Docker daemon reachable? ──yes──▶ docker compose run  (pinned LSP versions in image)
-                         ──no───▶ ./tools/bin/mcp-language-server  (local binary fallback)
+bash (PATH) ──▶ run-*.sh wrappers ──▶ ./tools/bin/mcp-language-server + LSP stdio
 ```
 
-### Windows (Docker Desktop)
+### Windows (WSL or Git Bash)
 
-Docker Desktop provides the daemon, so the wrapper scripts take the Docker path automatically. The only requirement is that `bash` is on your PATH — Git for Windows (Git Bash) satisfies this.
+- If using WSL bash: install a distro (`wsl --install -d Ubuntu`).
+- If using Git Bash: install Git for Windows and ensure `C:\Program Files\Git\bin` is before `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps` in PATH.
+- Verify resolution in PowerShell:
 
-**No Go install or binary build required.** Build the Docker image once:
+```powershell
+Get-Command bash -All
+```
+
+Your preferred `bash.exe` should be first in the list.
+
+### Linux / macOS
+
+`bash` is typically already on PATH. Verify with:
 
 ```bash
-docker compose -f docker-compose-tools.yml build mcp-lsp
+command -v bash
 ```
 
-Then restart Claude Code (or your MCP-capable tool) — done.
+### Build and Install (All Hosts)
 
-### Linux / macOS without Docker
-
-The wrappers fall back to a locally built binary. This is a one-time setup:
+The wrappers use a locally built pinned binary. This is a one-time setup:
 
 **Step 1 — build the MCP bridge binary (requires `git` and `go 1.24+`):**
 
@@ -105,7 +112,7 @@ The wrappers fall back to a locally built binary. This is a one-time setup:
 
 This clones `isaacphi/mcp-language-server` at the pinned tag, verifies the commit hash, and writes the binary to `tools/bin/mcp-language-server`. The pinned version, expected commit, and SHA-256 are in `tools/mcp-language-server/VERSION`.
 
-> **Do not** run `npm install -g mcp-language-server` — that package name resolves to something unrelated on the npm registry.
+> **Do not** run `npm install -g mcp-language-server` — that package name resolves to a non-pinned version of this LSP-MCP server on the npm registry.
 
 **Step 2 — install the TypeScript and Python LSP servers globally:**
 
@@ -119,15 +126,13 @@ npm install -g pyright
 
 These only need to be installed once per machine. Restart Claude Code after setup.
 
-### Linux with Docker
-
-The Docker path is used automatically if the daemon is running. Build the image once:
+**Optional quick validation (recommended):**
 
 ```bash
-docker compose -f docker-compose-tools.yml build mcp-lsp
+./tools/mcp-language-server/check.sh
 ```
 
-If the daemon is not running at session start, the wrapper falls back to the local binary (follow the Linux/macOS steps above to have a fallback available).
+This prints a PASS/FAIL summary and exact fix commands for missing MCP prerequisites.
 
 ---
 

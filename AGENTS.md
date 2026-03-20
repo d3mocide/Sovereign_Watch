@@ -43,10 +43,35 @@ Both frontend and backend have Hot Module Replacement (HMR) enabled:
   - **Changes**: Specific files modified and logic implemented.
   - **Verification**: Tests run and results observed.
   - **Benefits**: Impact on the project (e.g., performance, security, maintainability).
+- **MCP Workflow Reference**: For token-efficient MCP and LSP tool selection, read `agent_docs/mcp-agent-playbook.md` before falling back to broad repo search.
 
 ## 5. Verification & Quality Gates
 
 Before declaring a task complete, you **MUST** run the appropriate verification **once** using standard tools for the repository. Do NOT run lint/tests after each individual file edit — run them once at the end before marking the task done.
+
+### Verification Decision Gate (Efficiency + Parity)
+
+Use this gate to avoid unnecessary container overhead while preserving container-first architecture:
+
+1. **Inner-loop code checks (preferred on host):**
+  - Linting
+  - Unit tests
+  - Static analysis
+  - Use host tools first for fastest feedback when equivalent tooling is available.
+
+2. **Parity-critical checks (must use Docker):**
+  - Image builds
+  - Service startup/runtime validation
+  - Integration checks that depend on container networking/service wiring
+  - Any task where host environment differences could hide defects
+
+3. **Ingestion poller rule (always containerized for runtime):**
+  - Poller code/config changes still require rebuild and restart via Docker Compose.
+
+4. **Practical fallback order:**
+  - If host toolchain is available, run verification on host first.
+  - If host toolchain is missing or results are environment-sensitive, run inside Docker.
+  - Before merge/release, ensure parity-critical checks have been run in Docker.
 
 ### Quick Checks
 

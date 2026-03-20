@@ -1,6 +1,6 @@
+import { Crosshair, Network, Plane, Radio, Satellite, Ship, Signal, Zap } from 'lucide-react';
 import React from 'react';
 import { CoTEntity } from '../../types';
-import { Plane, Ship, Satellite, Zap, Crosshair, Radio, Signal, Network } from 'lucide-react';
 
 interface MapTooltipProps {
   entity: CoTEntity;
@@ -10,6 +10,7 @@ interface MapTooltipProps {
 export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isShip = entity.type.includes('S');
   const isRepeater = entity.type === 'repeater';
+  const isTower = entity.type === 'tower';
   const isJS8 = entity.type === 'js8';
   const isOrbital = entity.type === "a-s-K" || (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
   const isInfra = entity.type === 'infra';
@@ -17,6 +18,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
 
   const accentColor = isRepeater
     ? 'text-emerald-400'
+    : isTower
+      ? 'text-orange-400'
     : isJS8
       ? 'text-emerald-400'
       : isOrbital
@@ -31,6 +34,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
 
   const borderColor = isRepeater
     ? 'border-emerald-400/50'
+    : isTower
+      ? 'border-orange-400/50'
     : isJS8
       ? 'border-emerald-400/50'
       : isOrbital
@@ -45,6 +50,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
 
   const HeaderIcon = isRepeater
     ? Radio
+    : isTower
+      ? Radio
     : isJS8
       ? Signal
       : isOrbital
@@ -77,7 +84,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         <div className="flex items-center gap-1">
           <div className={`h-1.5 w-1.5 rounded-full ${accentColor} animate-pulse shadow-[0_0_4px_currentColor]`} />
           <span className="text-[8px] font-mono text-white/50">
-            {isRepeater ? 'INFRA' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : isOutage ? 'OUTAGE' : 'LIVE'}
+            {isRepeater ? 'INFRA' : isTower ? 'TOWER' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : isOutage ? 'OUTAGE' : 'LIVE'}
           </span>
         </div>
       </div>
@@ -126,6 +133,45 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               </span>
             </div>
           )}
+        </div>
+      ) : isTower ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">SYSTEM</span>
+            <span className="text-[10px] text-orange-400 font-mono font-bold leading-tight uppercase">
+              FCC COMMUNICATIONS TOWER
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">FCC ID</span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight truncate">
+              {String(entity.detail?.properties?.fcc_id || 'UNKNOWN')}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">STATUS</span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight flex items-center gap-1 uppercase">
+              <Zap size={8} /> {String(entity.detail?.properties?.status || 'ACTIVE')}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">HEIGHT</span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight">
+              {entity.detail?.properties?.height_m != null ? `${Number(entity.detail.properties.height_m).toLocaleString()} m` : 'N/A'}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">TYPE</span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight truncate uppercase">
+              {String(entity.detail?.properties?.tower_type || 'COMMERCIAL')}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">OWNER</span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight truncate block" title={String(entity.detail?.properties?.owner || 'N/A')}>
+              {String(entity.detail?.properties?.owner || 'N/A')}
+            </span>
+          </div>
         </div>
       ) : isInfra ? (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
