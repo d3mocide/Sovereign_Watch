@@ -132,6 +132,14 @@ export function useEntityWorker({
         // (Backend should filter, but this cleanup prevents stale data artifacts)
         const mission = currentMissionRef.current;
 
+        // Fast source extraction from raw JSON string — avoids full JSON.parse per update.
+        // Watchlist-sourced entities carry _source:"opensky_watchlist" and must bypass
+        // the spatial gate so they render globally, not just within the AOR.
+        const rawStr = (entity.raw as string) ?? '';
+        const isWatchlistSource =
+          rawStr.includes('"_source":"opensky_watchlist"') ||
+          rawStr.includes('"_source": "opensky_watchlist"');
+
         // Check if Satellite
         const isSat =
           entity.type === "a-s-K" ||
@@ -257,9 +265,13 @@ export function useEntityWorker({
           const maxRadiusM = mission.radius_nm * 1852;
 
           // Allow 5% buffer for edge cases, but drop outliers.
-          // Exception: ICAO24s on the global watchlist bypass the spatial gate —
-          // they are tracked worldwide via the OpenSky watchlist loop.
-          if (distToCenter > maxRadiusM * 1.05 && !watchedIcaosRef.current.has(entity.uid)) {
+          // Bypass for watchlist entities: check both the per-message _source tag
+          // (immediate, no sync delay) and the polled watchlist set (covers manual entries).
+          const bypassSpatialGate =
+            isWatchlistSource ||
+            existing?._source === 'opensky_watchlist' ||
+            watchedIcaosRef.current.has(entity.uid);
+          if (distToCenter > maxRadiusM * 1.05 && !bypassSpatialGate) {
             // If it exists, remove it (it moved out of bounds)
             if (existing) {
               entitiesRef.current.delete(entity.uid);
@@ -369,6 +381,7 @@ export function useEntityWorker({
           lat: newLat,
           lon: newLon,
           altitude: entity.hae || 0, // Height Above Ellipsoid in meters (Proto is flat)
+          _source: isWatchlistSource ? 'opensky_watchlist' : (existingEntity?._source ?? ''),
           type: entity.type,
           course: entity.detail?.track?.course || 0,
           speed: entity.detail?.track?.speed || 0,
@@ -700,7 +713,7 @@ export function useEntityWorker({
       }
     };
     syncWatchlist();
-    const watchlistInterval = window.setInterval(syncWatchlist, 30_000);
+    const watchlistInterval = window.setInterval(syncWatchlist, 10_000);
 
     connect();
 

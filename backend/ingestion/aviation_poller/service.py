@@ -521,6 +521,7 @@ class PollerService:
 
         return {
             "uid": ac.get("hex", "").lower(),
+            "_source": ac.get("_source", ""),
             "type": cot_type,
             "how": "m-g",
             "time": source_ts * 1000, # MS timestamp adjusted for age
