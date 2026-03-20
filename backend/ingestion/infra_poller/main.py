@@ -217,6 +217,16 @@ def _download_fcc_zip(dest_path: str) -> None:
                 raise
 
 
+def _parse_float(s: str):
+    """Return a float from a pipe-delimited FCC field, or None if empty/invalid."""
+    if not s or not s.strip():
+        return None
+    try:
+        return float(s.strip())
+    except ValueError:
+        return None
+
+
 def fetch_and_ingest_fcc_towers():
     logger.info("Starting FCC Towers ingestion...")
     tmp_path = None
@@ -227,14 +237,47 @@ def fetch_and_ingest_fcc_towers():
 
         _download_fcc_zip(tmp_path)
 
-        records = []
-
         with zipfile.ZipFile(tmp_path) as z:
-            # CO.dat contains the coordinate records
-            if 'CO.dat' not in z.namelist():
+            names = z.namelist()
+
+            # --- EN.dat: entity / owner name ---
+            # col[2]=fcc_id  col[9]=entity_name (registered owner)
+            owner_by_id = {}
+            if 'EN.dat' in names:
+                logger.info("Parsing EN.dat for owner names...")
+                with z.open('EN.dat') as f:
+                    content = f.read().decode('latin1')
+                for row in csv.reader(io.StringIO(content), delimiter='|'):
+                    if len(row) > 9 and row[0] == 'EN':
+                        fid = row[2].strip()
+                        name = row[9].strip()
+                        if fid and name:
+                            owner_by_id[fid] = name
+                logger.info("Loaded %d owner records from EN.dat", len(owner_by_id))
+
+            # --- RA.dat: registration / structure dimensions ---
+            # col[2]=fcc_id  col[28]=ground_elevation_m (AMSL)  col[30]=height_above_ground_m
+            ra_by_id = {}
+            if 'RA.dat' in names:
+                logger.info("Parsing RA.dat for height/elevation...")
+                with z.open('RA.dat') as f:
+                    content = f.read().decode('latin1')
+                for row in csv.reader(io.StringIO(content), delimiter='|'):
+                    if len(row) > 30 and row[0] == 'RA':
+                        fid = row[2].strip()
+                        if fid and fid not in ra_by_id:  # keep first (most recent) record
+                            ra_by_id[fid] = (
+                                _parse_float(row[28]),  # ground elevation AMSL (m)
+                                _parse_float(row[30]),  # structure height above ground (m)
+                            )
+                logger.info("Loaded %d structure records from RA.dat", len(ra_by_id))
+
+            # --- CO.dat: coordinates ---
+            if 'CO.dat' not in names:
                 logger.error("CO.dat not found in FCC towers zip")
                 return
 
+            records = []
             with z.open('CO.dat') as f:
                 content = f.read().decode('latin1')
                 reader = csv.reader(io.StringIO(content), delimiter='|')
@@ -267,12 +310,14 @@ def fetch_and_ingest_fcc_towers():
                     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
                         continue
 
+                    elev_m, height_m = ra_by_id.get(fcc_id, (None, None))
                     records.append((
                         fcc_id,
                         lat,
                         lon,
-                        None,   # elevation_m — not in CO.dat new schema
-                        None,   # height_m   — not in CO.dat new schema
+                        elev_m,
+                        height_m,
+                        owner_by_id.get(fcc_id),
                     ))
 
         if not records:
@@ -290,13 +335,14 @@ def fetch_and_ingest_fcc_towers():
 
         # Upsert logic — columns match init.sql infra_towers schema
         insert_query = """
-            INSERT INTO infra_towers (fcc_id, lat, lon, elevation_m, height_m, geom)
+            INSERT INTO infra_towers (fcc_id, lat, lon, elevation_m, height_m, owner, geom)
             VALUES %s
             ON CONFLICT (fcc_id) DO UPDATE SET
                 lat = EXCLUDED.lat,
                 lon = EXCLUDED.lon,
                 elevation_m = EXCLUDED.elevation_m,
                 height_m = EXCLUDED.height_m,
+                owner = EXCLUDED.owner,
                 geom = EXCLUDED.geom,
                 updated_at = CURRENT_TIMESTAMP;
         """
@@ -304,8 +350,8 @@ def fetch_and_ingest_fcc_towers():
         # Prepare data with PostGIS geometry
         psycopg2_records = [
             (
-                r[0], r[1], r[2], r[3], r[4],
-                f"SRID=4326;POINT({r[2]} {r[1]})"
+                r[0], r[1], r[2], r[3], r[4], r[5],
+                "SRID=4326;POINT({} {})".format(r[2], r[1])
             )
             for r in records
         ]
