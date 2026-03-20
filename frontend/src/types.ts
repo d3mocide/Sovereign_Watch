@@ -216,7 +216,19 @@ export interface MapFilters {
   showGovernment: boolean;
   showCommercial: boolean;
   showPrivate: boolean;
-  [key: string]: any;
+  [key: string]: boolean;
+}
+
+/** A parsed FCC tower record returned by /api/infra/towers */
+export interface Tower {
+  id: string;
+  fccId: string;
+  type: string;
+  owner: string;
+  status: string;
+  heightM: number;
+  elevationM: number;
+  coordinates: [number, number];
 }
 
 export interface DRState {

@@ -6,16 +6,29 @@ import { CoTEntity } from '../types';
  * @param data The raw array of track points from the API.
  * @returns A Map where the key is the entity UID and the value is an array of CoTEntity snapshots sorted by time.
  */
-export function processReplayData(data: any[]): Map<string, CoTEntity[]> {
+interface ReplayPoint {
+  uid: string;
+  lat: number;
+  lon: number;
+  hae?: number;
+  type?: string;
+  course?: number;
+  speed?: number;
+  callsign?: string;
+  time?: number;
+  meta?: string | Record<string, unknown>;
+}
+
+export function processReplayData(data: ReplayPoint[]): Map<string, CoTEntity[]> {
   const cache = new Map<string, CoTEntity[]>();
 
-  data.forEach((pt: any) => {
+  data.forEach((pt: ReplayPoint) => {
     // Convert DB row to CoTEntity partial
     // Note: DB returns snake_case, CoTEntity is strict.
     // We need manual mapping.
 
     // Parse meta safely
-    let meta: any = {};
+    let meta: Record<string, unknown> = {};
     try {
       meta = typeof pt.meta === 'string' ? JSON.parse(pt.meta) : pt.meta || {};
     } catch { /* ignore */ }

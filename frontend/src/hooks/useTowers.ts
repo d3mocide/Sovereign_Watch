@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { Tower } from '../types';
 
 interface BoundingBox {
     minLat: number;
@@ -8,7 +9,7 @@ interface BoundingBox {
 }
 
 export const useTowers = (bounds: BoundingBox | null) => {
-    const [towers, setTowers] = useState<any[]>([]);
+    const [towers, setTowers] = useState<Tower[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +29,7 @@ export const useTowers = (bounds: BoundingBox | null) => {
                 const data = await response.json();
 
                 const features = data.features || [];
-                const parsedTowers = features.map((f: any) => ({
+                const parsedTowers = features.map((f: { properties: Record<string, unknown>; geometry: { coordinates: [number, number] } }) => ({
                     id: f.properties.id,
                     fccId: f.properties.fcc_id,
                     type: f.properties.type,
@@ -40,9 +41,9 @@ export const useTowers = (bounds: BoundingBox | null) => {
                 }));
 
                 setTowers(parsedTowers);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error(err);
-                setError(err.message);
+                setError((err as Error).message ?? 'Failed to fetch towers');
             } finally {
                 setIsLoading(false);
             }

@@ -12,6 +12,28 @@ const getSmoothedTrail = (trail: TrailPoint[], existing?: CoTEntity) => {
 };
 
 
+interface DecodedCotEvent {
+  uid: string;
+  lat: number;
+  lon: number;
+  hae?: number;
+  type?: string;
+  raw?: string;
+  time?: number;
+  detail?: {
+    track?: { speed?: number; course?: number; vspeed?: number };
+    contact?: { callsign?: string };
+    classification?: Record<string, unknown>;
+    vesselClassification?: import('../types').VesselClassification;
+    norad_id?: number;
+    category?: string;
+    constellation?: string;
+    periodMin?: number;
+    inclinationDeg?: number;
+    eccentricity?: number;
+  };
+}
+
 interface UseEntityWorkerOptions {
   onEvent:
   | ((event: {
@@ -118,9 +140,9 @@ export function useEntityWorker({
     // Simplest for now: Assume we will move tak.proto to public folder for easy fetch.
     worker.postMessage({ type: "init", payload: "/tak.proto?v=" + Date.now() });
 
-    const processEntityUpdate = (updateData: any) => {
+    const processEntityUpdate = (updateData: unknown) => {
       // Handle Decoded Data from Worker
-      const entity = updateData.cotEvent; // Based on our proto structure
+      const entity = (updateData as { cotEvent?: DecodedCotEvent }).cotEvent; // Based on our proto structure
       if (entity && entity.uid) {
         const existing = entitiesRef.current.get(entity.uid);
         const isNew = !existing && !knownUidsRef.current.has(entity.uid);
@@ -155,19 +177,19 @@ export function useEntityWorker({
           // entity.detail.classification.category (current: API maps classification: meta which contains all sat fields)
           const category =
             entity.detail?.category ??
-            (entity.detail?.classification as any)?.category;
+            (entity.detail?.classification as Record<string, unknown>)?.category;
           const constellation =
             entity.detail?.constellation ??
-            (entity.detail?.classification as any)?.constellation;
+            (entity.detail?.classification as Record<string, unknown>)?.constellation;
           const period_min =
             entity.detail?.periodMin ??
-            (entity.detail?.classification as any)?.periodMin;
+            (entity.detail?.classification as Record<string, unknown>)?.periodMin;
           const inclination_deg =
             entity.detail?.inclinationDeg ??
-            (entity.detail?.classification as any)?.inclinationDeg;
+            (entity.detail?.classification as Record<string, unknown>)?.inclinationDeg;
           const eccentricity =
             entity.detail?.eccentricity ??
-            (entity.detail?.classification as any)?.eccentricity;
+            (entity.detail?.classification as Record<string, unknown>)?.eccentricity;
 
           // Minimal trail for satellite if needed, but we don't need PVB here for MVP
           // We can just rely on the 30s updates and let it snap.

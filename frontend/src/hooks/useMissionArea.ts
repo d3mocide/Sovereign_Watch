@@ -156,7 +156,7 @@ export function useMissionArea({
 
 
   const handleSwitchMission = useCallback(
-    async (mission: any) => {
+    async (mission: import('../types').MissionLocation) => {
       await handleSetFocus(mission.lat, mission.lon, mission.radius_nm);
       // setCurrentMission is now handled inside handleSetFocus to ensure sync
     },

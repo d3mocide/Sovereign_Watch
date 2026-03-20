@@ -1,21 +1,23 @@
 import type { CSSProperties } from 'react';
+import type { Layer } from '@deck.gl/core';
+import type { MapboxOverlay } from '@deck.gl/mapbox';
 
 export interface MapAdapterProps {
     viewState: Record<string, number>;
-    onMove?: (evt: any) => void;
-    onLoad?: (evt: any) => void;
+    onMove?: (evt: unknown) => void;
+    onLoad?: (evt: unknown) => void;
     mapStyle: string;
     style: CSSProperties;
-    onContextMenu?: (evt: any) => void;
+    onContextMenu?: (evt: unknown) => void;
     onClick?: () => void;
     globeMode?: boolean;
     deckProps: {
         id: string;
         interleaved?: boolean;
-        onOverlayLoaded?: (overlay: any) => void;
+        onOverlayLoaded?: (overlay: MapboxOverlay | null) => void;
         key?: string;
         globeMode?: boolean;
-        layers?: any[];
-        [key: string]: any;
+        layers?: Layer[];
+        [key: string]: unknown;
     };
 }

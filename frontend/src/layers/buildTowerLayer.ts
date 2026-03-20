@@ -1,12 +1,14 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
+import type { Layer, PickingInfo } from "@deck.gl/core";
+import type { Tower } from '../types';
 
 export const buildTowerLayer = (
-    towers: any[], 
-    visible: boolean, 
+    towers: Tower[],
+    visible: boolean,
     globeMode: boolean,
-    onHover: (info: any) => void,
-    onSelect: (info: any) => void
-) => {
+    onHover: (info: PickingInfo<Tower>) => void,
+    onSelect: (info: PickingInfo<Tower>) => void
+): Layer[] => {
     if (!visible || !towers || towers.length === 0) return [];
 
     return [
@@ -21,7 +23,7 @@ export const buildTowerLayer = (
             radiusMinPixels: 2,
             radiusMaxPixels: 12,
             lineWidthMinPixels: 1,
-            getPosition: (d: any) => d.coordinates,
+            getPosition: (d: Tower) => d.coordinates,
             getFillColor: [249, 115, 22, 200], // Orange-500
             getLineColor: [0, 0, 0, 150],
             wrapLongitude: !globeMode,
@@ -30,7 +32,7 @@ export const buildTowerLayer = (
                 // Using Slot 3-4 transition depthBias (closer than cables, behind entities)
                 depthBias: globeMode ? -105.0 : 0
             },
-            onHover: (info: any) => {
+            onHover: (info: PickingInfo<Tower>) => {
                 if (info.object) {
                     // Normalize for TacticalMap tooltip
                     onHover({
@@ -49,7 +51,7 @@ export const buildTowerLayer = (
                     onHover(info);
                 }
             },
-            onClick: (info: any) => {
+            onClick: (info: PickingInfo<Tower>) => {
                 if (info.object) {
                     onSelect(info);
                 }

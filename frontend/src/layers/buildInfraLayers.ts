@@ -24,7 +24,13 @@ interface InfraFilters {
     showCables?: boolean;
     showLandingStations?: boolean;
     showOutages?: boolean;
-        cableOpacity?: number;
+    cableOpacity?: number;
+}
+
+interface OutageProperties {
+    country_code?: string;
+    severity?: number;
+    [key: string]: unknown;
 }
 
 export function buildInfraLayers(
@@ -37,7 +43,7 @@ export function buildInfraLayers(
     selectedEntity: { uid: string } | null = null,
     globeMode: boolean = false,
     worldCountriesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null = null,
-    countryOutageMap: Record<string, any> | null = null
+    countryOutageMap: Record<string, OutageProperties> | null = null
 ) {
     const layers = [];
 
@@ -45,13 +51,13 @@ export function buildInfraLayers(
     if (worldCountriesData && (outagesData || countryOutageMap) && filters?.showOutages === true) {
         // Use pre-calculated map if available, otherwise build it (fallback)
         const activeOutageMap = countryOutageMap || (outagesData ? (() => {
-            const map: Record<string, any> = {};
+            const map: Record<string, OutageProperties> = {};
             outagesData.features.forEach(f => {
                 const countryCode = f.properties?.country_code as string;
                 if (countryCode) {
                     const current = map[countryCode];
-                    if (!current || (f.properties?.severity as number || 0) > (current.severity || 0)) {
-                        map[countryCode] = f.properties;
+                    if (!current || (f.properties?.severity as number || 0) > ((current.severity as number) || 0)) {
+                        map[countryCode] = f.properties as OutageProperties;
                     }
                 }
             });
@@ -90,40 +96,42 @@ export function buildInfraLayers(
                     depthMask: !!globeMode,
                     depthBias: globeMode ? -20.0 : 0 
                 },
-                onHover: (info: any) => {
-                    const iso2 = info.object?.properties?.["ISO3166-1-Alpha-2"];
+                onHover: (info: unknown) => {
+                    const pickInfo = info as { object?: GeoJsonFeature; x: number; y: number };
+                    const iso2 = pickInfo.object?.properties?.["ISO3166-1-Alpha-2"] as string | undefined;
                     const outage = iso2 ? activeOutageMap[iso2] : null;
-                    
+
                     if (outage) {
                         // Synthesize an 'outage' entity for the tooltip preserving geometry
                         setHoveredInfra({
-                            ...info,
+                            ...pickInfo,
                             object: {
-                                ...info.object,
+                                ...pickInfo.object,
                                 type: 'outage',
-                                properties: { ...info.object.properties, ...outage }
+                                properties: { ...pickInfo.object?.properties, ...outage }
                             }
                         });
                     } else {
                         // Pass null object to clear tooltips for countries without outages
-                        setHoveredInfra({ ...info, object: null });
+                        setHoveredInfra({ ...pickInfo, object: null });
                     }
                 },
-                onClick: (info: any) => {
-                    const iso2 = info.object?.properties?.["ISO3166-1-Alpha-2"];
+                onClick: (info: unknown) => {
+                    const pickInfo = info as { object?: GeoJsonFeature; x: number; y: number };
+                    const iso2 = pickInfo.object?.properties?.["ISO3166-1-Alpha-2"] as string | undefined;
                     const outage = iso2 ? activeOutageMap[iso2] : null;
-                    
+
                     if (outage && setSelectedInfra) {
                         setSelectedInfra({
-                            ...info,
+                            ...pickInfo,
                             object: {
-                                ...info.object,
+                                ...pickInfo.object,
                                 type: 'outage',
-                                properties: { ...info.object.properties, ...outage }
+                                properties: { ...pickInfo.object?.properties, ...outage }
                             }
                         });
                     } else if (setSelectedInfra) {
-                        setSelectedInfra({ ...info, object: null });
+                        setSelectedInfra({ ...pickInfo, object: null });
                     }
                 },
             })

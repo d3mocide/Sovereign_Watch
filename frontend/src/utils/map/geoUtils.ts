@@ -1,3 +1,5 @@
+import type * as GeoJSON from 'geojson';
+
 // Helper: Simple Haversine Distance in Meters
 export function getDistanceMeters(
   lat1: number,
@@ -49,7 +51,7 @@ export function getCompensatedCenter(
   lat: number,
   lon: number,
   alt: number,
-  map: any,
+  map: { getPitch: () => number; getBearing: () => number; getZoom: () => number },
 ): [number, number] {
   const pitch = map.getPitch();
   if (pitch <= 0 || alt <= 0) return [lon, lat];
@@ -195,8 +197,8 @@ export const calculateZoom = (radiusNm: number) => {
   return Math.max(2, 14 - Math.log2(r));
 };
 
-export function buildGraticule(stepDeg: number = 30): any {
-  const features: any[] = [];
+export function buildGraticule(stepDeg: number = 30): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
   // Meridians (vertical lines)
   for (let lon = -180; lon <= 180; lon += stepDeg) {
     const coords: [number, number][] = [];

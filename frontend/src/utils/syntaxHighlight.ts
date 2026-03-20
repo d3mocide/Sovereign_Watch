@@ -28,7 +28,7 @@ export const syntaxHighlightJson = (jsonStr: string): string => {
         return `<span class="${cls}">${match}</span>`;
       }
     );
-  } catch (e) {
+  } catch {
     // Fallback if it's not valid JSON, but still escape it to prevent XSS
     return jsonStr
       .replace(/&/g, '&amp;')

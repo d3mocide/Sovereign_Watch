@@ -1,5 +1,9 @@
 import { PathLayer, LineLayer } from "@deck.gl/layers";
+import type { Layer } from "@deck.gl/core";
 import { CoTEntity } from "../types";
+
+interface GapBridgeDatum { path: number[][]; entity: CoTEntity }
+interface TrailPathDatum { path: number[][] }
 import {
   altitudeToColor,
   speedToColor,
@@ -12,8 +16,8 @@ export function buildTrailLayers(
   currentSelected: CoTEntity | null,
   globeMode: boolean | undefined,
   historyTailsEnabled: boolean,
-): any[] {
-  const layers: any[] = [];
+): Layer[] {
+  const layers: Layer[] = [];
 
   // 1. All History Trails (Global Toggle)
   // Filter out the selected entity's trail to avoid z-fighting/jaggedness
@@ -26,10 +30,8 @@ export function buildTrailLayers(
             e.trail.length >= 2 &&
             (!currentSelected || e.uid !== currentSelected.uid),
         ),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getPath: (d: any) => d.smoothedTrail || [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getColor: (d: any) => {
+        getPath: (d: CoTEntity) => d.smoothedTrail || [],
+        getColor: (d: CoTEntity) => {
           const isShip = d.type.includes("S");
           return isShip
             ? speedToColor(d.speed, 180)
@@ -67,8 +69,8 @@ export function buildTrailLayers(
               entity: d,
             };
           }),
-        getPath: (d: any) => d.path,
-        getColor: (d: any) => entityColor(d.entity, 180),
+        getPath: (d: GapBridgeDatum) => d.path,
+        getColor: (d: GapBridgeDatum) => entityColor(d.entity, 180),
         getWidth: 3.5,
         widthMinPixels: 2.5,
         jointRounded: true,
@@ -97,8 +99,7 @@ export function buildTrailLayers(
         new PathLayer({
           id: `selected-trail-${currentSelected.uid}-${globeMode ? "globe" : "merc"}`,
           data: [{ path: trailPath }],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          getPath: (d: any) => d.path,
+          getPath: (d: TrailPathDatum) => d.path,
           getColor: trailColor,
           getWidth: 3.5,
           widthMinPixels: 2.5,

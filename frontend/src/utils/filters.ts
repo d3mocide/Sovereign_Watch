@@ -3,7 +3,7 @@ import { CoTEntity } from "../types";
 /** Returns 'sea', 'air', or null (=skip) based on entity type and active filters. */
 export function filterEntity(
   entity: CoTEntity,
-  filters: any,
+  filters: import('../types').MapFilters | undefined,
 ): 'sea' | 'air' | null {
   const isShip = entity.type?.includes('S');
   if (isShip) {
@@ -50,7 +50,7 @@ export function filterEntity(
 /** Returns true if the satellite should be visible given the current filters. */
 export function filterSatellite(
   sat: CoTEntity,
-  filters: any,
+  filters: import('../types').MapFilters | undefined,
 ): boolean {
   if (!filters?.showSatellites) return false;
   const constellation = sat.detail?.constellation as string | undefined;

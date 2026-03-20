@@ -115,7 +115,7 @@ describe('processReplayData', () => {
   });
 
   it('handles large datasets without data loss', () => {
-    const largeDataset: any[] = [];
+    const largeDataset: Parameters<typeof processReplayData>[0] = [];
     const numEntities = 100;
     const pointsPerEntity = 100;
     const baseTime = Date.parse('2023-01-01T00:00:00Z');

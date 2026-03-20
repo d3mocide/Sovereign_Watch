@@ -23,7 +23,7 @@ interface SidebarLeftProps {
   js8BridgeConnected?: boolean;
   js8Connected?: boolean;
   js8KiwiConnecting?: boolean;
-  js8ActiveKiwiConfig?: any;
+  js8ActiveKiwiConfig?: import('../../types').KiwiConfig | null;
   sendMessage?: (target: string, message: string) => void;
   sendAction?: (payload: object) => void;
 }

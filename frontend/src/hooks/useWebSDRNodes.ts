@@ -37,8 +37,8 @@ export function useWebSDRNodes(
       const data: WebSDRNode[] = await res.json();
       setNodes(data);
       setError(null);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to fetch WebSDR node list');
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Failed to fetch WebSDR node list');
     } finally {
       setLoading(false);
     }

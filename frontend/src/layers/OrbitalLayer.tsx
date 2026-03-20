@@ -1,5 +1,8 @@
 import { ScatterplotLayer, PathLayer, IconLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import type { PickingInfo } from '@deck.gl/core';
 import { CoTEntity, GroundTrackPoint } from '../types';
+
+interface SatGapBridge { path: number[][]; entity: CoTEntity }
 
 const createSatIconAtlas = () => {
     const canvas = document.createElement('canvas');
@@ -147,7 +150,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
             new PathLayer({
                 id: `satellite-ground-track${sfx}`,
                 data: satellites,
-                getPath: (d: any): any => {
+                getPath: (d: CoTEntity): number[][] => {
                     const trail: number[][] = d.smoothedTrail || [];
                     if (projectionMode === 'globe') {
                         const alt = d.altitude || 0;
@@ -188,13 +191,13 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                         entity: d
                     };
                 }),
-                getPath: (d: any) => d.path,
-                getColor: (d: any) => {
+                getPath: (d: SatGapBridge) => d.path,
+                getColor: (d: SatGapBridge) => {
                     const isSelected = d.entity.uid === selectedEntity?.uid || d.entity.uid === hoveredEntity?.uid;
                     if (isSelected) return getSatColor(d.entity.detail?.category as string, 200);
                     return getSatColor(d.entity.detail?.category as string, 120);
                 },
-                getWidth: (d: any) => (d.entity.uid === selectedEntity?.uid || d.entity.uid === hoveredEntity?.uid) ? 4.5 : 3.5,
+                getWidth: (d: SatGapBridge) => (d.entity.uid === selectedEntity?.uid || d.entity.uid === hoveredEntity?.uid) ? 4.5 : 3.5,
                 widthMinPixels: 2.5,
                 jointRounded: true,
                 capRounded: true,
@@ -241,7 +244,7 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
             new SolidPolygonLayer({
                 id: `satellite-markers-globe${sfx}`,
                 data: gemFaces,
-                getPolygon: (d: FaceDatum) => d.polygon as any,
+                getPolygon: (d: FaceDatum) => d.polygon as number[][],
                 extruded: false,
                 getFillColor: (d: FaceDatum) => {
                     const base = getSatColor(d.entity.detail?.category as string, 220);
@@ -287,10 +290,10 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
                 pickable: true,
                 wrapLongitude: projectionMode !== 'globe',
                 parameters: { depthTest: true, depthBias: 0 },
-                onHover: (info: { object?: any; x: number; y: number }) => {
-                    onHover(info.object as CoTEntity ?? null, info.x, info.y);
+                onHover: (info: PickingInfo<CoTEntity>) => {
+                    onHover(info.object ?? null, info.x, info.y);
                 },
-                onClick: (info: { object?: any }) => {
+                onClick: (info: PickingInfo<CoTEntity>) => {
                     if (info.object) {
                         const entity = info.object as CoTEntity;
                         const newSelection = selectedEntity?.uid === entity.uid ? null : entity;

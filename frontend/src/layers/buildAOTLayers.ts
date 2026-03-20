@@ -1,7 +1,10 @@
 import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import type { Layer } from "@deck.gl/core";
 
 type AotShapes = { maritime: number[][]; aviation: number[][] };
 type Filters = { showSea?: boolean; showAir?: boolean;[key: string]: boolean | undefined };
+type PathDatum = { path: number[][] };
+type PositionDatum = { position: [number, number, number] };
 
 /** Generate a geodesic circle polygon with `segments` vertices. */
 function geodesicCircle(lat: number, lon: number, radiusKm: number, segments = 128): number[][] {
@@ -22,15 +25,15 @@ export function buildAOTLayers(
   globeMode: boolean | undefined,
   observer?: { lat: number; lon: number; radiusKm: number } | null,
   rfBoundary?: { lat: number; lon: number; radiusKm: number } | null,
-): any[] {
-  const layers: any[] = [];
+): Layer[] {
+  const layers: Layer[] = [];
 
   if (aotShapes && filters?.showSea !== false && aotShapes.maritime.length > 0) {
     layers.push(
       new PathLayer({
         id: `aot-maritime-${globeMode ? "globe" : "merc"}`,
         data: [{ path: aotShapes.maritime.map((p) => [p[0], p[1], 0]) }],
-        getPath: (d: any) => d.path,
+        getPath: (d: PathDatum) => d.path,
         getColor: [0, 191, 255, 150], // #00BFFF at ~60% opacity
         getWidth: 2.5,
         widthMinPixels: 2,
@@ -50,7 +53,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-aviation-${globeMode ? "globe" : "merc"}`,
         data: [{ path: aotShapes.aviation.map((p) => [p[0], p[1], 0]) }],
-        getPath: (d: any) => d.path,
+        getPath: (d: PathDatum) => d.path,
         getColor: [0, 255, 100, 150], // #00FF64 at ~60% opacity
         getWidth: 2.5,
         widthMinPixels: 2,
@@ -73,7 +76,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-orbital-horizon-${globeMode ? 'globe' : 'merc'}`,
         data: [{ path: ringPath }],
-        getPath: (d: any) => d.path,
+        getPath: (d: PathDatum) => d.path,
         getColor: [160, 100, 255, 90],  // soft purple at ~35% opacity
         getWidth: 2,
         widthMinPixels: 1.5,
@@ -91,8 +94,8 @@ export function buildAOTLayers(
     layers.push(
       new ScatterplotLayer({
         id: `aot-orbital-observer-${globeMode ? 'globe' : 'merc'}`,
-        data: [{ position: [observer.lon, observer.lat, 0] }],
-        getPosition: (d: any) => d.position,
+        data: [{ position: [observer.lon, observer.lat, 0] as [number, number, number] }],
+        getPosition: (d: PositionDatum) => d.position,
         getFillColor: [160, 100, 255, 200],
         getRadius: 6000,  // ~6km dot radius
         radiusMinPixels: 4,
@@ -110,7 +113,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-rf-horizon-${globeMode ? 'globe' : 'merc'}`,
         data: [{ path: ringPath }],
-        getPath: (d: any) => d.path,
+        getPath: (d: PathDatum) => d.path,
         getColor: [251, 191, 36, 90],  // amber-400 at ~35% opacity
         getWidth: 2,
         widthMinPixels: 1.5,

@@ -1,5 +1,8 @@
 import { ScatterplotLayer, PathLayer, IconLayer, LineLayer, PolygonLayer } from "@deck.gl/layers";
+import type { Layer, PickingInfo } from "@deck.gl/core";
 import { CoTEntity } from "../types";
+
+interface VelocityDatum { path: number[][]; entity: CoTEntity }
 import { entityColor } from "../utils/map/colorUtils";
 import { ICON_ATLAS } from "../utils/map/iconAtlas";
 
@@ -14,8 +17,8 @@ export function buildEntityLayers(
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   selectedEntity: CoTEntity | null,
-): any[] {
-  const layers: any[] = [];
+): Layer[] {
+  const layers: Layer[] = [];
 
   // 3. Altitude Stems (leader lines to ground) - 3D Mode only
   if (enable3d) {
@@ -67,7 +70,7 @@ export function buildEntityLayers(
       iconMapping: ICON_ATLAS.mapping,
       // Offset removed to prevent near-plane frustum clipping at high zoom in pitch=0 2D mode
       getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-      getSize: (d: any) => {
+      getSize: (d: CoTEntity) => {
         const isSelected = currentSelected?.uid === d.uid;
         const baseSize = 32; // Reduced from 64 to 32 (50% reduction)
         return isSelected ? baseSize * 1.3 : baseSize;
@@ -138,7 +141,7 @@ export function buildEntityLayers(
             alt
           ];
 
-          return [pt1, pt2, pt3, pt4, pt1] as any;
+          return [pt1, pt2, pt3, pt4, pt1] as number[][];
         },
         getFillColor: (d: CoTEntity) => entityColor(d, 200),
         getLineColor: (d: CoTEntity) => entityColor(d, 255),
@@ -147,18 +150,18 @@ export function buildEntityLayers(
         // wrapLongitude off in globe mode: native geographic polygons don't need it and it causes culling
         wrapLongitude: false,
         parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
-        onHover: (info: { object?: any; x: number; y: number }) => {
+        onHover: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
-            setHoveredEntity(info.object as CoTEntity);
+            setHoveredEntity(info.object);
             setHoverPosition({ x: info.x, y: info.y });
           } else {
             setHoveredEntity(null);
             setHoverPosition(null);
           }
         },
-        onClick: (info: { object?: any }) => {
+        onClick: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
-            const entity = info.object as CoTEntity;
+            const entity = info.object;
             const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
             onEntitySelect(newSelection);
           } else {
@@ -182,10 +185,8 @@ export function buildEntityLayers(
         },
         iconAtlas: ICON_ATLAS.url,
         iconMapping: ICON_ATLAS.mapping,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getPosition: (d: any) => [d.lon, d.lat, d.altitude || 0],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getSize: (d: any) => {
+        getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
+        getSize: (d: CoTEntity) => {
           const isSelected = currentSelected?.uid === d.uid;
           const baseSize = 32;
           return isSelected ? baseSize * 1.3 : baseSize;
@@ -193,29 +194,26 @@ export function buildEntityLayers(
         sizeUnits: "pixels" as const,
         sizeMinPixels: 18,
         billboard: false,
-        getAngle: (d: any) => {
+        getAngle: (d: CoTEntity) => {
           const course = d.course || 0;
           return -course;
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getColor: (d: any) => entityColor(d as CoTEntity),
+        getColor: (d: CoTEntity) => entityColor(d),
         pickable: true,
         wrapLongitude: !globeMode,
         parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onHover: (info: { object?: any; x: number; y: number }) => {
+        onHover: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
-            setHoveredEntity(info.object as CoTEntity);
+            setHoveredEntity(info.object);
             setHoverPosition({ x: info.x, y: info.y });
           } else {
             setHoveredEntity(null);
             setHoverPosition(null);
           }
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onClick: (info: { object?: any }) => {
+        onClick: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
-            const entity = info.object as CoTEntity;
+            const entity = info.object;
             const newSelection =
               selectedEntity?.uid === entity.uid ? null : entity;
             onEntitySelect(newSelection);
@@ -284,8 +282,8 @@ export function buildEntityLayers(
               entity: d,
             };
           }),
-        getPath: (d: any) => d.path,
-        getColor: (d: any) => entityColor(d.entity, 120),
+        getPath: (d: VelocityDatum) => d.path,
+        getColor: (d: VelocityDatum) => entityColor(d.entity, 120),
         getWidth: 2.2,
         widthMinPixels: 1.5,
         jointRounded: true,

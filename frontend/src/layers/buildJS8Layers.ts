@@ -1,4 +1,5 @@
 import { ScatterplotLayer, LineLayer, TextLayer } from "@deck.gl/layers";
+import type { Layer, PickingInfo } from "@deck.gl/core";
 import type { JS8Station, CoTEntity } from "../types";
 
 /**
@@ -49,14 +50,14 @@ export function buildJS8Layers(
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   zoom: number,
-): any[] {
+): Layer[] {
   // Only render stations that have been geocoded from their grid square
   const positioned = stations.filter((s) => s.lat !== 0 || s.lon !== 0);
   if (positioned.length === 0) return [];
 
   const modeKey = globeMode ? "globe" : "merc";
   const depthParams = { depthTest: !!globeMode, depthBias: globeMode ? -210.0 : 0 };
-  const layers: any[] = [];
+  const layers: Layer[] = [];
 
   // 1. Bearing lines from own station to each heard station
   if (ownLat !== 0 || ownLon !== 0) {
@@ -97,18 +98,18 @@ export function buildJS8Layers(
       pickable: true,
       wrapLongitude: !globeMode,
       parameters: depthParams,
-      onHover: (info: any) => {
+      onHover: (info: PickingInfo<JS8Station>) => {
         if (info.object) {
-          setHoveredEntity(stationToEntity(info.object as JS8Station));
+          setHoveredEntity(stationToEntity(info.object));
           setHoverPosition({ x: info.x, y: info.y });
         } else {
           setHoveredEntity(null);
           setHoverPosition(null);
         }
       },
-      onClick: (info: any) => {
+      onClick: (info: PickingInfo<JS8Station>) => {
         if (info.object) {
-          const station = info.object as JS8Station;
+          const station = info.object;
           const already = selectedCallsign === station.callsign;
           onEntitySelect(already ? null : stationToEntity(station));
         }

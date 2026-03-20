@@ -1,5 +1,13 @@
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import type { Layer, PickingInfo } from "@deck.gl/core";
 import type { RFSite, CoTEntity } from "../types";
+
+interface RFCluster {
+  lat: number;
+  lon: number;
+  count: number;
+  representative: RFSite;
+}
 
 /** Colour by service type and digital mode availability */
 /** Colour by service type and digital mode availability */
@@ -87,7 +95,7 @@ function clusterRFSites(sites: RFSite[], zoom: number) {
     }
   }
 
-  const clusters: any[] = [];
+  const clusters: RFCluster[] = [];
   const individuals: RFSite[] = [];
 
   for (const c of clusterMap.values()) {
@@ -116,7 +124,7 @@ export function buildRFLayers(
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   zoom: number,
-): any[] {
+): Layer[] {
   if (!sites || sites.length === 0) return [];
 
   const modeKey = globeMode ? "globe" : "merc";
@@ -125,7 +133,7 @@ export function buildRFLayers(
   // depthTest:true to prevent geometry bleeding through the Earth.
   // (See buildEntityLayers ground-shadows for the same pattern.)
   const depthParams = { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 };
-  const layers: any[] = [];
+  const layers: Layer[] = [];
 
   const { clusters, individuals } = clusterRFSites(sites, zoom);
 
@@ -135,10 +143,10 @@ export function buildRFLayers(
       new ScatterplotLayer({
         id: `rf-clusters-${modeKey}`,
         data: clusters,
-        getPosition: (d: any) => [d.lon, d.lat, 0],
-        getRadius: (d: any) => 8 + Math.min(d.count / 5, 5),
+        getPosition: (d: RFCluster) => [d.lon, d.lat, 0],
+        getRadius: (d: RFCluster) => 8 + Math.min(d.count / 5, 5),
         radiusUnits: "pixels" as const,
-        getFillColor: (d: any) => rfSiteColor(d.representative, 255),
+        getFillColor: (d: RFCluster) => rfSiteColor(d.representative, 255),
         stroked: true,
         getLineColor: [10, 10, 10, 180],
         getLineWidth: 1.5,
@@ -153,8 +161,8 @@ export function buildRFLayers(
       new TextLayer({
         id: `rf-cluster-labels-${modeKey}`,
         data: clusters,
-        getPosition: (d: any) => [d.lon, d.lat, 0],
-        getText: (d: any) => `${d.count}`,
+        getPosition: (d: RFCluster) => [d.lon, d.lat, 0],
+        getText: (d: RFCluster) => `${d.count}`,
         getSize: 10,
         getColor: [255, 255, 255, 255],
         getTextAnchor: "middle",
@@ -190,18 +198,18 @@ export function buildRFLayers(
         wrapLongitude: !globeMode,
         billboard: true,
         parameters: depthParams,
-        onHover: (info: any) => {
+        onHover: (info: PickingInfo<RFSite>) => {
           if (info.object) {
-            setHoveredEntity(rfSiteToEntity(info.object as RFSite));
+            setHoveredEntity(rfSiteToEntity(info.object));
             setHoverPosition({ x: info.x, y: info.y });
           } else {
             setHoveredEntity(null);
             setHoverPosition(null);
           }
         },
-        onClick: (info: any) => {
+        onClick: (info: PickingInfo<RFSite>) => {
           if (info.object) {
-            onEntitySelect(rfSiteToEntity(info.object as RFSite));
+            onEntitySelect(rfSiteToEntity(info.object));
           }
         },
       }),

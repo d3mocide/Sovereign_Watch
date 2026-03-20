@@ -8,11 +8,12 @@ import React, {
   MutableRefObject,
 } from "react";
 import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
+import type { FeatureCollection } from "geojson";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, RFSite } from "../../types";
+import { CoTEntity, JS8Station, MissionLocation, RFSite, Tower } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -96,7 +97,7 @@ interface TacticalMapProps {
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
   showHistoryTails?: boolean;
-  missionArea: any;
+  missionArea: MissionLocation | null;
   globeMode?: boolean;
   onToggleGlobe?: () => void; // Added prop for Globe toggle
   replayMode?: boolean;
@@ -124,11 +125,11 @@ interface TacticalMapProps {
     radius_nm: number;
   } | null>;
   // Infrastructure Data Props
-  cablesData: any;
-  stationsData: any;
-  outagesData: any;
-  worldCountriesData: any;
-  towersData?: any[];
+  cablesData: FeatureCollection | null;
+  stationsData: FeatureCollection | null;
+  outagesData: FeatureCollection | null;
+  worldCountriesData: FeatureCollection | null;
+  towersData?: Tower[];
   onBoundsChange?: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } | null) => void;
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
@@ -189,8 +190,8 @@ export function TacticalMap({
     lat: number;
     lon: number;
   } | null>(null);
-  const [_, setHoveredInfraState] = useState<any>(null);
-  const handleHoveredInfra = useCallback((info: any) => {
+  const [_, setHoveredInfraState] = useState<unknown>(null);
+  const handleHoveredInfra = useCallback((info: unknown) => {
     const obj = info?.object || null;
     setHoveredInfraState(obj);
     if (obj) {
@@ -253,7 +254,7 @@ export function TacticalMap({
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<unknown>(null);
 
   // History track segments ref — updated synchronously so the RAF loop picks it up
   const historySegmentsRef = useRef<import("../../types").HistorySegment[]>(historySegments ?? []);
@@ -493,7 +494,7 @@ export function TacticalMap({
     selectedEntity,
     filters,
     setHoveredInfra: handleHoveredInfra,
-    setSelectedInfra: (info: any) => {
+    setSelectedInfra: (info: unknown) => {
       if (!info || !info.object) return;
 
       const infraEntity: CoTEntity = {
@@ -566,7 +567,7 @@ export function TacticalMap({
   }, []);
 
   const handleMapLoad = useCallback(
-    (evt?: any) => {
+    (evt?: unknown) => {
       // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
       if (evt?.target) {
         mapInstanceRef.current =
@@ -653,12 +654,12 @@ export function TacticalMap({
       <Suspense fallback={null}>
         <MapComponent
           key={globeMode ? "map-globe" : "map-mercator"}
-          ref={mapRef as any}
+          ref={mapRef as React.Ref<unknown>}
           viewState={
             globeMode ? { ...viewState, pitch: 0, bearing: 0 } : viewState
           }
           onLoad={handleMapLoad}
-          onMove={(evt: any) => {
+          onMove={(evt: unknown) => {
             if (onBoundsChange && evt.target && evt.target.getBounds) {
               const bounds = evt.target.getBounds();
               if (bounds && typeof bounds.getSouth === 'function') {
@@ -686,7 +687,7 @@ export function TacticalMap({
               nextViewState.pitch = 0;
               nextViewState.bearing = 0;
             }
-            setViewState(nextViewState as any);
+            setViewState(nextViewState as Record<string, number>);
           }}
           mapStyle={mapStyle}
           {...(_enableMapbox && _isValidToken ? { mapboxAccessToken: mapToken } : {})}

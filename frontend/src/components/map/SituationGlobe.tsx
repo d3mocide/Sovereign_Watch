@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, Suspense } from 'react';
+import type { FeatureCollection } from 'geojson';
 import { MapRef } from 'react-map-gl/maplibre';
 import MapLibreAdapter from './MapLibreAdapter';
 import { CoTEntity, DRState } from '../../types';
@@ -12,10 +13,10 @@ import { getTerminatorLayer } from './TerminatorLayer';
 
 interface SituationGlobeProps {
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
-  cablesData: any;
-  stationsData: any;
-  outagesData: any;
-  worldCountriesData: any;
+  cablesData: FeatureCollection | null;
+  stationsData: FeatureCollection | null;
+  outagesData: FeatureCollection | null;
+  worldCountriesData: FeatureCollection | null;
   showTerminator: boolean;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
   mission: { lat: number; lon: number; radius_nm: number } | null;
@@ -67,13 +68,14 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
 
   const countryOutageMap = useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
-    const map: Record<string, any> = {};
-    outagesData.features.forEach((f: any) => {
-      const countryCode = f.properties?.country_code;
+    const map: Record<string, Record<string, unknown>> = {};
+    outagesData.features.forEach((f) => {
+      const props = f.properties as Record<string, unknown> | null;
+      const countryCode = props?.country_code as string | undefined;
       if (countryCode) {
         const current = map[countryCode];
-        if (!current || (f.properties?.severity || 0) > (current.severity || 0)) {
-          map[countryCode] = f.properties;
+        if (!current || (props?.severity as number || 0) > (current.severity as number || 0)) {
+          map[countryCode] = props ?? {};
         }
       }
     });

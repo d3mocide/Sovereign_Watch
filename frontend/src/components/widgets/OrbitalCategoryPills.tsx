@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Navigation, Cloud, Wifi, Eye, Globe, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface OrbitalCategoryPillsProps {
-  filters: any;
+  filters: import('../../types').MapFilters | undefined;
   onFilterChange: (key: string, value: boolean) => void;
   trackCount: number;
 }

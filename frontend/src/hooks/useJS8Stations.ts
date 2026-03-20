@@ -30,7 +30,7 @@ export interface UseJS8StationsResult {
   connected: boolean;
   js8Connected: boolean;
   kiwiConnecting: boolean;
-  activeKiwiConfig: any;
+  activeKiwiConfig: import('../types').KiwiConfig | null;
   js8Mode: string;
   sMeterDbm: number | null;
   adcOverload: boolean;
@@ -55,7 +55,7 @@ export function useJS8Stations(): UseJS8StationsResult {
   const [connected, setConnected] = useState(false);
   const [js8Connected, setJs8Connected] = useState(false);
   const [kiwiConnecting, setKiwiConnecting] = useState(false);
-  const [activeKiwiConfig, setActiveKiwiConfig] = useState<any>(null);
+  const [activeKiwiConfig, setActiveKiwiConfig] = useState<import('../types').KiwiConfig | null>(null);
   const [js8Mode, setJs8Mode] = useState<string>('normal');
   const [sMeterDbm, setsMeterDbm] = useState<number | null>(null);
   const [adcOverload, setAdcOverload] = useState(false);
@@ -91,7 +91,7 @@ export function useJS8Stations(): UseJS8StationsResult {
     ws.onerror = () => { /* handled by onclose */ };
 
     ws.onmessage = (evt) => {
-      let payload: Record<string, any>;
+      let payload: Record<string, unknown>;
       try { payload = JSON.parse(evt.data); } catch { return; }
       const type = payload.type || '';
 
@@ -235,7 +235,7 @@ export function useJS8Stations(): UseJS8StationsResult {
 
   const sendAction = useCallback((payload: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      if ((payload as any).action === 'SET_KIWI') {
+      if ((payload as { action?: string }).action === 'SET_KIWI') {
         setKiwiConnecting(true);
         // Safety timeout — unlock UI after 15s if backend hangs
         setTimeout(() => setKiwiConnecting(false), 15000);

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import type { FeatureCollection } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
@@ -225,10 +226,10 @@ interface DashboardViewProps {
   js8Connected: boolean;
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
-  cablesData: any;
-  stationsData: any;
-  outagesData: any;
-  worldCountriesData: any;
+  cablesData: FeatureCollection | null;
+  stationsData: FeatureCollection | null;
+  outagesData: FeatureCollection | null;
+  worldCountriesData: FeatureCollection | null;
   showTerminator: boolean;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
 }

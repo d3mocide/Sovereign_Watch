@@ -1,7 +1,7 @@
 import { forwardRef, useRef, useEffect, useMemo } from 'react';
 import { Map, useControl, MapRef, AttributionControl } from 'react-map-gl/mapbox';
-import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapAdapterProps } from './mapAdapterTypes';
+import { MapboxOverlay } from '@deck.gl/mapbox';
 
 // Mapbox Standard Style config applied via imperative API (react-map-gl v8 removed the `config` prop)
 const BASEMAP_CONFIG: Record<string, boolean | string> = {
@@ -14,7 +14,7 @@ const BASEMAP_CONFIG: Record<string, boolean | string> = {
     showTransitLabels: true,
 };
 
-function DeckGLOverlay(props: any) {
+function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     const { globeMode, ...rest } = props;
 
     // We pass _full3d so DeckGL enables full 3D perspective matrix synchronization 
@@ -91,8 +91,8 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
         >
             <AttributionControl compact={true} position="bottom-right" />
             {(() => {
-                const { key: deckKey, ...restDeckProps } = (deckProps as any);
-                return <DeckGLOverlay key={deckKey} {...restDeckProps} />;
+                const { key: deckKey, ...restDeckProps } = deckProps;
+                return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;
             })()}
         </Map>
     );

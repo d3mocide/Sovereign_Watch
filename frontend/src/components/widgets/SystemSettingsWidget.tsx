@@ -77,7 +77,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
         }
     };
 
-    const [customPresets, setCustomPresets] = useState<Record<string, Record<string, any>>>(loadCustomPresets());
+    const [customPresets, setCustomPresets] = useState<Record<string, Record<string, unknown>>>(loadCustomPresets());
 
     if (!isOpen) return null;
 

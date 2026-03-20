@@ -8,6 +8,7 @@ import React, {
   MutableRefObject,
 } from "react";
 import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
+import type { FeatureCollection } from "geojson";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -122,12 +123,12 @@ interface TacticalMapProps {
     radius_nm: number;
   } | null>;
   // Infrastructure Data Props
-  cablesData: any;
-  stationsData: any;
-  outagesData: any;
-  worldCountriesData: any;
+  cablesData: FeatureCollection | null;
+  stationsData: FeatureCollection | null;
+  outagesData: FeatureCollection | null;
+  worldCountriesData: FeatureCollection | null;
   showTerminator?: boolean;
-  missionArea: any;
+  missionArea: import('../../types').MissionLocation | null;
 }
 
 export function OrbitalMap({
@@ -179,8 +180,8 @@ export function OrbitalMap({
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lon: number } | null>(null);
 
-  const [hoveredInfra, setHoveredInfraState] = useState<any>(null);
-  const handleHoveredInfra = useCallback((info: any) => {
+  const [hoveredInfra, setHoveredInfraState] = useState<unknown>(null);
+  const handleHoveredInfra = useCallback((info: unknown) => {
     const obj = info?.object || null;
     setHoveredInfraState(obj);
     if (obj) {
@@ -228,7 +229,7 @@ export function OrbitalMap({
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<unknown>(null);
 
   // Environment Fallbacks
   const envLat = import.meta.env.VITE_CENTER_LAT;
@@ -505,7 +506,7 @@ export function OrbitalMap({
     stationsData,
     outagesData,
     setHoveredInfra: handleHoveredInfra,
-    setSelectedInfra: (info: any) => {
+    setSelectedInfra: (info: unknown) => {
       if (!info || !info.object) return;
 
       const infraEntity: CoTEntity = {
@@ -561,7 +562,7 @@ export function OrbitalMap({
   }, []);
 
   // Right-click context menu handlers
-  const handleContextMenu = useCallback((e: any) => {
+  const handleContextMenu = useCallback((e: unknown) => {
     e.preventDefault();
     const { lngLat, point } = e;
     setContextMenuPos({ x: point.x, y: point.y });
@@ -575,7 +576,7 @@ export function OrbitalMap({
   }, [setSaveFormCoords, setShowSaveForm]);
 
   const handleMapLoad = useCallback(
-    (evt?: any) => {
+    (evt?: unknown) => {
       // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
       if (evt?.target) {
         mapInstanceRef.current =
@@ -662,12 +663,12 @@ export function OrbitalMap({
       <Suspense fallback={null}>
         <MapComponent
           key={globeMode ? "map-globe" : "map-mercator"}
-          ref={mapRef as any}
+          ref={mapRef as React.Ref<unknown>}
           viewState={
             globeMode ? { ...viewState, pitch: 0, bearing: 0 } : viewState
           }
           onLoad={handleMapLoad}
-          onMove={(evt: any) => {
+          onMove={(evt: unknown) => {
             // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
             if (
               evt.originalEvent &&
@@ -684,7 +685,7 @@ export function OrbitalMap({
               nextViewState.pitch = 0;
               nextViewState.bearing = 0;
             }
-            setViewState(nextViewState as any);
+            setViewState(nextViewState as Record<string, number>);
           }}
           mapStyle={mapStyle}
           {...(_enableMapbox && _isValidToken ? { mapboxAccessToken: mapToken } : {})}

@@ -33,8 +33,8 @@ export function useKiwiNodes(freqKhz: number, enabled: boolean, radiusKm?: numbe
       const data: KiwiNode[] = await res.json();
       setNodes(data);
       setError(null);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to fetch node list');
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Failed to fetch node list');
     } finally {
       setLoading(false);
     }

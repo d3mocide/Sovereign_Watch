@@ -3,7 +3,7 @@ import { Map, useControl, MapRef, AttributionControl } from 'react-map-gl/maplib
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { MapAdapterProps } from './mapAdapterTypes';
 
-function DeckGLOverlay(props: any) {
+function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     // Strip globeMode — MapboxOverlay detects globe projection automatically
     // via getDefaultView(map) which returns GlobeView when the map is in globe mode.
     // Both projection and _full3d are managed internally on every map `render` event.
@@ -64,8 +64,8 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
         >
             <AttributionControl compact={true} position="bottom-right" />
             {(() => {
-                const { key: deckKey, ...restDeckProps } = (deckProps as any);
-                return <DeckGLOverlay key={deckKey} {...restDeckProps} />;
+                const { key: deckKey, ...restDeckProps } = deckProps;
+                return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;
             })()}
         </Map>
     );

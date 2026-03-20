@@ -1,5 +1,7 @@
 import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import { CoTEntity, HistorySegment, JS8Station, RFSite } from "../types";
+import type { Layer } from "@deck.gl/core";
+import type { FeatureCollection } from "geojson";
+import { CoTEntity, HistorySegment, JS8Station, RFSite, MapFilters, Tower } from "../types";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildInfraLayers } from "./buildInfraLayers";
@@ -12,21 +14,24 @@ import { getTerminatorLayer } from "../components/map/TerminatorLayer";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { maidenheadToLatLon } from "../utils/map/geoUtils";
 
+import type { H3CellData } from "./buildH3CoverageLayer";
+import type { GroundTrackPoint } from "../types";
+
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
   filteredSatellites: CoTEntity[];
   js8Stations: JS8Station[];
   rfSites: RFSite[];
-  h3Cells: any[];
-  cablesData: any;
-  stationsData: any;
-  outagesData: any;
-  towersData?: any[];
-  worldCountriesData: any;
-  countryOutageMap: Record<string, any>;
+  h3Cells: H3CellData[];
+  cablesData: FeatureCollection | null;
+  stationsData: FeatureCollection | null;
+  outagesData: FeatureCollection | null;
+  towersData?: Tower[];
+  worldCountriesData: FeatureCollection | null;
+  countryOutageMap: Record<string, Record<string, unknown>>;
   currentSelected: CoTEntity | null;
   hoveredEntity: CoTEntity | null;
-  filters: any;
+  filters: MapFilters | undefined;
   globeMode: boolean;
   enable3d: boolean;
   zoom: number;
@@ -35,15 +40,15 @@ interface LayerCompositionOptions {
   kiwiNode: { lat: number; lon: number; host: string } | null;
   historyTails: boolean;
   velocityVectors: boolean;
-  predictedGroundTrack?: any[];
-  observer?: any;
-  currentMission?: any;
-  aotShapes: any;
+  predictedGroundTrack?: GroundTrackPoint[];
+  observer?: { lat: number; lon: number; radiusKm: number } | null;
+  currentMission?: { lat: number; lon: number } | null;
+  aotShapes: { maritime: number[][]; aviation: number[][] } | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
   setHoveredEntity: (entity: CoTEntity | null) => void;
   setHoverPosition: (pos: { x: number; y: number } | null) => void;
-  setHoveredInfra: (info: any) => void;
-  setSelectedInfra: (info: any) => void;
+  setHoveredInfra: (info: unknown) => void;
+  setSelectedInfra: (info: unknown) => void;
   /** Historical flight path segments from TrackHistoryPanel */
   historySegments?: HistorySegment[];
 }
@@ -85,7 +90,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   } = options;
 
   // JS8 station layers
-  let js8Layers: any[] = [];
+  let js8Layers: Layer[] = [];
   if (js8Stations.length > 0 && ownGrid) {
     const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
     const selectedJS8Callsign = currentSelected?.type === "js8" ? currentSelected.callsign : null;
@@ -103,7 +108,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   }
 
   // Repeater infrastructure layers
-  let repeaterLayers: any[] = [];
+  let repeaterLayers: Layer[] = [];
   if (filters?.showRepeaters && rfSites.length > 0) {
     repeaterLayers = buildRFLayers(
       rfSites,
@@ -130,7 +135,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   );
 
   // KiwiSDR node marker layer
-  const kiwiLayers: any[] = [];
+  const kiwiLayers: Layer[] = [];
   if (kiwiNode && kiwiNode.lat !== 0 && kiwiNode.lon !== 0) {
     const pulse = (Math.sin(now / 400) + 1) / 2;
 
@@ -138,7 +143,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       new ScatterplotLayer({
         id: "kiwi-node-core",
         data: [kiwiNode],
-        getPosition: (d: any) => [d.lon, d.lat],
+        getPosition: (d: { lat: number; lon: number; host: string }) => [d.lon, d.lat],
         getFillColor: [251, 113, 133, 180 + pulse * 75],
         getLineColor: [251, 113, 133, 200],
         getRadius: 4000,
@@ -155,8 +160,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       new TextLayer({
         id: "kiwi-node-label",
         data: [kiwiNode],
-        getPosition: (d: any) => [d.lon, d.lat],
-        getText: (d: any) => `LIVE SDR\n${d.host}`,
+        getPosition: (d: { lat: number; lon: number; host: string }) => [d.lon, d.lat],
+        getText: (d: { lat: number; lon: number; host: string }) => `LIVE SDR\n${d.host}`,
         getSize: 10,
         getColor: [240, 240, 240, 255],
         background: true,

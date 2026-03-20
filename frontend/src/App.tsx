@@ -8,11 +8,13 @@ import { OrbitalMap } from './components/map/OrbitalMap'
 import { OrbitalSidebarLeft } from './components/layouts/OrbitalSidebarLeft'
 import RadioTerminal from './components/js8call/RadioTerminal'
 import { DashboardView } from './components/views/DashboardView'
+import type { FeatureCollection } from 'geojson';
 import { CoTEntity, HistorySegment, IntelEvent, MissionProps } from './types'
 import { TimeControls } from './components/widgets/TimeControls'
 import { useSystemHealth } from './hooks/useSystemHealth'
 import { useJS8Stations } from './hooks/useJS8Stations'
 import { useRFSites } from './hooks/useRFSites'
+import type { RFMode } from './types'
 import { usePassPredictions } from './hooks/usePassPredictions'
 import { processReplayData } from './utils/replayUtils'
 import { useEntityWorker } from './hooks/useEntityWorker'
@@ -182,7 +184,7 @@ function App() {
   // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
   const { cablesData, stationsData, outagesData } = useInfraData();
   const { towers, isLoading: towersLoading } = useTowers(mapBounds);
-  const [worldCountriesData, setWorldCountriesData] = useState<any>(null);
+  const [worldCountriesData, setWorldCountriesData] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     fetch("/world-countries.json")
@@ -382,7 +384,7 @@ function App() {
     visualStateRef,
     countsRef,
     onCountsUpdate: setTrackCounts,
-    onEntitySelect: handleSetSelectedSatNorad as any, // Simple stub for entity clearing
+    onEntitySelect: handleSetSelectedSatNorad as unknown as (entity: CoTEntity | null) => void, // Simple stub for entity clearing
     onMissionPropsReady: setMissionProps,
     initialLat: parseMissionHash().lat ?? parseFloat(import.meta.env.VITE_CENTER_LAT || "45.5152"),
     initialLon: parseMissionHash().lon ?? parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
@@ -403,9 +405,9 @@ function App() {
     missionProps?.currentMission?.lat ?? 45.5152,
     missionProps?.currentMission?.lon ?? -122.6784,
     (filters.rfRadius as number) || 300,
-    activeServices as any, // Will update hook signature next
-    (filters.modes as any) || undefined,
-    (filters.rfEmcommOnly as any) || undefined,
+    activeServices,
+    (filters.modes as unknown as RFMode[] | undefined),
+    filters.rfEmcommOnly || undefined,
   );
 
   // Intel satellite pass predictions for orbital alerts
@@ -622,7 +624,7 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleFilterChange = useCallback((key: string, value: any) => {
+  const handleFilterChange = useCallback((key: string, value: boolean) => {
     setFilters((prev: import('./types').MapFilters) => {
       const next = { ...prev, [key]: value };
       localStorage.setItem('mapFilters', JSON.stringify(next));
@@ -655,7 +657,7 @@ function App() {
   }, [addEvent]);
 
   const alertsCount = useMemo(() =>
-    events.filter(e => (e as any).type === 'alert').length,
+    events.filter(e => e.type === 'alert').length,
     [events]);
 
   const handleOpenAnalystPanel = useCallback(() => {
@@ -753,7 +755,7 @@ function App() {
           />
         ) : viewMode === 'ORBITAL' ? (
           <OrbitalSidebarLeft
-            filters={orbitalFilters as any}
+            filters={orbitalFilters}
             onFilterChange={handleOrbitalFilterChange}
             selectedSatNorad={selectedSatNorad}
             setSelectedSatNorad={handleSetSelectedSatNorad}
@@ -792,7 +794,7 @@ function App() {
         <>
           <TacticalMap
             onCountsUpdate={setTrackCounts}
-            filters={tacticalFilters as any}
+            filters={tacticalFilters}
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
@@ -863,7 +865,7 @@ function App() {
           onEntitySelect={handleEntitySelect}
           selectedEntity={selectedEntity}
           // The rest are dummy/no-ops for the layout shell
-          onCountsUpdate={setTrackCounts as any}
+          onCountsUpdate={setTrackCounts as unknown as (counts: { air: number; sea: number; orbital: number }) => void}
           onEvent={addEvent}
           missionArea={missionArea}
           onMissionPropsReady={setMissionProps}
@@ -888,7 +890,7 @@ function App() {
           stationsData={stationsData}
           outagesData={outagesData}
           worldCountriesData={worldCountriesData}
-          onSatellitesRefReady={(ref: any) => {
+          onSatellitesRefReady={(ref) => {
             orbitalSatellitesRef.current = ref;
           }}
         />

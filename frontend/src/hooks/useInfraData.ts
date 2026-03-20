@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { FeatureCollection } from 'geojson';
 
 // These are module-level constants so they have stable reference identity.
 // Declaring them inside the hook body caused a new object reference on every
@@ -87,9 +88,9 @@ const fallbackEmpty = {
 };
 
 export const useInfraData = () => {
-  const [cablesData, setCablesData] = useState<any>(null);
-  const [stationsData, setStationsData] = useState<any>(null);
-  const [outagesData, setOutagesData] = useState<any>(null);
+  const [cablesData, setCablesData] = useState<FeatureCollection | null>(null);
+  const [stationsData, setStationsData] = useState<FeatureCollection | null>(null);
+  const [outagesData, setOutagesData] = useState<FeatureCollection | null>(null);
   
   useEffect(() => {
     const fetchCables = async () => {

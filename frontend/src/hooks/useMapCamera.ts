@@ -34,7 +34,7 @@ export function useMapCamera({
   // MapLibre v5 also requires the style to be loaded before setProjection can be called.
   useEffect(() => {
     if (!mapLoaded) return;
-    const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as any);
+    const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as unknown as { setProjection?: (p: unknown) => void; isStyleLoaded?: () => boolean; on?: (e: string, cb: () => void) => void; off?: (e: string, cb: () => void) => void });
     if (!map || typeof map.setProjection !== "function") return;
 
     const applyProjection = () => {
@@ -91,7 +91,7 @@ export function useMapCamera({
       if (!map.getSource(SOURCE_ID)) {
         map.addSource(SOURCE_ID, {
           type: "geojson",
-          data: buildGraticule(30) as any,
+          data: buildGraticule(30) as unknown as GeoJSON.FeatureCollection,
         });
       }
       if (map.getLayer(LAYER_ID)) {
@@ -225,7 +225,7 @@ export function useMapCamera({
       setEnable3d(false);
       // Reset projection to flat mercator (switching back to Mapbox adapter)
       try {
-        (map as any).setProjection(
+        (map as unknown as { setProjection: (p: unknown) => void }).setProjection(
           mapToken ? "mercator" : { type: "mercator" },
         );
       } catch (_) {
