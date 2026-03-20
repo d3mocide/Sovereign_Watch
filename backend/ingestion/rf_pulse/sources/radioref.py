@@ -27,7 +27,7 @@ from zeep.transports import AsyncTransport
 
 logger = logging.getLogger("rf_pulse.radioref")
 
-WSDL_URL = "https://api.radioreference.com/soap2/?wsdl"
+WSDL_URL = "https://api.radioreference.com/soap2/?wsdl&v=9"
 
 
 class RadioReferenceSource:
@@ -40,34 +40,19 @@ class RadioReferenceSource:
         self.app_key  = os.getenv("RADIOREF_APP_KEY", "")
         self.username = os.getenv("RADIOREF_USERNAME", "")
         self.password = os.getenv("RADIOREF_PASSWORD", "")
-
-        # Cached session token; cleared on auth fault to force re-auth.
-        self._auth_token: str | None = None
+        # No authToken needed as we pass password and version directly.
 
     # ------------------------------------------------------------------
     # Authentication helpers
     # ------------------------------------------------------------------
-
-    async def _get_auth_token(self, client: zeep.AsyncClient) -> str:
-        """Acquire a fresh auth token from the API and cache it.
-
-        Credential values are intentionally never written to log output.
-        """
-        token = await client.service.getAuthToken(
-            username=self.username,
-            password=self.password,
-            appKey=self.app_key,
-        )
-        self._auth_token = token
-        logger.info("RadioReference: auth token acquired")
-        return token
 
     def _auth_info(self) -> dict:
         """Build the authInfo dict required by most RR SOAP calls."""
         return {
             "appKey":    self.app_key,
             "username":  self.username,
-            "authToken": self._auth_token,
+            "password":  self.password,
+            "version":   "latest",
         }
 
     # ------------------------------------------------------------------
@@ -94,21 +79,18 @@ class RadioReferenceSource:
     # ------------------------------------------------------------------
 
     async def _fetch_and_publish(self):
-        transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0, follow_redirects=True))
+        headers = {"User-Agent": "SovereignWatch/1.0"}
+        transport = AsyncTransport(
+            client=httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers),
+            wsdl_client=httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
+        )
         client = zeep.AsyncClient(WSDL_URL, transport=transport)
-
-        # Ensure we have a valid auth token before making data calls.
-        if not self._auth_token:
-            await self._get_auth_token(client)
 
         try:
             systems = await self._fetch_systems(client)
         except zeep.exceptions.Fault as fault:
-            # Auth token may have expired; clear it and retry once.
-            logger.warning("RadioReference: SOAP fault (%s), attempting re-auth", fault.message)
-            self._auth_token = None
-            await self._get_auth_token(client)
-            systems = await self._fetch_systems(client)
+            logger.warning("RadioReference: SOAP fault (%s)", fault.message)
+            return
 
         published = 0
         for sys in systems:
@@ -131,9 +113,9 @@ class RadioReferenceSource:
         logger.info("RadioReference: published %d systems to %s", published, self.topic)
 
     async def _fetch_systems(self, client: zeep.AsyncClient) -> list:
-        """Fetch trunked systems for the United States (country ID 1)."""
-        response = await client.service.getCountrySystemList(
-            cid=1,
-            authInfo=self._auth_info(),
-        )
-        return list(response or [])
+        """Fetch trunked systems.
+        Note: The original getCountrySystemList method does not exist in the v9 Radio Reference SOAP API.
+        Trunked system ingestion needs to be reimplemented using valid methods (e.g. getTrsDetails).
+        """
+        logger.warning("RadioReference trunked system ingestion is currently disabled (API method unsupported).")
+        return []
