@@ -1,28 +1,42 @@
-# Release - v0.40.0 - Infrastructure Resilience
+# Release - v0.40.1 - MCP Stabilization and FCC Tower UI Patch
 
 ## Summary
 
-This release introduces the **FCC Antenna Structure Registration (ASR)** dataset, providing operators with situational awareness of over 195,000 unique tower and antenna structures. To support this significant data expansion, the `infra-poller` architecture has been overhauled with a high-performance, persistent synchronization strategy that drastically reduces upstream API consumption and improves system stability.
+This patch release hardens developer MCP workflows and corrects FCC tower interaction semantics in the frontend. It improves cross-platform MCP startup reliability, adds a deterministic agent playbook for token-efficient tool usage, and fixes tower tooltip/sidebar rendering so tower metadata is shown consistently instead of generic infrastructure fields.
 
-## Key Features
+## Key Updates
 
-- **FCC Tower Ingestion**: Comprehensive mapping of terrestrial antenna infrastructure across North America.
-- **Weekly Cooldown Cycles**: Both FCC and Submarine Cable datasets now sync strictly every 7 days, avoiding redundant multi-megabyte downloads.
-- **Boot-Safe Persistence**: Polling status is now persisted in Redis. If a service restarts, it will skip scheduled syncs if the data is already current.
-- **Interactive Infrastructure Tooltips**: Improved interactivity for the new infrastructure layers, including registration details and status metadata.
-- **Transparent Polling Diagnostics**: Real-time logs now show exactly when the next weekly sync is scheduled (e.g., "Next sync in 6d 23h").
+- **MCP Startup and Readiness Improvements**:
+	- Added `tools/mcp-language-server/check.sh` for prerequisite validation and actionable remediation output.
+	- Standardized `.mcp.json` to wrapper-driven startup for Graph-it-Live, Pyright, and tsserver.
+	- Added robust Graph-it-Live wrapper resolution across common host environments.
+- **Agent Workflow Efficiency**:
+	- Added `agent_docs/mcp-agent-playbook.md` with strict first-choice MCP tool ordering to reduce duplicate search passes and token usage.
+	- Added guidance pointers in `AGENTS.md` and `CLAUDE.md` so sessions discover the playbook quickly.
+- **FCC Tower UI Fixes**:
+	- Corrected tower pick normalization and entity typing so towers remain `tower` end-to-end.
+	- Added dedicated tower branches in tooltip and sidebar components with FCC-specific details and orange visual treatment.
 
 ## Technical Details
 
-- **Ingestion**: Migrated from legacy `wireless2.fcc.gov` endpoints to modern `data.fcc.gov` APIs.
-- **Parser Tuning**: Specialized DMS (Degrees-Minutes-Seconds) coordinate translation to ensure sub-meter mapping precision for structured tower data.
-- **Rendering**: FCC towers utilize a Development Preview rendering mode with optimized Z-ordering and depth bias for Globe/3D views.
+- **MCP Wrappers**:
+	- `run-pyright.sh` and `run-tsserver.sh` now use deterministic repo-root resolution with explicit missing bridge binary guidance.
+	- `run-graph-it-live.sh` resolves extension entrypoints across local and remote VS Code host patterns.
+- **Frontend Mapping Path**:
+	- Tower pick events are normalized to point geometry and tower metadata payloads.
+	- Tactical map hover/selection logic preserves tower type and clears tower hovers correctly.
 
 ## Upgrade Instructions
 
-Rebuild and restart the infrastructure poller to apply the new scheduling and ingestion logic:
+Pull latest `dev` and rebuild/restart services as needed:
 
 ```bash
 git pull origin dev
-docker compose up -d --build infra-poller
+docker compose up -d --build frontend infra-poller
+```
+
+For MCP contributors, run:
+
+```bash
+./tools/mcp-language-server/check.sh
 ```

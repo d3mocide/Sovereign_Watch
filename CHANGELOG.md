@@ -1,3 +1,27 @@
+## [0.40.1] - 2026-03-20
+
+### Added
+
+- **MCP Readiness Health Check**: Added `tools/mcp-language-server/check.sh` to verify host prerequisites (`bash`, Node/npm, `typescript-language-server`, `pyright-langserver`), pinned bridge binary presence, and Graph-it-Live entrypoint discovery with explicit remediation steps.
+- **MCP Agent Efficiency Playbook**: Added `agent_docs/mcp-agent-playbook.md` with a token-efficient tool selection order (symbol tools first, file/dependency second, impact graph third, broad search last).
+
+### Changed
+
+- **MCP Runtime Wiring (Portability Pass)**:
+  - Standardized `.mcp.json` to wrapper-based startup for `graph-it-live`, `pyright`, and `tsserver`.
+  - Added `tools/mcp-language-server/run-graph-it-live.sh` for cross-host Graph-it-Live entrypoint resolution.
+  - Simplified `run-pyright.sh` and `run-tsserver.sh` to local pinned bridge execution with deterministic repo-root resolution and explicit missing-binary guidance.
+- **Verification Guidance Consolidation**:
+  - Added a shared Verification Decision Gate in `AGENTS.md` and `CLAUDE.md` clarifying host-first inner-loop checks versus Docker-required parity checks.
+  - Updated `Documentation/Development.md` MCP setup guidance to align with universal `bash` + wrapper workflow and readiness checks.
+
+### Fixed
+
+- **FCC Tower Interaction Semantics**:
+  - Corrected tower hover/click normalization so FCC towers are no longer treated as generic undersea infrastructure.
+  - Added dedicated tower tooltip/sidebar rendering paths with orange visual identity and FCC metadata (`fcc_id`, owner, tower type, status, height, elevation).
+  - Preserved existing undersea cable and outage behavior while clearing tower hovers correctly as infrastructure-derived entities.
+
 ## [0.40.0] - 2026-03-20
 
 ### Added
