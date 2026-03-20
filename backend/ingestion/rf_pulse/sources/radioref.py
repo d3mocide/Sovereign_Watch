@@ -125,8 +125,10 @@ class RadioReferenceSource:
                         continue
 
                 await self._fetch_and_publish()
-                # Update last-fetch timestamp in Redis
-                await self.redis_client.set("rf_pulse:radioref:last_fetch", str(time.time()))
+                await self.redis_client.set(
+                    "rf_pulse:radioref:last_fetch", str(time.time()),
+                    ex=int(self.interval_sec * 2),
+                )
                 
             except Exception:
                 logger.exception("RadioReference: unhandled fetch error")

@@ -3,9 +3,8 @@ ARD source adapter.
 """
 
 import asyncio
-import csv
-import io
 import logging
+import time
 
 import httpx
 
@@ -28,7 +27,25 @@ class ARDSource:
     async def loop(self):
         while True:
             try:
+                last_fetch = await self.redis_client.get("rf_pulse:ard:last_fetch")
+                now = time.time()
+                if last_fetch:
+                    elapsed = now - float(last_fetch)
+                    if elapsed < self.interval_sec:
+                        wait_sec = self.interval_sec - elapsed
+                        logger.info(
+                            "ARD: fetch cooldown active (%.1f/%.1f hours). "
+                            "Skipping for %.1f hours.",
+                            elapsed / 3600, self.interval_sec / 3600, wait_sec / 3600,
+                        )
+                        await asyncio.sleep(wait_sec)
+                        continue
+
                 await self._fetch_and_publish()
+                await self.redis_client.set(
+                    "rf_pulse:ard:last_fetch", str(time.time()),
+                    ex=int(self.interval_sec * 2),
+                )
             except Exception:
                 logger.exception("ARD fetch error")
             await asyncio.sleep(self.interval_sec)

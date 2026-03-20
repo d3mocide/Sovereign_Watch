@@ -12,7 +12,7 @@ import csv
 import io
 import psycopg2
 from psycopg2.extras import execute_values
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -24,6 +24,9 @@ DB_URL = os.getenv("DATABASE_URL", "postgresql://sovereign:watch@sovereign-db:54
 POLL_INTERVAL_CABLES_DAYS = 7
 POLL_INTERVAL_IODA_MINUTES = 30
 POLL_INTERVAL_FCC_DAYS = 7
+# UTC hour (0-23) at which the weekly FCC sync is allowed to start.
+# Defaults to 3 AM UTC to avoid contention with peak daytime track writes.
+POLL_FCC_START_HOUR = int(os.getenv("POLL_FCC_START_HOUR", "3"))
 # FCC migrated ASR bulk data from wireless2.fcc.gov -> data.fcc.gov.
 # r_tower.zip = active Registrations (~35 MB). a_tower.zip = full Application history (~195 MB).
 FCC_TOWERS_URL = "https://data.fcc.gov/download/pub/uls/complete/r_tower.zip"
@@ -377,11 +380,17 @@ def main():
             last_ioda_fetch = now
 
         if now - last_fcc_fetch > POLL_INTERVAL_FCC_DAYS * 86400:
-            fetch_and_ingest_fcc_towers()
-            last_fcc_fetch = now
-            redis_client.set("infra:last_fcc_fetch", str(now))
-
-        time.sleep(60)
+            current_hour = datetime.now(UTC).hour
+            if current_hour == POLL_FCC_START_HOUR:
+                fetch_and_ingest_fcc_towers()
+                last_fcc_fetch = now
+                redis_client.set("infra:last_fcc_fetch", str(now))
+            else:
+                logger.info(
+                    "FCC sync due but deferring to %02d:00 UTC (currently %02d:00 UTC) "
+                    "to avoid peak-hour disk contention.",
+                    POLL_FCC_START_HOUR, current_hour,
+                )
 
         time.sleep(60)
 
