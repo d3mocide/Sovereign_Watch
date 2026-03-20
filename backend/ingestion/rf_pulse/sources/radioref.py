@@ -50,7 +50,7 @@ RR_RADIUS_MI = int(os.getenv("RF_RR_RADIUS_MI", "200"))
 # Comma-separated RR state IDs to scan; defaults to Oregon (43) and Washington (56).
 _STATE_IDS: list[int] = [
     int(s.strip())
-    for s in os.getenv("RADIOREF_STATE_IDS", "43,56").split(",")
+    for s in os.getenv("RADIOREF_STATE_IDS", "41,53").split(",")
     if s.strip().isdigit()
 ]
 
@@ -88,6 +88,7 @@ class RadioReferenceSource:
             "username": self.username,
             "password": self.password,
             "version":  "latest",
+            "style":    "rpc",
         }
 
     # ------------------------------------------------------------------
@@ -104,9 +105,32 @@ class RadioReferenceSource:
 
         while True:
             try:
+                # Check for last-fetch timestamp in Redis to avoid over-fetching on restarts
+                last_fetch = await self.redis_client.get("rf_pulse:radioref:last_fetch")
+                now = asyncio.get_event_loop().time() # Using event loop time for consistency
+                # Wait, Redis uses real time, let's use time.time()
+                import time
+                now = time.time()
+
+                if last_fetch:
+                    elapsed = now - float(last_fetch)
+                    if elapsed < self.interval_sec:
+                        wait_sec = self.interval_sec - elapsed
+                        logger.info(
+                            "RadioReference: last fetch was %.1f hours ago. "
+                            "Cooldown active (interval: %.1f hours). Skipping for %.1f hours.",
+                            elapsed / 3600, self.interval_sec / 3600, wait_sec / 3600
+                        )
+                        await asyncio.sleep(wait_sec)
+                        continue
+
                 await self._fetch_and_publish()
+                # Update last-fetch timestamp in Redis
+                await self.redis_client.set("rf_pulse:radioref:last_fetch", str(time.time()))
+                
             except Exception:
                 logger.exception("RadioReference: unhandled fetch error")
+            
             await asyncio.sleep(self.interval_sec)
 
     # ------------------------------------------------------------------
@@ -119,115 +143,149 @@ class RadioReferenceSource:
             client=httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers),
             wsdl_client=httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
         )
-        client = zeep.AsyncClient(WSDL_URL, transport=transport)
+        settings = zeep.Settings(strict=False, xml_huge_tree=True)
+        client = zeep.AsyncClient(WSDL_URL, transport=transport, settings=settings)
 
-        try:
-            systems = await self._fetch_systems(client)
-        except zeep.exceptions.Fault as fault:
-            logger.warning("RadioReference: SOAP fault (%s)", fault.message)
-            return
-
-        published = 0
-        for sys in systems:
-            try:
-                lat = float(sys.lat or 0)
-                lon = float(sys.lon or 0)
-            except (TypeError, ValueError):
-                lat, lon = 0.0, 0.0
-
-            record = {
-                "source":       "radioref",
-                "site_id":      f"rr:sys:{sys.sid}",
-                "service":      "public_safety",
-                "name":         sys.sName,
-                "lat":          lat,
-                "lon":          lon,
-                "modes":        [sys.sType],
-                "status":       "Unknown",
-                "country":      "US",
-                "emcomm_flags": [],
-                "meta":         {"type": "trunked_system"},
-            }
-            await self.producer.send(self.topic, value=record)
-            published += 1
-
-        logger.info("RadioReference: published %d systems to %s", published, self.topic)
-
-    async def _fetch_systems(self, client: zeep.AsyncClient) -> list:
-        """Fetch trunked systems within the configured radius.
-
-        Call chain:
-          getCountyListByState(stid) → county list
-            getTrsList(cid)           → system stubs per county
-              getTrsDetails(sid)      → full system record with lat/lon
-        """
         auth = self._auth_info()
-        results: list = []
-        seen_sids: set = set()
+        published = 0
+        
+        # Mapping helpers
+        stype_mapping = {
+            1: "Motorola Type II", 2: "Motorola Type II", 3: "Motorola Type II",
+            5: "P25", 6: "P25", 8: "P25", 11: "EDACS", 12: "LTR", 13: "DMR", 14: "NXDN",
+        }
+        mode_mapping = {
+            "1": "FM", "2": "NFM", "3": "DMR", "4": "P25", "10": "P25 Phase 2", "11": "D-Star", "14": "YSF Fusion", "15": "NXDN",
+        }
 
         logger.info(
-            "RadioReference: scanning %d state(s) for trunked systems within %d mi of %.4f,%.4f",
+            "RadioReference: scanning %d state(s) for sites within %d mi of %.4f,%.4f",
             len(_STATE_IDS), RR_RADIUS_MI, CENTER_LAT, CENTER_LON,
         )
 
         for stid in _STATE_IDS:
             try:
-                counties = await client.service.getCountyListByState(
-                    stid=stid, authInfo=auth
-                )
-            except zeep.exceptions.Fault as exc:
-                logger.warning(
-                    "RadioReference: getCountyListByState fault for stid=%d: %s", stid, exc.message
-                )
+                state_info = await client.service.getStateInfo(stid=stid, authInfo=auth)
+            except zeep.exceptions.Fault:
                 continue
 
-            if not counties:
-                continue
+            # 1. Fetch Trunked Sites
+            seen_sys_ids = set()
+            stubs = []
+            if hasattr(state_info, "trsList") and state_info.trsList:
+                stubs.extend(state_info.trsList)
 
+            counties = state_info.countyList if hasattr(state_info, "countyList") else []
             for county in counties:
-                cid = county.cid
                 try:
-                    trs_list = await client.service.getTrsList(cid=cid, authInfo=auth)
+                    county_info = await client.service.getCountyInfo(ctid=county.ctid, authInfo=auth)
+                    if hasattr(county_info, "trsList") and county_info.trsList:
+                        stubs.extend(county_info.trsList)
+                    
+                    # 2. Fetch Conventional Frequencies from Categories
+                    if hasattr(county_info, "cats") and county_info.cats:
+                        for cat in county_info.cats:
+                            if not hasattr(cat, "subcats") or not cat.subcats:
+                                continue
+                            for sc in cat.subcats:
+                                # Skip if no location or too far
+                                try:
+                                    sc_lat = float(sc.lat or 0)
+                                    sc_lon = float(sc.lon or 0)
+                                except (TypeError, ValueError):
+                                    sc_lat, sc_lon = 0.0, 0.0
+                                
+                                if sc_lat != 0.0 or sc_lon != 0.0:
+                                    if _haversine_mi(CENTER_LAT, CENTER_LON, sc_lat, sc_lon) > RR_RADIUS_MI:
+                                        continue
+                                
+                                # Pull freqs in subcategory
+                                try:
+                                    freqs = await client.service.getSubcatFreqs(scid=sc.scid, authInfo=auth)
+                                    if not freqs:
+                                        continue
+                                    for f in freqs:
+                                        f_mode = mode_mapping.get(str(f.mode), "FM")
+                                        record = {
+                                            "source": "radioref",
+                                            "site_id": f"rr:conv:{f.fid}",
+                                            "service": "public_safety",
+                                            "name": f.descr or f.alpha,
+                                            "lat": sc_lat,
+                                            "lon": sc_lon,
+                                            "modes": [f_mode],
+                                            "output_freq": float(f.out) if f.out else None,
+                                            "input_freq": float(f.in_prop) if hasattr(f, "in_prop") and f.in_prop else None, # Zeep maps "in" to "in_prop"
+                                            "tone_ctcss": f.tone if f.tone and f.tone.replace(".", "").isdigit() else None,
+                                            "status": "Active",
+                                            "city": getattr(county_info, "ctName", None),
+                                            "state": state_info.stateName,
+                                            "country": "US",
+                                            "meta": {"type": "conventional", "cat": cat.cName, "subcat": sc.scName, "alpha": f.alpha},
+                                        }
+                                        await self.producer.send(self.topic, value=record)
+                                        published += 1
+                                except zeep.exceptions.Fault:
+                                    continue
                 except zeep.exceptions.Fault:
                     continue
 
-                if not trs_list:
-                    continue
-
-                for stub in trs_list:
-                    sid = stub.sid
-                    if sid in seen_sids:
+                # Fetch and publish Sites for each unique system stub
+                for stub in stubs:
+                    if stub.sid in seen_sys_ids:
                         continue
-                    seen_sids.add(sid)
-
+                    seen_sys_ids.add(stub.sid)
+                    
                     try:
-                        details = await client.service.getTrsDetails(sid=sid, authInfo=auth)
-                    except zeep.exceptions.Fault as exc:
-                        logger.debug(
-                            "RadioReference: getTrsDetails fault sid=%s: %s", sid, exc.message
-                        )
-                        continue
-
-                    # Filter by radius using system lat/lon when available.
-                    try:
-                        sys_lat = float(details.lat or 0)
-                        sys_lon = float(details.lon or 0)
-                    except (TypeError, ValueError):
-                        sys_lat, sys_lon = 0.0, 0.0
-
-                    if sys_lat != 0.0 or sys_lon != 0.0:
-                        dist = _haversine_mi(CENTER_LAT, CENTER_LON, sys_lat, sys_lon)
-                        if dist > RR_RADIUS_MI:
-                            logger.debug(
-                                "RadioReference: skipping %s (%.0f mi from center)",
-                                details.sName, dist,
-                            )
+                        # Fetch sites for the system to get precise locations and freqs
+                        sites = await client.service.getTrsSites(sid=stub.sid, authInfo=auth)
+                        if not sites:
                             continue
+                            
+                        sys_mode = stype_mapping.get(stub.sType, "P25")
+                        
+                        for site in sites:
+                            try:
+                                s_lat = float(site.lat or 0)
+                                s_lon = float(site.lon or 0)
+                            except (TypeError, ValueError):
+                                s_lat, s_lon = 0.0, 0.0
+                                
+                            if s_lat != 0.0 or s_lon != 0.0:
+                                if _haversine_mi(CENTER_LAT, CENTER_LON, s_lat, s_lon) > RR_RADIUS_MI:
+                                    continue
+                            
+                            # Use first frequency if available
+                            primary_freq = None
+                            if hasattr(site, "siteFreqs") and site.siteFreqs:
+                                for f in site.siteFreqs:
+                                    if f.freq:
+                                        primary_freq = float(f.freq)
+                                        break
+                                        
+                            record = {
+                                "source": "radioref",
+                                "site_id": f"rr:site:{site.siteId}",
+                                "service": "public_safety",
+                                "name": f"{stub.sName}: {site.siteDescr}",
+                                "lat": s_lat,
+                                "lon": s_lon,
+                                "modes": [sys_mode],
+                                "output_freq": primary_freq,
+                                "status": "Active",
+                                "city": site.siteLocation or stub.sCity,
+                                "state": state_info.stateName,
+                                "country": "US",
+                                "meta": {
+                                    "type": "trunked_site", 
+                                    "system_name": stub.sName, 
+                                    "system_id": stub.sid,
+                                    "site_id": site.siteId
+                                },
+                            }
+                            await self.producer.send(self.topic, value=record)
+                            published += 1
+                    except zeep.exceptions.Fault:
+                        continue
 
-                    results.append(details)
-
-        logger.info(
-            "RadioReference: fetched %d trunked systems across %d state(s)",
-            len(results), len(_STATE_IDS),
-        )
-        return results
+        logger.info("RadioReference: published %d sites/frequencies to %s", published, self.topic)

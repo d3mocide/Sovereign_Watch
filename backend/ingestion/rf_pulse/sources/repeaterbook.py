@@ -28,7 +28,24 @@ class RepeaterBookSource:
     async def loop(self):
         while True:
             try:
+                # Cooldown check
+                last_fetch = await self.redis_client.get("rf_pulse:repeaterbook:last_fetch")
+                import time
+                now = time.time()
+                if last_fetch:
+                    elapsed = now - float(last_fetch)
+                    if elapsed < self.interval_sec:
+                        wait_sec = self.interval_sec - elapsed
+                        logger.info(
+                            "RepeaterBook: fetch cooldown active (%.1f/%.1f hours). Skipping for %.1f hours.",
+                            elapsed / 3600, self.interval_sec / 3600, wait_sec / 3600
+                        )
+                        await asyncio.sleep(wait_sec)
+                        continue
+
                 await self._fetch_and_publish()
+                await self.redis_client.set("rf_pulse:repeaterbook:last_fetch", str(time.time()))
+
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:
                     logger.warning(

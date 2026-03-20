@@ -32,7 +32,7 @@ export function useRFSites(
     const servicesStr = services && services.length > 0 ? services.sort().join(",") : "all";
     const emcommStr = emcomm_only ? "true" : "false";
 
-    const CACHE_KEY = `rf_sites_cache_v3_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}_${radiusNm}_${servicesStr}_${modeStr}_${emcommStr}`;
+    const CACHE_KEY = `rf_sites_cache_v4_${missionLat.toFixed(2)}_${missionLon.toFixed(2)}_${radiusNm}_${servicesStr}_${modeStr}_${emcommStr}`;
     const CACHE_TS_KEY = `${CACHE_KEY}_ts`;
     const CACHE_TTL = 3600 * 1000; // 1 hour
 

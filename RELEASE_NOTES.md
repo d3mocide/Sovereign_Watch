@@ -1,18 +1,22 @@
-# Release - v0.39.1 - RadioReference Poller Fix
+# Release - v0.39.2 - Spectral Precision
 
-This patch release addresses a critical startup crash in the `rf_pulse` infrastructure poller that occurred when RadioReference credentials were provided.
+## Summary
+This update significantly enhances the **RadioReference** ingestion engine, moving from system-level centroids to individual tower sites and conventional regional frequencies. This shift provide operators with much higher spatial accuracy and detailed technical intelligence for public safety and regional radio infrastructure.
 
 ## Key Features
-- **Poller Stability**: The `rf_pulse` microservice now correctly connects to the v9 RadioReference SOAP API and successfully handles User-Agent requirements over CloudFront.
+- **Tower-Level Accuracy**: Instead of showing one dot per radio system, we now map every physical site (tower) individually.
+- **Frequency Intelligence**: Direct display of input/output frequencies, CTCSS tones, and advanced digital modes (P25, DMR, NXDN) in the UI.
+- **Regional Coverage**: Added deep traversal of State -> County subcategories to fetch regional conventional frequencies.
+- **API Protection**: Persistent Redis-backed cooldown mechanism to prevent unnecessary API consumption during development or container restarts.
 
 ## Technical Details
-- Injected `User-Agent` headers deep into the `zeep` WSDL fetcher to bypass 403 Forbidden errors.
-- Updated `radioref.py` to use modern credential-passing standards instead of the deprecated `getAuthToken` handshake.
-- Stubbed out unsupported trunked system queries to prevent the service from crashing on load.
+- **Sync Strategy**: Fetch interval now defaults to **168 hours (7 days)**, configurable via `RF_RADIOREF_INTERVAL_H`.
+- **Cache Management**: LocalStorage cache version bumped to `v4`.
 
 ## Upgrade Instructions
+Run the following commands to pull the latest changes and apply the poller updates:
+
 ```bash
 git pull origin dev
-docker compose build rf-pulse
-docker compose up -d
+docker compose up -d --build rf-pulse
 ```

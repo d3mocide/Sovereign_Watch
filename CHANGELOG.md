@@ -1,3 +1,13 @@
+## [0.39.2] - 2026-03-20
+
+### Fixed
+
+- **RadioReference Data Fidelity**: Significant enhancement to the RadioReference ingestion pipeline, transitioning from coarse "Trunked System" centroids to precise "Trunked Site" tower locations and Conventional Frequencies.
+  - **High-Resolution Mapping**: Fetches individual tower sites (`getTrsSites`) for all regional systems, increasing data density from ~130 systems to over 1,300 unique site/frequency assets in the Pacific Northwest.
+  - **Metadata Enrichment**: Automated extraction of City, State, Output/Input Frequencies, and advanced digital Mode mapping (P25, DMR, etc.) for display in tooltips and sidebar.
+  - **RepeaterBook & RadioRef Cooldown**: Implemented a Redis-backed fetch cooldown that persists across service restarts, reducing API key consumption by enforcing a configurable 1-week (168 hour) sync interval.
+  - **Frontend Sync**: Bumped infrastructure cache version to force an immediate refresh of stale site data in the browser.
+
 ## [0.39.1] - 2026-03-19
 
 ### Fixed

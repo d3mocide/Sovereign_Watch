@@ -28,6 +28,7 @@ TOPIC_OUT     = "rf_raw"
 REPEATERBOOK_INTERVAL_H = int(os.getenv("RF_REPEATERBOOK_INTERVAL_H", "6"))
 ARD_INTERVAL_H          = int(os.getenv("RF_ARD_INTERVAL_H", "24"))
 NOAA_INTERVAL_H         = int(os.getenv("RF_NOAA_INTERVAL_H", "168"))
+RADIOREF_INTERVAL_H     = int(os.getenv("RF_RADIOREF_INTERVAL_H", "168"))
 
 RB_TOKEN = os.getenv("REPEATERBOOK_API_TOKEN", "")
 RR_KEY   = os.getenv("RADIOREF_APP_KEY", "")
@@ -89,7 +90,7 @@ class RFPulseService:
                     producer=self.producer,
                     redis_client=self.redis_client,
                     topic=TOPIC_OUT,
-                    fetch_interval_h=24,
+                    fetch_interval_h=RADIOREF_INTERVAL_H,
                 )
             )
         else:
