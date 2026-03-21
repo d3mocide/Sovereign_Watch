@@ -188,7 +188,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
 
   return [
     ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
-    ...getTerminatorLayer(!!filters?.showTerminator),
+    getTerminatorLayer(!!filters?.showTerminator),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
     ...infraLayers,

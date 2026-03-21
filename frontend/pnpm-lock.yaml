@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@deck.gl/aggregation-layers':
-        specifier: 9.2.11
-        version: 9.2.11(@deck.gl/core@9.2.11)(@deck.gl/layers@9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/core':
         specifier: 9.2.11
         version: 9.2.11
@@ -206,14 +203,6 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
-
-  '@deck.gl/aggregation-layers@9.2.11':
-    resolution: {integrity: sha512-MRFbBHtMcDkOthxXnMPm6nF08DjFDACaIQsJSyHkdWtLUTSLHsWnOTn/8QbB4ka86WyNyfJy3dibLu/m3ei2ow==}
-    peerDependencies:
-      '@deck.gl/core': ~9.2.0
-      '@deck.gl/layers': ~9.2.0
-      '@luma.gl/core': ~9.2.6
-      '@luma.gl/engine': ~9.2.6
 
   '@deck.gl/core@9.2.11':
     resolution: {integrity: sha512-lpdxXQuFSkd6ET7M6QxPI8QMhsLRY6vzLyk83sPGFb7JSb4OhrNHYt9sfIhcA/hxJW7bdBSMWWphf2GvQetVuA==}
@@ -1367,9 +1356,6 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
-
-  d3-hexbin@0.2.2:
-    resolution: {integrity: sha512-KS3fUT2ReD4RlGCjvCEm1RgMtp2NFZumdMu4DBzQK8AZv3fXRM6Xm8I4fSU07UXvH4xxg03NwWKWdvxfS/yc4w==}
 
   data-view-buffer@1.0.2:
     resolution: {integrity: sha512-EmKO5V3OLXh1rtK2wgXRansaK1/mtVdTUEiEI0W8RkvgT05kfxaH29PliLnpLP73yYO6142Q72QNa8Wx/A5CqQ==}
@@ -2894,18 +2880,6 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
-  '@deck.gl/aggregation-layers@9.2.11(@deck.gl/core@9.2.11)(@deck.gl/layers@9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))':
-    dependencies:
-      '@deck.gl/core': 9.2.11
-      '@deck.gl/layers': 9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
-      '@luma.gl/constants': 9.2.6
-      '@luma.gl/core': 9.2.6
-      '@luma.gl/engine': 9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
-      '@luma.gl/shadertools': 9.2.6(@luma.gl/core@9.2.6)
-      '@math.gl/core': 4.1.0
-      '@math.gl/web-mercator': 4.1.0
-      d3-hexbin: 0.2.2
-
   '@deck.gl/core@9.2.11':
     dependencies:
       '@loaders.gl/core': 4.3.4
@@ -4120,8 +4094,6 @@ snapshots:
   csscolorparser@1.0.3: {}
 
   csstype@3.2.3: {}
-
-  d3-hexbin@0.2.2: {}
 
   data-view-buffer@1.0.2:
     dependencies:

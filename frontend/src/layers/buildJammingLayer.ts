@@ -68,8 +68,7 @@ export function buildJammingLayer(
       radiusUnits: "meters",
       getFillColor: [0, 0, 0, 0],
       getLineColor: (d: JammingZone) => {
-        // sin(π·pulse) gives a smooth symmetric in-out envelope (no pop at cycle reset)
-        const alpha = Math.round(180 * Math.sin(Math.PI * pulse));
+        const alpha = Math.round(180 * (1 - Math.pow(pulse, 2)));
         return zoneColor(d, alpha);
       },
       getLineWidth: 2000,

@@ -169,7 +169,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
 
     overlayRef.current.setProps({
       layers: [
-        ...getTerminatorLayer(!!showTerminator),
+        getTerminatorLayer(!!showTerminator),
         ...buildAuroraLayer(auroraData, true, true, now),
         ...infra,
         ...missionLayers,

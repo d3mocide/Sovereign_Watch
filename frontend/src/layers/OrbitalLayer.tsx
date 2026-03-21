@@ -240,30 +240,6 @@ export function getOrbitalLayers({ satellites, selectedEntity, hoveredEntity, no
         ] : []),
 
         // 4. Satellite Markers
-        // Mercator-only: soft bloom halo behind each satellite icon.
-        // Additive blending makes brighter category colours read as a glow;
-        // radius scales with altitude so GEO sats bloom more than LEO.
-        ...(projectionMode !== 'globe' ? [new ScatterplotLayer({
-            id: `satellite-bloom${sfx}`,
-            data: satellites,
-            getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
-            getRadius: (d: CoTEntity) => {
-                const altKm = (d.altitude || 500) / 1000;
-                // LEO ~500 km → 8 px  |  MEO ~20 000 km → 18 px  |  GEO ~36 000 km → 26 px (capped)
-                return Math.min(8 + altKm / 1750, 26);
-            },
-            radiusUnits: 'pixels',
-            getFillColor: (d: CoTEntity) => getSatColor(d.detail?.category as string, 30),
-            pickable: false,
-            wrapLongitude: true,
-            parameters: {
-                depthTest: true,
-                depthBias: 5.0,
-                blend: true,
-                blendFunc: [770, 1], // SRC_ALPHA, ONE — additive glow
-            },
-        })] : []),
-
         ...(projectionMode === 'globe' ? [
             new SolidPolygonLayer({
                 id: `satellite-markers-globe${sfx}`,
