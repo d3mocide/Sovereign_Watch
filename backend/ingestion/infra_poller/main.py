@@ -29,6 +29,7 @@ POLL_INTERVAL_FCC_DAYS = 7
 POLL_FCC_START_HOUR = int(os.getenv("POLL_FCC_START_HOUR", "3"))
 # FCC migrated ASR bulk data from wireless2.fcc.gov -> data.fcc.gov.
 # r_tower.zip = active Registrations (~35 MB). a_tower.zip = full Application history (~195 MB).
+# Standard r_tower layout docs: https://data.fcc.gov/download/pub/uls/complete/r_tower.zip_README.txt
 FCC_TOWERS_URL = "https://data.fcc.gov/download/pub/uls/complete/r_tower.zip"
 
 # IODA
@@ -244,36 +245,36 @@ def fetch_and_ingest_fcc_towers():
             names = z.namelist()
 
             # --- EN.dat: entity / owner name ---
-            # col[2]=fcc_id  col[9]=entity_name (registered owner)
-            owner_by_id = {}
+            # col[1]=usi  col[2]=fcc_id  col[9]=entity_name (registered owner)
+            owner_by_usi = {}
             if 'EN.dat' in names:
                 logger.info("Parsing EN.dat for owner names...")
                 with z.open('EN.dat') as f:
                     content = f.read().decode('latin1')
                 for row in csv.reader(io.StringIO(content), delimiter='|'):
                     if len(row) > 9 and row[0] == 'EN':
-                        fid = row[2].strip()
+                        usi = row[1].strip()
                         name = row[9].strip()
-                        if fid and name:
-                            owner_by_id[fid] = name
-                logger.info("Loaded %d owner records from EN.dat", len(owner_by_id))
+                        if usi and name:
+                            owner_by_usi[usi] = name
+                logger.info("Loaded %d owner records from EN.dat", len(owner_by_usi))
 
             # --- RA.dat: registration / structure dimensions ---
-            # col[2]=fcc_id  col[28]=ground_elevation_m (AMSL)  col[30]=height_above_ground_m
-            ra_by_id = {}
+            # col[1]=usi  col[2]=fcc_id  col[28]=ground_elevation_m (AMSL)  col[30]=height_above_ground_m
+            ra_by_usi = {}
             if 'RA.dat' in names:
                 logger.info("Parsing RA.dat for height/elevation...")
                 with z.open('RA.dat') as f:
                     content = f.read().decode('latin1')
                 for row in csv.reader(io.StringIO(content), delimiter='|'):
                     if len(row) > 30 and row[0] == 'RA':
-                        fid = row[2].strip()
-                        if fid and fid not in ra_by_id:  # keep first (most recent) record
-                            ra_by_id[fid] = (
+                        usi = row[1].strip()
+                        if usi and usi not in ra_by_usi:  # keep first (most recent) record
+                            ra_by_usi[usi] = (
                                 _parse_float(row[28]),  # ground elevation AMSL (m)
                                 _parse_float(row[30]),  # structure height above ground (m)
                             )
-                logger.info("Loaded %d structure records from RA.dat", len(ra_by_id))
+                logger.info("Loaded %d structure records from RA.dat", len(ra_by_usi))
 
             # --- CO.dat: coordinates ---
             if 'CO.dat' not in names:
@@ -300,8 +301,9 @@ def fetch_and_ingest_fcc_towers():
                     if row[5].strip() not in ('T', ''):
                         continue
 
+                    usi = row[1].strip()
                     fcc_id = row[2].strip()
-                    if not fcc_id:
+                    if not usi or not fcc_id:
                         continue
 
                     lat = dms_to_decimal(row[6], row[7], row[8], row[9])
@@ -313,14 +315,14 @@ def fetch_and_ingest_fcc_towers():
                     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
                         continue
 
-                    elev_m, height_m = ra_by_id.get(fcc_id, (None, None))
+                    elev_m, height_m = ra_by_usi.get(usi, (None, None))
                     records.append((
                         fcc_id,
                         lat,
                         lon,
                         elev_m,
                         height_m,
-                        owner_by_id.get(fcc_id),
+                        owner_by_usi.get(usi),
                     ))
 
         if not records:
@@ -427,7 +429,8 @@ def main():
 
         if now - last_fcc_fetch > POLL_INTERVAL_FCC_DAYS * 86400:
             current_hour = datetime.now(UTC).hour
-            if current_hour == POLL_FCC_START_HOUR:
+            # Start sync if it's the right hour, OR if hour gating is disabled (-1)
+            if POLL_FCC_START_HOUR == -1 or current_hour == POLL_FCC_START_HOUR:
                 fetch_and_ingest_fcc_towers()
                 last_fcc_fetch = now
                 redis_client.set("infra:last_fcc_fetch", str(now))

@@ -199,6 +199,41 @@ MY_GRID=FM18
 POSTGRES_PASSWORD=change-me-in-production
 ```
 
+
+---
+
+## Forcing Data Refreshes
+
+High-latency infrastructure (FCC Towers, Submarine Cables, RadioReference) uses Redis caching to prevent redundant daily downloads. By default, these sync on a **7-day interval**.
+
+### Use -1 to Bypass Start-Hour Gating
+On a first-time setup, some services wait until a specific UTC hour (e.g., 3:00 AM) to avoid contention. You can force these to run **immediately on boot** by setting their start hour to `-1` in your `.env`:
+
+| Feature | Variable | Force-Sync Value |
+| :--- | :--- | :--- |
+| **FCC Towers** | `POLL_FCC_START_HOUR` | `-1` |
+| **Satellite TLEs** | `ORBITAL_TLE_FETCH_HOUR` | `-1` |
+| **RadioReference** | `RF_RR_FETCH_HOUR` | `-1` |
+
+### Manual Force-Sync via Redis
+If a service has already run and you want to force it to run again before the 7-day cooldown expires, you must clear its timestamp from Redis using the following commands:
+
+```bash
+# Force FCC Towers refetch
+docker exec -it sovereign-redis redis-cli DEL infra:last_fcc_fetch
+
+# Force RadioReference refetch
+docker exec -it sovereign-redis redis-cli DEL rf_pulse:last_radioref_fetch
+
+# Force Submarine Cables refetch
+docker exec -it sovereign-redis redis-cli DEL infra:last_cables_fetch
+
+# Force Satellite TLE refetch
+docker exec -it sovereign-redis redis-cli DEL orbital:last_tle_fetch
+```
+
+After clearing the key, restart the corresponding container to trigger the sync.
+
 ---
 
 ## Related

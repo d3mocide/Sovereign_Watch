@@ -1,3 +1,21 @@
+## [0.41.0] - 2026-03-20
+
+### Added
+
+- **AI Analyst Infrastructure Fallbacks**: Enabled analysis for satellites, towers, RF sites, and cables without track data by synthesizing a single-waypoint history from their static locations.
+- **FCC High-Fidelity Data Enrichment**: Integrated three separate FCC datasets to populate previously missing `owner`, `height`, and `ground elevation` fields for over 195,000 antenna structures.
+- **Immediate Sync support**: Added support for `POLL_FCC_START_HOUR=-1` to trigger immediate data refreshes during deployment or configuration.
+
+### Changed
+
+- **Docker Stack Harmonization**: Standardized all Docker service, container, network, and volume names with a persistent `sovereign-` prefix for simplified CLI management and resource tracking.
+- **Frontend pnpm Standardization**: Formally adopted `pnpm` as the sole package manager for the React HUD, removing redundant `package-lock.json` files and improving build parity.
+- **Environment Template Synchronization**: Updated `.env.example` to include missing variables for PostgreSQL database names and poll-timing for all ingestion services.
+
+### Fixed
+
+- **FCC Identity Persistence**: Switched the `infra_poller` join logic to use the Unique System Identifier (USI), resolving registration mapping inconsistencies across the FCC ASR schema.
+
 ## [0.40.1] - 2026-03-20
 
 ### Added

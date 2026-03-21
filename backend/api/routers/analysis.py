@@ -107,37 +107,121 @@ async def analyze_track(
         logger.error(f"Analysis track query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    # 1.1 SATELLITE FALLBACK
-    if (not track_summary or track_summary['points'] == 0) and uid.startswith("SAT-"):
-        norad_id = uid.replace("SAT-", "")
-        async with db.pool.acquire() as conn:
-            sat_row = await conn.fetchrow("SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1", norad_id)
-        if sat_row and sat_row['tle_line1'] and sat_row['tle_line2']:
+    # 1.1 FALLBACKS: SATELLITES, TOWERS, RF SITES, INFRA
+    if (not track_summary or track_summary['points'] == 0):
+        # 1.1.1 SATELLITE FALLBACK
+        if uid.startswith("SAT-"):
+            norad_id = uid.replace("SAT-", "")
+            async with db.pool.acquire() as conn:
+                sat_row = await conn.fetchrow("SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1", norad_id)
+            if sat_row and sat_row['tle_line1'] and sat_row['tle_line2']:
+                try:
+                    satrec = Satrec.twoline2rv(sat_row['tle_line1'], sat_row['tle_line2'])
+                    now = datetime.now(timezone.utc)
+                    points = []
+                    for i in range(10):
+                        t = now - timedelta(hours=req.lookback_hours*(i/10))
+                        jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second + t.microsecond/1e6)
+                        e, r, v = satrec.sgp4(jd, fr)
+                        if e == 0:
+                            r_ecef = teme_to_ecef(np.array(r), jd, fr)
+                            lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                            points.append({"lat": lat[0], "lon": lon[0], "alt": alt[0]*1000, "speed": np.linalg.norm(r)*1000, "time": t.isoformat()})
+                    if points:
+                        track_summary = {
+                            'start_time': points[-1]['time'], 'last_seen': points[0]['time'], 'points': len(points),
+                            'avg_speed': sum(p['speed'] for p in points)/len(points), 'min_speed': min(p['speed'] for p in points), 'max_speed': max(p['speed'] for p in points),
+                            'avg_alt': sum(p['alt'] for p in points)/len(points), 'min_alt': min(p['alt'] for p in points), 'max_alt': max(p['alt'] for p in points),
+                            'centroid_geom': f"SRID=4326;POINT({points[0]['lon']} {points[0]['lat']})",
+                            'type': 'a-s-K', 'waypoint_history': points,
+                            'meta': {'callsign': sat_row['name'], 'classification': {'category': sat_row['category'], 'constellation': sat_row['constellation']}}
+                        }
+                except Exception as e: logger.warning(f"Satellite fallback synthesis failed: {e}")
+
+        # 1.1.2 TOWER FALLBACK (PostgreSQL)
+        if (not track_summary or track_summary['points'] == 0):
             try:
-                satrec = Satrec.twoline2rv(sat_row['tle_line1'], sat_row['tle_line2'])
-                now = datetime.now(timezone.utc)
-                points = []
-                for i in range(10):
-                    t = now - timedelta(hours=req.lookback_hours*(i/10))
-                    jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second + t.microsecond/1e6)
-                    e, r, v = satrec.sgp4(jd, fr)
-                    if e == 0:
-                        r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                        lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
-                        points.append({"lat": lat[0], "lon": lon[0], "alt": alt[0]*1000, "speed": np.linalg.norm(r)*1000, "time": t.isoformat()})
-                if points:
+                tower = await db.pool.fetchrow("SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1", uid)
+                if tower:
                     track_summary = {
-                        'start_time': points[-1]['time'], 'last_seen': points[0]['time'], 'points': len(points),
-                        'avg_speed': sum(p['speed'] for p in points)/len(points), 'min_speed': min(p['speed'] for p in points), 'max_speed': max(p['speed'] for p in points),
-                        'avg_alt': sum(p['alt'] for p in points)/len(points), 'min_alt': min(p['alt'] for p in points), 'max_alt': max(p['alt'] for p in points),
-                        'centroid_geom': f"SRID=4326;POINT({points[0]['lon']} {points[0]['lat']})",
-                        'type': 'a-s-K', 'waypoint_history': points,
-                        'meta': {'callsign': sat_row['name'], 'classification': {'category': sat_row['category'], 'constellation': sat_row['constellation']}}
+                        'start_time': tower['updated_at'], 'last_seen': tower['updated_at'], 'points': 1,
+                        'avg_speed': 0, 'min_speed': 0, 'max_speed': 0,
+                        'avg_alt': tower['elevation_m'] or 0, 'min_alt': tower['elevation_m'] or 0, 'max_alt': tower['elevation_m'] or 0,
+                        'centroid_geom': tower['geom'],
+                        'type': 'u-G-T', # Unknown-Ground-Tower
+                        'meta': {
+                            'callsign': f"FCC TOWER: {tower['fcc_id']}",
+                            'owner': tower['owner'],
+                            'status': tower['status'],
+                            'height_m': tower['height_m'],
+                            'elevation_m': tower['elevation_m']
+                        },
+                        'waypoint_history': [{'lat': tower['lat'], 'lon': tower['lon'], 'alt': tower['elevation_m'] or 0, 'time': tower['updated_at'].isoformat()}]
                     }
-            except Exception as e: logger.warning(f"Fallback synthesis failed: {e}")
+            except Exception as e: logger.warning(f"Tower fallback failed: {e}")
+
+        # 1.1.3 RF SITE FALLBACK (PostgreSQL)
+        if (not track_summary or track_summary['points'] == 0):
+            try:
+                site = await db.pool.fetchrow("SELECT * FROM rf_sites WHERE id::text = $1 OR site_id = $1", uid)
+                if site:
+                    track_summary = {
+                        'start_time': site['updated_at'], 'last_seen': site['updated_at'], 'points': 1,
+                        'avg_speed': 0, 'min_speed': 0, 'max_speed': 0,
+                        'avg_alt': 0, 'min_alt': 0, 'max_alt': 0,
+                        'centroid_geom': site['geom'],
+                        'type': 'u-G-R', # Unknown-Ground-Radio
+                        'meta': {
+                            'callsign': site['callsign'] or site['name'],
+                            'source': site['source'],
+                            'service': site['service'],
+                            'modes': site['modes']
+                        },
+                        'waypoint_history': [{'lat': site['lat'], 'lon': site['lon'], 'alt': 0, 'time': site['updated_at'].isoformat()}]
+                    }
+            except Exception as e: logger.warning(f"RF Site fallback failed: {e}")
+
+        # 1.1.4 CABLE / STATIC INFRA FALLBACK (Redis)
+        if (not track_summary or track_summary['points'] == 0) and db.redis_client:
+            try:
+                for key in ["infra:cables", "infra:stations", "infra:outages"]:
+                    raw = await db.redis_client.get(key)
+                    if not raw: continue
+                    data = json.loads(raw)
+                    features = data.get('features', [])
+                    for f in features:
+                        if str(f.get('id')) == uid or str(f.get('properties', {}).get('id')) == uid:
+                            props = f.get('properties', {})
+                            geom = f.get('geometry', {})
+                            coords = geom.get('coordinates', [0, 0])
+                            
+                            # Flatten coordinates (simplified for Analyst context)
+                            if isinstance(coords[0], list) and not isinstance(coords[0][0], (int, float)):
+                                lon, lat = coords[0][0][:2]
+                            elif isinstance(coords[0], list):
+                                lon, lat = coords[0][:2]
+                            else:
+                                lon, lat = coords[:2]
+                                
+                            track_summary = {
+                                'start_time': datetime.now(timezone.utc), 'last_seen': datetime.now(timezone.utc), 'points': 1,
+                                'avg_speed': 0, 'min_speed': 0, 'max_speed': 0,
+                                'avg_alt': 0, 'min_alt': 0, 'max_alt': 0,
+                                'centroid_geom': f"SRID=4326;POINT({lon} {lat})",
+                                'type': 'u-G-I', # Unknown-Ground-Infrastructure
+                                'meta': {
+                                    'callsign': props.get('name') or props.get('region') or uid,
+                                    'entity_type': props.get('entity_type', 'infrastructure'),
+                                    'details': props
+                                },
+                                'waypoint_history': [{'lat': lat, 'lon': lon, 'alt': 0, 'time': datetime.now(timezone.utc).isoformat()}]
+                            }
+                            break
+                    if track_summary: break
+            except Exception as e: logger.warning(f"Redis infra fallback failed: {e}")
 
     if not track_summary or track_summary['points'] == 0:
-        async def err(): yield {"event": "error", "data": "No track data found"}
+        async def err(): yield {"event": "error", "data": "No track history or infrastructure metadata found for this entity."}
         return EventSourceResponse(err())
 
     # 1.5 Multi-Domain Fusion

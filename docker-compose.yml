@@ -1,20 +1,20 @@
 networks:
-  frontend-net:
+  sovereign-net-frontend:
     driver: bridge
-  backend-net:
+  sovereign-net-backend:
     driver: bridge
-  ai-net:
+  sovereign-net-ai:
     driver: bridge
 
 volumes:
-  redpanda-data:
-  postgres-data:
-  redis-data:
-    # LiteLLM cache not strictly needed if in-memory default, but good for persistence if config'd
+  sovereign-vol-redpanda:
+  sovereign-vol-postgres:
+  sovereign-vol-redis:
+  sovereign-vol-frontend-node-modules:
 
 services:
   # --- Ingestion & Streaming ---
-  redpanda:
+  sovereign-redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: sovereign-redpanda
     command:
@@ -33,9 +33,9 @@ services:
       - --advertise-pandaproxy-addr internal://sovereign-redpanda:8082,external://localhost:28082
       - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
     volumes:
-      - redpanda-data:/var/lib/redpanda/data
+      - sovereign-vol-redpanda:/var/lib/redpanda/data
     networks:
-      - backend-net
+      - sovereign-net-backend
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health" ]
       interval: 10s
@@ -43,7 +43,7 @@ services:
       retries: 5
 
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
-  ais-poller:
+  sovereign-ais-poller:
     build:
       context: ./backend/ingestion/maritime_poller
       dockerfile: Dockerfile
@@ -58,16 +58,16 @@ services:
       - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
       - ARBITRATION_CLEANUP_INTERVAL=${ARBITRATION_CLEANUP_INTERVAL:-30}
     networks:
-      - backend-net
+      - sovereign-net-backend
     depends_on:
-      redpanda:
+      sovereign-redpanda:
         condition: service_healthy
-      redis:
+      sovereign-redis:
         condition: service_started
     restart: unless-stopped
 
   # --- Ingestion: Aviation ADS-B (via Python Poller) ---
-  adsb-poller:
+  sovereign-adsb-poller:
     build:
       context: ./backend/ingestion/aviation_poller
       dockerfile: Dockerfile
@@ -88,16 +88,16 @@ services:
       - OPENSKY_WATCHLIST_TTL_DAYS=${OPENSKY_WATCHLIST_TTL_DAYS:-7}
       - OPENSKY_WATCHLIST_BATCH_SIZE=${OPENSKY_WATCHLIST_BATCH_SIZE:-100}
     networks:
-      - backend-net
+      - sovereign-net-backend
     depends_on:
-      redpanda:
+      sovereign-redpanda:
         condition: service_healthy
-      redis:
+      sovereign-redis:
         condition: service_started
     restart: unless-stopped
 
   # --- Ingestion: Space TLE (via Python Poller) ---
-  orbital-pulse:
+  sovereign-orbital-pulse:
     build:
       context: ./backend/ingestion/orbital_pulse
       dockerfile: Dockerfile
@@ -110,14 +110,14 @@ services:
       # Set to -1 to disable hour gating and fetch immediately when interval elapses.
       - ORBITAL_TLE_FETCH_HOUR=${ORBITAL_TLE_FETCH_HOUR:-2}
     networks:
-      - backend-net
+      - sovereign-net-backend
     depends_on:
-      redpanda:
+      sovereign-redpanda:
         condition: service_healthy
     restart: unless-stopped
 
   # --- Ingestion: Infrastructure (Cables, Outages, Datacenters, FCC Towers) ---
-  infra-poller:
+  sovereign-infra-poller:
     build:
       context: ./backend/ingestion/infra_poller
       dockerfile: Dockerfile
@@ -128,16 +128,16 @@ services:
       # UTC hour (0-23) at which the weekly FCC tower sync is allowed to run.
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
     networks:
-      - backend-net
+      - sovereign-net-backend
     depends_on:
-      redis:
+      sovereign-redis:
         condition: service_started
-      timescaledb:
+      sovereign-timescaledb:
         condition: service_healthy
     restart: unless-stopped
 
   # --- Ingestion: RF Infrastructure (Repeaters, NOAA NWR, Public Safety) ---
-  rf-pulse:
+  sovereign-rf-pulse:
     build:
       context: ./backend/ingestion/rf_pulse
       dockerfile: Dockerfile
@@ -162,42 +162,42 @@ services:
       # Set to -1 to disable (fetch immediately when interval elapses).
       - RF_RR_FETCH_HOUR=${RF_RR_FETCH_HOUR:-4}
     networks:
-      - backend-net
+      - sovereign-net-backend
     depends_on:
-      redpanda:
+      sovereign-redpanda:
         condition: service_healthy
-      redis:
+      sovereign-redis:
         condition: service_started
     restart: unless-stopped
 
   # --- Persistence ---
-  timescaledb:
+  sovereign-timescaledb:
     image: timescale/timescaledb-ha:pg16
     container_name: sovereign-timescaledb
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: sovereign_watch
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
     volumes:
-      - postgres-data:/home/postgres/pgdata/data
+      - sovereign-vol-postgres:/home/postgres/pgdata/data
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - backend-net
-      - ai-net
+      - sovereign-net-backend
+      - sovereign-net-ai
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  redis:
+  sovereign-redis:
     image: redis:alpine
     container_name: sovereign-redis
     command: redis-server --appendonly yes
     volumes:
-      - redis-data:/data
+      - sovereign-vol-redis:/data
     networks:
-      - backend-net
-      - ai-net
+      - sovereign-net-backend
+      - sovereign-net-ai
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -205,7 +205,7 @@ services:
       retries: 5
 
   # --- Backend & AI ---
-  backend-api:
+  sovereign-backend:
     build:
       context: ./backend/api
       dockerfile: Dockerfile
@@ -239,17 +239,17 @@ services:
       - ./backend/ai/models.yaml:/app/models.yaml:ro
       - ./backend/ai/litellm_config.yaml:/app/litellm_config.yaml:ro
     networks:
-      - backend-net
-      - ai-net
+      - sovereign-net-backend
+      - sovereign-net-ai
     depends_on:
-      timescaledb:
+      sovereign-timescaledb:
         condition: service_healthy
 
   # --- JS8Call Radio Terminal (Phase 1/2/3) ---
   # Headless JS8Call instance with virtual PulseAudio routing from a KiwiSDR node.
   # The FastAPI WebSocket bridge (server.py) runs inside this same container on
   # port 8080 and is accessed by the frontend RadioTerminal component.
-  js8call:
+  sovereign-js8call:
     build:
       context: ./js8call
       dockerfile: Dockerfile
@@ -269,7 +269,7 @@ services:
       - BRIDGE_PORT=8080
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
     networks:
-      - backend-net
+      - sovereign-net-backend
     cap_add: []
     restart: unless-stopped
     healthcheck:
@@ -280,17 +280,17 @@ services:
       start_period: 20s
 
   # --- Frontend ---
-  frontend:
+  sovereign-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: sovereign-frontend
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Prevent host from overwriting container node_modules
+      - sovereign-vol-frontend-node-modules:/app/node_modules # Prevent host from overwriting container node_modules
     networks:
-      - frontend-net
-      - backend-net
+      - sovereign-net-frontend
+      - sovereign-net-backend
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://localhost}
       - VITE_ENABLE_MAPBOX=${VITE_ENABLE_MAPBOX:-true}
@@ -303,7 +303,7 @@ services:
       - VITE_JS8_BASE_URL=${VITE_JS8_BASE_URL}
 
   # --- Nginx Reverse Proxy (single entry point) ---
-  nginx:
+  sovereign-nginx:
     image: nginx:alpine
     container_name: sovereign-nginx
     ports:
@@ -311,10 +311,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - frontend-net
-      - backend-net
+      - sovereign-net-frontend
+      - sovereign-net-backend
     depends_on:
-      - frontend
-      - backend-api
-      - js8call
+      - sovereign-frontend
+      - sovereign-backend
+      - sovereign-js8call
     restart: unless-stopped
