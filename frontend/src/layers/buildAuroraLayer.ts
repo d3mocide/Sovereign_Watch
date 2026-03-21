@@ -64,8 +64,17 @@ export function buildAuroraLayer(
     properties: { aurora: number };
   }>;
 
-  // Filter to meaningful intensities (≥1% avoids cluttering quiet zones)
-  const data = features.filter((f) => (f.properties?.aurora ?? 0) >= 1);
+  // Filter to meaningful intensities (≥1% avoids cluttering quiet zones).
+  // In mercator (2D) mode, clamp to ±85° latitude — beyond that Web Mercator
+  // distortion inflates meter-radius circles into giant screen-filling blobs.
+  const data = features.filter((f) => {
+    if ((f.properties?.aurora ?? 0) < 1) return false;
+    if (!globeMode) {
+      const lat = f.geometry.coordinates[1];
+      if (lat < -85 || lat > 85) return false;
+    }
+    return true;
+  });
 
   if (!data.length) return [];
 
