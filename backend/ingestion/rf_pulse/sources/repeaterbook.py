@@ -44,7 +44,10 @@ class RepeaterBookSource:
                         continue
 
                 await self._fetch_and_publish()
-                await self.redis_client.set("rf_pulse:repeaterbook:last_fetch", str(time.time()))
+                await self.redis_client.set(
+                    "rf_pulse:repeaterbook:last_fetch", str(time.time()),
+                    ex=int(self.interval_sec * 2),
+                )
 
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:

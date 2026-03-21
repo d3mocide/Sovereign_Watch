@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import aiohttp
 import numpy as np
 from aiokafka import AIOKafkaProducer
@@ -48,6 +48,10 @@ class OrbitalPulseService:
 
         # Fetched twice daily usually; every 6h loop checks HTTP cache locally
         self.fetch_interval_hours = 6
+        # UTC hour (0-23) at which TLE refreshes from Celestrak are allowed.
+        # Defaults to 2 AM UTC to spread the 20-group download away from FCC (3h)
+        # and RadioReference (4h) syncs.  Set to -1 to disable hour gating.
+        self.fetch_hour = int(os.getenv("ORBITAL_TLE_FETCH_HOUR", "2"))
         self.propagate_interval_sec = 5
 
         # Curated groups only — 'active' (~9k unclassified sats) is intentionally excluded.
@@ -242,6 +246,19 @@ class OrbitalPulseService:
 
     async def tle_update_loop(self):
         while self.running:
+            # Hour-window gate: if a specific UTC hour is configured, only fetch
+            # during that hour to avoid competing with peak ingest or other heavy
+            # weekly syncs.  -1 disables gating (fetch immediately when due).
+            if self.fetch_hour >= 0:
+                current_hour = datetime.now(UTC).hour
+                if current_hour != self.fetch_hour:
+                    logger.info(
+                        "Orbital TLE: fetch due but deferring to %02d:00 UTC "
+                        "(currently %02d:00 UTC).",
+                        self.fetch_hour, current_hour,
+                    )
+                    await asyncio.sleep(3600)  # re-check in 1 hour
+                    continue
             try:
                 await self.fetch_tle_data()
             except Exception as e:

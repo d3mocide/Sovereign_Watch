@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import system, tracks, analysis, rf, orbital, infra, news
 from core.database import db
-from services.historian import historian_task
+from services.historian import historian_task, rf_sites_cleanup_task
 from services.broadcast import broadcast_service
 
 # Setup Logging
@@ -48,8 +48,9 @@ async def _historian_supervisor():
             backoff = min(backoff * 2, 60.0)
 
 
-# Global task handle
+# Global task handles
 historian_task_handle: asyncio.Task | None = None
+rf_cleanup_task_handle: asyncio.Task | None = None
 
 
 @asynccontextmanager
@@ -58,7 +59,7 @@ async def lifespan(app: FastAPI):
     BUG-017: Replaced deprecated @app.on_event("startup") / @app.on_event("shutdown")
     decorators with the modern lifespan context manager pattern (FastAPI >= 0.93).
     """
-    global historian_task_handle
+    global historian_task_handle, rf_cleanup_task_handle
     # --- Startup ---
     await db.connect()
     try:
@@ -70,18 +71,20 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to auto-update TimescaleDB extension: {e}")
 
     historian_task_handle = asyncio.create_task(_historian_supervisor())
+    rf_cleanup_task_handle = asyncio.create_task(rf_sites_cleanup_task())
     await broadcast_service.start()
-    logger.info("Database, Redis, Historian, and Broadcast Service started")
+    logger.info("Database, Redis, Historian, RF Cleanup, and Broadcast Service started")
 
     yield
 
     # --- Shutdown ---
-    if historian_task_handle:
-        historian_task_handle.cancel()
-        try:
-            await historian_task_handle
-        except asyncio.CancelledError:
-            pass
+    for handle in (historian_task_handle, rf_cleanup_task_handle):
+        if handle:
+            handle.cancel()
+            try:
+                await handle
+            except asyncio.CancelledError:
+                pass
     await broadcast_service.stop()
     await db.disconnect()
 

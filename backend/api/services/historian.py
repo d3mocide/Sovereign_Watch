@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -8,6 +9,29 @@ from core.database import db
 from core.config import settings
 
 logger = logging.getLogger("SovereignWatch.Historian")
+
+async def rf_sites_cleanup_task():
+    """
+    Periodically prune rf_sites rows that haven't been refreshed in 30 days.
+    Decommissioned repeaters and removed FCC registrations naturally stop receiving
+    upserts; this task evicts them so the table doesn't grow unbounded.
+    Runs once at startup (after a short delay) then every 24 hours.
+    """
+    logger.info("RF sites cleanup task started (24-hour interval, 30-day staleness threshold)")
+    await asyncio.sleep(300)  # wait 5 min for DB pool to be fully ready
+    while True:
+        if db.pool:
+            try:
+                async with db.pool.acquire() as conn:
+                    deleted = await conn.fetchval("SELECT prune_stale_rf_sites()")
+                if deleted:
+                    logger.info("RF sites cleanup: pruned %d stale site(s)", deleted)
+                else:
+                    logger.debug("RF sites cleanup: no stale sites found")
+            except Exception as err:
+                logger.error("RF sites cleanup error: %s", err)
+        await asyncio.sleep(86400)  # 24 hours
+
 
 async def historian_task():
     """
@@ -35,10 +59,54 @@ async def historian_task():
         BATCH_SIZE = 100
         FLUSH_INTERVAL = 2.0
 
+        # In-memory cache of TLE hashes: norad_id → sha1(tle_line1 + tle_line2).
+        # TLEs are fetched every 6 hours but the propagation loop emits ~2 000 msgs/sec
+        # of identical orbital data — without dedup, that's ~2 000 redundant upserts/sec.
+        # This cache eliminates them; it resets on historian restart (safe — worst case
+        # one extra upsert per NORAD ID on startup).
+        _tle_hash_cache: dict[str, str] = {}
+
+        # RF sites are batched separately to avoid per-message round trips.
+        # Keyed by (source, site_id) so duplicates within a flush window are
+        # collapsed to the latest record — same dedup the DB ON CONFLICT gives us
+        # but without the extra write.
+        rf_batch: dict[tuple, dict] = {}
+        rf_last_flush = time.time()
+
         # PostGIS Geometry Insert: ST_SetSRID(ST_MakePoint(lon, lat), 4326)
         insert_sql = """
             INSERT INTO tracks (time, entity_id, type, lat, lon, alt, speed, heading, meta, geom)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ST_SetSRID(ST_MakePoint($5, $4), 4326))
+        """
+
+        rf_upsert_sql = """
+            INSERT INTO rf_sites (
+                source, site_id, service, callsign, name,
+                lat, lon, output_freq, input_freq, tone_ctcss, tone_dcs,
+                modes, use_access, status, city, state, country,
+                emcomm_flags, meta, geom, fetched_at, updated_at
+            ) VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+                ST_GeomFromEWKT($20), NOW(), NOW()
+            )
+            ON CONFLICT (source, site_id) DO UPDATE SET
+                name         = EXCLUDED.name,
+                lat          = EXCLUDED.lat,
+                lon          = EXCLUDED.lon,
+                output_freq  = EXCLUDED.output_freq,
+                input_freq   = EXCLUDED.input_freq,
+                tone_ctcss   = EXCLUDED.tone_ctcss,
+                tone_dcs     = EXCLUDED.tone_dcs,
+                modes        = EXCLUDED.modes,
+                use_access   = EXCLUDED.use_access,
+                status       = EXCLUDED.status,
+                city         = EXCLUDED.city,
+                state        = EXCLUDED.state,
+                emcomm_flags = EXCLUDED.emcomm_flags,
+                meta         = EXCLUDED.meta,
+                geom         = EXCLUDED.geom,
+                fetched_at   = NOW(),
+                updated_at   = NOW()
         """
 
         satellite_upsert_sql = """
@@ -62,7 +130,35 @@ async def historian_task():
                 data = json.loads(msg.value.decode('utf-8'))
 
                 if msg.topic == "rf_raw":
-                    await _handle_rf_raw(data, db.pool)
+                    key = (data.get("source", ""), data.get("site_id", ""))
+                    rf_batch[key] = data
+                    now = time.time()
+                    if len(rf_batch) >= BATCH_SIZE or (now - rf_last_flush > FLUSH_INTERVAL and rf_batch):
+                        if db.pool:
+                            try:
+                                rows = [
+                                    (
+                                        r["source"], r["site_id"], r["service"],
+                                        r.get("callsign"), r.get("name"),
+                                        r["lat"], r["lon"],
+                                        r.get("output_freq"), r.get("input_freq"),
+                                        r.get("tone_ctcss"), r.get("tone_dcs"),
+                                        r.get("modes", []), r.get("use_access", "OPEN"),
+                                        r.get("status", "Unknown"),
+                                        r.get("city"), r.get("state"),
+                                        r.get("country", "US"),
+                                        r.get("emcomm_flags", []),
+                                        json.dumps(r.get("meta", {})),
+                                        f"SRID=4326;POINT({r['lon']} {r['lat']})",
+                                    )
+                                    for r in rf_batch.values()
+                                ]
+                                async with db.pool.acquire() as conn:
+                                    await conn.executemany(rf_upsert_sql, rows)
+                                rf_batch.clear()
+                                rf_last_flush = now
+                            except Exception as rf_err:
+                                logger.error("Historian RF batch flush error: %s", rf_err)
                     continue
 
                 # --- Parsing Logic ---
@@ -100,8 +196,13 @@ async def historian_task():
                     tle_line1 = classification.get("tle_line1")
                     tle_line2 = classification.get("tle_line2")
                     if tle_line1 and tle_line2 and db.pool:
+                        norad_id = str(classification.get("norad_id") or uid)
+                        tle_hash = hashlib.sha1(
+                            (tle_line1 + tle_line2).encode(), usedforsecurity=False
+                        ).hexdigest()
+                        if _tle_hash_cache.get(norad_id) == tle_hash:
+                            continue  # TLE unchanged — skip redundant DB write
                         try:
-                            norad_id    = classification.get("norad_id") or uid
                             sat_name    = classification.get("name") or callsign
                             category    = classification.get("category")
                             constellation = classification.get("constellation")
@@ -111,12 +212,13 @@ async def historian_task():
                             async with db.pool.acquire() as conn:
                                 await conn.execute(
                                     satellite_upsert_sql,
-                                    str(norad_id), sat_name, category, constellation,
+                                    norad_id, sat_name, category, constellation,
                                     tle_line1, tle_line2,
                                     float(period_min)   if period_min   is not None else None,
                                     float(incl_deg)     if incl_deg     is not None else None,
                                     float(eccentricity) if eccentricity is not None else None,
                                 )
+                            _tle_hash_cache[norad_id] = tle_hash
                         except Exception as sat_err:
                             logger.error(f"Historian satellite upsert error: {sat_err}")
                     continue  # orbital_raw never goes into the tracks batch
@@ -180,57 +282,30 @@ async def historian_task():
                 logger.info(f"Historian: flushed {len(batch)} track records on shutdown")
             except Exception as e:
                 logger.error(f"Historian shutdown flush error: {e}")
+        if rf_batch and db.pool:
+            try:
+                rows = [
+                    (
+                        r["source"], r["site_id"], r["service"],
+                        r.get("callsign"), r.get("name"),
+                        r["lat"], r["lon"],
+                        r.get("output_freq"), r.get("input_freq"),
+                        r.get("tone_ctcss"), r.get("tone_dcs"),
+                        r.get("modes", []), r.get("use_access", "OPEN"),
+                        r.get("status", "Unknown"),
+                        r.get("city"), r.get("state"),
+                        r.get("country", "US"),
+                        r.get("emcomm_flags", []),
+                        json.dumps(r.get("meta", {})),
+                        f"SRID=4326;POINT({r['lon']} {r['lat']})",
+                    )
+                    for r in rf_batch.values()
+                ]
+                async with db.pool.acquire() as conn:
+                    await conn.executemany(rf_upsert_sql, rows)
+                logger.info("Historian: flushed %d RF site records on shutdown", len(rows))
+            except Exception as e:
+                logger.error("Historian RF shutdown flush error: %s", e)
         await consumer.stop()
         logger.info("Historian consumer stopped")
 
-
-async def _handle_rf_raw(record: dict, pool):
-    """Upsert an RF site from rf_raw Kafka message into rf_sites table."""
-    if not pool:
-        return
-
-    geom_wkt = f"SRID=4326;POINT({record['lon']} {record['lat']})"
-
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO rf_sites (
-                source, site_id, service, callsign, name,
-                lat, lon, output_freq, input_freq, tone_ctcss, tone_dcs,
-                modes, use_access, status, city, state, country,
-                emcomm_flags, meta, geom, fetched_at, updated_at
-            ) VALUES (
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-                ST_GeomFromEWKT($20), NOW(), NOW()
-            )
-            ON CONFLICT (source, site_id) DO UPDATE SET
-                name         = EXCLUDED.name,
-                lat          = EXCLUDED.lat,
-                lon          = EXCLUDED.lon,
-                output_freq  = EXCLUDED.output_freq,
-                input_freq   = EXCLUDED.input_freq,
-                tone_ctcss   = EXCLUDED.tone_ctcss,
-                tone_dcs     = EXCLUDED.tone_dcs,
-                modes        = EXCLUDED.modes,
-                use_access   = EXCLUDED.use_access,
-                status       = EXCLUDED.status,
-                city         = EXCLUDED.city,
-                state        = EXCLUDED.state,
-                emcomm_flags = EXCLUDED.emcomm_flags,
-                meta         = EXCLUDED.meta,
-                geom         = EXCLUDED.geom,
-                fetched_at   = NOW(),
-                updated_at   = NOW()
-        """,
-            record["source"], record["site_id"], record["service"],
-            record.get("callsign"), record.get("name"),
-            record["lat"], record["lon"],
-            record.get("output_freq"), record.get("input_freq"),
-            record.get("tone_ctcss"), record.get("tone_dcs"),
-            record.get("modes", []), record.get("use_access", "OPEN"),
-            record.get("status", "Unknown"),
-            record.get("city"), record.get("state"),
-            record.get("country", "US"),
-            record.get("emcomm_flags", []),
-            json.dumps(record.get("meta", {})),
-            geom_wkt,
-        )

@@ -42,10 +42,31 @@ ALTER TABLE tracks SET (
     timescaledb.compress_orderby = 'time DESC'
 );
 
--- Add Compression Policy (Compress data older than 1 hour)
--- Compressing early means ~71 of the 72 retained hours sit in columnar form,
--- reducing storage significantly vs. compressing at the retention boundary.
-SELECT add_compression_policy('tracks', INTERVAL '1 hour');
+-- Migrate existing compression policy from 1h → 4h if it was previously created.
+-- On a fresh deployment this block is a no-op; on an upgrade it reschedules the job.
+DO $$
+DECLARE
+    _job_id INTEGER;
+BEGIN
+    SELECT job_id INTO _job_id
+    FROM timescaledb_information.jobs
+    WHERE hypertable_name = 'tracks' AND proc_name = 'policy_compression';
+    IF _job_id IS NOT NULL THEN
+        PERFORM alter_job(_job_id, config => jsonb_build_object('compress_after', '4 hours'));
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    -- alter_job not available on older TimescaleDB versions; will be set on first init.
+    NULL;
+END;
+$$;
+
+-- Add Compression Policy (Compress data older than 4 hours)
+-- 4-hour lag gives live ingest a write-friendly uncompressed window while still
+-- keeping ~68 of the 72 retained hours in columnar form.  Compressing at 1 hour
+-- caused the background job to compete with ongoing inserts on constrained SSD
+-- hardware (Jetson Nano).  The storage savings vs. 1-hour are negligible (3 fewer
+-- hours uncompressed out of 72), but the reduction in I/O contention is significant.
+SELECT add_compression_policy('tracks', INTERVAL '4 hours');
 
 -- Add Retention Policy (Auto-delete data older than 72 hours)
 -- Matches TRACK_HISTORY_MAX_HOURS=72 in the API config.
@@ -212,3 +233,17 @@ CREATE TABLE IF NOT EXISTS infra_towers (
 );
 
 CREATE INDEX IF NOT EXISTS ix_infra_towers_geom ON infra_towers USING GIST (geom);
+
+-- FUNCTION: Prune stale RF sites not updated in 30 days.
+-- Called periodically by the API historian background task.
+-- Sites that vanish from a source's feed (decommissioned repeaters, removed towers)
+-- will stop receiving upserts and will be pruned automatically.
+CREATE OR REPLACE FUNCTION prune_stale_rf_sites() RETURNS INTEGER AS $$
+DECLARE
+    deleted INTEGER;
+BEGIN
+    DELETE FROM rf_sites WHERE updated_at < NOW() - INTERVAL '30 days';
+    GET DIAGNOSTICS deleted = ROW_COUNT;
+    RETURN deleted;
+END;
+$$ LANGUAGE plpgsql;

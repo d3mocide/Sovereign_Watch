@@ -106,6 +106,9 @@ services:
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379
+      # UTC hour (0-23) at which Celestrak TLE refreshes are allowed to run.
+      # Set to -1 to disable hour gating and fetch immediately when interval elapses.
+      - ORBITAL_TLE_FETCH_HOUR=${ORBITAL_TLE_FETCH_HOUR:-2}
     networks:
       - backend-net
     depends_on:
@@ -122,6 +125,8 @@ services:
     environment:
       - REDIS_URL=redis://sovereign-redis:6379/0
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      # UTC hour (0-23) at which the weekly FCC tower sync is allowed to run.
+      - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
     networks:
       - backend-net
     depends_on:
@@ -153,6 +158,9 @@ services:
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
+      # UTC hour (0-23) at which the weekly RadioReference SOAP fetch is allowed to run.
+      # Set to -1 to disable (fetch immediately when interval elapses).
+      - RF_RR_FETCH_HOUR=${RF_RR_FETCH_HOUR:-4}
     networks:
       - backend-net
     depends_on:
