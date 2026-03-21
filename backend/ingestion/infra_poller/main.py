@@ -1,168 +1,68 @@
-import math
-import os
-import json
-import time
-import logging
-import tempfile
-import requests
-import redis
-import traceback
-import zipfile
+"""
+InfraPoller — async infrastructure ingestion service.
+
+Three independent async polling loops run concurrently:
+  cables_loop   — Submarine cables + landing stations   (7-day interval → Redis)
+  ioda_loop     — Internet outage summary from IODA     (30-min interval → Redis)
+  fcc_loop      — FCC ASR tower registrations           (7-day interval, hour-gated → PostgreSQL)
+
+All blocking I/O (psycopg2, zipfile/csv parsing) is offloaded to a thread pool
+via asyncio.to_thread so the event loop stays responsive.  SIGINT/SIGTERM are
+caught and trigger a clean shutdown.
+"""
+
+import asyncio
 import csv
 import io
-import psycopg2
-from psycopg2.extras import execute_values
+import json
+import logging
+import math
+import os
+import signal
+import tempfile
+import time
+import traceback
+import zipfile
 from datetime import datetime, UTC
 
-# Setup Logging
+import httpx
+import psycopg2
+from psycopg2.extras import execute_values
+import redis.asyncio as aioredis
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("InfraPoller")
 
+# ---------------------------------------------------------------------------
 # Config
-REDIS_URL = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
-DB_URL = os.getenv("DATABASE_URL", "postgresql://sovereign:watch@sovereign-db:5432/sovereign")
-POLL_INTERVAL_CABLES_DAYS = 7
+# ---------------------------------------------------------------------------
+REDIS_URL    = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
+DB_URL       = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:password@sovereign-timescaledb:5432/sovereign_watch",
+)
+POLL_FCC_START_HOUR        = int(os.getenv("POLL_FCC_START_HOUR", "3"))
+POLL_INTERVAL_CABLES_DAYS  = 7
 POLL_INTERVAL_IODA_MINUTES = 30
-POLL_INTERVAL_FCC_DAYS = 7
-# UTC hour (0-23) at which the weekly FCC sync is allowed to start.
-# Defaults to 3 AM UTC to avoid contention with peak daytime track writes.
-POLL_FCC_START_HOUR = int(os.getenv("POLL_FCC_START_HOUR", "3"))
-# FCC migrated ASR bulk data from wireless2.fcc.gov -> data.fcc.gov.
-# r_tower.zip = active Registrations (~35 MB). a_tower.zip = full Application history (~195 MB).
-# Standard r_tower layout docs: https://data.fcc.gov/download/pub/uls/complete/r_tower.zip_README.txt
+POLL_INTERVAL_FCC_DAYS     = 7
+
 FCC_TOWERS_URL = "https://data.fcc.gov/download/pub/uls/complete/r_tower.zip"
+IODA_URL       = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
+CABLES_URL     = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
+STATIONS_URL   = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json"
+NOMINATIM_URL  = "https://nominatim.openstreetmap.org/search"
 
-# IODA
-IODA_URL = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
+FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
+FCC_CONNECT_TIMEOUT_S    = 30
+FCC_READ_TIMEOUT_S       = 120
+FCC_MAX_RETRIES          = 5
 
-# Submarine Cables
-CABLES_URL = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
-STATIONS_URL = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json"
-
-# Connect to Redis
-redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
-
-# Geocoding Cache
-_region_geocode_cache = {}
-
-def geocode_region(region_name: str, country_code: str):
-    cache_key = f"{region_name},{country_code}"
-    if cache_key in _region_geocode_cache:
-        return _region_geocode_cache[cache_key]
-
-    try:
-        query = f"{region_name}, {country_code}"
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": query, "format": "json", "limit": 1}
-        headers = {"User-Agent": "SovereignWatch/1.0 (InfraPoller)"}
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if data:
-            lat = float(data[0]["lat"])
-            lon = float(data[0]["lon"])
-            _region_geocode_cache[cache_key] = (lat, lon)
-            time.sleep(1) # Be nice to Nominatim
-            return (lat, lon)
-    except Exception as e:
-        logger.error(f"Geocoding failed for {query}: {e}")
-
-    # Fallback default if geocoding fails
-    _region_geocode_cache[cache_key] = (0.0, 0.0)
-    return (0.0, 0.0)
-
-def fetch_internet_outages():
-    logger.info("Fetching Internet Outage Summary from IODA...")
-    try:
-        # Get last 24h in UTC
-        now = int(time.time())
-        from_time = now - (24 * 3600)
-
-        params = {
-            "from": from_time,
-            "until": now,
-            "entityType": "country"
-        }
-        
-        resp = requests.get(IODA_URL, params=params, timeout=30)
-        resp.raise_for_status()
-        
-        data = resp.json().get("data", [])
-        
-        outages = []
-        for entry in data:
-            entity = entry.get("entity", {})
-            if not entity:
-                continue
-                
-            scores = entry.get("scores", {})
-            # Use 'overall' score for severity
-            overall_score = scores.get("overall", 0)
-            if overall_score < 1000: # Ignore very minor noise
-                continue
-
-            # Check for IR
-            country_code = entity.get("code", "")
-            country_name = entity.get("name", country_code)
-            
-            # Normalize overall_score to 0-100 severity
-            # Based on IODA scores (e.g., 350G is 3.5e11), we'll use a log scale
-            # log10(1,000) = 3 -> 10% severity
-            # log10(1,000,000,000,000) = 12 -> 100% severity
-            log_score = math.log10(max(1, overall_score))
-            severity = (log_score / 12.0) * 100
-            severity = max(0, min(100, severity))
-
-            # Geocode
-            lat, lon = geocode_region(country_name, country_code)
-            if lat == 0.0 and lon == 0.0:
-                continue
-
-            outages.append({
-                "type": "Feature",
-                "properties": {
-                    "id": f"outage-{country_code}",
-                    "region": country_name,
-                    "country": country_name,
-                    "country_code": country_code,
-                    "severity": round(severity, 1),
-                    "datasource": "IODA_OVERALL",
-                    "entity_type": "country",
-                    "score_raw": overall_score
-                },
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [lon, lat]
-                }
-            })
-
-            if len(outages) >= 200:
-                break
-
-        geojson = {"type": "FeatureCollection", "features": outages}
-        redis_client.set("infra:outages", json.dumps(geojson))
-        logger.info(f"Stored {len(outages)} internet outages in Redis from Summary.")
-
-    except Exception as e:
-        logger.error(f"Failed to fetch internet outages from summary: {e}")
-        traceback.print_exc()
+USER_AGENT = "SovereignWatch/1.0 (InfraPoller; admin@sovereignwatch.local)"
 
 
-def fetch_cables_and_stations():
-    logger.info("Fetching Submarine Cables and Landing Stations...")
-    try:
-        cables_resp = requests.get(CABLES_URL, timeout=30)
-        cables_resp.raise_for_status()
-        redis_client.set("infra:cables", json.dumps(cables_resp.json()))
-        logger.info("Stored submarine cables in Redis.")
-
-        stations_resp = requests.get(STATIONS_URL, timeout=30)
-        stations_resp.raise_for_status()
-        redis_client.set("infra:stations", json.dumps(stations_resp.json()))
-        logger.info("Stored landing stations in Redis.")
-
-    except Exception as e:
-        logger.error(f"Failed to fetch cables/stations: {e}")
+# ---------------------------------------------------------------------------
+# Pure helpers — no I/O, unit-testable directly
+# ---------------------------------------------------------------------------
 
 def dms_to_decimal(deg_s, min_s, sec_s, dir_s):
     """Convert separate DMS fields to decimal degrees.
@@ -172,56 +72,21 @@ def dms_to_decimal(deg_s, min_s, sec_s, dir_s):
       [11]=lon_deg [12]=lon_min [13]=lon_sec [14]=lon_dir (E/W)
     """
     try:
-        deg = float(deg_s)
-        mins = float(min_s) if min_s and min_s.strip() else 0.0
-        secs = float(sec_s) if sec_s and sec_s.strip() else 0.0
-        direction = dir_s.strip().upper() if dir_s else ''
+        deg       = float(deg_s)
+        mins      = float(min_s) if min_s and min_s.strip() else 0.0
+        secs      = float(sec_s) if sec_s and sec_s.strip() else 0.0
+        direction = dir_s.strip().upper() if dir_s else ""
         if not direction:
             return None
         decimal = deg + (mins / 60.0) + (secs / 3600.0)
-        if direction in ('S', 'W'):
+        if direction in ("S", "W"):
             decimal = -decimal
         return decimal
     except (TypeError, ValueError):
         return None
 
-FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB chunks
-FCC_CONNECT_TIMEOUT_S    = 30               # fail fast if server won't accept
-FCC_READ_TIMEOUT_S       = 60               # allow 1 min per chunk read
-FCC_MAX_RETRIES          = 5
 
-
-def _download_fcc_zip(dest_path: str) -> None:
-    """Stream-download the FCC ASR zip to dest_path with retry/backoff."""
-    for attempt in range(1, FCC_MAX_RETRIES + 1):
-        try:
-            logger.info("FCC download attempt %d/%d -> %s", attempt, FCC_MAX_RETRIES, FCC_TOWERS_URL)
-            with requests.get(
-                FCC_TOWERS_URL,
-                stream=True,
-                timeout=(FCC_CONNECT_TIMEOUT_S, FCC_READ_TIMEOUT_S),
-            ) as resp:
-                resp.raise_for_status()
-                total = 0
-                with open(dest_path, "wb") as fh:
-                    for chunk in resp.iter_content(chunk_size=FCC_DOWNLOAD_CHUNK_BYTES):
-                        if chunk:
-                            fh.write(chunk)
-                            total += len(chunk)
-                            logger.info("FCC download progress: %.1f MB", total / 1_000_000)
-            logger.info("FCC zip downloaded: %.1f MB", total / 1_000_000)
-            return  # success
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-            logger.warning("FCC download attempt %d failed: %s", attempt, exc)
-            if attempt < FCC_MAX_RETRIES:
-                backoff = 30 * attempt
-                logger.info("Retrying FCC download in %ds...", backoff)
-                time.sleep(backoff)
-            else:
-                raise
-
-
-def _parse_float(s: str):
+def parse_float(s: str):
     """Return a float from a pipe-delimited FCC field, or None if empty/invalid."""
     if not s or not s.strip():
         return None
@@ -231,217 +96,393 @@ def _parse_float(s: str):
         return None
 
 
-def fetch_and_ingest_fcc_towers():
-    logger.info("Starting FCC Towers ingestion...")
-    tmp_path = None
-    try:
-        # Stream the zip to a temp file so we survive slow/flaky FCC servers
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            tmp_path = tmp.name
+def ioda_severity(overall_score: float) -> float:
+    """Normalise IODA overall score to 0-100 severity on a log scale."""
+    log_score = math.log10(max(1, overall_score))
+    return max(0.0, min(100.0, (log_score / 12.0) * 100))
 
-        _download_fcc_zip(tmp_path)
 
-        with zipfile.ZipFile(tmp_path) as z:
-            names = z.namelist()
+# ---------------------------------------------------------------------------
+# Blocking helpers — called via asyncio.to_thread
+# ---------------------------------------------------------------------------
 
-            # --- EN.dat: entity / owner name ---
-            # col[1]=usi  col[2]=fcc_id  col[9]=entity_name (registered owner)
-            owner_by_usi = {}
-            if 'EN.dat' in names:
-                logger.info("Parsing EN.dat for owner names...")
-                with z.open('EN.dat') as f:
-                    content = f.read().decode('latin1')
-                for row in csv.reader(io.StringIO(content), delimiter='|'):
-                    if len(row) > 9 and row[0] == 'EN':
-                        usi = row[3].strip()
-                        name = row[9].strip()
-                        if usi and name:
-                            owner_by_usi[usi] = name
-                logger.info("Loaded %d owner records from EN.dat", len(owner_by_usi))
+def _parse_fcc_zip_sync(tmp_path: str) -> list[tuple]:
+    """Parse EN.dat, RA.dat, CO.dat from the FCC ASR zip.
 
-            # --- RA.dat: registration / structure dimensions ---
-            # col[1]=usi  col[2]=fcc_id  col[28]=ground_elevation_m (AMSL)  col[30]=height_above_ground_m
-            ra_by_usi = {}
-            if 'RA.dat' in names:
-                logger.info("Parsing RA.dat for height/elevation...")
-                with z.open('RA.dat') as f:
-                    content = f.read().decode('latin1')
-                for row in csv.reader(io.StringIO(content), delimiter='|'):
-                    if len(row) > 30 and row[0] == 'RA':
-                        usi = row[3].strip()
-                        if usi and usi not in ra_by_usi:  # keep first (most recent) record
-                            ra_by_usi[usi] = (
-                                _parse_float(row[28]),  # ground elevation AMSL (m)
-                                _parse_float(row[30]),  # structure height above ground (m)
-                            )
-                logger.info("Loaded %d structure records from RA.dat", len(ra_by_usi))
+    Returns a deduplicated list of tuples:
+      (fcc_id, lat, lon, elevation_m, height_m, owner)
+    """
+    with zipfile.ZipFile(tmp_path) as z:
+        names = z.namelist()
 
-            # --- CO.dat: coordinates ---
-            if 'CO.dat' not in names:
-                logger.error("CO.dat not found in FCC towers zip")
-                return
+        # EN.dat — entity / owner names
+        owner_by_usi: dict[str, str] = {}
+        if "EN.dat" in names:
+            logger.info("Parsing EN.dat for owner names...")
+            with z.open("EN.dat") as f:
+                content = f.read().decode("latin1")
+            for row in csv.reader(io.StringIO(content), delimiter="|"):
+                if len(row) > 9 and row[0] == "EN":
+                    usi  = row[3].strip()
+                    name = row[9].strip()
+                    if usi and name:
+                        owner_by_usi[usi] = name
+            logger.info("Loaded %d owner records from EN.dat", len(owner_by_usi))
 
-            records = []
-            with z.open('CO.dat') as f:
-                content = f.read().decode('latin1')
-                reader = csv.reader(io.StringIO(content), delimiter='|')
-                for row in reader:
-                    # data.fcc.gov r_tower.zip CO.dat schema (18 columns):
-                    # [0]=record_type [1]=REG [2]=file_num (FCC ID)
-                    # [5]=coord_type (T=Tower)
-                    # [6]=lat_deg [7]=lat_min [8]=lat_sec [9]=lat_dir
-                    # [11]=lon_deg [12]=lon_min [13]=lon_sec [14]=lon_dir
-                    if len(row) < 15:
-                        continue
-
-                    if row[0] != 'CO':
-                        continue
-
-                    # Only ingest Tower coordinate type
-                    if row[5].strip() not in ('T', ''):
-                        continue
-
+        # RA.dat — registration / structure dimensions
+        ra_by_usi: dict[str, tuple] = {}
+        if "RA.dat" in names:
+            logger.info("Parsing RA.dat for height/elevation...")
+            with z.open("RA.dat") as f:
+                content = f.read().decode("latin1")
+            for row in csv.reader(io.StringIO(content), delimiter="|"):
+                if len(row) > 30 and row[0] == "RA":
                     usi = row[3].strip()
-                    fcc_id = row[2].strip()
-                    if not usi or not fcc_id:
-                        continue
+                    if usi and usi not in ra_by_usi:
+                        ra_by_usi[usi] = (parse_float(row[28]), parse_float(row[30]))
+            logger.info("Loaded %d structure records from RA.dat", len(ra_by_usi))
 
-                    lat = dms_to_decimal(row[6], row[7], row[8], row[9])
-                    lon = dms_to_decimal(row[11], row[12], row[13], row[14])
+        # CO.dat — coordinates
+        if "CO.dat" not in names:
+            logger.error("CO.dat not found in FCC towers zip")
+            return []
 
-                    if lat is None or lon is None:
-                        continue
-                    # Sanity-check: must be on Earth
-                    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-                        continue
+        logger.info("Parsing CO.dat for coordinates...")
+        records: list[tuple] = []
+        with z.open("CO.dat") as f:
+            content = f.read().decode("latin1")
+        for row in csv.reader(io.StringIO(content), delimiter="|"):
+            if len(row) < 15 or row[0] != "CO":
+                continue
+            if row[5].strip() not in ("T", ""):
+                continue
+            usi    = row[3].strip()
+            fcc_id = row[2].strip()
+            if not usi or not fcc_id:
+                continue
+            lat = dms_to_decimal(row[6],  row[7],  row[8],  row[9])
+            lon = dms_to_decimal(row[11], row[12], row[13], row[14])
+            if lat is None or lon is None:
+                continue
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
+            elev_m, height_m = ra_by_usi.get(usi, (None, None))
+            records.append((fcc_id, lat, lon, elev_m, height_m, owner_by_usi.get(usi)))
 
-                    elev_m, height_m = ra_by_usi.get(usi, (None, None))
-                    records.append((
-                        fcc_id,
-                        lat,
-                        lon,
-                        elev_m,
-                        height_m,
-                        owner_by_usi.get(usi),
-                    ))
+    # Deduplicate by fcc_id — CO.dat can repeat entries for the same registration
+    deduped = list({r[0]: r for r in records}.values())
+    logger.info("Parsed %d unique tower records from FCC zip", len(deduped))
+    return deduped
 
-        if not records:
-            logger.warning("No valid FCC tower records found.")
-            return
 
-        # Deduplicate by fcc_id — CO.dat can contain repeated entries for the
-        # same registration number. ON CONFLICT DO UPDATE cannot affect the same
-        # row twice within one execute_values page, so deduplicate first.
-        records_by_id = {r[0]: r for r in records}
-        records = list(records_by_id.values())
-        logger.info("Connecting to DB to insert %d unique towers...", len(records))
-        conn = psycopg2.connect(DB_URL)
-        cursor = conn.cursor()
-
-        # Upsert logic — columns match init.sql infra_towers schema
-        insert_query = """
-            INSERT INTO infra_towers (fcc_id, lat, lon, elevation_m, height_m, owner, geom)
-            VALUES %s
-            ON CONFLICT (fcc_id) DO UPDATE SET
-                lat = EXCLUDED.lat,
-                lon = EXCLUDED.lon,
-                elevation_m = EXCLUDED.elevation_m,
-                height_m = EXCLUDED.height_m,
-                owner = EXCLUDED.owner,
-                geom = EXCLUDED.geom,
-                updated_at = CURRENT_TIMESTAMP;
-        """
-
-        # Prepare data with PostGIS geometry
-        psycopg2_records = [
-            (
-                r[0], r[1], r[2], r[3], r[4], r[5],
-                "SRID=4326;POINT({} {})".format(r[2], r[1])
-            )
-            for r in records
-        ]
-
-        execute_values(cursor, insert_query, psycopg2_records, page_size=1000)
+def _ingest_fcc_records_sync(db_url: str, records: list[tuple]) -> None:
+    """Upsert FCC tower records into infra_towers via psycopg2 (blocking)."""
+    insert_sql = """
+        INSERT INTO infra_towers (fcc_id, lat, lon, elevation_m, height_m, owner, geom)
+        VALUES %s
+        ON CONFLICT (fcc_id) DO UPDATE SET
+            lat         = EXCLUDED.lat,
+            lon         = EXCLUDED.lon,
+            elevation_m = EXCLUDED.elevation_m,
+            height_m    = EXCLUDED.height_m,
+            owner       = EXCLUDED.owner,
+            geom        = EXCLUDED.geom,
+            updated_at  = CURRENT_TIMESTAMP
+    """
+    rows = [
+        (r[0], r[1], r[2], r[3], r[4], r[5], f"SRID=4326;POINT({r[2]} {r[1]})")
+        for r in records
+    ]
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, insert_sql, rows, page_size=1000)
         conn.commit()
-        cursor.close()
-        conn.close()
-        logger.info("Successfully ingested FCC Towers.")
-
-    except Exception as e:
-        logger.error("Failed to ingest FCC towers: %s", e)
-        traceback.print_exc()
+        cur.close()
     finally:
-        # Always clean up the temp file
-        if tmp_path:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+        conn.close()
+    logger.info("Upserted %d FCC tower records into infra_towers", len(records))
 
-def main():
-    logger.info("Starting InfraPoller...")
 
-    # IODA refreshes on every boot. 
-    # FCC and Cables are persistent weekly updates.
-    last_ioda_fetch = 0
-    
-    last_cables_fetch_str = redis_client.get("infra:last_cables_fetch")
-    last_cables_fetch = float(last_cables_fetch_str) if last_cables_fetch_str else 0
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
 
-    last_fcc_fetch_str = redis_client.get("infra:last_fcc_fetch")
-    last_fcc_fetch = float(last_fcc_fetch_str) if last_fcc_fetch_str else 0
+class InfraPollerService:
+    def __init__(self):
+        self.running = True
+        self.redis   = None
+        self._geocode_cache: dict[str, tuple[float, float]] = {}
 
-    now = time.time()
-    
-    # Cables Sync Check
-    if last_cables_fetch > 0:
-        elapsed = now - last_cables_fetch
-        remaining = max(0, (POLL_INTERVAL_CABLES_DAYS * 86400) - elapsed)
-        if remaining > 0:
-            days = int(remaining // 86400)
-            hours = int((remaining % 86400) // 3600)
-            logger.info(f"Submarine Cables data is cached. Next sync in {days}d {hours}h.")
-    else:
-        logger.info("No cached Submarine Cables timestamp. Syncing shortly.")
+    async def setup(self):
+        self.redis = await aioredis.from_url(REDIS_URL, decode_responses=True)
+        logger.info("InfraPoller: Redis connected")
 
-    # FCC Sync Check
-    if last_fcc_fetch > 0:
-        elapsed = now - last_fcc_fetch
-        remaining = max(0, (POLL_INTERVAL_FCC_DAYS * 86400) - elapsed)
-        if remaining > 0:
-            days = int(remaining // 86400)
-            hours = int((remaining % 86400) // 3600)
-            logger.info(f"FCC Towers data is cached. Next sync in {days}d {hours}h.")
-    else:
-        logger.info("No cached FCC timestamp. Syncing shortly.")
+    async def run(self):
+        tasks = [
+            asyncio.create_task(self.cables_loop()),
+            asyncio.create_task(self.ioda_loop()),
+            asyncio.create_task(self.fcc_loop()),
+        ]
+        try:
+            await asyncio.gather(*tasks)
+        except asyncio.CancelledError:
+            pass
 
-    while True:
-        now = time.time()
+    async def shutdown(self):
+        logger.info("InfraPoller: shutting down...")
+        self.running = False
+        if self.redis:
+            await self.redis.aclose()
 
-        if now - last_cables_fetch > POLL_INTERVAL_CABLES_DAYS * 86400:
-            fetch_cables_and_stations()
-            last_cables_fetch = now
-            redis_client.set("infra:last_cables_fetch", str(now))
+    # -----------------------------------------------------------------------
+    # Geocoding (Nominatim) — 1 req/s rate limit
+    # -----------------------------------------------------------------------
 
-        if now - last_ioda_fetch > POLL_INTERVAL_IODA_MINUTES * 60:
-            fetch_internet_outages()
-            last_ioda_fetch = now
+    async def geocode_region(self, region_name: str, country_code: str) -> tuple[float, float]:
+        cache_key = f"{region_name},{country_code}"
+        if cache_key in self._geocode_cache:
+            return self._geocode_cache[cache_key]
 
-        if now - last_fcc_fetch > POLL_INTERVAL_FCC_DAYS * 86400:
-            current_hour = datetime.now(UTC).hour
-            # Start sync if it's the right hour, OR if hour gating is disabled (-1)
-            if POLL_FCC_START_HOUR == -1 or current_hour == POLL_FCC_START_HOUR:
-                fetch_and_ingest_fcc_towers()
-                last_fcc_fetch = now
-                redis_client.set("infra:last_fcc_fetch", str(now))
-            else:
+        try:
+            async with httpx.AsyncClient(
+                timeout=10.0, headers={"User-Agent": USER_AGENT}
+            ) as client:
+                resp = await client.get(
+                    NOMINATIM_URL,
+                    params={"q": f"{region_name}, {country_code}", "format": "json", "limit": 1},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            if data:
+                lat = float(data[0]["lat"])
+                lon = float(data[0]["lon"])
+                self._geocode_cache[cache_key] = (lat, lon)
+                await asyncio.sleep(1)  # Nominatim: 1 req/s policy
+                return (lat, lon)
+        except Exception as exc:
+            logger.error("Geocoding failed for %s, %s: %s", region_name, country_code, exc)
+
+        self._geocode_cache[cache_key] = (0.0, 0.0)
+        return (0.0, 0.0)
+
+    # -----------------------------------------------------------------------
+    # Cables loop — 7-day interval
+    # -----------------------------------------------------------------------
+
+    async def cables_loop(self):
+        last_fetch_str = await self.redis.get("infra:last_cables_fetch")
+        last_fetch     = float(last_fetch_str) if last_fetch_str else 0.0
+        interval_s     = POLL_INTERVAL_CABLES_DAYS * 86400
+
+        if last_fetch > 0:
+            remaining = interval_s - (time.time() - last_fetch)
+            if remaining > 0:
                 logger.info(
-                    "FCC sync due but deferring to %02d:00 UTC (currently %02d:00 UTC) "
-                    "to avoid peak-hour disk contention.",
+                    "Cables: cached, next sync in %dd %dh",
+                    int(remaining // 86400), int((remaining % 86400) // 3600),
+                )
+                await asyncio.sleep(remaining)
+
+        while self.running:
+            try:
+                await self._fetch_cables_and_stations()
+                await self.redis.set("infra:last_cables_fetch", str(time.time()))
+            except Exception:
+                logger.exception("Cables fetch error")
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_cables_and_stations(self):
+        logger.info("Fetching submarine cables and landing stations...")
+        async with httpx.AsyncClient(
+            timeout=30.0, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            cables_resp = await client.get(CABLES_URL)
+            cables_resp.raise_for_status()
+            await self.redis.set("infra:cables", cables_resp.text)
+            logger.info("Stored submarine cables in Redis")
+
+            stations_resp = await client.get(STATIONS_URL)
+            stations_resp.raise_for_status()
+            await self.redis.set("infra:stations", stations_resp.text)
+            logger.info("Stored landing stations in Redis")
+
+    # -----------------------------------------------------------------------
+    # IODA loop — 30-minute interval
+    # -----------------------------------------------------------------------
+
+    async def ioda_loop(self):
+        # Always fetch on boot; no persistent cooldown for IODA
+        while self.running:
+            try:
+                await self._fetch_internet_outages()
+            except Exception:
+                logger.exception("IODA fetch error")
+            await asyncio.sleep(POLL_INTERVAL_IODA_MINUTES * 60)
+
+    async def _fetch_internet_outages(self):
+        logger.info("Fetching internet outage summary from IODA...")
+        now       = int(time.time())
+        from_time = now - (24 * 3600)
+
+        async with httpx.AsyncClient(
+            timeout=30.0, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            resp = await client.get(
+                IODA_URL,
+                params={"from": from_time, "until": now, "entityType": "country"},
+            )
+            resp.raise_for_status()
+            data = resp.json().get("data", [])
+
+        outages = []
+        for entry in data:
+            entity = entry.get("entity", {})
+            if not entity:
+                continue
+            overall_score = entry.get("scores", {}).get("overall", 0)
+            if overall_score < 1000:
+                continue
+
+            country_code = entity.get("code", "")
+            country_name = entity.get("name", country_code)
+            severity     = ioda_severity(overall_score)
+
+            lat, lon = await self.geocode_region(country_name, country_code)
+            if lat == 0.0 and lon == 0.0:
+                continue
+
+            outages.append({
+                "type": "Feature",
+                "properties": {
+                    "id":           f"outage-{country_code}",
+                    "region":       country_name,
+                    "country":      country_name,
+                    "country_code": country_code,
+                    "severity":     round(severity, 1),
+                    "datasource":   "IODA_OVERALL",
+                    "entity_type":  "country",
+                    "score_raw":    overall_score,
+                },
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            })
+            if len(outages) >= 200:
+                break
+
+        geojson = {"type": "FeatureCollection", "features": outages}
+        await self.redis.set("infra:outages", json.dumps(geojson))
+        logger.info("Stored %d internet outages in Redis", len(outages))
+
+    # -----------------------------------------------------------------------
+    # FCC loop — 7-day interval, hour-gated
+    # -----------------------------------------------------------------------
+
+    async def fcc_loop(self):
+        last_fetch_str = await self.redis.get("infra:last_fcc_fetch")
+        last_fetch     = float(last_fetch_str) if last_fetch_str else 0.0
+        interval_s     = POLL_INTERVAL_FCC_DAYS * 86400
+
+        if last_fetch > 0:
+            remaining = interval_s - (time.time() - last_fetch)
+            if remaining > 0:
+                logger.info(
+                    "FCC towers: cached, next sync in %dd %dh",
+                    int(remaining // 86400), int((remaining % 86400) // 3600),
+                )
+                await asyncio.sleep(remaining)
+
+        while self.running:
+            current_hour = datetime.now(UTC).hour
+            if POLL_FCC_START_HOUR != -1 and current_hour != POLL_FCC_START_HOUR:
+                logger.info(
+                    "FCC sync due but deferring to %02d:00 UTC (currently %02d:00 UTC).",
                     POLL_FCC_START_HOUR, current_hour,
                 )
+                await asyncio.sleep(3600)
+                continue
 
-        time.sleep(60)
+            try:
+                await self._fetch_and_ingest_fcc_towers()
+                await self.redis.set("infra:last_fcc_fetch", str(time.time()))
+            except Exception:
+                logger.exception("FCC towers ingestion error")
+            await asyncio.sleep(interval_s)
+
+    async def _download_fcc_zip(self, dest_path: str) -> None:
+        """Stream-download the FCC ASR zip with retry/backoff."""
+        timeout = httpx.Timeout(
+            connect=FCC_CONNECT_TIMEOUT_S, read=FCC_READ_TIMEOUT_S, write=None, pool=None
+        )
+        for attempt in range(1, FCC_MAX_RETRIES + 1):
+            try:
+                logger.info("FCC download attempt %d/%d", attempt, FCC_MAX_RETRIES)
+                async with httpx.AsyncClient(
+                    timeout=timeout, headers={"User-Agent": USER_AGENT}, follow_redirects=True
+                ) as client:
+                    async with client.stream("GET", FCC_TOWERS_URL) as resp:
+                        resp.raise_for_status()
+                        total = 0
+                        with open(dest_path, "wb") as fh:
+                            async for chunk in resp.aiter_bytes(FCC_DOWNLOAD_CHUNK_BYTES):
+                                fh.write(chunk)
+                                total += len(chunk)
+                                logger.info("FCC download: %.1f MB", total / 1_000_000)
+                logger.info("FCC zip downloaded: %.1f MB total", total / 1_000_000)
+                return
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                logger.warning("FCC download attempt %d failed: %s", attempt, exc)
+                if attempt < FCC_MAX_RETRIES:
+                    backoff = 30 * attempt
+                    logger.info("Retrying FCC download in %ds...", backoff)
+                    await asyncio.sleep(backoff)
+                else:
+                    raise
+
+    async def _fetch_and_ingest_fcc_towers(self):
+        logger.info("Starting FCC Towers ingestion...")
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            # Async network download
+            await self._download_fcc_zip(tmp_path)
+
+            # Blocking ZIP/CSV parse — offload to thread pool
+            records = await asyncio.to_thread(_parse_fcc_zip_sync, tmp_path)
+            if not records:
+                logger.warning("No valid FCC tower records found")
+                return
+
+            # Blocking DB write — offload to thread pool
+            await asyncio.to_thread(_ingest_fcc_records_sync, DB_URL, records)
+            logger.info("FCC Towers ingestion complete")
+
+        except Exception:
+            logger.error("FCC towers ingestion failed")
+            traceback.print_exc()
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+async def main():
+    svc  = InfraPollerService()
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(svc.shutdown()))
+
+    await svc.setup()
+    await svc.run()
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

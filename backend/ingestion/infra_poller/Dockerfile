@@ -12,7 +12,7 @@ COPY pyproject.toml uv.lock ./
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 
 # Ensure the virtual environment's binaries are in the PATH
 ENV VIRTUAL_ENV=/opt/venv
