@@ -116,6 +116,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- Ingestion: Space Weather (NOAA SWPC Kp-index + Auroral Oval) ---
+  sovereign-space-weather-pulse:
+    build:
+      context: ./backend/ingestion/space_weather_pulse
+      dockerfile: Dockerfile
+    container_name: sovereign-space-weather-pulse
+    environment:
+      - REDIS_URL=redis://sovereign-redis:6379/0
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      # Aurora GeoJSON poll interval in seconds (default 300 = 5 min)
+      - AURORA_INTERVAL_S=${AURORA_INTERVAL_S:-300}
+      # Kp-index poll interval in seconds (default 900 = 15 min)
+      - KP_INTERVAL_S=${KP_INTERVAL_S:-900}
+    networks:
+      - sovereign-net-backend
+    depends_on:
+      sovereign-redis:
+        condition: service_started
+      sovereign-timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
   # --- Ingestion: Infrastructure (Cables, Outages, Datacenters, FCC Towers) ---
   sovereign-infra-poller:
     build:

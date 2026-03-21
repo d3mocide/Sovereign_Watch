@@ -24,6 +24,7 @@ import { RFLegend } from "./RFLegend";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { SpeedLegend } from "./SpeedLegend";
 import { StarField } from "./StarField";
+import { KpIndexWidget } from "../KpIndexWidget";
 
 // Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
 const SATELLITE_MAP_STYLE = {
@@ -250,6 +251,29 @@ export function TacticalMap({
       setHoveredEntity((prev: CoTEntity | null) => (prev?.type === 'infra' || prev?.type === 'outage' || prev?.type === 'tower' ? null : prev));
     }
   }, []);
+
+  // Space Weather & Jamming data (polled from API, passed to layer composition)
+  const [auroraData, setAuroraData] = useState<any>(null);
+  const [jammingData, setJammingData] = useState<any>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSpaceWeather = async () => {
+      try {
+        if (filters?.showAurora) {
+          const r = await fetch("/api/space-weather/aurora");
+          if (r.ok && !cancelled) setAuroraData(await r.json());
+        }
+        if (filters?.showJamming) {
+          const r = await fetch("/api/jamming/active");
+          if (r.ok && !cancelled) setJammingData(await r.json());
+        }
+      } catch { /* silently fail */ }
+    };
+    fetchSpaceWeather();
+    const id = setInterval(fetchSpaceWeather, 60_000); // refresh every 60 s
+    return () => { cancelled = true; clearInterval(id); };
+  }, [filters?.showAurora, filters?.showJamming]);
 
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -555,6 +579,8 @@ export function TacticalMap({
     stationsData,
     outagesData,
     towersData,
+    auroraData,
+    jammingData,
     historySegmentsRef,
   });
 
@@ -917,6 +943,19 @@ export function TacticalMap({
       <AltitudeLegend visible={filters?.showAir ?? true} />
       <SpeedLegend visible={filters?.showSea ?? true} />
       <RFLegend visible={!!showRepeaters} />
+
+      {/* Kp-index space weather badge — top-right corner */}
+      <div
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          zIndex: 200,
+          pointerEvents: "none",
+        }}
+      >
+        <KpIndexWidget visible={true} />
+      </div>
     </>
   );
 }

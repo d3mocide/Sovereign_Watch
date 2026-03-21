@@ -40,6 +40,10 @@ interface UseAnimationLoopOptions {
   stationsData?: any;
   outagesData?: any;
   towersData?: any[];
+  /** NOAA aurora 1-hour forecast GeoJSON (from /api/space-weather/aurora) */
+  auroraData?: any;
+  /** Active GPS jamming zones GeoJSON (from /api/jamming/active) */
+  jammingData?: any;
   setHoveredInfra?: (info: any) => void;
   setSelectedInfra?: (info: any) => void;
   worldCountriesData?: any;
@@ -99,6 +103,8 @@ export function useAnimationLoop({
   stationsData,
   outagesData,
   towersData,
+  auroraData,
+  jammingData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -444,6 +450,8 @@ export function useAnimationLoop({
         observer: observerRef?.current,
         currentMission: currentMissionRef.current,
         aotShapes,
+        auroraData,
+        jammingData,
         onEntitySelect,
         setHoveredEntity,
         setHoverPosition,
@@ -494,6 +502,8 @@ export function useAnimationLoop({
     stationsData,
     outagesData,
     towersData,
+    auroraData,
+    jammingData,
     worldCountriesData,
   ]);
 }

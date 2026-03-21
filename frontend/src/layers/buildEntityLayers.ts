@@ -17,6 +17,40 @@ export function buildEntityLayers(
 ): any[] {
   const layers: any[] = [];
 
+  // GPS Integrity warning halos — amber ring on aircraft with degraded NIC/NACp (Ingest-04)
+  const integrityDegraded = interpolated.filter((e) => {
+    const nic = e.classification?.nic;
+    const nacp = e.classification?.nacP;
+    return (nic !== null && nic !== undefined && nic <= 4) ||
+           (nacp !== null && nacp !== undefined && nacp <= 6);
+  });
+
+  if (integrityDegraded.length > 0) {
+    layers.push(
+      new ScatterplotLayer({
+        id: `integrity-warning-${globeMode ? "globe" : "merc"}`,
+        data: integrityDegraded,
+        getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
+        getRadius: 18,
+        radiusUnits: "pixels" as const,
+        getFillColor: [0, 0, 0, 0],
+        getLineColor: () => {
+          // Amber warning, pulse
+          const pulse = (now % 1500) / 1500;
+          const alpha = Math.round(120 + pulse * 135);
+          return [251, 191, 36, alpha] as [number, number, number, number];
+        },
+        getLineWidth: 2,
+        stroked: true,
+        filled: false,
+        pickable: false,
+        wrapLongitude: !globeMode,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -155.0 : 0 },
+        updateTriggers: { getLineColor: [now] },
+      }),
+    );
+  }
+
   // 3. Altitude Stems (leader lines to ground) - 3D Mode only
   if (enable3d) {
     layers.push(

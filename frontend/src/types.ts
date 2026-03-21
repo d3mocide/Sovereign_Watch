@@ -58,6 +58,42 @@ export interface EntityClassification {
   description?: string;
   squawk?: string;
   emergency?: string;
+  /** ADS-B Navigation Integrity Category (0-11). ≤4 = degraded GPS integrity. */
+  nic?: number | null;
+  /** ADS-B Navigation Accuracy Category for Position (0-11). ≤6 = degraded GPS accuracy. */
+  nacP?: number | null;
+}
+
+/** A detected GPS jamming/degradation zone keyed to an H3 hex cell. */
+export interface JammingZone {
+  h3_index: string;
+  centroid_lat: number;
+  centroid_lon: number;
+  confidence: number;          // 0.0–1.0
+  affected_count: number;
+  avg_nic: number | null;
+  avg_nacp: number | null;
+  kp_at_event: number;
+  active: boolean;
+  assessment: 'jamming' | 'space_weather' | 'mixed' | 'equipment';
+  time: string;
+}
+
+/** Current space weather status from NOAA SWPC. */
+export interface SpaceWeatherStatus {
+  kp: number | null;
+  kp_fraction?: number | null;
+  storm_level: string;          // 'quiet'|'unsettled'|'active'|'G1'–'G5'
+  aurora_active: boolean;
+  gps_degradation_risk: 'low' | 'moderate' | 'high' | 'unknown';
+  time: string | null;
+}
+
+/** One entry in the Kp-index history series. */
+export interface KpHistoryPoint {
+  time: string;
+  kp: number;
+  storm_level: string;
 }
 
 export interface IntelEvent {

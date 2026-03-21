@@ -1,0 +1,10 @@
+[project]
+name = "sovereign-watch-space-weather-pulse"
+version = "0.1.0"
+description = "Sovereign Watch NOAA SWPC space weather ingestion poller"
+requires-python = ">=3.12"
+dependencies = [
+    "requests==2.32.5",
+    "redis==7.3.0",
+    "psycopg2-binary>=2.9.9",
+]

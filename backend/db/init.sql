@@ -247,3 +247,41 @@ BEGIN
     RETURN deleted;
 END;
 $$ LANGUAGE plpgsql;
+
+-- TABLE: space_weather_kp (Kp-index time series from NOAA SWPC)
+-- Hypertable for correlation with jamming events and satellite pass quality.
+CREATE TABLE IF NOT EXISTS space_weather_kp (
+    time        TIMESTAMPTZ NOT NULL,
+    kp          FLOAT NOT NULL,          -- Kp value (0.0–9.0)
+    kp_fraction FLOAT,                   -- Sub-integer precision where available
+    storm_level TEXT,                    -- 'quiet'|'unsettled'|'active'|'G1'|'G2'|'G3'|'G4'|'G5'
+    source      TEXT DEFAULT 'noaa_swpc' -- 'noaa_swpc_3h' | 'noaa_swpc_1m'
+);
+
+SELECT create_hypertable('space_weather_kp', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('space_weather_kp', INTERVAL '7 days');
+CREATE INDEX IF NOT EXISTS ix_swkp_time ON space_weather_kp (time DESC);
+
+-- TABLE: jamming_events (Detected GPS jamming zones from ADS-B integrity analysis)
+-- Stores both active and historical jamming/degradation events keyed to H3 hex cells.
+CREATE TABLE IF NOT EXISTS jamming_events (
+    time            TIMESTAMPTZ NOT NULL,
+    h3_index        TEXT NOT NULL,           -- H3 resolution-6 cell index
+    centroid_lat    DOUBLE PRECISION,
+    centroid_lon    DOUBLE PRECISION,
+    confidence      FLOAT,                   -- 0.0–1.0 (higher = more likely intentional)
+    affected_count  INTEGER,                 -- Aircraft with degraded NIC/NACp in cell
+    avg_nic         FLOAT,                   -- Mean NIC in cell during window
+    avg_nacp        FLOAT,                   -- Mean NACp in cell during window
+    kp_at_event     FLOAT,                   -- Kp-index at event time (for discriminator)
+    active          BOOLEAN DEFAULT TRUE,    -- FALSE once no degraded contacts remain
+    assessment      TEXT                     -- 'jamming'|'space_weather'|'mixed'|'equipment'
+);
+
+SELECT create_hypertable('jamming_events', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('jamming_events', INTERVAL '7 days');
+CREATE INDEX IF NOT EXISTS ix_jamming_h3_time   ON jamming_events (h3_index, time DESC);
+CREATE INDEX IF NOT EXISTS ix_jamming_active     ON jamming_events (active, time DESC);
+CREATE INDEX IF NOT EXISTS ix_jamming_centroid   ON jamming_events USING GIST (
+    ST_SetSRID(ST_MakePoint(centroid_lon, centroid_lat), 4326)
+) WHERE centroid_lat IS NOT NULL AND centroid_lon IS NOT NULL;

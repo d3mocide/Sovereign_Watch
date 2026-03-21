@@ -14,6 +14,7 @@ from classification import classify_aircraft
 from arbitration import Arbitrator
 from utils import safe_float, parse_altitude
 from h3_sharding import H3PriorityManager
+from jamming import JammingAnalyzer
 
 # Config - Read from ENV (set in docker-compose.yml)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
@@ -99,6 +100,11 @@ class PollerService:
             else None
         )
 
+        # GPS jamming/integrity analyzer (Ingest-04)
+        self.jamming_analyzer = JammingAnalyzer(REDIS_URL)
+        self._last_jamming_analysis = 0.0
+        self._jamming_analysis_interval = 30.0  # Analyze every 30 seconds
+
     async def setup(self):
         await self.poller.start()
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
@@ -135,6 +141,9 @@ class PollerService:
             self.center_lat, self.center_lon, self.radius_nm * 1.852
         )
 
+        # Start jamming analyzer
+        await self.jamming_analyzer.start()
+
         logger.info("Poller service ready")
 
     async def load_active_mission(self):
@@ -158,6 +167,7 @@ class PollerService:
         if self.watchlist:
             await self.watchlist.close()
         await self.h3_manager.close()
+        await self.jamming_analyzer.close()
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
@@ -461,6 +471,18 @@ class PollerService:
 
             self.arbitrator.record_publish(hex_id, source_ts, msg_lat, msg_lon)
 
+            # Feed integrity fields into jamming analyzer
+            nic = tak_msg.get("detail", {}).get("classification", {}).get("nic")
+            nacp = tak_msg.get("detail", {}).get("classification", {}).get("nacP")
+            if nic is not None or nacp is not None:
+                self.jamming_analyzer.ingest(
+                    uid=hex_id,
+                    lat=msg_lat,
+                    lon=msg_lon,
+                    nic=nic,
+                    nacp=nacp,
+                )
+
             # Auto-seed watchlist for high-interest aircraft spotted in any source
             await self._maybe_seed_watchlist(tak_msg)
 
@@ -471,6 +493,15 @@ class PollerService:
 
         if published:
             logger.info(f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
+
+        # Run jamming analysis periodically (every 30 s), not per-batch
+        now = time.time()
+        if now - self._last_jamming_analysis >= self._jamming_analysis_interval:
+            try:
+                await self.jamming_analyzer.analyze_and_publish()
+            except Exception as e:
+                logger.error("Jamming analysis error: %s", e)
+            self._last_jamming_analysis = now
 
     def normalize_to_tak(self, ac: Dict) -> Optional[Dict]:
         """Convert ADSBx format to SovereignWatch TAK-ish JSON format."""
@@ -546,6 +577,14 @@ class PollerService:
                 "contact": {
                     "callsign": (ac.get("flight", "") or ac.get("hex", "")).strip()
                 },
-                "classification": target_class
+                "classification": {
+                    **target_class,
+                    # ADS-B integrity fields (NIC/NACp) — present in adsb.fi and adsb.lol feeds.
+                    # NIC  0-11: Navigation Integrity Category (higher = tighter containment radius)
+                    # NACp 0-11: Navigation Accuracy Category for Position (higher = better accuracy)
+                    # Missing (None) means the source did not provide the field.
+                    "nic":  int(ac["nic"])  if ac.get("nic")  is not None else None,
+                    "nacP": int(ac["nac_p"]) if ac.get("nac_p") is not None else None,
+                }
             }
         }
