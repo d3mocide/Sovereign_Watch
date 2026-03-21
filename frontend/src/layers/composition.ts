@@ -110,8 +110,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       onEntitySelect,
       setHoveredEntity,
-      setHoverPosition,
-      zoom,
+      setHoverPosition
     );
   }
 

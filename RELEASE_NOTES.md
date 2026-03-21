@@ -1,20 +1,19 @@
-# Release - v0.41.3 - FCC Ingestion Hotfix & UI Theming
+# Release - v0.41.4 - Dynamic RadioReference & RF Range Enhancements
 
-This release immediately addresses a critical bug in the FCC Antenna Structure Registration (ASR) ingestion mapping logic, and synchronizes the AI intelligence panel to follow dedicated tactical colors.
+This release significantly enhances the geographical intelligence handling for RadioReference ingestion and expands backend querying capabilities for the tactical map.
 
 ### High-Level Summary
-Previously, all towers appearing on the global map were incorrectly categorized with identical owners (e.g., "City of Gillette") and identically mapped heights. This was caused by the ingestion script indexing the wrong column in the FCC `.dat` datasets. Additionally, the AI Analyst tool failed to reflect the respective domain colors for new infrastructure types, sticking to a generic green fallback. Both issues are now resolved.
+Previously, the overarching map limits constrained the RadioReference ingestion engine exclusively to the Pacific Northwest (Oregon/Washington) and capped visual tower mapping to a rigid 5000 pins inside the view. This resulted in sharp geographical constraints extending outward into the contiguous United States. By introducing dynamic US state discovery metrics based on your custom `CENTER_LAT`/`CENTER_LON`, the system now dynamically auto-extracts infrastructure boundaries to envelop your localized area flawlessly.
 
-### Key Fixed
-- **FCC Tower Ingestion Identifiers**: Transitioned the parsed USI key from column 1 (`REG`) to the actual Unique System Identifier at column 3. This resolves the metadata collision event and ensures thousands of structures successfully align to accurate registration values upon extraction from `r_tower.zip`.
-- **AI Analyst Theming Integration**: Resolved fallback mapping in the `AIAnalystPanel.tsx` modal and `AnalysisWidget.tsx` property card component to explicitly support styles for Orange (Towers), Teal (Repeaters), Cyan (Infrastructure), and Indigo (JS8Call) entities. 
+### Key Changes
+- **Dynamic State Generation (RadioReference)**: The ingestion container natively leverages FIPS lookup tables instead of hardcoded environment inputs. Providing `RADIOREF_STATE_IDS="AUTO"` measures states encompassing your predefined `RR_RADIUS_MI`, mapping dynamically selected states perfectly for targeted ingestion.
+- **RF Map Capacity Expansion**: Lifted backend database retrieval restrictions from generating a strict `LIMIT 5000` to `LIMIT 15000` nodes natively. This prevents harsh geographic drop-offs during macro-tactical views of radio and infrastructure elements.
+- **Optimized UI Range Toggles**: Altered the legacy system parameters out of large bounds (e.g. 1000, 2000 NM filters) focusing exclusively on the most accurate radar presentation intervals: `150`, `300` (Default), and `600` NM radius views.
 
 ### Upgrade Instructions
-Pull the latest code, force build the updated python container mapping, and clear out legacy cache variables in the data service:
+Pull the newest source configurations and launch a forced service rebuild for the `sovereign-rf-pulse` polling engine:
 
 ```bash
-docker compose up -d --build sovereign-infra-poller
-docker exec sovereign-redis redis-cli DEL infra:last_fcc_fetch
-docker compose restart sovereign-infra-poller
+docker compose up -d --build sovereign-rf-pulse
 ```
-No database migrations are required, as the next poller sweep will execute an `ON CONFLICT (fcc_id) DO UPDATE` command applying the correct properties immediately.
+No frontend static bundles are strictly required since Vite's HMR manages mapping files automatically, but users navigating back out of the environment can run `pnpm run build` as needed.

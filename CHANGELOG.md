@@ -1,3 +1,11 @@
+## [0.41.4] - 2026-03-20
+
+### Changed
+
+- **RadioReference Dynamic Coverage**: Replaced hardcoded `_STATE_IDS` targeting the Pacific Northwest entirely. Utilizing a dynamic FIPS state coordinate mapping inside the ingest container, `RADIOREF_STATE_IDS="AUTO"` now naturally discovers boundaries that correlate to your active Area of Tactical Operations parameters (`CENTER_LAT`/`CENTER_LON`), pulling all required regional nodes gracefully.
+- **RF Map Capacity**: Increased default spatial query limits on `/api/rf/sites` from 5,000 to 15,000 active nodes, preventing artificial circular rendering cutoffs within large AOR spheres.
+- **Map Range Presets**: Adjusted bounding radius widget settings in `SystemStatus.tsx` to center closer to optimal visual rendering thresholds (150, 300, 600 NM) and removed the oversized 2000 NM filter constraint.
+
 ## [0.41.3] - 2026-03-20
 
 ### Changed

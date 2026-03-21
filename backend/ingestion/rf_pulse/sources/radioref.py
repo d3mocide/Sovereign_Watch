@@ -41,6 +41,8 @@ import zeep
 import zeep.exceptions
 from zeep.transports import AsyncTransport
 
+from sources.fips_states import STATE_FIPS
+
 logger = logging.getLogger("rf_pulse.radioref")
 
 WSDL_URL = "https://api.radioreference.com/soap2/?wsdl&v=9"
@@ -49,12 +51,9 @@ CENTER_LAT   = float(os.getenv("CENTER_LAT", "45.5152"))
 CENTER_LON   = float(os.getenv("CENTER_LON", "-122.6784"))
 RR_RADIUS_MI = int(os.getenv("RF_RR_RADIUS_MI", "200"))
 
-# Comma-separated RR state IDs to scan; defaults to Oregon (43) and Washington (56).
-_STATE_IDS: list[int] = [
-    int(s.strip())
-    for s in os.getenv("RADIOREF_STATE_IDS", "41,53").split(",")
-    if s.strip().isdigit()
-]
+# Comma-separated RR state IDs to scan. If "AUTO" or empty, this will dynamically select states
+# whose centers fall within RR_RADIUS_MI + buffer of CENTER_LAT / CENTER_LON.
+_ENV_STATES = os.getenv("RADIOREF_STATE_IDS", "AUTO").strip().upper()
 
 
 def _haversine_mi(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -172,12 +171,23 @@ class RadioReferenceSource:
             "1": "FM", "2": "NFM", "3": "DMR", "4": "P25", "10": "P25 Phase 2", "11": "D-Star", "14": "YSF Fusion", "15": "NXDN",
         }
 
+        state_ids_to_scan = []
+        if _ENV_STATES == "AUTO" or not _ENV_STATES:
+            # Dynamically calc which states are geographically relevant
+            # We add a 300 mile buffer to state centers so boundary counties aren't missed
+            for s_info in STATE_FIPS.values():
+                dist = _haversine_mi(CENTER_LAT, CENTER_LON, s_info["lat"], s_info["lon"])
+                if dist <= (RR_RADIUS_MI + 300):
+                    state_ids_to_scan.append(s_info["fips"])
+        else:
+            state_ids_to_scan = [int(s.strip()) for s in _ENV_STATES.split(",") if s.strip().isdigit()]
+
         logger.info(
-            "RadioReference: scanning %d state(s) for sites within %d mi of %.4f,%.4f",
-            len(_STATE_IDS), RR_RADIUS_MI, CENTER_LAT, CENTER_LON,
+            "RadioReference: scanning %d state(s) (IDs: %s) for sites within %d mi of %.4f,%.4f",
+            len(state_ids_to_scan), state_ids_to_scan, RR_RADIUS_MI, CENTER_LAT, CENTER_LON,
         )
 
-        for stid in _STATE_IDS:
+        for stid in state_ids_to_scan:
             try:
                 state_info = await client.service.getStateInfo(stid=stid, authInfo=auth)
             except zeep.exceptions.Fault:

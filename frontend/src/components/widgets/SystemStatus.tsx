@@ -5,7 +5,7 @@ import { MapFilters } from '../../types';
 interface SystemStatusProps {
   trackCounts: { air: number; sea: number; orbital?: number };
   filters?: MapFilters;
-  onFilterChange?: (key: string, value: boolean) => void;
+  onFilterChange?: (key: string, value: boolean | number) => void;
 }
 
 export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters, onFilterChange }) => {
@@ -188,7 +188,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ trackCounts, filters
                     <span className="text-[9px] font-bold text-emerald-400/80">{filters.rfRadius || 300} NM</span>
                   </div>
                   <div className="flex w-full gap-1">
-                    {[100, 500, 1000, 2000].map(dist => (
+                    {[150, 300, 600].map(dist => (
                       <button
                         key={dist}
                         className={`flex-1 py-1 text-[9px] font-bold rounded border transition-all ${(filters.rfRadius || 300) === dist

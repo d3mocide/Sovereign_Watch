@@ -58,7 +58,7 @@ async def get_rf_sites(
         FROM rf_sites
         WHERE {where}
         ORDER BY geom <-> ST_SetSRID(ST_MakePoint($2,$1), 4326)::geometry
-        LIMIT 5000
+        LIMIT 15000
     """
 
     rows = await db.pool.fetch(query, *params)
