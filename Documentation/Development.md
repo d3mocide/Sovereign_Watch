@@ -329,6 +329,18 @@ docker compose exec sovereign-backend python -m pytest
 
 ### Ingestion Pollers
 
+**Pylance / pyright resolution for pollers:** The root `pyrightconfig.json` covers `backend/ingestion/` and points to the root-level `.venv`. Poller dependencies are not installed there by default, so you'll see `Import "redis" could not be resolved`-style errors until you install them once:
+
+```bash
+# From the repo root — installs poller deps into the root .venv for IDE use only
+# (Runtime still uses each poller's own Docker image)
+.venv\Scripts\pip install redis==7.3.0 psycopg2-binary requests   # Windows
+# or
+.venv/bin/pip install redis==7.3.0 psycopg2-binary requests        # Linux / macOS
+```
+
+After installing, do **Ctrl+Shift+P → Python: Restart Language Server** in VS Code to clear cached errors.
+
 **Pollers do not support hot reload.** Any change to `backend/ingestion/<poller>/` requires a rebuild and restart:
 
 ```bash
