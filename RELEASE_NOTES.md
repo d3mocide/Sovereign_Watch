@@ -1,19 +1,31 @@
-# Release - v0.41.4 - Dynamic RadioReference & RF Range Enhancements
+# Release - v0.42.0 - GhostNet Operational Integration
 
-This release significantly enhances the geographical intelligence handling for RadioReference ingestion and expands backend querying capabilities for the tactical map.
+This release integrates full operational support for the GhostNet JS8Call network (S2 Underground GhostNet v1.5), significantly enhancing the JS8Call radio terminal.
 
 ### High-Level Summary
-Previously, the overarching map limits constrained the RadioReference ingestion engine exclusively to the Pacific Northwest (Oregon/Washington) and capped visual tower mapping to a rigid 5000 pins inside the view. This resulted in sharp geographical constraints extending outward into the contiguous United States. By introducing dynamic US state discovery metrics based on your custom `CENTER_LAT`/`CENTER_LON`, the system now dynamically auto-extracts infrastructure boundaries to envelop your localized area flawlessly.
+The main focus of this release is the integration of GhostNet v1.5 operational support into the JS8Call terminal. Operators can now leverage frequency presets, group targeting, and a weekly net schedule with real-time active window highlighting. This release also resolves critical UI cutoff issues and background bridge stability, ensuring a seamless operational experience.
 
-### Key Changes
-- **Dynamic State Generation (RadioReference)**: The ingestion container natively leverages FIPS lookup tables instead of hardcoded environment inputs. Providing `RADIOREF_STATE_IDS="AUTO"` measures states encompassing your predefined `RR_RADIUS_MI`, mapping dynamically selected states perfectly for targeted ingestion.
-- **RF Map Capacity Expansion**: Lifted backend database retrieval restrictions from generating a strict `LIMIT 5000` to `LIMIT 15000` nodes natively. This prevents harsh geographic drop-offs during macro-tactical views of radio and infrastructure elements.
-- **Optimized UI Range Toggles**: Altered the legacy system parameters out of large bounds (e.g. 1000, 2000 NM filters) focusing exclusively on the most accurate radar presentation intervals: `150`, `300` (Default), and `600` NM radius views.
+### Key Features
+- **GhostNet v1.5 Operational Support**: 
+    - Full suite of frequency presets for weekly nets, data bridges, RTTY, and emergency voice.
+    - Specialized JS8Call group tags (@GHOSTNET, @GSTFLASH, @ALLCALL) for rapid TX targeting.
+    - Integrated weekly net schedule with "ACTIVE" window highlighting and inline tuning.
+- **RadioTerminal UI Enhancements**:
+    - Converted the right sidebar to a tabbed interface ("Heard" vs "GhostNet").
+    - Added a color-coded frequency/group quick-select toolbar.
+    - Implemented pulsing status badges for active GhostNet windows.
+- **JS8Call Frequency Sync**: Added `RIG.SET_FREQ` support to automatically synchronize the JS8Call dial frequency with the linked KiwiSDR receiver.
+- **KiwiSDR Filter Widening**: Expanded USB passband from 300–2700 Hz to 50–2800 Hz to capture the full JS8Call audio spectrum.
+
+### Technical Details
+- **UI Protection**: Implemented defensive padding (`pb-10`) across terminal panels to prevent bottom controls from being lost under system taskbars.
+- **Bridge Stability**: Fixed a missing `socket` import in the `js8call` service that caused UDP command failures.
+- **Spectrum Capture**: Symmetrically widened LSB/USB filters to ensure binary-transparent audio capture across the entire 2500 Hz JS8Call offset range.
 
 ### Upgrade Instructions
-Pull the newest source configurations and launch a forced service rebuild for the `sovereign-rf-pulse` polling engine:
+Pull the latest source and rebuild the `sovereign-js8call` service:
 
 ```bash
-docker compose up -d --build sovereign-rf-pulse
+docker compose up -d --build sovereign-js8call
 ```
-No frontend static bundles are strictly required since Vite's HMR manages mapping files automatically, but users navigating back out of the environment can run `pnpm run build` as needed.
+The frontend UI will update automatically via Vite's HMR system. For production bundles, run `pnpm run build` inside the `frontend` directory.
