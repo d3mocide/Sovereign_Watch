@@ -36,6 +36,7 @@ import logging
 import math
 import os
 import re
+import socket
 import subprocess
 import threading
 import time
@@ -1002,6 +1003,9 @@ async def ws_js8(websocket: WebSocket) -> None:
                             "freq": freq, "mode": mode,
                             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
                         })
+                        # Sync JS8Call dial frequency to the KiwiSDR dial frequency
+                        # so that decoded message metadata reflects the correct band.
+                        _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": int(float(freq) * 1000), "PARAMS": {}})
                     except ValueError as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:
@@ -1024,6 +1028,9 @@ async def ws_js8(websocket: WebSocket) -> None:
                         else:
                             # Different node — full reconnect
                             await _kiwi_native.connect(host, port, float(freq), mode, password=password)
+                        # Sync JS8Call dial frequency to the KiwiSDR dial frequency
+                        # so that decoded message metadata reflects the correct band.
+                        _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": int(float(freq) * 1000), "PARAMS": {}})
                     except ValueError as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:

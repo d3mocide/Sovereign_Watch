@@ -2,7 +2,7 @@
 
 This file tracks the historical progress of the Sovereign Watch platform. For future tasks, see [ROADMAP.md](../../ROADMAP.md).
 
-## Completed Tasks (as of 2026-03-14)
+## Completed Tasks (as of 2026-03-20)
 
 | ID              | Task Name                    | Component          | Description                                                                                                                                                                                                                                                 |
 | :-------------- | :--------------------------- | :----------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -55,3 +55,5 @@ This file tracks the historical progress of the Sovereign Watch platform. For fu
 | **FE-12**       | Settings UI                  | Frontend           | **DONE** (v0.29.1). Configure API keys and Poller internals via the UI instead of `.env` files.                                                                                                                                                             |
 | **AI-01**       | AI Analyst Panel             | Frontend           | **DONE** (v0.29.1). Surface the existing `/api/analyze/{uid}` LLM capability into a dedicated frontend widget.                                                                                                                                              |
 | **FE-10**       | Payload Eval                 | Frontend           | **DONE** (v0.32.0). Raw JSON inspector (Terminal Mode).                                                                                                                                                                                                     |
+| **Ingest-11**   | FCC ASR Tower Service        | Data Eng           | **DONE** (v0.41.0) FCC antenna structure DB -> bounding-box filtered endpoints.                                                                                                                                                                             |
+| **FE-25b**      | FCC Tower Layer              | Frontend           | **DONE** (v0.41.0) Visual markers for communication towers                                                                                                                                                                                                  |

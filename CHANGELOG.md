@@ -1,3 +1,44 @@
+## [0.42.1] - 2026-03-21
+
+### Changed
+
+- **Roadmap & Backlog Modernization**: Integrated strategic research findings for GDELT (Global Database of Events, Language, and Tone), SIGINT Jamming (ADS-B integrity analysis), and Space Weather (NOAA SWPC) into the technical roadmap.
+- **Documentation Pruning**: Performed a massive cleanup of obsolete `agent_docs/tasks/archive/` files (over 17k lines removed) to reduce repository clutter and improve agent token efficiency.
+- **Strategic Features Added to Backlog**:
+  - GDELT Events Pulse (GeoJSON news mapping).
+  - SIGINT Jamming Pipeline (NIC/NACp inference).
+  - Space Weather Pulse (Kp-index/Auroral Oval).
+  - Multi-INT HUD (Polymarket/News Grid/DEFCON).
+  - RF Band Plan context (Offline SQLite lookup).
+
+### Fixed
+
+- **Roadmap Consistency**: Updated `COMPLETED_ARCHIVE.md` status for FCC Tower datasets and standardized task IDs across documentation.
+
+## [0.42.0] - 2026-03-21
+
+### Added
+
+- **GhostNet v1.5 Operational Support**: Integrated full operational support for the GhostNet JS8Call network.
+  - **Frequency Presets**: Added `GHOSTNET_FREQ_PRESETS` for weekly nets, data bridges, RTTY, and emergency voice.
+  - **Group Targeting**: Added `GHOSTNET_GROUPS` (@GHOSTNET, @GSTFLASH, @ALLCALL) for rapid TX targeting and monitoring.
+  - **Weekly Schedule**: Integrated the full weekly schedule with real-time active window highlighting and inline tuning.
+- **RadioTerminal UI Enhancements**:
+  - **Tabbed Sidebar**: Converted the right sidebar to a tabbed interface with "Heard" and "GhostNet" tabs.
+  - **Quick-Select Toolbar**: Added frequency and group quick-select buttons with color-coded operational categories.
+  - **Active Net Highlighting**: Implemented pulsing "ACTIVE" badges for live net windows based on current UTC time.
+- **JS8Call Frequency Sync**: Added `RIG.SET_FREQ` UDP command support to keep JS8Call dial frequency in perfect sync with the KiwiSDR receiver.
+
+### Changed
+
+- **KiwiSDR Filter Widening**: Expanded USB passband (300–2700 Hz → 50–2800 Hz) to capture the full JS8Call audio spectrum and ensure maximum decode bandwidth.
+- **Default TX Target**: Updated default transmit target to `@GHOSTNET` for immediate network readiness.
+
+### Fixed
+
+- **UI Cutoff Protection**: Implemented defensive padding in `ListeningPost` and `RadioTerminal` to prevent bottom controls from being clipped by system taskbars.
+- **JS8Bridge Stability**: Resolved a critical missing `socket` import in the bridge server that caused UDP command failures.
+
 ## [0.41.4] - 2026-03-20
 
 ### Changed

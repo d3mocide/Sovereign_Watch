@@ -27,14 +27,20 @@ The platform's "System of Systems" architecture is documented in detail within t
 
 ## 3. Backlog (P2)
 
-| ID            | Task Name             | Component | Description                                                                 |
-| :------------ | :-------------------- | :-------- | :-------------------------------------------------------------------------- |
-| **Ingest-11** | FCC ASR Tower Service | Data Eng  | FCC antenna structure DB -> bounding-box filtered endpoints.                |
-| **FE-25b**    | FCC Tower Layer       | Frontend  | Visual markers for communication towers by height and type.                 |
-| **FE-13**     | Mission Labels        | Frontend  | Floating text labels for coverage areas.                                    |
-| **Ingest-07** | Drone Remote ID       | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline (Requires RTL-SDR hardware).       |
-| **FE-22**     | Drone Tactical Layer  | Frontend  | Implement `DroneLayer.tsx` with rotor icons and `drone_class` color coding. |
-| **FE-25c**    | PSAP / 911 Centers    | Frontend  | Static GeoJSON markers for emergency dispatch centers.                      |
+| ID            | Task Name            | Component | Description                                                                 |
+| :------------ | :------------------- | :-------- | :-------------------------------------------------------------------------- |
+| **FE-13**     | Mission Labels       | Frontend  | Floating text labels for coverage areas.                                    |
+| **Ingest-07** | Drone Remote ID      | Data Eng  | OpenDroneID / FAA Remote ID SDR pipeline (Requires RTL-SDR hardware).       |
+| **FE-22**     | Drone Tactical Layer | Frontend  | Implement `DroneLayer.tsx` with rotor icons and `drone_class` color coding. |
+| **FE-25c**    | PSAP / 911 Centers   | Frontend  | Static GeoJSON markers for emergency dispatch centers.                      |
+| **Ingest-04** | SIGINT Jamming       | Data Eng  | ADS-B Integrity Analysis                                                    |
+| **Ingest-05** | Spectrum Verif       | Data Eng  | SatNOGS Integration                                                         |
+| **Ingest-14** | GDELT Events Pulse   | Data Eng  | Ingest GDELT GKG GeoJSON (15-min interval) news events.                     |
+| **FE-35**     | GDELT News Layer     | Frontend  | Real-time news markers with Tone (Goldstein) and CAMEO filtering.           |
+| **Ingest-15** | Space Weather Pulse  | Data Eng  | NOAA SWPC (Kp-index, Solar Flux, Auroral Oval) ingestion.                   |
+| **FE-36**     | Env Layers           | Frontend  | Auroral Oval polygon layer and solar activity status widget.                |
+| **FE-38**     | Multi-INT Dashboard  | Frontend  | Integrated HUD: Polymarket probabilities, Live TV Grid, and DEFCON Status.  |
+| **FE-37**     | RF Band Plan Context | Frontend  | Offline SQLite frequency allocation lookup (FCC/ITU).                       |
 
 ---
 
@@ -46,4 +52,4 @@ The platform's "System of Systems" architecture is documented in detail within t
 
 ---
 
-- **Last Updated**: 2026-03-15 (Refactored for focus).
+- **Last Updated**: 2026-03-21 (Backlog Update).

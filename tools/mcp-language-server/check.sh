@@ -86,7 +86,9 @@ graph_found=0
 for candidate in \
   "$HOME"/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs \
   "$HOME"/.vscode-server/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs \
-  /c/Users/"${USERNAME:-}"/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs
+  /c/Users/"${USERNAME:-}"/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs \
+  /c/Users/"${USERNAME:-}"/.antigravity/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs \
+  "$HOME"/.antigravity/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs
   do
   if compgen -G "$candidate" >/dev/null 2>&1; then
     graph_found=1

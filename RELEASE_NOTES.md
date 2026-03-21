@@ -1,19 +1,27 @@
-# Release - v0.41.4 - Dynamic RadioReference & RF Range Enhancements
+# Release - v0.42.1 - Strategic Update
 
-This release significantly enhances the geographical intelligence handling for RadioReference ingestion and expands backend querying capabilities for the tactical map.
+## Summary
 
-### High-Level Summary
-Previously, the overarching map limits constrained the RadioReference ingestion engine exclusively to the Pacific Northwest (Oregon/Washington) and capped visual tower mapping to a rigid 5000 pins inside the view. This resulted in sharp geographical constraints extending outward into the contiguous United States. By introducing dynamic US state discovery metrics based on your custom `CENTER_LAT`/`CENTER_LON`, the system now dynamically auto-extracts infrastructure boundaries to envelop your localized area flawlessly.
+This update marks a critical transition from core track ingestion toward high-level analytical utility. Following a deep-dive research phase across GDELT and External SIGINT datasets, we are formally prioritizing features that provide global situational context.
 
-### Key Changes
-- **Dynamic State Generation (RadioReference)**: The ingestion container natively leverages FIPS lookup tables instead of hardcoded environment inputs. Providing `RADIOREF_STATE_IDS="AUTO"` measures states encompassing your predefined `RR_RADIUS_MI`, mapping dynamically selected states perfectly for targeted ingestion.
-- **RF Map Capacity Expansion**: Lifted backend database retrieval restrictions from generating a strict `LIMIT 5000` to `LIMIT 15000` nodes natively. This prevents harsh geographic drop-offs during macro-tactical views of radio and infrastructure elements.
-- **Optimized UI Range Toggles**: Altered the legacy system parameters out of large bounds (e.g. 1000, 2000 NM filters) focusing exclusively on the most accurate radar presentation intervals: `150`, `300` (Default), and `600` NM radius views.
+This release also performs a "Repo Hygiene" pass, pruning over 17,000 lines of obsolete documentation in `agent_docs` to ensure token-efficient AI operations and faster workspace loading on tactical edge hardware.
 
-### Upgrade Instructions
-Pull the newest source configurations and launch a forced service rebuild for the `sovereign-rf-pulse` polling engine:
+## Key Features (Backlog)
+
+*   **GDELT Intelligence Pulse**: Integrated planned support for the Global Database of Events, Language, and Tone (15-min interval mapping).
+*   **SIGINT Jamming Index (ADS-B)**: Strategic roadmap now includes inference models for GPS jamming detection via ADS-B integrity categories (NIC/NACp).
+*   **Environmental Layer**: Added NOAA Space Weather (Kp-index & Auroral Oval) to the operational backlog.
+*   **Multi-INT HUD Suite**: Roadmap now includes integrated widgets for Polymarket (predictive OSINT), Live News Grids, and Global Threat Levels (DEFCON).
+
+## Technical Details
+
+*   **Pruning**: Cleaned up historical `agent_docs/tasks/archive/` directory to remove hundreds of obsolete markdown task logs.
+*   **Roadmap**: Updated `ROADMAP.md` and `COMPLETED_ARCHIVE.md` to ensure ID-level consistency and status accuracy.
+
+## Upgrade Instructions
+
+No code changes in this version; document-only update to roadmap and repository metadata.
 
 ```bash
-docker compose up -d --build sovereign-rf-pulse
+git pull origin main
 ```
-No frontend static bundles are strictly required since Vite's HMR manages mapping files automatically, but users navigating back out of the environment can run `pnpm run build` as needed.

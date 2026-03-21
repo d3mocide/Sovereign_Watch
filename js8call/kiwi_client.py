@@ -65,8 +65,11 @@ SND_FLAG_LE_PCM     = 0x80  # PCM is little-endian (always set on current KiwiSD
 
 MODE_FILTERS: dict[str, tuple[int, int]] = {
     # Single-sideband voice
-    "usb":  (300,   2700),
-    "lsb":  (-2700, -300),
+    # Note: USB default widened to 50–2800 Hz (from 300–2700) to capture the
+    # full JS8Call audio spectrum (0–2500 Hz offsets) per GhostNet guide §2.
+    # Standard SSB voice would use 300–2700; digital modes need the wider pass.
+    "usb":  (50,    2800),
+    "lsb":  (-2800, -50),
     "usn":  (300,   1800),    # USB narrow
     "lsn":  (-1800, -300),    # LSB narrow
     # AM variants
