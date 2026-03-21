@@ -253,7 +253,7 @@ def fetch_and_ingest_fcc_towers():
                     content = f.read().decode('latin1')
                 for row in csv.reader(io.StringIO(content), delimiter='|'):
                     if len(row) > 9 and row[0] == 'EN':
-                        usi = row[1].strip()
+                        usi = row[3].strip()
                         name = row[9].strip()
                         if usi and name:
                             owner_by_usi[usi] = name
@@ -268,7 +268,7 @@ def fetch_and_ingest_fcc_towers():
                     content = f.read().decode('latin1')
                 for row in csv.reader(io.StringIO(content), delimiter='|'):
                     if len(row) > 30 and row[0] == 'RA':
-                        usi = row[1].strip()
+                        usi = row[3].strip()
                         if usi and usi not in ra_by_usi:  # keep first (most recent) record
                             ra_by_usi[usi] = (
                                 _parse_float(row[28]),  # ground elevation AMSL (m)
@@ -301,7 +301,7 @@ def fetch_and_ingest_fcc_towers():
                     if row[5].strip() not in ('T', ''):
                         continue
 
-                    usi = row[1].strip()
+                    usi = row[3].strip()
                     fcc_id = row[2].strip()
                     if not usi or not fcc_id:
                         continue

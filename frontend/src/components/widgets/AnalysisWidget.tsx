@@ -21,6 +21,9 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
   } else if (accentColor.includes('purple')) {
     accentBorder = 'border-purple-400/30';
     accentBg = 'bg-gradient-to-br from-purple-400/10 to-purple-400/5';
+  } else if (accentColor.includes('orange')) {
+    accentBorder = 'border-orange-400/30';
+    accentBg = 'bg-gradient-to-br from-orange-400/10 to-orange-400/5';
   } else if (accentColor.includes('indigo')) {
     accentBorder = 'border-indigo-400/30';
     accentBg = 'bg-gradient-to-br from-indigo-400/10 to-indigo-400/5';

@@ -194,6 +194,18 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
   if (entity) {
     const isShip = entity.type.includes('S');
     const isSat = entity.type === 'a-s-K' || entity.type.indexOf('K') === 4;
+    const isTower = entity.type === 'tower';
+    const isRepeater = entity.type === 'repeater';
+    const isJS8 = entity.type === 'js8';
+    const isInfra = entity.type === 'infra';
+
+    let isOutage = false;
+    let severity = 0;
+    if (isInfra && entity.detail?.properties) {
+       const props = entity.detail.properties as Record<string, unknown>;
+       isOutage = props.entity_type === 'outage' || (typeof props.id === 'string' && props.id.includes('outage')) || props.severity !== undefined;
+       severity = Number(props.severity || 0);
+    }
 
     if (isSat) {
       accentColor = 'text-purple-400';
@@ -203,6 +215,34 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
       accentColor = 'text-sea-accent';
       accentBorder = 'border-sea-accent/30';
       accentBg = 'bg-gradient-to-br from-black/90 to-sea-accent/5';
+    } else if (isTower) {
+      accentColor = 'text-orange-400';
+      accentBorder = 'border-orange-400/30';
+      accentBg = 'bg-gradient-to-br from-black/90 to-orange-400/5';
+    } else if (isRepeater) {
+      accentColor = 'text-teal-400';
+      accentBorder = 'border-teal-400/30';
+      accentBg = 'bg-gradient-to-br from-black/90 to-teal-400/5';
+    } else if (isJS8) {
+      accentColor = 'text-indigo-400';
+      accentBorder = 'border-indigo-400/30';
+      accentBg = 'bg-gradient-to-br from-black/90 to-indigo-400/5';
+    } else if (isInfra) {
+      if (isOutage) {
+        if (severity > 50) {
+          accentColor = 'text-red-400';
+          accentBorder = 'border-red-400/30';
+          accentBg = 'bg-gradient-to-br from-black/90 to-red-400/5';
+        } else {
+          accentColor = 'text-amber-400';
+          accentBorder = 'border-amber-400/30';
+          accentBg = 'bg-gradient-to-br from-black/90 to-amber-400/5';
+        }
+      } else {
+        accentColor = 'text-cyan-400';
+        accentBorder = 'border-cyan-400/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-cyan-400/5';
+      }
     } else {
       accentColor = 'text-air-accent';
       accentBorder = 'border-air-accent/30';

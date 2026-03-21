@@ -1,21 +1,20 @@
-# Release - v0.41.2 - FCC Scatter Distribution Patch
+# Release - v0.41.3 - FCC Ingestion Hotfix & UI Theming
 
-This patch resolves a "patchy" rendering issue on the Tactical Map when visualizing large volumes of FCC Antenna Structure Registration (ASR) data.
+This release immediately addresses a critical bug in the FCC Antenna Structure Registration (ASR) ingestion mapping logic, and synchronizes the AI intelligence panel to follow dedicated tactical colors.
 
 ### High-Level Summary
-Previously, zoomed-out views of FCC towers would show dense clusters in some areas and total voids in others, even if those areas were fully ingested. This was due to the backend serving only the "first 2000" rows in physical disk order. This release fixes this by implement randomized spatial sampling.
+Previously, all towers appearing on the global map were incorrectly categorized with identical owners (e.g., "City of Gillette") and identically mapped heights. This was caused by the ingestion script indexing the wrong column in the FCC `.dat` datasets. Additionally, the AI Analyst tool failed to reflect the respective domain colors for new infrastructure types, sticking to a generic green fallback. Both issues are now resolved.
 
 ### Key Fixed
-- **FCC Spatial Distribution**: Modernized the `infra_towers` query to use a random UUID sort. This ensures that even when a limit is hit, the results are a representative sample from the entire viewport rather than just the first available database pages.
-- **Sample Density**: Increased the default tower budget from 2,000 to 10,000 unique records per viewport, greatly improving the fidelity of infrastructure scatter plots on high-resolution displays.
-
-### Technical Details
-- **Sort Logic**: Backend now explicitly uses `ORDER BY id` (where ID is a random UUID) to force a non-geographic budget distribution.
-- **FastAPI Defaults**: Updated the internal `limit` parameter for the `/api/infra/towers` endpoint.
+- **FCC Tower Ingestion Identifiers**: Transitioned the parsed USI key from column 1 (`REG`) to the actual Unique System Identifier at column 3. This resolves the metadata collision event and ensures thousands of structures successfully align to accurate registration values upon extraction from `r_tower.zip`.
+- **AI Analyst Theming Integration**: Resolved fallback mapping in the `AIAnalystPanel.tsx` modal and `AnalysisWidget.tsx` property card component to explicitly support styles for Orange (Towers), Teal (Repeaters), Cyan (Infrastructure), and Indigo (JS8Call) entities. 
 
 ### Upgrade Instructions
-Pull the latest code and the backend will auto-reload. No container rebuild is strictly necessary if HMR/Reloader is active, but a quick restart is recommended:
+Pull the latest code, force build the updated python container mapping, and clear out legacy cache variables in the data service:
+
 ```bash
-docker compose up -d sovereign-backend
+docker compose up -d --build sovereign-infra-poller
+docker exec sovereign-redis redis-cli DEL infra:last_fcc_fetch
+docker compose restart sovereign-infra-poller
 ```
-No database migrations or ingest rescans are required.
+No database migrations are required, as the next poller sweep will execute an `ON CONFLICT (fcc_id) DO UPDATE` command applying the correct properties immediately.

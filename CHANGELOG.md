@@ -1,3 +1,13 @@
+## [0.41.3] - 2026-03-20
+
+### Changed
+
+- **AI Analyst Theming**: Synchronized the property card `AnalysisWidget` button styling and the `AIAnalystPanel` modal to accurately inherit domain-specific accent colors (e.g., Orange for FCC Towers, Teal for Repeaters, Cyan for Infrastructure, and Indigo for JS8Call).
+
+### Fixed
+
+- **FCC Tower Ingestion Identifiers**: Resolved a bug in `infra_poller/main.py` where FCC tower parsing defaulted to the static row indicator `"REG"` instead of the Unique System Identifier (USI). This fix ensures metadata fields such as Owner and Elevation accurately map to their exact registered structure during database ingestion.
+
 ## [0.41.2] - 2026-03-22
 
 ### Fixed
