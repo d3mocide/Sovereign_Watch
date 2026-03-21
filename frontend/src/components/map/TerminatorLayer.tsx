@@ -5,6 +5,11 @@ interface InlinePolygon {
   coordinates: number[][][];
 }
 
+interface InlineLineString {
+  type: 'LineString';
+  coordinates: number[][];
+}
+
 interface InlineFeature<G> {
   type: 'Feature';
   geometry: G;
@@ -21,9 +26,16 @@ interface InlineFeatureCollection<G> {
  * We cast to Internal GeoJSON types to satisfy the interface.
  */
 type TerminatorGeoJson = InlineFeatureCollection<InlinePolygon>;
+type TerminatorLineGeoJson = InlineFeatureCollection<InlineLineString>;
+
+interface TerminatorGeometry {
+  nightGeoJson: TerminatorGeoJson;
+  twilightLineGeoJson: TerminatorLineGeoJson;
+  twilightStripGeoJson: TerminatorGeoJson;
+}
 
 // Helper to compute the terminator GeoJSON polygon
-function computeTerminator(date: Date) {
+function computeTerminator(date: Date): TerminatorGeometry {
   // Get sun position at lat=0, lon=0 to find declination and right ascension/hour angle
   // suncalc.getPosition(date, lat, lon) returns altitude and azimuth
   // For the sub-solar point:
@@ -73,34 +85,67 @@ function computeTerminator(date: Date) {
     coords.push([lon_deg, lat * 180 / Math.PI]);
   }
 
-  // To make a polygon representing the *night* side, we need to connect the terminator
-  // to either the north or south pole, depending on season (subSolarLat).
-  // If sun is in north hemisphere (subSolarLat > 0), night covers south pole.
+  // ── Twilight strip: ±2° offset of the terminator line into the night side ──
+  // This simulates the civil/nautical twilight penumbra (~200 km wide).
+  // We offset each terminator point slightly toward the night pole.
+  const nightOffset = subSolarLat > 0 ? -2.0 : 2.0; // degrees toward night pole
+  const coordsOffset = coords.map(([lon, lat]) => [lon, Math.max(-89, Math.min(89, lat + nightOffset))]);
 
+  // Twilight strip polygon: terminator line + offset line reversed, closed
+  const stripRing = [
+    ...coords,
+    ...[...coordsOffset].reverse(),
+    coords[0],
+  ];
+
+  // ── Night polygon ──
+  const nightCoords = [...coords];
   if (subSolarLat > 0) {
-    coords.push([180, -90]);
-    coords.push([-180, -90]);
+    nightCoords.push([180, -90]);
+    nightCoords.push([-180, -90]);
   } else {
-    coords.push([180, 90]);
-    coords.push([-180, 90]);
+    nightCoords.push([180, 90]);
+    nightCoords.push([-180, 90]);
   }
-
   // Close the polygon
-  coords.push(coords[0]);
+  nightCoords.push(nightCoords[0]);
 
   return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [coords]
+    nightGeoJson: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [nightCoords] },
+          properties: {},
         },
-        properties: {}
-      }
-    ]
-  } as TerminatorGeoJson;
+      ],
+    } as TerminatorGeoJson,
+
+    // Glowing edge line along the terminator boundary
+    twilightLineGeoJson: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: coords },
+          properties: {},
+        },
+      ],
+    } as TerminatorLineGeoJson,
+
+    // Twilight strip polygon
+    twilightStripGeoJson: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [stripRing] },
+          properties: {},
+        },
+      ],
+    } as TerminatorGeoJson,
+  };
 }
 
 export function getTerminatorLayer(visible: boolean) {
@@ -109,21 +154,46 @@ export function getTerminatorLayer(visible: boolean) {
   const now = new Date();
   now.setSeconds(0, 0);
 
-  const terminatorGeoJson = computeTerminator(now);
+  const { nightGeoJson, twilightLineGeoJson, twilightStripGeoJson } = computeTerminator(now);
 
-  return new GeoJsonLayer({
-    id: 'terminator-layer',
-    data: terminatorGeoJson,
-    visible: visible,
-    getFillColor: [0, 0, 20, 80],
-    getLineColor: [100, 100, 200, 60],
-    getLineWidth: 1,
-    lineWidthMinPixels: 1,
-    stroked: true,
-    filled: true,
-    // Add updateTriggers if we want it to react to time changes
-    updateTriggers: {
-      getFillColor: [now.getTime()]
-    }
-  });
+  return [
+    // ── Layer 1: full night-side fill (deep blue, subtle) ──────────────────
+    new GeoJsonLayer({
+      id: 'terminator-night',
+      data: nightGeoJson,
+      visible,
+      getFillColor: [0, 0, 20, 80],
+      getLineColor: [0, 0, 0, 0],
+      stroked: false,
+      filled: true,
+      updateTriggers: { getFillColor: [now.getTime()] },
+    }),
+
+    // ── Layer 2: twilight penumbra strip (~200 km wide along terminator) ──
+    // Represents civil/nautical twilight — atmospheric scattering zone.
+    new GeoJsonLayer({
+      id: 'terminator-twilight-strip',
+      data: twilightStripGeoJson,
+      visible,
+      getFillColor: [20, 40, 120, 45],
+      getLineColor: [0, 0, 0, 0],
+      stroked: false,
+      filled: true,
+      updateTriggers: { getFillColor: [now.getTime()] },
+    }),
+
+    // ── Layer 3: glowing terminator edge line ─────────────────────────────
+    // Bright blue-white glow that makes the day/night boundary visually pop.
+    new GeoJsonLayer({
+      id: 'terminator-edge',
+      data: twilightLineGeoJson,
+      visible,
+      getLineColor: [140, 180, 255, 150],
+      getLineWidth: 3,
+      lineWidthMinPixels: 1.5,
+      stroked: true,
+      filled: false,
+      updateTriggers: { getLineColor: [now.getTime()] },
+    }),
+  ];
 }

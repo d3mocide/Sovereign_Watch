@@ -2,7 +2,7 @@ import { ScatterplotLayer, PathLayer, IconLayer, LineLayer, PolygonLayer } from 
 import type { Layer, PickingInfo } from "@deck.gl/core";
 import { CoTEntity } from "../types";
 
-interface VelocityDatum { path: number[][]; entity: CoTEntity }
+interface VelocityDatum { path: number[][]; arrowhead: number[][]; entity: CoTEntity }
 import { entityColor } from "../utils/map/colorUtils";
 import { ICON_ATLAS } from "../utils/map/iconAtlas";
 
@@ -39,8 +39,9 @@ export function buildEntityLayers(
         getFillColor: [0, 0, 0, 0],
         getLineColor: () => {
           // Amber warning, pulse
-          const pulse = (now % 1500) / 1500;
-          const alpha = Math.round(120 + pulse * 135);
+          // Faster 900 ms period; wider alpha swing (80→255) for urgent feel
+          const pulse = (now % 900) / 900;
+          const alpha = Math.round(80 + pulse * 175);
           return [251, 191, 36, alpha] as [number, number, number, number];
         },
         getLineWidth: 2,
@@ -292,36 +293,71 @@ export function buildEntityLayers(
   }
 
   if (velocityVectorsEnabled) {
+    // Pre-compute velocity endpoint + arrowhead geometry once, shared by both layers
+    const velocityData: VelocityDatum[] = interpolated
+      .filter((e) => e.speed > 0.1)
+      .map((d) => {
+        const projectionSeconds = 45;
+        const distMeters = d.speed * projectionSeconds;
+        const courseRad = ((d.course || 0) * Math.PI) / 180;
+        const R = 6371000;
+        const latRad = (d.lat * Math.PI) / 180;
+        const dLat = (distMeters * Math.cos(courseRad)) / R;
+        const dLon = (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
+        const alt = d.altitude || 0;
+        const tipLon = d.lon + dLon * (180 / Math.PI);
+        const tipLat = d.lat + dLat * (180 / Math.PI);
+
+        // Arrowhead triangle: apex at tip, base ~6 km back, ~3 km wide
+        const lonScale = 1 / Math.cos(latRad);
+        const arrowLenDeg = 0.055;
+        const arrowWidthDeg = 0.028;
+        const fwdLon = Math.sin(courseRad) * lonScale;
+        const fwdLat = Math.cos(courseRad);
+        const perpLon = Math.cos(courseRad) * lonScale;
+        const perpLat = -Math.sin(courseRad);
+
+        const apex   = [tipLon, tipLat, alt];
+        const baseL  = [
+          tipLon - arrowLenDeg * fwdLon + arrowWidthDeg * perpLon,
+          tipLat - arrowLenDeg * fwdLat + arrowWidthDeg * perpLat,
+          alt,
+        ];
+        const baseR  = [
+          tipLon - arrowLenDeg * fwdLon - arrowWidthDeg * perpLon,
+          tipLat - arrowLenDeg * fwdLat - arrowWidthDeg * perpLat,
+          alt,
+        ];
+
+        return {
+          path: [[d.lon, d.lat, alt], [tipLon, tipLat, alt]],
+          arrowhead: [apex, baseL, baseR],
+          entity: d,
+        };
+      });
+
     layers.push(
       new PathLayer({
         id: `velocity-vectors-${globeMode ? "globe" : "merc"}`,
-        data: interpolated
-          .filter((e) => e.speed > 0.1)
-          .map((d) => {
-            const projectionSeconds = 45;
-            const distMeters = d.speed * projectionSeconds;
-            const courseRad = ((d.course || 0) * Math.PI) / 180;
-            const R = 6371000;
-            const latRad = (d.lat * Math.PI) / 180;
-            const dLat = (distMeters * Math.cos(courseRad)) / R;
-            const dLon =
-              (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
-            const target = [
-              d.lon + dLon * (180 / Math.PI),
-              d.lat + dLat * (180 / Math.PI),
-              d.altitude || 0,
-            ];
-            return {
-              path: [[d.lon, d.lat, d.altitude || 0], target],
-              entity: d,
-            };
-          }),
+        data: velocityData,
         getPath: (d: VelocityDatum) => d.path,
         getColor: (d: VelocityDatum) => entityColor(d.entity, 120),
         getWidth: 2.2,
         widthMinPixels: 1.5,
         jointRounded: true,
         capRounded: true,
+        pickable: false,
+        wrapLongitude: !globeMode,
+        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -250.0 : 0 },
+      }),
+      // Solid arrowhead triangle at each vector tip
+      new PolygonLayer({
+        id: `velocity-arrowheads-${globeMode ? "globe" : "merc"}`,
+        data: velocityData,
+        getPolygon: (d: VelocityDatum) => d.arrowhead,
+        getFillColor: (d: VelocityDatum) => entityColor(d.entity, 170),
+        filled: true,
+        stroked: false,
         pickable: false,
         wrapLongitude: !globeMode,
         parameters: { depthTest: !!globeMode, depthBias: globeMode ? -250.0 : 0 },
