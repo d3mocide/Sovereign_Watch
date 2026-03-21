@@ -665,7 +665,6 @@ function App() {
 
   const handleOpenAnalystPanel = useCallback(() => {
     setIsAIAnalystOpen(true);
-    setAiAnalystAutoRun(Date.now());
   }, []);
 
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {

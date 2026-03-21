@@ -18,7 +18,6 @@ import {
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
 import { AlertsWidget } from '../widgets/AlertsWidget';
-import { AIEngineWidget } from '../widgets/AIEngineWidget';
 import { SystemSettingsWidget } from '../widgets/SystemSettingsWidget';
 import { SystemHealthWidget } from '../widgets/SystemHealthWidget';
 import { KpIndexWidget } from '../widgets/KpIndexWidget';
@@ -346,8 +345,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </div>
                 </div>
 
-                {/* AI Engine Widget */}
-                <AIEngineWidget />
+
 
                 {/* Alerts Pill */}
                 <div className="flex items-center px-1 relative">
