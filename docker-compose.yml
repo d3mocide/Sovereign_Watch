@@ -149,6 +149,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- Ingestion: Geopolitical OSINT (via GDELT CSV Poller) ---
+  sovereign-gdelt-pulse:
+    build:
+      context: ./backend/ingestion/gdelt_pulse
+      dockerfile: Dockerfile
+    container_name: sovereign-gdelt-pulse
+    environment:
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - POLL_INTERVAL=900
+    networks:
+      - sovereign-net-backend
+    depends_on:
+      sovereign-redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
   # --- Ingestion: RF Infrastructure (Repeaters, NOAA NWR, Public Safety) ---
   sovereign-rf-pulse:
     build:

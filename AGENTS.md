@@ -28,6 +28,7 @@
 | `sovereign-space-pulse` | `backend/ingestion/space_pulse/` | Orbital, SatNOGS, Weather |
 | `sovereign-rf-pulse` | `backend/ingestion/rf_pulse/` | Repeaters, NOAA NWR |
 | `sovereign-infra-poller` | `backend/ingestion/infra_poller/` | Cables, Outages, FCC Towers |
+| `sovereign-gdelt-pulse` | `backend/ingestion/gdelt_pulse/` | OSINT Events (GDELT) |
 | `sovereign-js8call` | `js8call/` | HF Radio Terminal + Bridge |
 | `sovereign-timescaledb` | `backend/db/` | Historical Data Store |
 | `sovereign-redis` | N/A | Real-time Cache / State |

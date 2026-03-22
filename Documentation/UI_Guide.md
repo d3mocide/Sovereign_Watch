@@ -20,7 +20,7 @@ Switch between modes using the **mode toggle** in the TopBar.
 
 ## Interface Layout
 
-```
+```text
 ┌────────────────────────── TopBar ──────────────────────────────┐
 │  [Mode Toggle]  [UTC Clock]  [Entity Count]  [System Controls] │
 ├──────────────┬──────────────────────────────┬──────────────────┤
@@ -196,6 +196,27 @@ Switch the active AI model in **System Settings → AI Engine**.
 
 ---
 
+## Intelligence Stream
+
+The **Intelligence Stream** (Right Sidebar) is a real-time fusion feed that combines decoded telemetry alerts with global OSINT events.
+
+### Domain Filtering
+
+Use the icons at the top of the stream to toggle visibility for:
+
+- **Air** (Aviation alerts)
+- **Sea** (Maritime alerts)
+- **Orbital** (Space alerts / flyovers)
+
+### GEODENT (GDELT OSINT)
+
+At the bottom of the Intelligence Stream is the **GEODENT** footer widget. This toggle enables/disables real-time global event tracking from the **GDELT Project**.
+
+- **Interaction**: Clicking an OSINT event headline will fly the map to the event location and automatically search for any nearby tactical entities (aircraft/vessels).
+- **Data**: Events include a "Goldstein Scale" (stability impact) and "Average Tone" (coverage sentiment).
+
+---
+
 ## Trail Visualization (Historical Tracks)
 
 When an entity is selected, its **historical trail** is rendered as a breadcrumb path on the map:
@@ -240,12 +261,14 @@ This layer is useful for understanding poller coverage and identifying dead zone
 Open via the **Settings button** in the TopBar. Organized into tabs:
 
 ### Map Settings
+
 - Toggle between Mapbox 3D and MapLibre vector basemaps
 - Toggle terrain/satellite imagery (Mapbox mode)
 - Tactical grid overlay on/off
 - Noise texture overlay on/off
 
 ### Layer Controls
+
 - **Aviation layer** — Toggle ADS-B aircraft on/off
 - **Maritime layer** — Toggle AIS vessels on/off
 - **Orbital layer** — Toggle satellite overlay on/off
@@ -255,11 +278,13 @@ Open via the **Settings button** in the TopBar. Organized into tabs:
 - **H3 Coverage** — Toggle poller cell visualization on/off
 
 ### Mission Area
+
 - Current AOR center coordinates and radius
 - **Update** — Change the AOR center and radius (propagates to all pollers via API)
 - **Presets** — Quick-select predefined areas of interest
 
 ### AI Engine
+
 - View available AI models (Claude, Gemini, LLaMA3)
 - Switch the active model for track analysis
 

@@ -112,6 +112,7 @@ export interface MissionLocation {
   lon: number;
   radius_nm: number;
   created_at: string;
+  aotShapes?: { maritime: number[][]; aviation: number[][] } | null;
 }
 
 export interface MissionProps {
@@ -120,6 +121,8 @@ export interface MissionProps {
   onSwitchMission: (mission: MissionLocation) => void;
   onDeleteMission: (id: string) => void;
   onPresetSelect: (radius: number) => void;
+  handleReturnHome?: () => void;
+  aotShapes?: { maritime: number[][]; aviation: number[][] } | null;
 }
 
 export interface MapActions {
@@ -247,6 +250,7 @@ export interface PassResult {
 export interface MapFilters {
   showAir: boolean;
   showSea: boolean;
+  showSatellites: boolean;
   showHelicopter: boolean;
   showMilitary: boolean;
   showGovernment: boolean;
@@ -255,7 +259,14 @@ export interface MapFilters {
   showAurora: boolean;
   showSatNOGS: boolean;
   showGdelt: boolean;
-  [key: string]: boolean;
+  geodent?: boolean; // Geodent toggle synonym
+  // Infrastructure
+  showCables?: boolean;
+  showLandingStations?: boolean;
+  showOutages?: boolean;
+  showTowers?: boolean;
+  cableOpacity?: number;
+  [key: string]: string | boolean | number | string[] | undefined;
 }
 
 export interface SatNOGSStation {

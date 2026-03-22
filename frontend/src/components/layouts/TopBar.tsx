@@ -157,20 +157,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </button>
                     <button
                         role="tab"
-                        aria-selected={viewMode === 'RADIO'}
-                        aria-label="Radio View"
-                        title="Radio View"
-                        onClick={() => onViewChange?.('RADIO')}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 focus-visible:ring-1 focus-visible:ring-indigo-500 outline-none ${viewMode === 'RADIO'
-                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-[0_0_15px_rgba(79,70,229,0.4)] backdrop-blur-md'
-                            : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                            }`}
-                    >
-                        <Radio size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'RADIO' ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : ''} />
-                        <span className={viewMode === 'RADIO' ? 'block drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]' : 'hidden'}>RADIO</span>
-                    </button>
-                    <button
-                        role="tab"
                         aria-selected={viewMode === 'DASHBOARD'}
                         aria-label="Dashboard View"
                         title="Dashboard View"
@@ -182,6 +168,20 @@ export const TopBar: React.FC<TopBarProps> = ({
                     >
                         <LayoutDashboard size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'DASHBOARD' ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : ''} />
                         <span className={viewMode === 'DASHBOARD' ? 'block drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'hidden'}>DASHBOARD</span>
+                    </button>
+                    <button
+                        role="tab"
+                        aria-selected={viewMode === 'RADIO'}
+                        aria-label="Radio View"
+                        title="Radio View"
+                        onClick={() => onViewChange?.('RADIO')}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 focus-visible:ring-1 focus-visible:ring-indigo-500 outline-none ${viewMode === 'RADIO'
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-[0_0_15px_rgba(79,70,229,0.4)] backdrop-blur-md'
+                            : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                            }`}
+                    >
+                        <Radio size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'RADIO' ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : ''} />
+                        <span className={viewMode === 'RADIO' ? 'block drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]' : 'hidden'}>RADIO</span>
                     </button>
                 </div>
             </div>

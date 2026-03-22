@@ -153,6 +153,7 @@ interface TacticalMapProps {
       maxLon: number;
     } | null,
   ) => void;
+  gdeltData?: FeatureCollection | null;
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
@@ -212,6 +213,8 @@ export function TacticalMap({
   worldCountriesData,
   towersData,
   onBoundsChange,
+  gdeltData: propGdeltData,
+  showTerminator,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -317,70 +320,8 @@ export function TacticalMap({
     };
   }, [filters?.showAurora, filters?.showJamming]);
 
-  // GDELT geolocated news events (polled every 15 min — matches GDELT update cadence)
-  // Also runs when a mission area is active even if showGdelt filter is off.
-  const [gdeltData, setGdeltData] = useState<any>(null);
-  const alertedGdeltUrls = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const hasMission = !!currentMissionRef.current;
-    if (!filters?.showGdelt && !hasMission) return;
-    let cancelled = false;
-
-    const fetchGdelt = async () => {
-      try {
-        const r = await fetch("/api/gdelt/events");
-        if (!r.ok || cancelled) return;
-        const data = await r.json();
-        if (!cancelled) setGdeltData(data);
-
-        // Proximity alerts: fire onEvent for conflict/tension events near mission area
-        const mission = currentMissionRef.current;
-        if (!mission || !onEvent || !data?.features?.length) return;
-        const radiusKm = mission.radius_nm * 1.852;
-
-        for (const f of data.features) {
-          const tone: number = f.properties?.tone ?? 0;
-          if (tone > -2) continue; // only tension (≤ -2) and conflict (≤ -5)
-          const url: string = f.properties?.url ?? "";
-          if (alertedGdeltUrls.current.has(url)) continue;
-
-          const [lon, lat] = f.geometry.coordinates;
-          const dLat = (lat - mission.lat) * (Math.PI / 180);
-          const dLon = (lon - mission.lon) * (Math.PI / 180);
-          const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(mission.lat * (Math.PI / 180)) *
-              Math.cos(lat * (Math.PI / 180)) *
-              Math.sin(dLon / 2) ** 2;
-          const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-          if (distKm <= radiusKm) {
-            alertedGdeltUrls.current.add(url);
-            const headline = (f.properties?.name ?? "Unknown event").slice(0, 60);
-            const distNm = Math.round(distKm / 1.852);
-            const severity = tone <= -5 ? "alert" : "new";
-            const label = tone <= -5 ? "CONFLICT" : "TENSION";
-            onEvent({
-              type: severity,
-              message: `GDELT ${label} ${distNm}nm from mission: ${headline}`,
-              entityType: "infra",
-            });
-          }
-        }
-      } catch {
-        /* silently fail */
-      }
-    };
-
-    fetchGdelt();
-    const id = setInterval(fetchGdelt, 15 * 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.showGdelt, !!missionArea?.currentMission, onEvent]);
+  // GDELT geolocated news events
+  const gdeltData = propGdeltData;
 
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -725,6 +666,7 @@ export function TacticalMap({
     auroraData,
     jammingData,
     gdeltData,
+    gdeltToneThreshold: filters?.gdeltToneThreshold,
     historySegmentsRef,
   });
 
@@ -855,6 +797,7 @@ export function TacticalMap({
           <MapComponent
             key={globeMode ? "map-globe" : "map-mercator"}
             ref={mapRef as React.Ref<unknown>}
+            showAttribution={false}
             viewState={
               globeMode ? { ...viewState, pitch: 0, bearing: 0 } : viewState
             }

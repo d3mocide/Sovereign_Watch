@@ -1,8 +1,8 @@
 import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
+import { MapFilters } from "../types";
 
 type AotShapes = { maritime: number[][]; aviation: number[][] };
-type Filters = { showSea?: boolean; showAir?: boolean;[key: string]: boolean | undefined };
 type PathDatum = { path: number[][] };
 type PositionDatum = { position: [number, number, number] };
 
@@ -21,7 +21,7 @@ function geodesicCircle(lat: number, lon: number, radiusKm: number, segments = 1
 
 export function buildAOTLayers(
   aotShapes: AotShapes | null,
-  filters: Filters | undefined,
+  filters: MapFilters | undefined,
   globeMode: boolean | undefined,
   observer?: { lat: number; lon: number; radiusKm: number } | null,
   rfBoundary?: { lat: number; lon: number; radiusKm: number } | null,
@@ -33,7 +33,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-maritime-${globeMode ? "globe" : "merc"}`,
         data: [{ path: aotShapes.maritime.map((p) => [p[0], p[1], 0]) }],
-        getPath: (d: PathDatum) => d.path,
+        getPath: (d: PathDatum) => d.path as any,
         getColor: [0, 191, 255, 150], // #00BFFF at ~60% opacity
         getWidth: 2.5,
         widthMinPixels: 2,
@@ -53,7 +53,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-aviation-${globeMode ? "globe" : "merc"}`,
         data: [{ path: aotShapes.aviation.map((p) => [p[0], p[1], 0]) }],
-        getPath: (d: PathDatum) => d.path,
+        getPath: (d: PathDatum) => d.path as any,
         getColor: [0, 255, 100, 150], // #00FF64 at ~60% opacity
         getWidth: 2.5,
         widthMinPixels: 2,
@@ -76,7 +76,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-orbital-horizon-${globeMode ? 'globe' : 'merc'}`,
         data: [{ path: ringPath }],
-        getPath: (d: PathDatum) => d.path,
+        getPath: (d: PathDatum) => d.path as any,
         getColor: [160, 100, 255, 90],  // soft purple at ~35% opacity
         getWidth: 2,
         widthMinPixels: 1.5,
@@ -113,7 +113,7 @@ export function buildAOTLayers(
       new PathLayer({
         id: `aot-rf-horizon-${globeMode ? 'globe' : 'merc'}`,
         data: [{ path: ringPath }],
-        getPath: (d: PathDatum) => d.path,
+        getPath: (d: PathDatum) => d.path as any,
         getColor: [251, 191, 36, 90],  // amber-400 at ~35% opacity
         getWidth: 2,
         widthMinPixels: 1.5,

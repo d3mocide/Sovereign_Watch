@@ -15,7 +15,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
         // Globe view (GlobeView vs MapView) is auto-detected via getDefaultView(map).
         // Since Maplibre's globe depth buffer has issues with objects near the surface, keep this false.
         _full3d: false
-    }));
+    } as any));
 
     const isDeadRef = useRef(false);
     useEffect(() => {
@@ -26,7 +26,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     useEffect(() => {
         if (overlay && overlay.setProps && !isDeadRef.current) {
             try {
-                overlay.setProps({ ...rest, _full3d: false });
+                overlay.setProps({ ...rest, _full3d: false } as any);
             } catch (e) {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
@@ -47,7 +47,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
 }
 
 const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, style, onContextMenu, onClick, globeMode, deckProps } = props;
+    const { viewState, onMove, onLoad, mapStyle, style, onContextMenu, onClick, globeMode, showAttribution, deckProps } = props;
     return (
         <Map
             ref={ref}
@@ -58,11 +58,10 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
             style={style}
             onContextMenu={onContextMenu}
             onClick={onClick}
-            antialias={true}
             projection={globeMode ? { type: 'globe' } : { type: 'mercator' }}
             attributionControl={false}
         >
-            <AttributionControl compact={true} position="bottom-right" />
+            {showAttribution !== false && <AttributionControl compact={true} position="bottom-right" />}
             {(() => {
                 const { key: deckKey, ...restDeckProps } = deckProps;
                 return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;

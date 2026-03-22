@@ -11,6 +11,7 @@ export interface MapAdapterProps {
     onContextMenu?: (evt: unknown) => void;
     onClick?: () => void;
     globeMode?: boolean;
+    showAttribution?: boolean;
     deckProps: {
         id: string;
         interleaved?: boolean;

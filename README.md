@@ -87,6 +87,7 @@ Full documentation is in the [`Documentation/`](./Documentation/) folder:
 | [JS8Call Radio](./Documentation/pollers/JS8Call.md)         | HF Radio / JS8Call Terminal              |
 | [Infra Poller](./Documentation/pollers/Infra.md)            | Internet outages + submarine cables      |
 | [RF Pulse](./Documentation/pollers/RF.md)                   | RF repeaters + NOAA weather radio        |
+| [GEODENT (GDELT)](./Documentation/pollers/GEODENT.md)       | Real-time OSINT event stream             |
 | [TAK Protocol Reference](./Documentation/TAK_Protocol.md)   | Internal message schema (CoT/Protobuf)   |
 | [API Reference](./Documentation/API_Reference.md)           | REST endpoints + WebSocket               |
 | [UI User Guide](./Documentation/UI_Guide.md)                | How to use the Tactical and Orbital maps |
@@ -110,6 +111,7 @@ graph TD
         JS[Sovereign JS8Call] -->|UDP Bridge| B
         RF[RF Pulse: ARD/NOAA/RepBook/RadioRef] -->|REST API/SOAP| B
         IN[Infra Poller: IODA/Cables] -->|REST API| B
+        GD[GEODENT: GDELT Pulse OSINT] -->|TSV/REST API| B
         B -->|TAK JSON| D(Redpanda Bus)
     end
 
@@ -153,6 +155,7 @@ All upstream data is sourced from **public, open-access networks**.
 | Internet Outages  | IODA (Georgia Tech)                         | Every 30 minutes         |
 | Submarine Cables  | TeleGeography                               | Every 24 hours           |
 | RF Infrastructure | RepeaterBook, ARD, NOAA NWR, RadioReference | Every 6–168 hours        |
+| GDELT (OSINT)     | GDELTproject.org                            | Every 15 minutes         |
 | WebSDR            | Global Network                              | Discovery (on-demand)    |
 
 ---

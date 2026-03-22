@@ -26,8 +26,6 @@ import { CoTEntity, HistorySegment, IntelEvent, MissionProps } from "./types";
 import type { RFMode } from "./types";
 import { processReplayData } from "./utils/replayUtils";
 
-const NOOP = () => { };
-
 function App() {
 
   const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
@@ -40,7 +38,7 @@ function App() {
   const [isSystemHealthOpen, setIsSystemHealthOpen] = useState(false);
   const [isAIAnalystOpen, setIsAIAnalystOpen] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-  const [aiAnalystAutoRun, setAiAnalystAutoRun] = useState(0);
+  const [aiAnalystAutoRun] = useState(0);
 
   // Global COT State Refs
   const currentMissionRef = useRef<{
@@ -53,14 +51,6 @@ function App() {
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('3D');
   const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
 
-  // Pass geometry bubbled up from SidebarRight → drives the floating PassGeometryWidget in OrbitalMap
-  const [passGeometry, setPassGeometry] = useState<{
-    pass?: { points: { azimuth: number; elevation: number; time: string; isAos?: boolean; isTca?: boolean; isLos?: boolean }[] };
-    nextPassAos?: string;
-    nextPassMaxEl?: number;
-    satelliteName?: string;
-    nextPassDuration?: number;
-  } | null>(null);
 
   // Live satellite entity map exposed from OrbitalMap's entity worker.
   // Keyed as "SAT-<NORAD_ID>" — same as the CoT UID used by the backend.
@@ -192,7 +182,7 @@ function App() {
   }, [entitiesRef, satellitesRef, knownUidsRef, viewMode]);
 
   // Infrastructure Data (Shared across TACTICAL/ORBITAL views)
-  const { cablesData, stationsData, outagesData } = useInfraData();
+  const { cablesData, stationsData, outagesData, gdeltData } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
@@ -249,7 +239,7 @@ function App() {
       showDrone: true,
       showSatellites: false,
       showSatGPS: true,
-      showSatWeather: true,
+      showSatWeather: false,
       showSatComms: false,
       showSatSurveillance: true,
       showSatOther: true,
@@ -269,6 +259,7 @@ function App() {
       showH3Coverage: false,
       showAurora: false,
       showGdelt: false,
+      showTerminator: true,
     };
 
     // First check hash
@@ -310,21 +301,38 @@ function App() {
     updateMissionHash(undefined, filters);
   }, [filters]);
 
-  const { towers, isLoading: towersLoading } = useTowers(mapBounds, filters.showTowers);
+  const { towers } = useTowers(mapBounds, filters.showTowers);
 
   // Isolated orbital satellite category filter state — never persisted to
   // mapFilters, so it never bleeds into the tactical map filter state.
-  const [orbitalSatFilters, setOrbitalSatFilters] = useState({
-    showSatGPS: true,
-    showSatWeather: true,
-    showSatComms: true,
-    showSatSurveillance: true,
-    showSatOther: true,
-    showConstellation_Starlink: false,
+  const [orbitalSatFilters, setOrbitalSatFilters] = useState(() => {
+    const defaultOrbital = {
+      showSatGPS: true,
+      showSatWeather: false,
+      showSatComms: true,
+      showSatSurveillance: true,
+      showSatOther: true,
+      showSatNOGS: true,
+      showAurora: true,
+      showConstellation_Starlink: false,
+    };
+    const saved = localStorage.getItem('orbitalSatFilters');
+    if (saved) {
+      try {
+        return { ...defaultOrbital, ...JSON.parse(saved) };
+      } catch (e) {
+        console.error("Failed to parse orbitalSatFilters:", e);
+      }
+    }
+    return defaultOrbital;
   });
 
   const handleOrbitalFilterChange = useCallback((key: string, value: unknown) => {
-    setOrbitalSatFilters(prev => ({ ...prev, [key]: value }));
+    setOrbitalSatFilters((prev: Record<string, any>) => {
+      const next = { ...prev, [key]: value };
+      localStorage.setItem('orbitalSatFilters', JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   // Velocity Vector Toggle
@@ -365,7 +373,7 @@ function App() {
 
   const [showTerminator, setShowTerminator] = useState(() => {
     const saved = localStorage.getItem('showTerminator');
-    return saved !== null ? JSON.parse(saved) : false;
+    return saved !== null ? JSON.parse(saved) : true;
   });
 
   const handleGlobeModeToggle = useCallback(() => {
@@ -415,13 +423,13 @@ function App() {
 
   // RF infrastructure layer
   const { rfSitesRef, loading: repeatersLoading } = useRFSites(
-    filters.showRepeaters as boolean,
+    filters.showRepeaters === true,
     missionProps?.currentMission?.lat ?? 45.5152,
     missionProps?.currentMission?.lon ?? -122.6784,
     ((filters.rfRadius as unknown) as number) || 300,
     activeServices,
     (filters.modes as unknown as RFMode[] | undefined),
-    filters.rfEmcommOnly || undefined,
+    filters.rfEmcommOnly === true,
   );
 
   // Intel satellite pass predictions for orbital alerts
@@ -471,6 +479,7 @@ function App() {
       showTerminator: showTerminator,
       showCables: false,
       showLandingStations: false,
+      showOutages: false,
     };
   }, [filters, orbitalSatFilters, showTerminator]);
   
@@ -491,7 +500,7 @@ function App() {
   // Map<uid, List of time-sorted snapshots>
   const replayCacheRef = useRef<Map<string, CoTEntity[]>>(new Map());
   const lastReplayFrameRef = useRef<number>(0);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number>(0);
 
   const updateReplayFrame = useCallback((time: number) => {
     const frameMap = new Map<string, CoTEntity>();
@@ -683,8 +692,7 @@ function App() {
   const handleEntitySelect = useCallback((e: CoTEntity | null) => {
     setSelectedEntity(e);
     setHistorySegments([]); // clear track path when selection changes
-    // Always stop following when selection changes (user must re-engage)
-    setFollowMode(false);
+    setFollowMode(false); // Always stop following when selection changes (user must re-engage)
 
     if (e && (e.type === 'a-s-K' || e.detail?.category)) {
       addEvent({
@@ -735,15 +743,14 @@ function App() {
           isAlertsOpen={isAlertsOpen}
           alerts={events.filter(e => e.type === 'alert')}
           onAlertsClose={() => setIsAlertsOpen(false)}
-          filters={filters}
-          onFilterChange={handleFilterChange}
+          filters={filters as any}
+          onFilterChange={handleFilterChange as any}
           isSystemSettingsOpen={isSystemSettingsOpen}
           onSystemSettingsClick={() => setIsSystemSettingsOpen(!isSystemSettingsOpen)}
           onSystemSettingsClose={() => setIsSystemSettingsOpen(false)}
           isSystemHealthOpen={isSystemHealthOpen}
           onSystemHealthClick={() => setIsSystemHealthOpen(!isSystemHealthOpen)}
           onSystemHealthClose={() => setIsSystemHealthOpen(false)}
-          isTerminalOpen={isTerminalOpen}
           onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
         />
       }
@@ -751,8 +758,8 @@ function App() {
         viewMode === 'TACTICAL' ? (
           <SidebarLeft
             trackCounts={trackCounts}
-            filters={filters}
-            onFilterChange={handleFilterChange}
+            filters={filters as any}
+            onFilterChange={handleFilterChange as any}
             events={events}
             missionProps={missionProps}
             health={health}
@@ -779,27 +786,32 @@ function App() {
         ) : null
       }
       rightSidebar={
-        selectedEntity && (viewMode === 'TACTICAL' || viewMode === 'ORBITAL') ? (
-          <SidebarRight
-            entity={selectedEntity}
-            onClose={() => {
-              setSelectedEntity(null);
-              setHistorySegments([]);
-              setFollowMode(false);
-            }}
-            onCenterMap={() => {
-              setFollowMode(true);
-              if (selectedEntity && mapActions) {
-                mapActions.flyTo(selectedEntity.lat, selectedEntity.lon);
-              }
-            }}
-            onOpenAnalystPanel={handleOpenAnalystPanel}
-            onHistoryLoaded={setHistorySegments}
-            fetchSatnogsVerification={fetchVerification}
-            onPassData={(pass, nextPassAos, nextPassMaxEl, satelliteName, nextPassDuration) =>
-              setPassGeometry({ pass, nextPassAos, nextPassMaxEl, satelliteName, nextPassDuration })
-            }
-          />
+        (viewMode === 'TACTICAL' || viewMode === 'ORBITAL') ? (
+          <div className="flex flex-col h-full gap-4">
+
+            {/* Entity Details Sidebar */}
+            {selectedEntity && (
+              <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden">
+                <SidebarRight
+                  entity={selectedEntity}
+                  onClose={() => {
+                    setSelectedEntity(null);
+                    setHistorySegments([]);
+                    setFollowMode(false);
+                  }}
+                  onCenterMap={() => {
+                    setFollowMode(true);
+                    if (selectedEntity && mapActions) {
+                      mapActions.flyTo(selectedEntity.lat, selectedEntity.lon);
+                    }
+                  }}
+                  onOpenAnalystPanel={handleOpenAnalystPanel}
+                  onHistoryLoaded={setHistorySegments}
+                  fetchSatnogsVerification={fetchVerification}
+                />
+              </div>
+            )}
+          </div>
         ) : null
       }
     >
@@ -817,7 +829,7 @@ function App() {
             onEvent={addEvent}
             selectedEntity={selectedEntity}
             onEntitySelect={handleEntitySelect}
-            missionArea={missionArea}
+            missionArea={missionArea as any}
             onMapActionsReady={setMapActions}
             showVelocityVectors={showVelocityVectors}
             showHistoryTails={showHistoryTails}
@@ -850,6 +862,7 @@ function App() {
             showTerminator={showTerminator}
             towersData={towers}
             onBoundsChange={setMapBounds}
+            gdeltData={gdeltData}
           />
 
           {/* Replay Controls Overlay */}
@@ -886,7 +899,7 @@ function App() {
           // The rest are dummy/no-ops for the layout shell
           onCountsUpdate={setTrackCounts as unknown as (counts: { air: number; sea: number; orbital: number }) => void}
           onEvent={addEvent}
-          missionArea={missionArea}
+          missionArea={missionArea as any}
           onMissionPropsReady={setMissionProps}
           onMapActionsReady={setMapActions}
           showVelocityVectors={false}
@@ -910,7 +923,6 @@ function App() {
           outagesData={outagesData}
           worldCountriesData={worldCountriesData}
           satnogsStationsRef={stationsRef}
-          passGeometry={passGeometry}
           onSatellitesRefReady={(ref) => {
             orbitalSatellitesRef.current = ref;
           }}
@@ -920,9 +932,6 @@ function App() {
           events={events}
           trackCounts={trackCounts}
           missionProps={missionProps}
-          js8LogEntries={js8LogEntries}
-          js8Stations={js8Stations}
-          js8Connected={js8Connected}
           entitiesRef={entitiesRef}
           satellitesRef={satellitesRef}
           cablesData={cablesData}
@@ -931,8 +940,7 @@ function App() {
           worldCountriesData={worldCountriesData}
           showTerminator={showTerminator}
           drStateRef={drStateRef}
-          towersData={towers}
-          onBoundsChange={setMapBounds}
+          gdeltData={gdeltData}
         />
       ) : (
         <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">

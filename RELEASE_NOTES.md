@@ -1,36 +1,32 @@
-# Release - v0.45.0 - Ethereal Pulse
+# Release - v0.46.0 - OSINT Convergence & Orbital Refinement
 
-This release introduces major architectural consolidations and deep radio intelligence capabilities. Key highlights include the rollout of the JS8Call radio service, unification of the Space domain suite, and a streamlined core codebase with the removal of legacy MCP infrastructure.
+## High-Level Summary
+
+This release marks the full integration of the **GEODENT (GDELT Pulse)** data pipe, transforming Sovereign Watch into a unified tactical and OSINT monitoring platform. Operators can now monitor global stability via real-time news events from the GDELT Project, fused directly into the intelligence stream alongside aviation and maritime telemetry. Additionally, this update refines the orbital visualization suite, ensuring that satellite mission timing and space weather metrics are perfectly aligned within the high-fidelity HUD.
 
 ## Key Features
 
-- **JS8Call Tactical Integration**: A new full-stack radio service that bridges HF JS8Call traffic directly into the HUD. Features include GhostNet preset synchronization, automated KiwiSDR audio ingestion, and a unified terminal interface.
-- **Unified Space Pulse**: The orbital tracking pipeline has been expanded into a complete Space Domain intelligence service. It now integrates SatNOGS ground station observations and real-time NOAA Space Weather (Aurora/Kp-index) data.
-- **Documentation Suite v2**: Every core guide has been updated to reflect the new service architecture. Includes deep-dive documentation for Space and JS8Call pollers.
-- **Codebase Sanitization**: Successfully decommissioned baked-in MCP support and transitioned to more flexible, agent-driven verification and semantic analysis workflows.
+- **GEODENT (GDELT)**: Real-time global event ingestion (every 15 mins) providing tactical context via conflict, protest, and diplomatic reports.
+- **Orbital HUD Refinement**: Repositioned the Polar Plot geometry widget to prevent overlap and improved visual coherence with the Space Weather monitor.
+- **Intelligence Stream Fusion**: GDELT headlines are now fully interactive, allowing users to "Fly To" OSINT event locations and identify nearby tactical assets with a single click.
+- **Default Terminator Logic**: Synchronized day/night terminator visibility across all map projections by default.
+- **Stabilized UI Loop**: Resolved critical React lifecycle and TypeScript errors in the orbital map and map abstraction layers.
 
 ## Technical Details
 
-- **Service Migration**: `sovereign-orbital-pulse` has been officially renamed to `sovereign-space-pulse`.
-- **Dependency Management**: Standardized the frontend on `pnpm` and optimized container build contexts to reduce image sizes.
-- **Verification Gate**: Integrated component-targeting lint/test logic into `AGENTS.md` and `.cursorrules` to accelerate the inner-loop development cycle.
+- **Microservice Additions**: `sovereign-gdelt-pulse` (Python ingestion) and corresponding FastAPI routers.
+- **Protocol Updates**: Multi-INT HUD now supports GDELT-specific metadata (Goldstein Scale, Average Tone).
+- **Tooling**: Standardized `pnpm` usage and component-specific verification rules established in `AGENTS.md`.
 
 ## Upgrade Instructions
 
-1. **Pull and Prune**:
+1. **Pull the latest changes**:
    ```bash
    git pull origin main
-   docker compose down --remove-orphans
    ```
-
-2. **Rebuild Suite**:
+2. **Rebuild Ingestion Services**:
    ```bash
-   docker compose build --pull
+   docker compose up -d --build sovereign-gdelt-pulse sovereign-backend sovereign-frontend
    ```
-
-3. **Deploy**:
-   ```bash
-   docker compose up -d
-   ```
-
-*Note: Ensure your `.env` is updated with the new `SPACE_TLE_FETCH_HOUR` variable if you were overriding the orbital default.*
+3. **Verify Documentation**:
+   Review [Documentation/pollers/GEODENT.md](Documentation/pollers/GEODENT.md) for data pipe verification steps.

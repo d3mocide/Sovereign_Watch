@@ -212,9 +212,30 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     // Auto-enabled when a mission area is active (shows all events in AOT)
     ...buildGdeltLayer(
       gdeltData,
-      !!filters?.showGdelt || !!currentMission,
+      !!filters?.showGdelt,
       globeMode,
       gdeltToneThreshold,
+      (entity, pos) => {
+        setHoveredEntity(entity);
+        setHoverPosition(pos);
+      },
+      (g) => {
+        // Transform GDELT point into a virtual entity for the sidebar
+        onEntitySelect({
+          uid: `gdelt-${g.name.slice(0, 10)}`,
+          type: "gdelt",
+          callsign: g.name,
+          lat: g.lat,
+          lon: g.lon,
+          altitude: 0,
+          course: 0,
+          speed: 0,
+          lastSeen: Date.now(),
+          detail: g as any,
+          trail: [],
+          uidHash: 0,
+        });
+      },
     ),
     ...getOrbitalLayers({
       satellites: filteredSatellites,
@@ -222,7 +243,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       hoveredEntity: hoveredEntity,
       now,
       showHistoryTails: historyTails,
-      showFootprints: filters?.showFootprints,
+      showFootprints: !!filters?.showFootprints,
       projectionMode: globeMode ? "globe" : "mercator",
       zoom,
       predictedGroundTrack: predictedGroundTrack,
@@ -246,7 +267,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         ? {
           lat: currentMission.lat,
           lon: currentMission.lon,
-          radiusKm: (filters?.rfRadius || 300) * 1.852,
+          radiusKm: (Number(filters?.rfRadius) || 300) * 1.852,
         }
         : null,
     ),
@@ -254,7 +275,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     ...kiwiLayers,
     ...buildTowerLayer(
       towersData || [], 
-      filters?.showTowers ?? false, 
+      filters?.showTowers === true, 
       globeMode, 
       setHoveredInfra, 
       setSelectedInfra

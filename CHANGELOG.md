@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.46.0] - 2026-03-22
+
+### Added
+
+- **GEODENT (GDELT Pulse) Integration**: Full implementation of the OSINT data pipe for real-time global event tracking.
+  - **Ingestion Poller**: High-concurrency GDELT 2.0 pulse service extracting events via rolling 15-minute windows.
+  - **Intelligence Stream Support**: Real-time fusion of OSINT headlines with tactical tracks (Aviation/Maritime) in the right sidebar.
+  - **Dashboard Analytics**: Integrated Goldstein Scale (stability impact) and Average Tone metrics for global situational awareness.
+- **Orbital Map Refinements**:
+  - **Polar Plot HUD**: Repositioned and synchronized the orbital pass geometry widget for improved visual alignment in the HUD stack.
+  - **Layout Optimization**: Repositioned Space Weather and Pass Geometry widgets to eliminate overlap and provide a cleaner vertical stack on the right sidebar.
+
+### Changed
+
+- **Documentation Standard**: Standardized documentation across `README.md`, `Configuration.md`, and `UI_Guide.md` to support the GEODENT data pipe.
+- **Terminator State**: Enabled the day/night terminator toggle by default across all map projections for improved temporal awareness.
+
+### Fixed
+
+- **OrbitalMap Stabilization**: Resolved multiple TypeScript and syntax errors in `OrbitalMap.tsx`, ensuring proper event handling and camera synchronization.
+- **Map Adapter Resilience**: Fixed Deck.gl and MapLibre compatibility issues related to WebGPU/WebGL2 feature detection and property access.
+
 ## [0.45.0] - 2026-03-22
 
 ### Added

@@ -1,302 +1,479 @@
-import React, { useMemo, useCallback, useState } from 'react';
-import { Radio, Bell, TrendingDown, TrendingUp, Filter, Plane, Ship, Satellite, Network } from 'lucide-react';
-import { CoTEntity, MapActions, IntelEvent, MapFilters } from '../../types';
-import { LayerFilters } from './LayerFilters';
+import {
+  Bell,
+  Filter,
+  Network,
+  Newspaper,
+  Plane,
+  Radio,
+  Satellite,
+  Ship,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+import React, { useCallback, useMemo, useState } from "react";
+import { CoTEntity, IntelEvent, MapActions, MapFilters } from "../../types";
+import { LayerFilters } from "./LayerFilters";
 
 interface IntelFeedProps {
-    events: IntelEvent[];
-    onEntitySelect?: (entity: CoTEntity) => void;
-    mapActions?: MapActions;
-    filters?: MapFilters;
-    onFilterChange?: (key: string, value: boolean) => void;
+  events: IntelEvent[];
+  onEntitySelect?: (entity: CoTEntity) => void;
+  mapActions?: MapActions;
+  filters?: MapFilters;
+  onFilterChange?: (key: string, value: any) => void;
 }
 
-export const IntelFeed = ({ events, onEntitySelect, mapActions, filters, onFilterChange }: IntelFeedProps) => {
-    const [showFilters, setShowFilters] = useState(false);
+export const IntelFeed = ({
+  events,
+  onEntitySelect,
+  mapActions,
+  filters,
+  onFilterChange,
+}: IntelFeedProps) => {
+  const [showFilters, setShowFilters] = useState(false);
 
-    // 1. Memoize filtered events to avoid recalculating on every render
-    const filteredEvents = useMemo(() => {
-        return events.filter(event => {
-            if (!filters) return true;
+  // 1. Memoize filtered events to avoid recalculating on every render
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      if (!filters) return true;
 
-            // Root filters
-            if (event.entityType === 'air' && !filters.showAir) return false;
-            if (event.entityType === 'sea' && !filters.showSea) return false;
-            if (event.entityType === 'orbital') {
-                if (!filters.showSatellites) return false;
-                const msg = event.message?.toLowerCase() || '';
-                const classification = (event.classification?.category || '').toLowerCase();
+      // Root filters
+      if (event.entityType === "air" && !filters.showAir) return false;
+      if (event.entityType === "sea" && !filters.showSea) return false;
+      if (event.entityType === "orbital") {
+        if (!filters.showSatellites) return false;
+        const msg = event.message?.toLowerCase() || "";
+        const classification = (
+          event.classification?.category || ""
+        ).toLowerCase();
 
-                // Check sub-filters based on message content or classification if available
-                if (msg.includes('gps') || msg.includes('gnss') || classification.includes('gps')) {
-                    if (filters.showSatGPS === false) return false;
-                } else if (msg.includes('weather') || msg.includes('noaa') || classification.includes('weather')) {
-                    if (filters.showSatWeather === false) return false;
-                } else if (msg.includes('comms') || msg.includes('communications') || msg.includes('starlink') || classification.includes('comms')) {
-                    if (filters.showSatComms === false) return false;
-                } else if (msg.includes('intel') || msg.includes('surveillance') || msg.includes('military') || classification.includes('surveillance')) {
-                    if (filters.showSatSurveillance === false) return false;
-                } else { // Everything else (debris, active unclassified, etc.) falls to 'Other'
-                    if (filters.showSatOther === false) return false;
-                }
-            }
-
-            // Air Filters
-            if (event.entityType === 'air' && event.classification) {
-                const cls = event.classification;
-                
-                // Platform overrides
-                if (cls.platform === 'helicopter') {
-                    return filters.showHelicopter !== false;
-                }
-                if (cls.platform === 'drone' || cls.platform === 'uav') {
-                    return filters.showDrone !== false;
-                }
-
-                // Affiliation check
-                if (cls.affiliation === 'military' && filters.showMilitary === false) return false;
-                if (cls.affiliation === 'government' && filters.showGovernment === false) return false;
-                if (cls.affiliation === 'commercial' && filters.showCommercial === false) return false;
-                if (cls.affiliation === 'general_aviation' && filters.showPrivate === false) return false;
-            }
-
-            // Sea filters
-            if (event.entityType === 'sea' && event.classification) {
-                const cat = event.classification.category;
-                if (cat === 'cargo' && filters.showCargo === false) return false;
-                if (cat === 'tanker' && filters.showTanker === false) return false;
-                if (cat === 'passenger' && filters.showPassenger === false) return false;
-                if (cat === 'fishing' && filters.showFishing === false) return false;
-                if (cat === 'military' && filters.showSeaMilitary === false) return false;
-                if (cat === 'law_enforcement' && filters.showLawEnforcement === false) return false;
-                if (cat === 'sar' && filters.showSar === false) return false;
-                if (cat === 'tug' && filters.showTug === false) return false;
-                if (cat === 'pleasure' && filters.showPleasure === false) return false;
-                if (cat === 'hsc' && filters.showHsc === false) return false;
-                if (cat === 'pilot' && filters.showPilot === false) return false;
-                if ((cat === 'special' || cat === 'unknown') && filters.showSpecial === false) return false;
-            }
-
-            return true;
-        });
-    }, [events, filters]);
-
-    // 2. stable callback for click handling
-    const handleItemClick = useCallback((event: IntelEvent) => {
-        if (onEntitySelect && mapActions) {
-            const words = event.message.split(' ').map((w: string) => w.replace(/[^a-zA-Z0-9]/g, ''));
-
-            for (const word of words) {
-                if (word.length < 3) continue;
-                const matches = mapActions.searchLocal(word);
-                const exact = matches.find((e: CoTEntity) => e.callsign === word || e.uid === word);
-                if (exact) {
-                    onEntitySelect(exact);
-                    mapActions.flyTo(exact.lat, exact.lon, 12);
-                    return;
-                }
-            }
+        // Check sub-filters based on message content or classification if available
+        if (
+          msg.includes("gps") ||
+          msg.includes("gnss") ||
+          classification.includes("gps")
+        ) {
+          if (filters.showSatGPS === false) return false;
+        } else if (
+          msg.includes("weather") ||
+          msg.includes("noaa") ||
+          classification.includes("weather")
+        ) {
+          if (filters.showSatWeather === false) return false;
+        } else if (
+          msg.includes("comms") ||
+          msg.includes("communications") ||
+          msg.includes("starlink") ||
+          classification.includes("comms")
+        ) {
+          if (filters.showSatComms === false) return false;
+        } else if (
+          msg.includes("intel") ||
+          msg.includes("surveillance") ||
+          msg.includes("military") ||
+          classification.includes("surveillance")
+        ) {
+          if (filters.showSatSurveillance === false) return false;
+        } else {
+          // Everything else (debris, active unclassified, etc.) falls to 'Other'
+          if (filters.showSatOther === false) return false;
         }
-    }, [onEntitySelect, mapActions]);
+      }
 
-    return (
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden widget-panel">
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
-                <div className="flex items-center gap-2 mr-auto">
-                    <Radio size={13} className="text-hud-green" />
-                    <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
-                        Intelligence Stream
-                    </span>
-                    <div className="w-1.5 h-1.5 rounded-full bg-hud-green animate-pulse" />
-                </div>
+      // Air Filters
+      if (event.entityType === "air" && event.classification) {
+        const cls = event.classification;
 
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            title="Toggle Air"
-                            aria-label="Toggle Air Intelligence"
-                            aria-pressed={filters?.showAir}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? 'text-air-accent bg-air-accent/10 border border-air-accent/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
-                            onClick={() => onFilterChange?.('showAir', !filters?.showAir)}
-                        >
-                            <Plane size={12} />
-                        </button>
-                        <button
-                            title="Toggle Sea"
-                            aria-label="Toggle Sea Intelligence"
-                            aria-pressed={filters?.showSea}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? 'text-sea-accent bg-sea-accent/10 border border-sea-accent/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
-                            onClick={() => onFilterChange?.('showSea', !filters?.showSea)}
-                        >
-                            <Ship size={12} />
-                        </button>
-                        <button
-                            title="Toggle Orbital"
-                            aria-label="Toggle Orbital Intelligence"
-                            aria-pressed={filters?.showSatellites}
-                            className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSatellites ? 'text-purple-400 bg-purple-400/10 border border-purple-400/30' : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'}`}
-                            onClick={() => onFilterChange?.('showSatellites', !filters?.showSatellites)}
-                        >
-                            <Satellite size={12} />
-                        </button>
-                    </div>
+        // Platform overrides
+        if (cls.platform === "helicopter") {
+          return filters.showHelicopter !== false;
+        }
+        if (cls.platform === "drone" || cls.platform === "uav") {
+          return filters.showDrone !== false;
+        }
 
-                    <div className="h-4 w-[1px] bg-white/10 mx-1" />
+        // Affiliation check
+        if (cls.affiliation === "military" && filters.showMilitary === false)
+          return false;
+        if (
+          cls.affiliation === "government" &&
+          filters.showGovernment === false
+        )
+          return false;
+        if (
+          cls.affiliation === "commercial" &&
+          filters.showCommercial === false
+        )
+          return false;
+        if (
+          cls.affiliation === "general_aviation" &&
+          filters.showPrivate === false
+        )
+          return false;
+      }
 
-                    <button
-                        title="Toggle Filters"
-                        aria-label="Toggle filter options"
-                        aria-expanded={showFilters}
-                        className={`transition-colors p-1 rounded focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${showFilters ? 'bg-white/10 text-white' : 'text-white/30 hover:text-hud-green hover:bg-white/5'}`}
-                        onClick={() => setShowFilters(!showFilters)}
-                    >
-                        <Filter size={12} />
-                    </button>
-                </div>
-            </div>
+      // Sea filters
+      if (event.entityType === "sea" && event.classification) {
+        const cat = event.classification.category;
+        if (cat === "cargo" && filters.showCargo === false) return false;
+        if (cat === "tanker" && filters.showTanker === false) return false;
+        if (cat === "passenger" && filters.showPassenger === false)
+          return false;
+        if (cat === "fishing" && filters.showFishing === false) return false;
+        if (cat === "military" && filters.showSeaMilitary === false)
+          return false;
+        if (cat === "law_enforcement" && filters.showLawEnforcement === false)
+          return false;
+        if (cat === "sar" && filters.showSar === false) return false;
+        if (cat === "tug" && filters.showTug === false) return false;
+        if (cat === "pleasure" && filters.showPleasure === false) return false;
+        if (cat === "hsc" && filters.showHsc === false) return false;
+        if (cat === "pilot" && filters.showPilot === false) return false;
+        if (
+          (cat === "special" || cat === "unknown") &&
+          filters.showSpecial === false
+        )
+          return false;
+      }
 
-            {showFilters && filters && onFilterChange && (
-                <div className="border-b border-white/10 bg-black/60 p-3 max-h-[50vh] overflow-y-auto">
-                    <LayerFilters filters={filters} onFilterChange={onFilterChange} />
-                </div>
-            )}
+      return true;
+    });
+  }, [events, filters]);
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 scrollbar-thin scrollbar-thumb-hud-green/20">
-                {events.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center space-y-2 opacity-30">
-                        <ActivityIndicator />
-                        <span className="text-mono-xs font-bold tracking-widest text-white">Awaiting Fusion Uplink...</span>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {filteredEvents.slice(0, 50).map((event) => (
-                            <IntelEventItem
-                                key={event.id}
-                                event={event}
-                                onClick={handleItemClick}
-                                filters={filters}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
+  // 2. stable callback for click handling
+  const handleItemClick = useCallback(
+    (event: IntelEvent) => {
+      if (onEntitySelect && mapActions) {
+        const words = event.message
+          .split(" ")
+          .map((w: string) => w.replace(/[^a-zA-Z0-9]/g, ""));
+
+        for (const word of words) {
+          if (word.length < 3) continue;
+          const matches = mapActions.searchLocal(word);
+          const exact = matches.find(
+            (e: CoTEntity) => e.callsign === word || e.uid === word,
+          );
+          if (exact) {
+            onEntitySelect(exact);
+            mapActions.flyTo(exact.lat, exact.lon, 12);
+            return;
+          }
+        }
+      }
+    },
+    [onEntitySelect, mapActions],
+  );
+
+  return (
+    <div className="flex flex-1 flex-col min-h-0 overflow-hidden widget-panel">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
+        <div className="flex items-center gap-2 mr-auto">
+          <Radio size={13} className="text-hud-green" />
+          <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
+            Intelligence Stream
+          </span>
+          <div className="w-1.5 h-1.5 rounded-full bg-hud-green animate-pulse" />
         </div>
-    );
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              title="Toggle Air"
+              aria-label="Toggle Air Intelligence"
+              aria-pressed={filters?.showAir}
+              className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? "text-air-accent bg-air-accent/10 border border-air-accent/30" : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"}`}
+              onClick={() => onFilterChange?.("showAir", !filters?.showAir)}
+            >
+              <Plane size={12} />
+            </button>
+            <button
+              title="Toggle Sea"
+              aria-label="Toggle Sea Intelligence"
+              aria-pressed={filters?.showSea}
+              className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? "text-sea-accent bg-sea-accent/10 border border-sea-accent/30" : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"}`}
+              onClick={() => onFilterChange?.("showSea", !filters?.showSea)}
+            >
+              <Ship size={12} />
+            </button>
+            <button
+              title="Toggle Orbital"
+              aria-label="Toggle Orbital Intelligence"
+              aria-pressed={filters?.showSatellites}
+              className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSatellites ? "text-purple-400 bg-purple-400/10 border border-purple-400/30" : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"}`}
+              onClick={() =>
+                onFilterChange?.("showSatellites", !filters?.showSatellites)
+              }
+            >
+              <Satellite size={12} />
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
+          <button
+            title="Toggle Filters"
+            aria-label="Toggle filter options"
+            aria-expanded={showFilters}
+            className={`transition-colors p-1 rounded focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${showFilters ? "bg-white/10 text-white" : "text-white/30 hover:text-hud-green hover:bg-white/5"}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={12} />
+          </button>
+        </div>
+      </div>
+
+      {showFilters && filters && onFilterChange && (
+        <div className="border-b border-white/10 bg-black/60 p-3 max-h-[50vh] overflow-y-auto">
+          <LayerFilters filters={filters} onFilterChange={onFilterChange} />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 scrollbar-thin scrollbar-thumb-hud-green/20">
+        {events.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center space-y-2 opacity-30">
+            <ActivityIndicator />
+            <span className="text-mono-xs font-bold tracking-widest text-white">
+              Awaiting Fusion Uplink...
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredEvents.slice(0, 50).map((event) => (
+              <IntelEventItem
+                key={event.id}
+                event={event}
+                onClick={handleItemClick}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* GDELT OSINT Footer Widget */}
+      <div className="border-t border-white/10 bg-black/40 p-2 mt-auto">
+        <div
+          className={`group flex items-center justify-between rounded border transition-all ${filters?.showGdelt ? "border-amber-400/30 bg-amber-400/10" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
+        >
+          <div className="flex items-center gap-3 p-2">
+            <Newspaper
+              size={14}
+              className={
+                filters?.showGdelt ? "text-amber-400" : "text-white/20"
+              }
+            />
+            <div className="flex flex-col">
+              <span className="text-[8px] font-mono text-amber-400/60 leading-none">
+                Global Event Tracking
+              </span>
+            </div>
+          </div>
+          <button
+            className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            onClick={() => onFilterChange?.("showGdelt", !filters?.showGdelt)}
+            aria-label="Toggle GDELT OSINT Events"
+            aria-pressed={filters?.showGdelt}
+          >
+            <div
+              className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters?.showGdelt ? "bg-amber-400" : "bg-white/10 hover:bg-white/20"}`}
+            >
+              <div
+                className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters?.showGdelt ? "left-3.5" : "left-0.5"}`}
+              />
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // 3. Isolated sub-component with React.memo to prevent unnecessary re-renders
-const IntelEventItem = React.memo(({
+const IntelEventItem = React.memo(
+  ({
     event,
     onClick,
-    filters
-}: {
+  }: {
     event: IntelEvent;
     onClick: (event: IntelEvent) => void;
-    filters?: MapFilters;
-}) => {
-    const isAir = event.entityType === 'air';
-    const isSea = event.entityType === 'sea';
-    const isOrbital = event.entityType === 'orbital';
-    const isInfra = event.entityType === 'infra';
-    const isLost = event.type === 'lost';
-    const isAlert = event.type === 'alert';
-    const isMil = event.classification?.affiliation === 'military';
-    const isGov = event.classification?.affiliation === 'government';
-    const isRF = isInfra && (event.message?.includes('RF') || event.message?.includes('Repeater'));
-    const infraColor = isRF ? 'emerald-400' : 'cyan-400';
+  }) => {
+    const isAir = event.entityType === "air";
+    const isOrbital = event.entityType === "orbital";
+    const isInfra = event.entityType === "infra";
+    const isLost = event.type === "lost";
+    const isAlert = event.type === "alert";
+    const isMil = event.classification?.affiliation === "military";
+    const isGov = event.classification?.affiliation === "government";
+    const isRF =
+      isInfra &&
+      (event.message?.includes("RF") || event.message?.includes("Repeater"));
+    const infraColor = isRF ? "emerald-400" : "cyan-400";
 
-    const accentColor = isAlert ? 'bg-alert-red' :
-        isLost ? 'bg-alert-amber' :
-            isMil ? 'bg-amber-500' :
-                isGov ? 'bg-blue-400' :
-                    isOrbital ? 'bg-purple-400' :
-                        isInfra ? `bg-${infraColor}` :
-                            isAir ? 'bg-air-accent' : 'bg-sea-accent';
+    const accentColor = isAlert
+      ? "bg-alert-red"
+      : isLost
+        ? "bg-alert-amber"
+        : isMil
+          ? "bg-amber-500"
+          : isGov
+            ? "bg-blue-400"
+            : isOrbital
+              ? "bg-purple-400"
+              : isInfra
+                ? `bg-${infraColor}`
+                : isAir
+                  ? "bg-air-accent"
+                  : "bg-sea-accent";
 
-    const textColor = isAlert ? 'text-alert-red' :
-        isLost ? 'text-alert-amber' :
-            isMil ? 'text-amber-500' :
-                isGov ? 'text-blue-400' :
-                    isOrbital ? 'text-purple-400' :
-                        isInfra ? `text-${infraColor}` :
-                            isAir ? 'text-air-accent' : 'text-sea-accent';
+    const textColor = isAlert
+      ? "text-alert-red"
+      : isLost
+        ? "text-alert-amber"
+        : isMil
+          ? "text-amber-500"
+          : isGov
+            ? "text-blue-400"
+            : isOrbital
+              ? "text-purple-400"
+              : isInfra
+                ? `text-${infraColor}`
+                : isAir
+                  ? "text-air-accent"
+                  : "text-sea-accent";
 
-    const borderLight = isAlert ? 'border-alert-red/30' :
-        isLost ? 'border-alert-amber/30' :
-            isMil ? 'border-amber-500/30' :
-                isGov ? 'border-blue-400/30' :
-                    isOrbital ? 'border-purple-400/30' :
-                        isInfra ? `border-${infraColor}/30` :
-                            isAir ? 'border-air-accent/30' : 'border-sea-accent/30';
+    const borderLight = isAlert
+      ? "border-alert-red/30"
+      : isLost
+        ? "border-alert-amber/30"
+        : isMil
+          ? "border-amber-500/30"
+          : isGov
+            ? "border-blue-400/30"
+            : isOrbital
+              ? "border-purple-400/30"
+              : isInfra
+                ? `border-${infraColor}/30`
+                : isAir
+                  ? "border-air-accent/30"
+                  : "border-sea-accent/30";
 
     return (
-        <button
-            onClick={() => onClick(event)}
-            aria-label={`View event: ${event.message}`}
-            className={`w-full text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
-        >
-            <div className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`} />
+      <button
+        onClick={() => onClick(event)}
+        aria-label={`View event: ${event.message}`}
+        className={`w-full text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none group relative overflow-hidden rounded border border-white/5 bg-black/40 p-2 transition-all hover:bg-white-[5%] hover:${borderLight} cursor-pointer active:scale-[0.98]`}
+      >
+        <div
+          className={`absolute left-0 top-0 h-full w-[2px] ${accentColor}`}
+        />
 
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                        {isAlert ? <Bell size={10} className="text-alert-red" /> :
-                            isLost ? <TrendingDown size={10} className="text-alert-amber" /> :
-                                <TrendingUp size={10} className={textColor} />}
+        <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              {isAlert ? (
+                <Bell size={10} className="text-alert-red" />
+              ) : isLost ? (
+                <TrendingDown size={10} className="text-alert-amber" />
+              ) : (
+                <TrendingUp size={10} className={textColor} />
+              )}
 
-                        <span className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}>
-                            {isAlert ? 'CRITICAL ALERT' : event.type.toUpperCase()}
-                        </span>
-                        {event.classification?.affiliation && ['military', 'government'].includes(event.classification.affiliation.toLowerCase()) && (
-                            <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.affiliation.toLowerCase() === 'military' ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
-                                {event.classification.affiliation.toUpperCase()}
-                            </span>
-                        )}
-                        {event.classification?.platform && event.classification.platform.toLowerCase() !== 'fixed_wing' && (
-                            <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.platform.toLowerCase() === 'helicopter' ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
-                                {event.classification.platform.toUpperCase()}
-                            </span>
-                        )}
-                        {event.classification?.category && (
-                            <span className={`text-[9px] px-1 rounded border opacity-80 font-bold ${['sar', 'law_enforcement', 'military'].includes(event.classification.category.toLowerCase()) ? 'border-amber-500/80 text-amber-500 tracking-wide' : `${borderLight} ${textColor}`}`}>
-                                {event.classification.category.toUpperCase().replace(/_/g, ' ')}
-                            </span>
-                        )}
-                    </div>
-                    <p className="text-mono-sm font-medium leading-tight text-white/80 group-hover:text-white">
-                        {event.message}
-                    </p>
-                </div>
-                <span className="text-[8px] font-mono text-white/30 whitespace-nowrap">
-                    {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              <span
+                className={`text-[10px] font-bold tracking-widest uppercase ${textColor}`}
+              >
+                {isAlert ? "CRITICAL ALERT" : event.type.toUpperCase()}
+              </span>
+              {event.classification?.affiliation &&
+                ["military", "government"].includes(
+                  event.classification.affiliation.toLowerCase(),
+                ) && (
+                  <span
+                    className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.affiliation.toLowerCase() === "military" ? "border-amber-500/80 text-amber-500 tracking-wide" : `${borderLight} ${textColor}`}`}
+                  >
+                    {event.classification.affiliation.toUpperCase()}
+                  </span>
+                )}
+              {event.classification?.platform &&
+                event.classification.platform.toLowerCase() !==
+                  "fixed_wing" && (
+                  <span
+                    className={`text-[9px] px-1 rounded border opacity-80 font-bold ${event.classification.platform.toLowerCase() === "helicopter" ? "border-amber-500/80 text-amber-500 tracking-wide" : `${borderLight} ${textColor}`}`}
+                  >
+                    {event.classification.platform.toUpperCase()}
+                  </span>
+                )}
+              {event.classification?.category && (
+                <span
+                  className={`text-[9px] px-1 rounded border opacity-80 font-bold ${["sar", "law_enforcement", "military"].includes(event.classification.category.toLowerCase()) ? "border-amber-500/80 text-amber-500 tracking-wide" : `${borderLight} ${textColor}`}`}
+                >
+                  {event.classification.category
+                    .toUpperCase()
+                    .replace(/_/g, " ")}
                 </span>
+              )}
             </div>
+            <p className="text-mono-sm font-medium leading-tight text-white/80 group-hover:text-white">
+              {event.message}
+            </p>
+          </div>
+          <span className="text-[8px] font-mono text-white/30 whitespace-nowrap">
+            {event.time.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
+          </span>
+        </div>
 
-            <div className="absolute -bottom-2 -right-2 opacity-[0.03] transition-opacity group-hover:opacity-[0.08]">
-                {isOrbital ? <Satellite size={40} className="text-purple-400" /> :
-                    isInfra ? <Network size={40} className="text-cyan-400" /> :
-                        isAir ? <PlaneIcon size={40} /> : <ShipIcon size={40} />}
-            </div>
-        </button>
+        <div className="absolute -bottom-2 -right-2 opacity-[0.03] transition-opacity group-hover:opacity-[0.08]">
+          {isOrbital ? (
+            <Satellite size={40} className="text-purple-400" />
+          ) : isInfra ? (
+            <Network size={40} className="text-cyan-400" />
+          ) : isAir ? (
+            <PlaneIcon size={40} />
+          ) : (
+            <ShipIcon size={40} />
+          )}
+        </div>
+      </button>
     );
-});
+  },
+);
 
 // Internal utility icons
 const ActivityIndicator = () => (
-    <div className="relative h-6 w-6">
-        <div className="absolute inset-0 rounded-full border border-hud-green opacity-20 animate-ping" />
-        <div className="absolute inset-0 rounded-full border border-hud-green animate-pulse" />
-    </div>
+  <div className="relative h-6 w-6">
+    <div className="absolute inset-0 rounded-full border border-hud-green opacity-20 animate-ping" />
+    <div className="absolute inset-0 rounded-full border border-hud-green animate-pulse" />
+  </div>
 );
 
 const PlaneIcon = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3.5 19.5 3 18 3.5 16.5 5L13 8.5 4.8 6.7c-1.2-.3-2.4.5-2.8 1.7-.2.6 0 1.2.5 1.7L9 13.5l-3.5 3.5c-.7.7-.7 1.8 0 2.5.7.7 1.8.7 2.5 0l3.5-3.5 3.4 6.5c.5.5 1.1.7 1.7.5 1.2-.4 2-1.6 1.7-2.8z" />
-    </svg>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3.5 19.5 3 18 3.5 16.5 5L13 8.5 4.8 6.7c-1.2-.3-2.4.5-2.8 1.7-.2.6 0 1.2.5 1.7L9 13.5l-3.5 3.5c-.7.7-.7 1.8 0 2.5.7.7 1.8.7 2.5 0l3.5-3.5 3.4 6.5c.5.5 1.1.7 1.7.5 1.2-.4 2-1.6 1.7-2.8z" />
+  </svg>
 );
 
 const ShipIcon = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 21H3L1 15h22l-2 6zM12 15V1M7 10h10" />
-    </svg>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 21H3L1 15h22l-2 6zM12 15V1M7 10h10" />
+  </svg>
 );

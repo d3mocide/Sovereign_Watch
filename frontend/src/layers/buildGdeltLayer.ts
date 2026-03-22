@@ -2,16 +2,14 @@ import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
 import type { PickingInfo } from "@deck.gl/core";
 
-interface GdeltFeature {
-  geometry: { coordinates: [number, number] };
-  properties: {
-    name?: string;
-    url?: string;
-    domain?: string;
-    tone?: number;
-    toneColor?: [number, number, number, number];
-    dateadded?: string;
-  };
+export interface GdeltPoint {
+  lat: number;
+  lon: number;
+  name: string;
+  url: string;
+  domain: string;
+  tone: number;
+  toneColor: [number, number, number, number];
 }
 
 /**
@@ -24,6 +22,18 @@ export function gdeltToneLabel(tone: number): string {
   if (tone < 0) return "NEGATIVE";
   if (tone < 2) return "NEUTRAL";
   return "COOPERATIVE";
+}
+
+interface GdeltFeature {
+  geometry: { coordinates: [number, number] };
+  properties: {
+    name?: string;
+    url?: string;
+    domain?: string;
+    tone?: number;
+    toneColor?: [number, number, number, number];
+    dateadded?: string;
+  };
 }
 
 /**
@@ -47,16 +57,19 @@ export function buildGdeltLayer(
   visible: boolean,
   globeMode: boolean,
   toneThreshold: number = -Infinity,
+  onHover: (entity: any | null, pos: { x: number; y: number } | null) => void,
+  onClick?: (event: GdeltPoint) => void,
 ): Layer[] {
+  const threshold = (toneThreshold === undefined || toneThreshold === null) ? -Infinity : toneThreshold;
   if (!visible || !gdeltData?.features?.length) return [];
 
-  const features = toneThreshold === -Infinity
+  const features = threshold === -Infinity
     ? gdeltData.features
-    : gdeltData.features.filter((f) => (f.properties.tone ?? 0) <= toneThreshold);
+    : gdeltData.features.filter((f) => (f.properties.tone ?? 0) <= threshold);
 
   if (!features.length) return [];
 
-  const data = features.map((f) => ({
+  const data: GdeltPoint[] = features.map((f) => ({
     lon: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
     name: f.properties.name || "",
@@ -65,8 +78,6 @@ export function buildGdeltLayer(
     tone: f.properties.tone ?? 0,
     toneColor: f.properties.toneColor || [163, 230, 53, 180],
   }));
-
-  type GdeltPoint = (typeof data)[number];
 
   return [
     // Outer glow ring
@@ -86,7 +97,7 @@ export function buildGdeltLayer(
       getLineWidth: 4000,
       lineWidthUnits: "meters",
       wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 } as any,
     }),
 
     // Filled dot
@@ -106,15 +117,31 @@ export function buildGdeltLayer(
       getLineWidth: 1,
       lineWidthUnits: "pixels",
       wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 } as any,
       onHover: (info: PickingInfo<GdeltPoint>) => {
         if (info.object) {
-          info.object; // handled by MapTooltip via hoveredGdelt state in TacticalMap
+          const d = info.object;
+          // Transform internal GdeltPoint into a virtual CoTEntity for the tooltip HUD
+          const entity = {
+            uid: `gdelt-${d.name.slice(0, 10)}`,
+            type: "gdelt",
+            callsign: d.name,
+            lat: d.lat,
+            lon: d.lon,
+            altitude: 0,
+            course: 0,
+            speed: 0,
+            lastSeen: Date.now(),
+            detail: d, // Includes url, tone, domain
+          };
+          onHover(entity, { x: info.x, y: info.y });
+        } else {
+          onHover(null, null);
         }
       },
       onClick: (info: PickingInfo<GdeltPoint>) => {
-        if (info.object?.url) {
-          window.open(info.object.url, "_blank", "noopener,noreferrer");
+        if (info.object && onClick) {
+          onClick(info.object);
         }
       },
     }),
@@ -145,7 +172,7 @@ export function buildGdeltLayer(
       billboard: true,
       sizeScale: 1,
       wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -99.0 : 0 },
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -99.0 : 0 } as any,
     }),
   ];
 }

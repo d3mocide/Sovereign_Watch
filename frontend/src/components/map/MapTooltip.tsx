@@ -15,6 +15,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isOrbital = entity.type === "a-s-K" || (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
   const isInfra = entity.type === 'infra';
   const isOutage = entity.type === 'outage';
+  const isGdelt = entity.type === 'gdelt';
 
   const accentColor = isRepeater
     ? 'text-emerald-400'
@@ -30,7 +31,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? 'text-cyan-400'
             : isOutage
               ? 'text-amber-400'
-              : 'text-air-accent';
+              : isGdelt
+                ? 'text-hud-green'
+                : 'text-air-accent';
 
   const borderColor = isRepeater
     ? 'border-emerald-400/50'
@@ -46,6 +49,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? 'border-cyan-400/50'
             : isOutage
               ? 'border-amber-400/50'
+            : isGdelt
+              ? 'border-hud-green/30'
               : 'border-air-accent/50';
 
   const HeaderIcon = isRepeater
@@ -62,7 +67,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? Network
             : isOutage
               ? Signal
-              : Plane;
+              : isGdelt
+                ? Zap
+                : Plane;
 
   return (
     <div
@@ -84,7 +91,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         <div className="flex items-center gap-1">
           <div className={`h-1.5 w-1.5 rounded-full ${accentColor} animate-pulse shadow-[0_0_4px_currentColor]`} />
           <span className="text-[8px] font-mono text-white/50">
-            {isRepeater ? 'INFRA' : isTower ? 'TOWER' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : isOutage ? 'OUTAGE' : 'LIVE'}
+            {isRepeater ? 'INFRA' : isTower ? 'TOWER' : isJS8 ? 'JS8CALL' : isInfra ? 'UNDERSEA' : isOutage ? 'OUTAGE' : isGdelt ? 'OSINT' : 'LIVE'}
           </span>
         </div>
       </div>
@@ -226,6 +233,33 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             <span className="text-[8px] text-white/40 block leading-tight">LOCATION</span>
             <span className="text-[10px] text-white/80 font-mono font-bold leading-tight truncate block">
               {entity.detail?.properties?.region || entity.detail?.properties?.country || 'GLOBAL'}
+            </span>
+          </div>
+        </div>
+      ) : isGdelt ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">SOURCE DOMAIN</span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight uppercase">
+              {String(entity.detail?.domain || 'OPEN SOURCE')}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">TONE (GS)</span>
+            <span className={`text-[10px] font-mono font-bold leading-tight ${Number(entity.detail?.tone || 0) <= -2 ? 'text-red-400' : 'text-hud-green'}`}>
+              {(entity.detail?.tone as number)?.toFixed(1) || '0.0'}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">STATUS</span>
+            <span className={`text-[10px] font-mono font-bold leading-tight ${Number(entity.detail?.tone || 0) <= -2 ? 'text-red-400' : 'text-hud-green'}`}>
+              {Number(entity.detail?.tone || 0) <= -5 ? 'CRITICAL' : Number(entity.detail?.tone || 0) <= -2 ? 'TENSION' : 'STABLE'}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">DATA SOURCE</span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
+              GDELT GLOBAL EVENT MONITOR
             </span>
           </div>
         </div>

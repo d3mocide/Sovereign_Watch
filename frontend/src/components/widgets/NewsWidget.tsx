@@ -89,34 +89,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({ compact = false }) => {
   if (compact) {
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Compact threats strip */}
-        {threats.length > 0 && (
-          <div className="border-b border-red-400/20 bg-red-400/5">
-            {threats.slice(0, 5).map((t, i) => {
-              const chip = toneChip(t.properties.tone ?? -3);
-              return (
-                <a
-                  key={i}
-                  href={t.properties.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start gap-1.5 px-2 py-1 border-b border-white/[0.03] hover:bg-red-400/10 transition-colors group"
-                >
-                  <AlertTriangle size={8} className="text-red-400/70 flex-shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[9px] text-white/70 leading-tight line-clamp-1 group-hover:text-white/90">
-                      {t.properties.name}
-                    </p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className={`text-[7px] font-bold px-1 rounded border ${chip.className}`}>{chip.label}</span>
-                      <span className="text-[7px] text-white/30">{t.properties.domain}</span>
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        )}
+        {/* Compact threats strip removed - replaced by header count in DashboardView */}
         {items.length === 0 ? (
           <div className="flex items-center justify-center h-full text-[10px] text-white/20">
             {loading ? 'FETCHING FEEDS...' : 'NO DATA'}

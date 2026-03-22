@@ -1,34 +1,28 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import type { FeatureCollection } from 'geojson';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import type { FeatureCollection } from "geojson";
 import {
-  AlertTriangle,
-  Radio,
-  Satellite,
   Activity,
+  AlertTriangle,
+  Antenna,
+  Globe,
+  Newspaper,
   Plane,
+  Satellite,
   Ship,
   Signal,
-  Globe,
-  Antenna,
   TrendingUp,
-} from 'lucide-react';
-import {
-  CoTEntity,
-  IntelEvent,
-  JS8LogEntry,
-  JS8Station,
-  MissionProps,
-  DRState,
-} from '../../types';
-import { usePassPredictions } from '../../hooks/usePassPredictions';
-import { calculateZoom } from '../../utils/map/geoUtils';
-import { NewsWidget } from '../widgets/NewsWidget';
-import { SituationGlobe } from '../map/SituationGlobe';
+} from "lucide-react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePassPredictions } from "../../hooks/usePassPredictions";
+import { CoTEntity, DRState, IntelEvent, MissionProps } from "../../types";
+import { calculateZoom } from "../../utils/map/geoUtils";
+import { SituationGlobe } from "../map/SituationGlobe";
+import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
+import { NewsWidget } from "../widgets/NewsWidget";
 
 const DARK_MAP_STYLE =
-  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,54 +47,48 @@ interface RFSiteResult {
   city: string | null;
   state: string | null;
   modes: string[];
+  lat?: number;
+  lon?: number;
 }
 
 type TrackSnapshot = { air: number; sea: number; orbital: number };
-type PassCategory = 'intel' | 'weather' | 'gps';
+type PassCategory = "intel" | "weather" | "gps";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const STREAM_ABBR: Record<string, string> = {
-  aviation: 'ADSB',
-  maritime: 'AIS',
-  orbital: 'ORB',
-  repeaterbook: 'RBOOK',
-  radioref: 'RREF',
-  rf_public: 'RF',
-  ai: 'AI',
+  aviation: "ADSB",
+  maritime: "AIS",
+  orbital: "ORB",
+  repeaterbook: "RBOOK",
+  radioref: "RREF",
+  rf_public: "RF",
+  ai: "AI",
 };
 
 function streamDotClass(status: string): string {
-  if (status === 'Active') return 'bg-hud-green shadow-[0_0_4px_#00ff41]';
-  if (status === 'Missing Key') return 'bg-amber-400 shadow-[0_0_4px_#fbbf24]';
-  return 'bg-white/20';
+  if (status === "Active") return "bg-hud-green shadow-[0_0_4px_#00ff41]";
+  if (status === "Missing Key") return "bg-amber-400 shadow-[0_0_4px_#fbbf24]";
+  return "bg-white/20";
 }
 
 function streamTextClass(status: string): string {
-  if (status === 'Active') return 'text-hud-green';
-  if (status === 'Missing Key') return 'text-amber-400';
-  return 'text-white/25';
+  if (status === "Active") return "text-hud-green";
+  if (status === "Missing Key") return "text-amber-400";
+  return "text-white/25";
 }
 
 function severityColor(s: number): string {
-  if (s >= 60) return 'text-alert-red';
-  if (s >= 25) return 'text-amber-400';
-  return 'text-yellow-300';
+  if (s >= 60) return "text-alert-red";
+  if (s >= 25) return "text-amber-400";
+  return "text-yellow-300";
 }
 
 function severityBarClass(s: number): string {
-  if (s >= 60) return 'bg-alert-red';
-  if (s >= 25) return 'bg-amber-400';
-  return 'bg-yellow-300';
+  if (s >= 60) return "bg-alert-red";
+  if (s >= 25) return "bg-amber-400";
+  return "bg-yellow-300";
 }
-
-const EMCOMM_BADGE: Record<string, string> = {
-  ARES: 'bg-blue-600/30 text-blue-300 border-blue-500/30',
-  RACES: 'bg-green-700/30 text-green-300 border-green-500/30',
-  SKYWARN: 'bg-yellow-600/30 text-yellow-200 border-yellow-500/30',
-  CERT: 'bg-orange-600/30 text-orange-300 border-orange-500/30',
-  WICEN: 'bg-purple-600/30 text-purple-300 border-purple-500/30',
-};
 
 // ─── Mini Sparkline ───────────────────────────────────────────────────────────
 
@@ -112,22 +100,54 @@ const Sparkline: React.FC<{
   if (data.length < 2) {
     return (
       <svg width={width} height={height} className="opacity-20 flex-shrink-0">
-        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="#00ff41" strokeWidth={1} />
+        <line
+          x1={0}
+          y1={height / 2}
+          x2={width}
+          y2={height / 2}
+          stroke="#00ff41"
+          strokeWidth={1}
+        />
       </svg>
     );
   }
-  const maxAirSea = Math.max(1, ...data.map(d => Math.max(d.air, d.sea)));
+  const maxAirSea = Math.max(1, ...data.map((d) => Math.max(d.air, d.sea)));
   const pad = 2;
   const norm = (v: number, max: number) =>
-    height - pad - ((v / max) * (height - pad * 2));
+    height - pad - (v / max) * (height - pad * 2);
   const buildPath = (vals: number[], max: number) => {
     const step = width / (vals.length - 1);
-    return vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${norm(v, max).toFixed(1)}`).join(' ');
+    return vals
+      .map(
+        (v, i) =>
+          `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${norm(v, max).toFixed(1)}`,
+      )
+      .join(" ");
   };
   return (
     <svg width={width} height={height} className="flex-shrink-0">
-      <path d={buildPath(data.map(d => d.air), maxAirSea)} stroke="#00ff41" strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d={buildPath(data.map(d => d.sea), maxAirSea)} stroke="#22d3ee" strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={buildPath(
+          data.map((d) => d.air),
+          maxAirSea,
+        )}
+        stroke="#00ff41"
+        strokeWidth={1.5}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d={buildPath(
+          data.map((d) => d.sea),
+          maxAirSea,
+        )}
+        stroke="#22d3ee"
+        strokeWidth={1.5}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 };
@@ -146,18 +166,31 @@ function makeMissionCircle(
   const coords: [number, number][] = [];
   for (let i = 0; i <= N; i++) {
     const a = (i / N) * 2 * Math.PI;
-    coords.push([lon + ((radiusNm * NM_TO_DEG) / safeCos) * Math.sin(a), lat + radiusNm * NM_TO_DEG * Math.cos(a)]);
+    coords.push([
+      lon + ((radiusNm * NM_TO_DEG) / safeCos) * Math.sin(a),
+      lat + radiusNm * NM_TO_DEG * Math.cos(a),
+    ]);
   }
-  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: {} };
+  return {
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [coords] },
+    properties: {},
+  };
 }
 
 interface MiniMapProps {
   mission: { lat: number; lon: number; radius_nm: number };
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
+  rfSites: RFSiteResult[];
 }
 
-const MiniTacticalMap: React.FC<MiniMapProps> = ({ mission, entitiesRef, satellitesRef }) => {
+const MiniTacticalMap: React.FC<MiniMapProps> = ({
+  mission,
+  entitiesRef,
+  satellitesRef,
+  rfSites,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapReadyRef = useRef(false);
@@ -174,42 +207,147 @@ const MiniTacticalMap: React.FC<MiniMapProps> = ({ mission, entitiesRef, satelli
       attributionControl: false,
     });
     mapRef.current = map;
-    map.on('load', () => {
-      const circle = makeMissionCircle(mission.lat, mission.lon, mission.radius_nm);
-      map.addSource('mission-circle', { type: 'geojson', data: circle });
-      map.addLayer({ id: 'mission-fill', type: 'fill', source: 'mission-circle', paint: { 'fill-color': '#00ff41', 'fill-opacity': 0.05 } });
-      map.addLayer({ id: 'mission-border', type: 'line', source: 'mission-circle', paint: { 'line-color': '#00ff41', 'line-width': 1.5, 'line-opacity': 0.7 } });
-      map.addSource('entities', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'ent-air', type: 'circle', source: 'entities', filter: ['==', ['get', 'etype'], 'air'], paint: { 'circle-radius': 2.5, 'circle-color': '#00ff41', 'circle-opacity': 0.85 } });
-      map.addLayer({ id: 'ent-sea', type: 'circle', source: 'entities', filter: ['==', ['get', 'etype'], 'sea'], paint: { 'circle-radius': 2.5, 'circle-color': '#22d3ee', 'circle-opacity': 0.85 } });
-      map.addSource('orbital', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'ent-orbital', type: 'circle', source: 'orbital', paint: { 'circle-radius': 2, 'circle-color': '#a855f7', 'circle-opacity': 0.6 } });
+    map.on("load", () => {
+      const circle = makeMissionCircle(
+        mission.lat,
+        mission.lon,
+        mission.radius_nm,
+      );
+      map.addSource("mission-circle", { type: "geojson", data: circle });
+      map.addLayer({
+        id: "mission-fill",
+        type: "fill",
+        source: "mission-circle",
+        paint: { "fill-color": "#00ff41", "fill-opacity": 0.05 },
+      });
+      map.addLayer({
+        id: "mission-border",
+        type: "line",
+        source: "mission-circle",
+        paint: {
+          "line-color": "#00ff41",
+          "line-width": 1.5,
+          "line-opacity": 0.7,
+        },
+      });
+      map.addSource("entities", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "ent-air",
+        type: "circle",
+        source: "entities",
+        filter: ["==", ["get", "etype"], "air"],
+        paint: {
+          "circle-radius": 2.5,
+          "circle-color": "#00ff41",
+          "circle-opacity": 0.85,
+        },
+      });
+      map.addLayer({
+        id: "ent-sea",
+        type: "circle",
+        source: "entities",
+        filter: ["==", ["get", "etype"], "sea"],
+        paint: {
+          "circle-radius": 2.5,
+          "circle-color": "#22d3ee",
+          "circle-opacity": 0.85,
+        },
+      });
+      map.addSource("orbital", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "ent-orbital",
+        type: "circle",
+        source: "orbital",
+        paint: {
+          "circle-radius": 2,
+          "circle-color": "#a855f7",
+          "circle-opacity": 0.6,
+        },
+      });
+      map.addSource("emcomm", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "ent-emcomm",
+        type: "circle",
+        source: "emcomm",
+        paint: {
+          "circle-radius": 2,
+          "circle-color": "#fbbf24",
+          "circle-opacity": 0.8,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#fbbf2433",
+        },
+      });
       mapReadyRef.current = true;
     });
-    return () => { mapReadyRef.current = false; map.remove(); mapRef.current = null; };
+    return () => {
+      mapReadyRef.current = false;
+      map.remove();
+      mapRef.current = null;
+    };
   }, [mission.lat, mission.lon, mission.radius_nm]);
 
   const updateLayers = useCallback(() => {
     const map = mapRef.current;
     if (!map || !mapReadyRef.current) return;
     const airSea: GeoJSON.Feature[] = [];
-    entitiesRef.current.forEach(e => {
-      airSea.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: { etype: e.vesselClassification !== undefined ? 'sea' : 'air' } });
+    entitiesRef.current.forEach((e) => {
+      airSea.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [e.lon, e.lat] },
+        properties: {
+          etype: e.vesselClassification !== undefined ? "sea" : "air",
+        },
+      });
     });
     const orb: GeoJSON.Feature[] = [];
-    satellitesRef.current.forEach(e => {
-      if (e.detail?.constellation !== 'Starlink') {
-        orb.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lon, e.lat] }, properties: {} });
+    satellitesRef.current.forEach((e) => {
+      if (e.detail?.constellation !== "Starlink") {
+        orb.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [e.lon, e.lat] },
+          properties: {},
+        });
       }
     });
-    (map.getSource('entities') as maplibregl.GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: airSea });
-    (map.getSource('orbital') as maplibregl.GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: orb });
-  }, [entitiesRef, satellitesRef]);
+    const emcomm: GeoJSON.Feature[] = [];
+    rfSites.forEach((s) => {
+      if (s.lat !== undefined && s.lon !== undefined) {
+        emcomm.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+          properties: {},
+        });
+      }
+    });
+
+    (map.getSource("entities") as maplibregl.GeoJSONSource | undefined)?.setData(
+      { type: "FeatureCollection", features: airSea },
+    );
+    (map.getSource("orbital") as maplibregl.GeoJSONSource | undefined)?.setData(
+      { type: "FeatureCollection", features: orb },
+    );
+    (map.getSource("emcomm") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: emcomm,
+    });
+  }, [entitiesRef, satellitesRef, rfSites]);
 
   useEffect(() => {
     const t0 = setTimeout(updateLayers, 1500);
     const ti = setInterval(updateLayers, 5000);
-    return () => { clearTimeout(t0); clearInterval(ti); };
+    return () => {
+      clearTimeout(t0);
+      clearInterval(ti);
+    };
   }, [updateLayers]);
 
   return <div ref={containerRef} className="w-full h-full" />;
@@ -221,9 +359,6 @@ interface DashboardViewProps {
   events: IntelEvent[];
   trackCounts: { air: number; sea: number; orbital: number };
   missionProps: MissionProps | null;
-  js8LogEntries: JS8LogEntry[];
-  js8Stations: JS8Station[];
-  js8Connected: boolean;
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   cablesData: FeatureCollection | null;
@@ -232,15 +367,13 @@ interface DashboardViewProps {
   worldCountriesData: FeatureCollection | null;
   showTerminator: boolean;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
+  gdeltData: FeatureCollection | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   events,
   trackCounts,
   missionProps,
-  js8LogEntries,
-  js8Stations,
-  js8Connected,
   entitiesRef,
   satellitesRef,
   cablesData,
@@ -249,17 +382,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   worldCountriesData,
   showTerminator,
   drStateRef,
+  gdeltData,
 }) => {
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
   const obsLon = mission?.lon ?? -122.6784;
 
   // ── New state ──
-  const [passCategory, setPassCategory] = useState<PassCategory>('intel');
+  const [passCategory, setPassCategory] = useState<PassCategory>("intel");
   const [streamStatuses, setStreamStatuses] = useState<StreamStatus[]>([]);
   const [outages, setOutages] = useState<OutageItem[]>([]);
-  const [rfEmcomm, setRfEmcomm] = useState<{ count: number; results: RFSiteResult[] }>({ count: 0, results: [] });
-  const [trackHistory, setTrackHistory] = useState<{ air: number; sea: number; orbital: number }[]>([]);
+  const [rfEmcomm, setRfEmcomm] = useState<{
+    count: number;
+    results: RFSiteResult[];
+  }>({ count: 0, results: [] });
+  const [trackHistory, setTrackHistory] = useState<
+    { air: number; sea: number; orbital: number }[]
+  >([]);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -269,23 +408,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Keep a ref to trackCounts so the sparkline interval reads the latest value
   const trackCountsRef = useRef(trackCounts);
-  useEffect(() => { trackCountsRef.current = trackCounts; }, [trackCounts]);
+  useEffect(() => {
+    trackCountsRef.current = trackCounts;
+  }, [trackCounts]);
 
   // Pass predictions — single hook, category swaps on tab change
-  const { passes, loading: passesLoading } = usePassPredictions(obsLat, obsLon, {
-    category: passCategory,
-    hours: passCategory === 'gps' ? 4 : 6,
-    minElevation: 10,
-    skip: !mission,
-  });
+  const { passes, loading: passesLoading } = usePassPredictions(
+    obsLat,
+    obsLon,
+    {
+      category: passCategory,
+      hours: passCategory === "gps" ? 4 : 6,
+      minElevation: 10,
+      skip: !mission,
+    },
+  );
 
   // ── Fetch stream health (60s refresh) ──
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch('/api/config/streams');
+        const r = await fetch("/api/config/streams");
         if (r.ok) setStreamStatuses(await r.json());
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     };
     load();
     const t = setInterval(load, 60_000);
@@ -296,20 +443,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch('/api/infra/outages');
+        const r = await fetch("/api/infra/outages");
         if (r.ok) {
           const geojson = await r.json();
           const items: OutageItem[] = (geojson.features ?? [])
-            .map((f: { properties: { country: string; country_code: string; severity: number } }) => ({
-              country: f.properties.country,
-              country_code: f.properties.country_code,
-              severity: f.properties.severity,
-            }))
+            .map(
+              (f: {
+                properties: {
+                  country: string;
+                  country_code: string;
+                  severity: number;
+                };
+              }) => ({
+                country: f.properties.country,
+                country_code: f.properties.country_code,
+                severity: f.properties.severity,
+              }),
+            )
             .sort((a: OutageItem, b: OutageItem) => b.severity - a.severity)
             .slice(0, 20);
           setOutages(items);
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     };
     load();
     const t = setInterval(load, 30 * 60_000);
@@ -325,65 +482,86 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           lat: String(mission.lat),
           lon: String(mission.lon),
           radius_nm: String(mission.radius_nm),
-          emcomm_only: 'true',
+          emcomm_only: "true",
         });
         const r = await fetch(`/api/rf/sites?${params}`);
         if (r.ok) setRfEmcomm(await r.json());
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     };
     load();
   }, [mission]);
 
   // ── Sample track counts every 30s for sparkline ──
   useEffect(() => {
-    const sample = () => setTrackHistory(h => [...h.slice(-19), { ...trackCountsRef.current }]);
+    const sample = () =>
+      setTrackHistory((h) => [...h.slice(-19), { ...trackCountsRef.current }]);
     sample();
     const t = setInterval(sample, 30_000);
     return () => clearInterval(t);
   }, []);
 
   // ── Derived ──
-  const alerts = events.filter(e => e.type === 'alert').slice(0, 20);
-  const intelEvents = events.filter(e => e.type !== 'alert').slice(0, 30);
+  const alerts = events.filter((e) => e.type === "alert").slice(0, 20);
+  const intelEvents = events.filter((e) => e.type !== "alert").slice(0, 30);
+  const [selectedGdelt, setSelectedGdelt] = useState<any | null>(null);
+  const [hoveredGdelt, setHoveredGdelt] = useState<any | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
-  const fmtTime = (d: Date) => d.toISOString().split('T')[1].substring(0, 8);
-  const fmtPassTime = (iso: string) => new Date(iso).toISOString().split('T')[1].substring(0, 5) + 'Z';
+  const conflictCount = useMemo(() => {
+    if (!gdeltData?.features) return 0;
+    return gdeltData.features.filter((f: any) => (f.properties?.tone ?? 0) <= -5)
+      .length;
+  }, [gdeltData]);
+
+  const fmtTime = (d: Date) => d.toISOString().split("T")[1].substring(0, 8);
+  const fmtPassTime = (iso: string) =>
+    new Date(iso).toISOString().split("T")[1].substring(0, 5) + "Z";
   const untilPass = (iso: string) => {
     const diff = (new Date(iso).getTime() - now) / 60000;
-    if (diff <= 0) return 'NOW';
+    if (diff <= 0) return "NOW";
     if (diff < 60) return `${Math.round(diff)}m`;
     return `${Math.floor(diff / 60)}h${Math.round(diff % 60)}m`;
   };
 
   const entityIcon = (type?: string) => {
-    if (type === 'air') return <Plane size={9} className="text-hud-green flex-shrink-0" />;
-    if (type === 'sea') return <Ship size={9} className="text-cyan-400 flex-shrink-0" />;
-    if (type === 'orbital') return <Satellite size={9} className="text-purple-400 flex-shrink-0" />;
+    if (type === "air")
+      return <Plane size={9} className="text-hud-green flex-shrink-0" />;
+    if (type === "sea")
+      return <Ship size={9} className="text-cyan-400 flex-shrink-0" />;
+    if (type === "orbital")
+      return <Satellite size={9} className="text-purple-400 flex-shrink-0" />;
     return <Activity size={9} className="text-white/30 flex-shrink-0" />;
   };
 
-  const passCategoryLabel: Record<PassCategory, string> = { intel: 'INTEL', weather: 'WEATHER', gps: 'GPS' };
-  const passCategoryAccent: Record<PassCategory, string> = {
-    intel: 'text-purple-300 border-purple-500/50 bg-purple-500/20',
-    weather: 'text-sky-300 border-sky-500/50 bg-sky-500/20',
-    gps: 'text-emerald-300 border-emerald-500/50 bg-emerald-500/20',
+  const passCategoryLabel: Record<PassCategory, string> = {
+    intel: "INTEL",
+    weather: "WEATHER",
+    gps: "GPS",
   };
-  const passCategoryInactive = 'text-white/30 border-transparent hover:text-white/60 hover:bg-white/5';
+  const passCategoryAccent: Record<PassCategory, string> = {
+    intel: "text-purple-300 border-purple-500/30 bg-purple-500/10",
+    weather: "text-sky-300 border-sky-500/30 bg-sky-500/10",
+    gps: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10",
+  };
+  const passCategoryInactive =
+    "text-white/20 border-transparent hover:text-white/40 hover:bg-white/5";
 
   return (
     <div className="w-full h-full pt-[55px] bg-tactical-bg text-hud-green font-mono flex flex-col overflow-hidden">
-
       {/* ── Stats Bar ── */}
       <div className="flex items-center gap-4 px-4 py-1.5 bg-black/70 border-b border-white/5 flex-shrink-0 flex-wrap">
-
         {/* Mission area */}
         <div className="flex items-center gap-1.5">
           <Globe size={10} className="text-hud-green/50" />
-          <span className="text-[9px] text-white/35 uppercase tracking-widest">AO</span>
+          <span className="text-[9px] text-white/35 uppercase tracking-widest">
+            AO
+          </span>
           <span className="text-[10px] text-hud-green tabular-nums">
             {mission
-              ? `${Math.abs(mission.lat).toFixed(3)}°${mission.lat >= 0 ? 'N' : 'S'} / ${Math.abs(mission.lon).toFixed(3)}°${mission.lon >= 0 ? 'E' : 'W'} / ${mission.radius_nm}NM`
-              : '—'}
+              ? `${Math.abs(mission.lat).toFixed(3)}°${mission.lat >= 0 ? "N" : "S"} / ${Math.abs(mission.lon).toFixed(3)}°${mission.lon >= 0 ? "E" : "W"} / ${mission.radius_nm}NM`
+              : "—"}
           </span>
         </div>
         <div className="h-3 w-px bg-white/10" />
@@ -393,22 +571,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="flex items-center gap-1 text-[10px]">
             <Plane size={10} className="text-hud-green" />
             <span className="text-white/35">AIR</span>
-            <span className="text-hud-green font-bold tabular-nums">{trackCounts.air}</span>
+            <span className="text-hud-green font-bold tabular-nums">
+              {trackCounts.air}
+            </span>
           </span>
           <span className="flex items-center gap-1 text-[10px]">
             <Ship size={10} className="text-cyan-400" />
             <span className="text-white/35">SEA</span>
-            <span className="text-cyan-400 font-bold tabular-nums">{trackCounts.sea}</span>
+            <span className="text-cyan-400 font-bold tabular-nums">
+              {trackCounts.sea}
+            </span>
           </span>
           <span className="flex items-center gap-1 text-[10px]">
             <Satellite size={10} className="text-purple-400" />
             <span className="text-white/35">ORB</span>
-            <span className="text-purple-400 font-bold tabular-nums">{trackCounts.orbital}</span>
+            <span className="text-purple-400 font-bold tabular-nums">
+              {trackCounts.orbital}
+            </span>
           </span>
         </div>
 
         {/* Sparkline */}
-        <div className="flex items-center gap-1.5" title="30-second track count history (green=air, cyan=sea)">
+        <div
+          className="flex items-center gap-1.5"
+          title="30-second track count history (green=air, cyan=sea)"
+        >
           <TrendingUp size={9} className="text-white/20" />
           <Sparkline data={trackHistory} />
         </div>
@@ -416,18 +603,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Stream health dots */}
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-white/25 uppercase tracking-widest">Streams</span>
+          <span className="text-[10px] text-white/25 uppercase tracking-widest">
+            Streams
+          </span>
           <div className="flex items-center gap-1">
             {streamStatuses.length === 0 ? (
               <span className="text-[8px] text-white/15">—</span>
             ) : (
-              streamStatuses.map(s => (
+              streamStatuses.map((s) => (
                 <div
                   key={s.id}
                   className="flex items-center gap-0.5"
                   title={`${s.name}: ${s.status}`}
                 >
-                  <div className={`h-1.5 w-1.5 rounded-full ${streamDotClass(s.status)}`} />
+                  <div
+                    className={`h-1.5 w-1.5 rounded-full ${streamDotClass(s.status)}`}
+                  />
                   <span className={`text-[9px] ${streamTextClass(s.status)}`}>
                     {STREAM_ABBR[s.id] ?? s.id.toUpperCase()}
                   </span>
@@ -439,10 +630,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="h-3 w-px bg-white/10" />
 
         {/* RF EmComm count */}
-        <div className="flex items-center gap-1.5" title="EmComm sites in mission area">
+        <div
+          className="flex items-center gap-1.5"
+          title="EmComm sites in mission area"
+        >
           <Antenna size={10} className="text-amber-400/60" />
           <span className="text-[9px] text-white/35">EMCOMM</span>
-          <span className="text-[10px] text-amber-300 font-bold">{rfEmcomm.count}</span>
+          <span className="text-[10px] text-amber-300 font-bold">
+            {rfEmcomm.count}
+          </span>
         </div>
 
         {/* Alerts badge */}
@@ -450,9 +646,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <>
             <div className="h-3 w-px bg-white/10" />
             <div className="flex items-center gap-1.5">
-              <AlertTriangle size={10} className="text-alert-red animate-pulse" />
+              <AlertTriangle
+                size={10}
+                className="text-alert-red animate-pulse"
+              />
               <span className="text-[10px] text-alert-red font-bold">
-                {alerts.length} ALERT{alerts.length !== 1 ? 'S' : ''}
+                {alerts.length} ALERT{alerts.length !== 1 ? "S" : ""}
               </span>
             </div>
           </>
@@ -464,15 +663,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ── Main 3-column grid ── */}
-      <div className="flex-1 grid min-h-0 overflow-hidden" style={{ gridTemplateColumns: '265px 1fr 265px' }}>
-
+      <div
+        className="flex-1 grid min-h-0 overflow-hidden"
+        style={{ gridTemplateColumns: "265px 1fr 265px" }}
+      >
         {/* Left — Alerts + Intel Feed */}
         <div className="flex flex-col border-r border-white/5 min-h-0 overflow-hidden">
-
-          <div className="flex flex-col border-b border-white/5 overflow-hidden" style={{ flex: '0 0 40%' }}>
+          <div
+            className="flex flex-col border-b border-white/5 overflow-hidden"
+            style={{ flex: "0 0 40%" }}
+          >
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-              <AlertTriangle size={12} className={alerts.length > 0 ? 'text-alert-red' : 'text-white/20'} />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Alerts</span>
+              <AlertTriangle
+                size={12}
+                className={
+                  alerts.length > 0 ? "text-alert-red" : "text-white/20"
+                }
+              />
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+                Alerts
+              </span>
               {alerts.length > 0 && (
                 <span className="ml-auto text-[10px] bg-alert-red/20 text-alert-red border border-alert-red/30 rounded px-1 font-bold">
                   {alerts.length}
@@ -485,13 +695,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   No Active Alerts
                 </div>
               ) : (
-                alerts.map(ev => (
-                  <div key={ev.id} className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5">
+                alerts.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5"
+                  >
                     <div className="flex items-start gap-1.5">
-                      <span className="text-[8px] text-alert-red mt-0.5 flex-shrink-0">▶</span>
+                      <span className="text-[8px] text-alert-red mt-0.5 flex-shrink-0">
+                        ▶
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[9px] text-alert-red leading-snug">{ev.message}</p>
-                        <span className="text-[8px] text-white/25">{fmtTime(ev.time)}Z</span>
+                        <p className="text-[9px] text-alert-red leading-snug">
+                          {ev.message}
+                        </p>
+                        <span className="text-[8px] text-white/25">
+                          {fmtTime(ev.time)}Z
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -503,8 +722,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
               <Activity size={11} className="text-hud-green/50" />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Intel Feed</span>
-              <span className="ml-auto text-[8px] text-white/20 tabular-nums">{intelEvents.length}</span>
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+                Intel Feed
+              </span>
+              <span className="ml-auto text-[8px] text-white/20 tabular-nums">
+                {intelEvents.length}
+              </span>
             </div>
             <div className="flex-1 overflow-y-auto">
               {intelEvents.length === 0 ? (
@@ -512,14 +735,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Awaiting Data
                 </div>
               ) : (
-                intelEvents.map(ev => (
-                  <div key={ev.id} className="px-3 py-1 border-b border-white/[0.03] hover:bg-white/5">
+                intelEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="px-3 py-1 border-b border-white/[0.03] hover:bg-white/5"
+                  >
                     <div className="flex items-center gap-1.5">
                       {entityIcon(ev.entityType)}
-                      <span className={`text-[9px] flex-1 min-w-0 truncate ${ev.type === 'new' ? 'text-hud-green/75' : 'text-white/35'}`}>
+                      <span
+                        className={`text-[9px] flex-1 min-w-0 truncate ${ev.type === "new" ? "text-hud-green/75" : "text-white/35"}`}
+                      >
                         {ev.message}
                       </span>
-                      <span className="text-[8px] text-white/20 flex-shrink-0 tabular-nums">{fmtTime(ev.time)}</span>
+                      <span className="text-[8px] text-white/20 flex-shrink-0 tabular-nums">
+                        {fmtTime(ev.time)}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -530,15 +760,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Center — Split Map View (Tactical AO vs Global Situation) */}
         <div className="relative overflow-hidden bg-black min-h-0 grid grid-cols-2">
-          
           {/* Tactical Left */}
           <div className="relative border-r border-white/5 overflow-hidden">
             {mission ? (
-              <MiniTacticalMap mission={mission} entitiesRef={entitiesRef} satellitesRef={satellitesRef} />
+              <MiniTacticalMap
+                mission={mission}
+                entitiesRef={entitiesRef}
+                satellitesRef={satellitesRef}
+                rfSites={rfEmcomm.results}
+              />
             ) : (
               <div className="flex flex-col items-center justify-center w-full h-full gap-3">
                 <Signal size={28} className="text-white/10" />
-                <span className="text-[10px] text-white/20 uppercase tracking-widest">Awaiting Mission Area</span>
+                <span className="text-[10px] text-white/20 uppercase tracking-widest">
+                  Awaiting Mission Area
+                </span>
               </div>
             )}
             <div className="absolute top-2 left-2 text-[8px] text-hud-green/35 bg-black/70 px-1.5 py-0.5 rounded tracking-widest pointer-events-none select-none border border-hud-green/20">
@@ -547,14 +783,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {/* Track Counters (Moved here for better spatial grouping) */}
             <div className="absolute bottom-2 left-2 flex gap-1 pointer-events-none z-10 animate-in fade-in slide-in-from-right-2 duration-700">
-              <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">AIR {trackCounts.air}</span>
-              <span className="text-[8px] bg-black/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-400/20">SEA {trackCounts.sea}</span>
-              <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">ORB {trackCounts.orbital}</span>
+              <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">
+                AIR {trackCounts.air}
+              </span>
+              <span className="text-[8px] bg-black/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-400/20">
+                SEA {trackCounts.sea}
+              </span>
+              <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">
+                ORB {trackCounts.orbital}
+              </span>
+              <span className="text-[8px] bg-black/80 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20">
+                RF {rfEmcomm.count}
+              </span>
             </div>
           </div>
 
           {/* Global Right */}
-          <SituationGlobe 
+          <SituationGlobe
             satellitesRef={satellitesRef}
             cablesData={cablesData}
             stationsData={stationsData}
@@ -563,89 +808,183 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             showTerminator={showTerminator}
             drStateRef={drStateRef}
             mission={missionProps?.currentMission ?? null}
+            onGdeltClick={setSelectedGdelt}
+            onHover={(entity, pos) => {
+              setHoveredGdelt(entity);
+              if (pos) setHoverPos(pos);
+            }}
           />
 
-        </div>
+          {/* Situation Globe Tooltip (Heads-up Display) */}
+          {hoveredGdelt && hoverPos && (
+            <div
+              className="absolute z-50 pointer-events-none p-3 bg-black/90 border border-hud-green/30 rounded backdrop-blur-md shadow-2xl animate-in zoom-in-95 duration-200"
+              style={{
+                left: hoverPos.x + 15,
+                top: hoverPos.y - 40,
+                minWidth: "200px",
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Signal size={12} className="text-hud-green animate-pulse" />
+                  <span className="text-[11px] font-black tracking-tighter uppercase text-white">
+                    {hoveredGdelt.callsign}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 bg-hud-green/10 px-1 py-0.5 rounded">
+                  <div className="h-1.5 w-1.5 rounded-full bg-hud-green" />
+                  <span className="text-[7px] text-hud-green font-bold">OSINT</span>
+                </div>
+              </div>
 
-        {/* Right — JS8 Feed + Orbital Passes */}
-        <div className="flex flex-col border-l border-white/5 min-h-0 overflow-hidden">
+              <div className="space-y-2">
+                <div className="border-t border-white/5 pt-2">
+                  <span className="text-[8px] text-white/30 uppercase tracking-widest block mb-0.5">Source Domain</span>
+                  <span className="text-[10px] text-hud-green font-bold uppercase">{hoveredGdelt.detail?.domain || "Open Source"}</span>
+                </div>
 
-          {/* JS8 Feed */}
-          <div className="flex flex-col border-b border-white/5 overflow-hidden" style={{ flex: '0 0 50%' }}>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-              <Radio size={11} className={js8Connected ? 'text-hud-green' : 'text-white/20'} />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">JS8 / HF Radio</span>
-              <div className="ml-auto flex items-center gap-2">
-                <span className="text-[8px] text-white/25">{js8Stations.length} stations</span>
-                <div className={`h-1.5 w-1.5 rounded-full ${js8Connected ? 'bg-hud-green shadow-[0_0_5px_#00ff41] animate-pulse' : 'bg-white/15'}`} />
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <span className="text-[8px] text-white/30 uppercase tracking-widest block mb-0.5">Tone (GS)</span>
+                    <span className={`text-[11px] font-mono font-bold ${hoveredGdelt.detail?.tone < -2 ? 'text-red-400' : 'text-hud-green'}`}>
+                      {hoveredGdelt.detail?.tone?.toFixed(1)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[8px] text-white/30 uppercase tracking-widest block mb-0.5">Status</span>
+                    <span className={`text-[9px] font-black uppercase ${hoveredGdelt.detail?.tone < -2 ? 'text-red-500' : 'text-hud-green'}`}>
+                      {hoveredGdelt.detail?.tone <= -5 ? 'CONFL' : hoveredGdelt.detail?.tone <= -2 ? 'UNSTABLE' : 'STABLE'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <span className="text-[8px] text-white/30 uppercase tracking-widest block mb-0.5">Data Source</span>
+                  <p className="text-[9px] text-white/60 font-medium leading-tight">GDELT GLOBAL EVENT MONITOR</p>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-2 border-t border-white/10 flex items-center gap-2 opacity-50">
+                <Globe size={10} className="text-white/40" />
+                <span className="text-[7px] text-white/40 uppercase font-black">SELECT FOR DETAILS</span>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              {js8LogEntries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-12 gap-1">
-                  <span className="text-[9px] text-white/15 uppercase tracking-widest">No HF Activity</span>
-                  {!js8Connected && <span className="text-[8px] text-white/10">JS8 bridge offline</span>}
-                </div>
-              ) : (
-                [...js8LogEntries].reverse().slice(0, 30).map(entry => (
-                  <div key={entry.id} className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5">
-                    <div className="flex items-start gap-1.5">
-                      <Radio size={8} className="text-hud-green/30 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {entry.from && <span className="text-[9px] text-hud-green font-bold">{entry.from}</span>}
-                          {entry.to && entry.to !== 'ALLCALL' && <span className="text-[9px] text-white/35">→ {entry.to}</span>}
-                          {entry.snr !== undefined && (
-                            <span className={`text-[8px] ml-auto ${entry.snr >= -18 ? 'text-emerald-400' : entry.snr >= -24 ? 'text-yellow-400' : 'text-red-400'}`}>
-                              {entry.snr}dB
-                            </span>
-                          )}
-                        </div>
-                        {entry.text && <p className="text-[9px] text-white/55 truncate leading-snug">{entry.text}</p>}
-                      </div>
+          )}
+        </div>
+
+        {/* Right — Global Stability */}
+        <div className="flex flex-col border-l border-white/5 min-h-0 overflow-hidden">
+            {selectedGdelt ? (
+              <div className="flex flex-col flex-1 bg-black/40">
+                <div className="p-4 border-b border-white/5 bg-red-500/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <button 
+                      onClick={() => setSelectedGdelt(null)}
+                      className="text-[9px] font-bold text-white/30 hover:text-white flex items-center gap-1 transition-colors uppercase tracking-widest"
+                    >
+                      <Signal size={10} className="rotate-180" /> Back to Matrix
+                    </button>
+                    <div className="px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[8px] text-red-400 font-bold animate-pulse">
+                      LIVE EVENT
                     </div>
                   </div>
-                ))
+
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight leading-none mb-1">
+                    {selectedGdelt.name}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-red-500 font-bold uppercase">{selectedGdelt.domain}</span>
+                    <div className="h-1 w-1 rounded-full bg-white/20" />
+                    <span className="text-[10px] text-white/40 font-mono">
+                      LAT: {selectedGdelt.lat.toFixed(4)} LON: {selectedGdelt.lon.toFixed(4)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
+                      <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Stability (GS)</span>
+                      <span className={`text-2xl font-black tabular-nums ${selectedGdelt.tone < -2 ? 'text-red-500' : 'text-hud-green'}`}>
+                        {selectedGdelt.tone.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
+                      <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Alert Level</span>
+                      <span className={`text-xs font-bold ${selectedGdelt.tone <= -5 ? 'text-red-500' : 'text-amber-500'} uppercase`}>
+                        {selectedGdelt.tone <= -5 ? 'Critical Conflict' : 'Rising Tension'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/[0.02] p-4 rounded border border-white/5">
+                    <span className="text-[10px] text-white font-bold block mb-2 uppercase tracking-tight">Intelligence Source</span>
+                    <p className="text-[11px] text-white/60 leading-relaxed mb-4">
+                      Direct monitoring of geolocated news reporting originating from {selectedGdelt.domain}. 
+                      The Goldstein scale assessment shows a persistent focus on localized instability.
+                    </p>
+                    <a 
+                      href={selectedGdelt.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 bg-hud-green text-black font-black text-[10px] py-2.5 rounded hover:bg-white transition-all uppercase tracking-widest"
+                    >
+                      Access Intel Stream <Globe size={12} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <GdeltBreakdownWidget gdeltData={gdeltData} />
+            )}
+
+          {/* Internet Outages */}
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
+              <Globe size={11} className="text-red-400/70" />
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+                Internet Outages
+              </span>
+              {outages.length > 0 && (
+                <span className="ml-auto text-[9px] text-alert-red/60">
+                  {outages.length} regions
+                </span>
               )}
             </div>
-          </div>
-
-          {/* Orbital Passes with category tabs */}
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-              <Satellite size={11} className="text-purple-400 flex-shrink-0" />
-              {(['intel', 'weather', 'gps'] as PassCategory[]).map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setPassCategory(cat)}
-                  className={`text-[8px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded border transition-all ${passCategory === cat ? passCategoryAccent[cat] : passCategoryInactive}`}
-                >
-                  {passCategoryLabel[cat]}
-                </button>
-              ))}
-              <span className="ml-auto text-[8px] text-white/25">{passes.length}</span>
-            </div>
             <div className="flex-1 overflow-y-auto">
-              {passesLoading ? (
-                <div className="flex items-center justify-center h-10 text-[9px] text-white/20 animate-pulse">CALCULATING…</div>
-              ) : passes.length === 0 ? (
-                <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">No Passes in Window</div>
+              {outages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-[9px] text-white/15 uppercase tracking-widest">
+                  No Outages Detected
+                </div>
               ) : (
-                passes.slice(0, 15).map((pass, i) => (
-                  <div key={`${pass.norad_id}-${i}`} className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5">
+                outages.map((o) => (
+                  <div
+                    key={o.country_code}
+                    className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5"
+                  >
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] text-purple-300 font-bold truncate">{pass.name}</span>
-                          <span className="text-[8px] text-white/20 flex-shrink-0">{pass.norad_id}</span>
+                      <span className="text-[9px] text-white/50 w-7 flex-shrink-0 tabular-nums font-bold">
+                        {o.country_code}
+                      </span>
+                      <span
+                        className={`text-[9px] flex-1 truncate ${severityColor(o.severity)}`}
+                      >
+                        {o.country}
+                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${severityBarClass(o.severity)}`}
+                            style={{ width: `${Math.min(100, o.severity)}%` }}
+                          />
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[8px] text-white/35">AOS {fmtPassTime(pass.aos)}</span>
-                          <span className="text-[8px] text-purple-400/60">EL {Math.round(pass.max_elevation)}°</span>
-                          <span className="text-[8px] text-white/35">{Math.round(pass.duration_seconds / 60)}min</span>
-                        </div>
+                        <span
+                          className={`text-[8px] tabular-nums w-6 text-right ${severityColor(o.severity)}`}
+                        >
+                          {Math.round(o.severity)}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-purple-300 font-bold flex-shrink-0 tabular-nums">{untilPass(pass.aos)}</span>
                     </div>
                   </div>
                 ))
@@ -658,43 +997,89 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ── Bottom 3-panel row ── */}
       <div
         className="flex-shrink-0 border-t border-white/5 grid min-h-0"
-        style={{ height: '200px', gridTemplateColumns: '1fr 1fr 1fr' }}
+        style={{ height: "200px", gridTemplateColumns: "1fr 1fr 1fr" }}
       >
-
-        {/* Internet Outages */}
+        {/* Orbital Passes with category tabs */}
         <div className="flex flex-col border-r border-white/5 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-            <Globe size={11} className="text-red-400/70" />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Internet Outages</span>
-            {outages.length > 0 && (
-              <span className="ml-auto text-[9px] text-alert-red/60">{outages.length} regions</span>
-            )}
+            <Satellite size={11} className="text-purple-400 flex-shrink-0" />
+            {(["intel", "weather", "gps"] as PassCategory[]).map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setPassCategory(cat)}
+                className={`text-[8px] font-bold tracking-widest uppercase px-1.5 py-0 rounded-sm border transition-all ${passCategory === cat ? passCategoryAccent[cat] : passCategoryInactive}`}
+              >
+                {passCategoryLabel[cat]}
+              </button>
+            ))}
+            <span className="ml-auto text-[8px] text-white/25">
+              {passes.length}
+            </span>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {outages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-[9px] text-white/15 uppercase tracking-widest">
-                No Outages Detected
+            {passesLoading ? (
+              <div className="flex items-center justify-center h-10 text-[9px] text-white/20 animate-pulse">
+                CALCULATING…
+              </div>
+            ) : passes.length === 0 ? (
+              <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
+                No Passes in Window
               </div>
             ) : (
-              outages.map(o => (
-                <div key={o.country_code} className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-white/50 w-7 flex-shrink-0 tabular-nums font-bold">{o.country_code}</span>
-                    <span className={`text-[9px] flex-1 truncate ${severityColor(o.severity)}`}>{o.country}</span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${severityBarClass(o.severity)}`}
-                          style={{ width: `${Math.min(100, o.severity)}%` }}
-                        />
+              <div className="grid grid-cols-3 gap-px bg-white/[0.03]">
+                {passes.slice(0, 18).map((pass, i) => {
+                  const isNow = untilPass(pass.aos) === "NOW";
+                  const accentColor =
+                    passCategory === "intel"
+                      ? "text-purple-400"
+                      : passCategory === "weather"
+                        ? "text-sky-400"
+                        : "text-emerald-400";
+                  const accentBg =
+                    passCategory === "intel"
+                      ? "bg-purple-500/5"
+                      : passCategory === "weather"
+                        ? "bg-sky-500/5"
+                        : "bg-emerald-500/5";
+
+                  return (
+                    <div
+                      key={`${pass.norad_id}-${i}`}
+                      className={`p-2 border-b border-white/[0.02] hover:bg-white/5 transition-all group flex flex-col justify-between min-h-[55px] ${isNow ? accentBg : "bg-black/40"}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`text-[9px] font-bold truncate mr-1 ${accentColor}/90 group-hover:${accentColor}`}
+                        >
+                          {pass.name.length > 15
+                            ? pass.name.substring(0, 12) + "…"
+                            : pass.name}
+                        </span>
+                        <span className="text-[7px] text-white/15 tabular-nums">
+                          {pass.norad_id.slice(-5)}
+                        </span>
                       </div>
-                      <span className={`text-[8px] tabular-nums w-6 text-right ${severityColor(o.severity)}`}>
-                        {Math.round(o.severity)}
-                      </span>
+
+                      <div className="flex items-end justify-between">
+                        <div className="flex flex-col gap-px">
+                          <span className="text-[7px] text-white/30 uppercase tracking-tighter">
+                            EL {Math.round(pass.max_elevation)}° •{" "}
+                            {Math.round(pass.duration_seconds / 60)}m
+                          </span>
+                          <span className="text-[7px] text-white/20 tabular-nums">
+                            {fmtPassTime(pass.aos)}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[8px] font-bold tabular-nums ${isNow ? "text-white animate-pulse" : accentColor.replace("400", "300")}`}
+                        >
+                          {untilPass(pass.aos)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -703,44 +1088,84 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex flex-col border-r border-white/5 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
             <Antenna size={11} className="text-amber-400/70" />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">Emergency Comm Sites</span>
-            <span className="ml-auto text-[8px] text-amber-400/60">{rfEmcomm.count} in AO</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+              Emergency Comm Sites
+            </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="text-[9px] font-bold text-amber-400 tabular-nums">
+                {rfEmcomm.count}
+              </span>
+              <div className="h-1.5 w-px bg-white/10" />
+              <span className="text-[7px] text-white/30 uppercase tracking-tighter">
+                Regional Grid
+              </span>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-black/10">
             {rfEmcomm.results.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-1 text-center">
-                <span className="text-[9px] text-white/15 uppercase tracking-widest">
-                  {mission ? 'No EmComm Sites Found' : 'Awaiting Mission Area'}
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-center opacity-30">
+                <Antenna size={24} strokeWidth={1} />
+                <span className="text-[9px] uppercase tracking-widest">
+                  Scanning for Local Infrastructure...
                 </span>
               </div>
             ) : (
-              rfEmcomm.results.slice(0, 20).map(site => (
-                <div key={site.id} className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-amber-300 font-bold">{site.callsign}</span>
-                        {site.city && (
-                          <span className="text-[8px] text-white/30 truncate">{site.city}{site.state ? `, ${site.state}` : ''}</span>
-                        )}
+              <div className="flex flex-col">
+                {/* Summary Bar */}
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-amber-400/5 border-b border-white/5">
+                  {(["ARES", "RACES", "SKYWARN"] as const).map((flag) => {
+                    const count = rfEmcomm.results.filter((s) =>
+                      s.emcomm_flags?.includes(flag),
+                    ).length;
+                    return (
+                      <div key={flag} className="flex items-center gap-1">
+                        <span className="text-[7px] text-white/30 font-bold">
+                          {flag}:
+                        </span>
+                        <span className="text-[8px] text-amber-400 font-mono">
+                          {count}
+                        </span>
                       </div>
-                      {site.emcomm_flags && site.emcomm_flags.length > 0 && (
-                        <div className="flex gap-0.5 mt-0.5 flex-wrap">
-                          {site.emcomm_flags.map(flag => (
-                            <span
-                              key={flag}
-                              className={`text-[7px] px-1 py-px rounded border font-bold ${EMCOMM_BADGE[flag] ?? 'bg-white/10 text-white/40 border-white/10'}`}
-                            >
-                              {flag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[8px] text-white/20 flex-shrink-0">{(site.modes ?? []).join('/')}</span>
-                  </div>
+                    );
+                  })}
                 </div>
-              ))
+
+                {/* Status Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-1 xl:grid-cols-2 gap-px bg-white/[0.03]">
+                  {rfEmcomm.results.slice(0, 32).map((site) => (
+                    <div
+                      key={site.id}
+                      className="bg-black/40 p-2 border-b border-white/[0.02] hover:bg-white/5 transition-all group cursor-default"
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                          <span className="text-[9px] font-bold text-amber-500/90 group-hover:text-amber-400 transition-colors">
+                            {site.callsign}
+                          </span>
+                        </div>
+                        <span className="text-[7px] text-white/20 font-mono">
+                          {site.modes?.[0] || site.service}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1 overflow-hidden">
+                        <span className="text-[8px] text-white/40 truncate flex-1">
+                          {site.city || "Unknown QTH"}
+                        </span>
+                        {site.emcomm_flags &&
+                          site.emcomm_flags.length > 0 &&
+                          (site.emcomm_flags.includes("RACES") ||
+                            site.emcomm_flags.includes("ARES")) && (
+                            <span className="text-[6px] text-amber-500/40 font-black tracking-tighter">
+                              CERT
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -748,7 +1173,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* News Feed */}
         <div className="flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">OSINT News</span>
+            <Newspaper size={11} className="text-hud-green/50" />
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+              OSINT News
+            </span>
+            {conflictCount > 0 && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-[8px] font-bold text-red-400 bg-red-400/10 border border-red-400/20 px-1.5 py-px rounded-sm animate-pulse whitespace-nowrap">
+                  {conflictCount} CONFLICTS IN AO
+                </span>
+              </div>
+            )}
           </div>
           <NewsWidget compact />
         </div>

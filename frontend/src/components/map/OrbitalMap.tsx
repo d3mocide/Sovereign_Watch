@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
-import { PassGeometryWidget } from "./PassGeometryWidget";
 import type { FeatureCollection } from "geojson";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
@@ -110,14 +109,9 @@ interface TacticalMapProps {
   showTerminator?: boolean;
   missionArea: import('../../types').MissionLocation | null;
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
-  /** Pass geometry data bubbled up from SidebarRight → rendered as floating HUD widget */
-  passGeometry?: {
-    pass?: { points: { azimuth: number; elevation: number; time: string; isAos?: boolean; isTca?: boolean; isLos?: boolean }[] };
-    nextPassAos?: string;
-    nextPassMaxEl?: number;
-    satelliteName?: string;
-    nextPassDuration?: number;
-  } | null;
+  passGeometry?: any; // Kept for interface padding but logic removed
+  onPassData?: (data: any) => void;
+  currentPassData?: any;
 }
 
 type InfraPickObject = {
@@ -173,7 +167,7 @@ export function OrbitalMap({
   worldCountriesData,
   missionArea,
   satnogsStationsRef,
-  passGeometry,
+  onPassData: _onPassData,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -198,9 +192,9 @@ export function OrbitalMap({
         : (obj.geometry?.coordinates as [number, number][])[0][0];
 
       const entity: CoTEntity = {
-        uid: props.id || String(obj.id),
+        uid: (props as any).id || String((obj as any).id),
         type: 'infra',
-        callsign: (props.name as string | undefined) || 'Unknown Infra',
+        callsign: (props as any).name || 'Unknown Infra',
         lat,
         lon,
         altitude: 0,
@@ -510,7 +504,6 @@ export function OrbitalMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mission Area: mission state, AOT geometry, entity clearing, save form
   const {
     aotShapes,
     handleSetFocus,
@@ -521,7 +514,7 @@ export function OrbitalMap({
     setSaveFormCoords,
     handleSaveFormSubmit,
     handleSaveFormCancel,
-  } = missionArea;
+  } = (missionArea || {}) as any;
 
   useAnimationLoop({
     entitiesRef,
@@ -555,7 +548,7 @@ export function OrbitalMap({
     gdeltData,
     gdeltToneThreshold: -2,
     setHoveredInfra: handleHoveredInfra as any,
-    setSelectedInfra: (info: unknown) => {
+    setSelectedInfra: (info: any) => {
       if (!info || !info.object) return;
 
       const infraEntity: CoTEntity = {
@@ -595,7 +588,7 @@ export function OrbitalMap({
 
   // Map Camera: projection, graticule, 3D terrain/fog
   const { setViewMode, handleAdjustCamera, handleResetCompass } = useMapCamera({
-    mapRef,
+    mapRef: mapRef as React.RefObject<MapRef>,
     mapInstanceRef,
     mapLoaded,
     globeMode,
@@ -611,14 +604,6 @@ export function OrbitalMap({
     overlayRef.current = overlay;
   }, []);
 
-  // Right-click context menu handlers
-  const handleContextMenu = useCallback((e: unknown) => {
-    e.preventDefault();
-    const { lngLat, point } = e;
-    setContextMenuPos({ x: point.x, y: point.y });
-    setContextMenuCoords({ lat: lngLat.lat, lon: lngLat.lng });
-  }, []);
-
   const handleSaveLocation = useCallback((lat: number, lon: number) => {
     setSaveFormCoords({ lat, lon });
     setShowSaveForm(true);
@@ -628,11 +613,11 @@ export function OrbitalMap({
   const handleMapLoad = useCallback(
     (evt?: unknown) => {
       // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
-      if (evt?.target) {
+      if ((evt as any)?.target) {
         mapInstanceRef.current =
-          typeof evt.target.getMap === "function"
-            ? evt.target.getMap()
-            : evt.target;
+          typeof (evt as any).target.getMap === "function"
+            ? (evt as any).target.getMap()
+            : (evt as any).target;
       }
       setMapLoaded(true);
     },
@@ -718,7 +703,7 @@ export function OrbitalMap({
             globeMode ? { ...viewState, pitch: 0, bearing: 0 } : viewState
           }
           onLoad={handleMapLoad}
-          onMove={(evt: unknown) => {
+          onMove={(evt: any) => {
             // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
             if (
               evt.originalEvent &&
@@ -729,13 +714,13 @@ export function OrbitalMap({
               onFollowModeChange(false);
             }
 
-            const nextViewState = { ...evt.viewState };
+            // Sync state
+            setViewState(evt.viewState);
+
+            // Lock pitch/bearing to 0 in state for globe mode
             if (globeMode) {
-              // Lock pitch/bearing to 0 in state
-              nextViewState.pitch = 0;
-              nextViewState.bearing = 0;
+              setViewState((prev: any) => ({ ...prev, pitch: 0, bearing: 0 }));
             }
-            setViewState(nextViewState as Record<string, number>);
           }}
           mapStyle={mapStyle}
           {...(_enableMapbox && _isValidToken ? { mapboxAccessToken: mapToken } : {})}
@@ -746,7 +731,13 @@ export function OrbitalMap({
             userSelect: "none",
             WebkitUserSelect: "none",
           }}
-          onContextMenu={handleContextMenu}
+          onContextMenu={(e: any) => {
+            if (e && e.lngLat) {
+              setContextMenuCoords({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+              setContextMenuPos({ x: e.point.x, y: e.point.y });
+            }
+          }}
+          showAttribution={false}
           onClick={() => {
             setContextMenuPos(null);
             setContextMenuCoords(null);
@@ -931,30 +922,23 @@ export function OrbitalMap({
         <MapTooltip entity={hoveredEntity} position={hoverPosition} />
       )}
 
-      {/* Space Weather Panel — top-right corner of orbital dashboard */}
+      {/* Right HUD Stack — Space Weather + Pass Geometry */}
       <div
+        className="flex flex-col gap-3"
         style={{
           position: "absolute",
           top: 70,
           right: selectedEntity ? 380 : 20,
           zIndex: 100,
-          pointerEvents: "auto",
+          pointerEvents: "none",
           transition: "right 0.3s ease-in-out",
         }}
       >
-        <SpaceWeatherPanel visible={true} />
+        {/* Space Weather Panel — always at the top of the stack */}
+        <div style={{ pointerEvents: "auto" }}>
+          <SpaceWeatherPanel visible={true} />
+        </div>
       </div>
-
-      {/* Pass Geometry HUD — bottom-right corner, slides left when sidebar is open */}
-      <PassGeometryWidget
-        visible={!!selectedEntity && (passGeometry?.pass?.points?.length ?? 0) > 0}
-        sidebarOpen={!!selectedEntity}
-        pass={passGeometry?.pass}
-        satelliteName={passGeometry?.satelliteName}
-        nextPassAos={passGeometry?.nextPassAos}
-        nextPassMaxEl={passGeometry?.nextPassMaxEl}
-        nextPassDuration={passGeometry?.nextPassDuration}
-      />
     </>
   );
 }

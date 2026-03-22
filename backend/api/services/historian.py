@@ -46,7 +46,7 @@ async def historian_task():
     logger.info("Historian task started")
     consumer = AIOKafkaConsumer(
         "adsb_raw", "ais_raw", "orbital_raw", "rf_raw",
-        "satnogs_transmitters", "satnogs_observations",
+        "satnogs_transmitters", "satnogs_observations", "gdelt_raw",
         bootstrap_servers=settings.KAFKA_BROKERS,
         group_id="historian-writer-v2",
         auto_offset_reset="earliest"
@@ -158,6 +158,13 @@ async def historian_task():
             ON CONFLICT (observation_id, time) DO NOTHING
         """
 
+        gdelt_upsert_sql = """
+            INSERT INTO gdelt_events (
+                time, event_id, headline, url, goldstein, tone, lat, lon, geom
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, ST_SetSRID(ST_MakePoint($8,$7), 4326))
+            ON CONFLICT (event_id, time) DO NOTHING
+        """
+
         # Batch buffers for satnogs transmitters (keyed by uuid for dedup)
         satnogs_tx_batch: dict[str, dict] = {}
         satnogs_tx_last_flush = time.time()
@@ -258,6 +265,29 @@ async def historian_task():
                                 await conn.execute(satnogs_obs_insert_sql, *obs_row)
                         except Exception as sobs_err:
                             logger.error("Historian SatNOGS observation insert error: %s", sobs_err)
+                    continue
+
+                if msg.topic == "gdelt_raw":
+                    if db.pool:
+                        try:
+                            # GDelt events are unique by (event_id, time).
+                            # We timestamp them by ingestion time or original time.
+                            ts_ms = data.get("time")
+                            event_time = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
+                            row = (
+                                event_time,
+                                data.get("event_id"),
+                                data.get("headline"),
+                                data.get("url"),
+                                data.get("goldstein"),
+                                data.get("tone"),
+                                data.get("lat"),
+                                data.get("lon"),
+                            )
+                            async with db.pool.acquire() as conn:
+                                await conn.execute(gdelt_upsert_sql, *row)
+                        except Exception as gdelt_err:
+                            logger.error("Historian GDELT event insert error: %s", gdelt_err)
                     continue
 
                 # --- Parsing Logic ---

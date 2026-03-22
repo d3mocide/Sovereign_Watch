@@ -343,3 +343,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS ix_satnogs_obs_id_time ON satnogs_observations
 CREATE INDEX IF NOT EXISTS ix_satnogs_obs_norad          ON satnogs_observations (norad_id, time DESC);
 CREATE INDEX IF NOT EXISTS ix_satnogs_obs_station        ON satnogs_observations (ground_station_id);
 CREATE INDEX IF NOT EXISTS ix_satnogs_obs_freq           ON satnogs_observations (frequency);
+
+-- TABLE: gdelt_events (Geopolitical OSINT)
+CREATE TABLE IF NOT EXISTS gdelt_events (
+    time        TIMESTAMPTZ NOT NULL,
+    event_id    TEXT NOT NULL,
+    actor1      TEXT,
+    actor2      TEXT,
+    headline    TEXT,
+    url         TEXT,
+    goldstein   FLOAT,
+    tone        FLOAT,
+    lat         DOUBLE PRECISION NOT NULL,
+    lon         DOUBLE PRECISION NOT NULL,
+    geom        GEOMETRY(POINT, 4326),
+    UNIQUE (event_id, time)
+);
+
+SELECT create_hypertable('gdelt_events', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('gdelt_events', INTERVAL '7 days');
+ALTER TABLE gdelt_events SET (timescaledb.compress, timescaledb.compress_segmentby = 'event_id');
+SELECT add_compression_policy('gdelt_events', INTERVAL '1 day');
+
+CREATE INDEX IF NOT EXISTS ix_gdelt_geom ON gdelt_events USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_gdelt_time ON gdelt_events (time DESC);
+CREATE INDEX IF NOT EXISTS ix_gdelt_tone ON gdelt_events (tone);

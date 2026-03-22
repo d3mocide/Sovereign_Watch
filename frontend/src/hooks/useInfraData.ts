@@ -5,7 +5,7 @@ import type { FeatureCollection } from 'geojson';
 // Declaring them inside the hook body caused a new object reference on every
 // render, which made the useEffect dependency re-fire infinitely.
 const fallbackCables = {
-  type: "FeatureCollection",
+  type: "FeatureCollection" as const,
   features: [
     {
       type: "Feature",
@@ -57,7 +57,7 @@ const fallbackCables = {
 };
 
 const fallbackStations = {
-  type: "FeatureCollection",
+  type: "FeatureCollection" as const,
   features: [
     {
       type: "Feature",
@@ -83,7 +83,7 @@ const fallbackStations = {
 };
 
 const fallbackEmpty = {
-  type: "FeatureCollection",
+  type: "FeatureCollection" as const,
   features: []
 };
 
@@ -91,6 +91,7 @@ export const useInfraData = () => {
   const [cablesData, setCablesData] = useState<FeatureCollection | null>(null);
   const [stationsData, setStationsData] = useState<FeatureCollection | null>(null);
   const [outagesData, setOutagesData] = useState<FeatureCollection | null>(null);
+  const [gdeltData, setGdeltData] = useState<FeatureCollection | null>(null);
   
   useEffect(() => {
     const fetchCables = async () => {
@@ -137,19 +138,40 @@ export const useInfraData = () => {
         setOutagesData(fallbackEmpty);
       }
     };
+    
+    const fetchGdelt = async () => {
+      try {
+        const res = await fetch("/api/gdelt/events");
+        const data = await res.json();
+        if (data) {
+          setGdeltData(data);
+        } else {
+          setGdeltData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("GDELT fetch failed, using fallback:", err);
+        setGdeltData(fallbackEmpty);
+      }
+    };
 
     const fetchAll = () => {
       fetchCables();
       fetchStations();
       fetchOutages();
+      fetchGdelt();
     };
 
     fetchAll();
 
     // Refresh outages every 10 minutes from the backend (which caches every 30m)
-    const interval = setInterval(fetchOutages, 10 * 60 * 1000);
-    return () => clearInterval(interval);
+    const outageInterval = setInterval(fetchOutages, 10 * 60 * 1000);
+    // Refresh GDELT every 15 minutes
+    const gdeltInterval = setInterval(fetchGdelt, 15 * 60 * 1000);
+    return () => {
+        clearInterval(outageInterval);
+        clearInterval(gdeltInterval);
+    };
   }, []);
 
-  return { cablesData, stationsData, outagesData };
+  return { cablesData, stationsData, outagesData, gdeltData };
 };

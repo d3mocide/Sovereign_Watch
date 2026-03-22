@@ -141,6 +141,14 @@ These are set automatically by `docker-compose.yml` and **do not need to be chan
 
 ---
 
+## GEODENT (GDELT OSINT)
+
+| Variable        | Default | Description                                   |
+| :-------------- | :------ | :-------------------------------------------- |
+| `POLL_INTERVAL` | `900`   | GDELT fetch interval in seconds (15 minutes). |
+
+---
+
 ## Feature Flags
 
 The following features are automatically enabled or disabled based on credential presence:

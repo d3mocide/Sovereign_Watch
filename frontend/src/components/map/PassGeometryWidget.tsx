@@ -63,20 +63,10 @@ export function PassGeometryWidget({
 
   if (!visible) return null;
 
-  const rightOffset = sidebarOpen ? 380 : 20;
 
   return (
     <div
-      style={{
-        position: 'absolute',
-        top: 355,
-        right: rightOffset,
-        zIndex: 100,
-        pointerEvents: 'auto',
-        transition: 'right 0.3s ease-in-out',
-        width: 270,
-      }}
-      className="flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-500 font-mono"
+      className="flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-500 font-mono w-[270px]"
     >
       {/* ── Header ── */}
       <div className="p-2.5 border border-b-0 border-purple-400/25

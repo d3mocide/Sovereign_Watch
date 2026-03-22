@@ -23,7 +23,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ 
         ...rest,
         _full3d: true
-    }));
+    } as any));
 
     const isDeadRef = useRef(false);
     useEffect(() => {
@@ -39,7 +39,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
                 overlay.setProps({ 
                     ...rest,
                     _full3d: true
-                });
+                } as any);
             } catch (e) {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
@@ -61,7 +61,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
 
 
 const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?: string }>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, deckProps } = props;
+    const { viewState, onMove, onLoad, mapStyle, mapboxAccessToken, style, onContextMenu, onClick, globeMode, showAttribution, deckProps } = props;
 
     // Mapbox Standard (v3) styling configuration.
     // We use useMemo to ensure that even if BASEMAP_CONFIG is static, 
@@ -89,7 +89,7 @@ const MapboxAdapter = forwardRef<MapRef, MapAdapterProps & { mapboxAccessToken?:
             attributionControl={false}
             config={basemapConfig}
         >
-            <AttributionControl compact={true} position="bottom-right" />
+            {showAttribution !== false && <AttributionControl compact={true} position="bottom-right" />}
             {(() => {
                 const { key: deckKey, ...restDeckProps } = deckProps;
                 return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;

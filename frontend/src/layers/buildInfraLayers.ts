@@ -34,15 +34,15 @@ interface OutageProperties {
 }
 
 export function buildInfraLayers(
-    cablesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
-    stationsData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
-    outagesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null,
+    cablesData: any,
+    stationsData: any,
+    outagesData: any,
     filters: InfraFilters | null,
     setHoveredInfra: (info: unknown) => void,
     setSelectedInfra: ((info: unknown) => void) | undefined,
     selectedEntity: { uid: string } | null = null,
     globeMode: boolean = false,
-    worldCountriesData: { type: "FeatureCollection"; features: GeoJsonFeature[] } | null = null,
+    worldCountriesData: any = null,
     countryOutageMap: Record<string, OutageProperties> | null = null
 ) {
     const layers = [];
@@ -52,7 +52,7 @@ export function buildInfraLayers(
         // Use pre-calculated map if available, otherwise build it (fallback)
         const activeOutageMap = countryOutageMap || (outagesData ? (() => {
             const map: Record<string, OutageProperties> = {};
-            outagesData.features.forEach(f => {
+            outagesData.features.forEach((f: any) => {
                 const countryCode = f.properties?.country_code as string;
                 if (countryCode) {
                     const current = map[countryCode];

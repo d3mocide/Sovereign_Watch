@@ -57,7 +57,7 @@ class ARDSource:
         async with aiohttp.ClientSession(timeout=timeout) as client:
             async with client.get(ARD_CSV_URL) as resp:
                 resp.raise_for_status()
-                data = await resp.json()
+                data = await resp.json(content_type=None)
 
         published = 0
 

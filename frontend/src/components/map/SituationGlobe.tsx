@@ -22,6 +22,8 @@ interface SituationGlobeProps {
   showTerminator: boolean;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
   mission: { lat: number; lon: number; radius_nm: number } | null;
+  onGdeltClick?: (event: any) => void;
+  onHover?: (entity: any | null, pos: { x: number; y: number } | null) => void;
 }
 
 const DARK_MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -35,6 +37,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   showTerminator,
   drStateRef,
   mission,
+  onGdeltClick,
+  onHover,
 }) => {
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -177,7 +181,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     // 4. Build Mission Area / AO Ring
     const missionLayers = buildAOTLayers(
       null,
-      { showRepeaters: true },
+      { showRepeaters: true } as any,
       true, // globeMode
       null, // observer
       mission ? { lat: mission.lat, lon: mission.lon, radiusKm: mission.radius_nm * 1.852 } : null
@@ -189,12 +193,19 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         ...buildAuroraLayer(auroraData, true, true, now),
         ...infra,
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
-        ...buildGdeltLayer(gdeltData, true, true, -2),
+        ...buildGdeltLayer(
+          gdeltData,
+          true,
+          true,
+          -2,
+          onHover || (() => {}),
+          onGdeltClick,
+        ),
         ...missionLayers,
         ...orbital
       ]
     });
-  }, [now, satellitesRef, drStateRef, cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, viewState.zoom, showTerminator, mission, auroraData, gdeltData]);
+  }, [now, satellitesRef, drStateRef, cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, viewState.zoom, showTerminator, mission, auroraData, gdeltData, onHover, onGdeltClick]);
 
   return (
     <div className="w-full h-full bg-black relative overflow-hidden">
@@ -208,6 +219,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
             mapStyle={DARK_MAP_STYLE}
             style={{ width: '100%', height: '100%' }}
             globeMode={true}
+            showAttribution={false}
             deckProps={{
               id: 'situation-globe-overlay',
               onOverlayLoaded: (ov) => { overlayRef.current = ov; }
