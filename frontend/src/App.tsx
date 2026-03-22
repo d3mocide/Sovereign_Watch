@@ -268,6 +268,7 @@ function App() {
       showConstellation_Starlink: false,
       showH3Coverage: false,
       showAurora: false,
+      showGdelt: false,
     };
 
     // First check hash

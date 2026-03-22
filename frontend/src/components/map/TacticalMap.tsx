@@ -317,6 +317,28 @@ export function TacticalMap({
     };
   }, [filters?.showAurora, filters?.showJamming]);
 
+  // GDELT geolocated news events (polled every 15 min — matches GDELT update cadence)
+  const [gdeltData, setGdeltData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!filters?.showGdelt) return;
+    let cancelled = false;
+    const fetchGdelt = async () => {
+      try {
+        const r = await fetch("/api/gdelt/events");
+        if (r.ok && !cancelled) setGdeltData(await r.json());
+      } catch {
+        /* silently fail */
+      }
+    };
+    fetchGdelt();
+    const id = setInterval(fetchGdelt, 15 * 60_000); // refresh every 15 min
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [filters?.showGdelt]);
+
   // Map & Style States
   const [mapLoaded, setMapLoaded] = useState(false);
   const [enable3d, setEnable3d] = useState(false);
@@ -659,6 +681,7 @@ export function TacticalMap({
     towersData,
     auroraData,
     jammingData,
+    gdeltData,
     historySegmentsRef,
   });
 

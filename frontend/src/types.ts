@@ -254,6 +254,7 @@ export interface MapFilters {
   showPrivate: boolean;
   showAurora: boolean;
   showSatNOGS: boolean;
+  showGdelt: boolean;
   [key: string]: boolean;
 }
 

@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, rf, orbital, infra, news, space_weather, jamming, satnogs
+from routers import system, tracks, analysis, rf, orbital, infra, news, space_weather, jamming, satnogs, gdelt
 from core.database import db
 from services.historian import historian_task, rf_sites_cleanup_task
 from services.broadcast import broadcast_service
@@ -133,6 +133,7 @@ app.include_router(news.router)
 app.include_router(space_weather.router)
 app.include_router(jamming.router)
 app.include_router(satnogs.router)
+app.include_router(gdelt.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -46,6 +46,8 @@ interface UseAnimationLoopOptions {
   auroraData?: any;
   /** Active GPS jamming zones GeoJSON (from /api/jamming/active) */
   jammingData?: any;
+  /** GDELT v2 geolocated news events GeoJSON (from /api/gdelt/events) */
+  gdeltData?: any;
   setHoveredInfra?: (info: unknown) => void;
   setSelectedInfra?: (info: unknown) => void;
   worldCountriesData?: FeatureCollection | null;
@@ -108,6 +110,7 @@ export function useAnimationLoop({
   towersData,
   auroraData,
   jammingData,
+  gdeltData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -457,6 +460,7 @@ export function useAnimationLoop({
         aotShapes,
         auroraData,
         jammingData,
+        gdeltData,
         onEntitySelect,
         setHoveredEntity,
         setHoverPosition,
@@ -510,6 +514,7 @@ export function useAnimationLoop({
     towersData,
     auroraData,
     jammingData,
+    gdeltData,
     worldCountriesData,
   ]);
 }

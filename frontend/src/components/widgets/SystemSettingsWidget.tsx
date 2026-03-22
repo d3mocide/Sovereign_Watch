@@ -172,7 +172,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
             'showSea',
             'showSatellites', 'showSatGPS', 'showSatWeather', 'showSatComms', 'showSatSurveillance', 'showSatOther', 'showConstellation_Starlink',
             'showRepeaters', 'showHam', 'showNoaa', 'showPublicSafety',
-            'showCables', 'showLandingStations', 'showOutages', 'showTowers', 'showAurora', 'showJamming'
+            'showCables', 'showLandingStations', 'showOutages', 'showTowers', 'showAurora', 'showJamming', 'showGdelt'
         ];
 
         // Object holding the new state for all boolean toggles
