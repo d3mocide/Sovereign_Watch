@@ -50,7 +50,7 @@ function App() {
   } | null>(null);
 
   // Orbital Dashboard State
-  const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
+  const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('3D');
   const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
 
   // Pass geometry bubbled up from SidebarRight → drives the floating PassGeometryWidget in OrbitalMap
