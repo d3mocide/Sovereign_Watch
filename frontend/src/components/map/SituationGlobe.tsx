@@ -11,6 +11,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { StarField } from './StarField';
 import { getTerminatorLayer } from './TerminatorLayer';
 import { buildAuroraLayer } from '../../layers/buildAuroraLayer';
+import { buildGdeltLayer } from '../../layers/buildGdeltLayer';
 
 interface SituationGlobeProps {
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
@@ -50,6 +51,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   const lastFrameTimeRef = useRef(0);
   const visualStateRef = useRef<Map<string, { lat: number; lon: number; alt: number }>>(new Map());
   const [auroraData, setAuroraData] = useState<any>(null);
+  const [gdeltData, setGdeltData] = useState<any>(null);
 
   // Poll for aurora data
   useEffect(() => {
@@ -62,6 +64,20 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     };
     fetchAurora();
     const id = setInterval(fetchAurora, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
+  useEffect(() => {
+    let cancelled = false;
+    const fetchGdelt = async () => {
+      try {
+        const r = await fetch("/api/gdelt/events");
+        if (r.ok && !cancelled) setGdeltData(await r.json());
+      } catch { /* silent fail */ }
+    };
+    fetchGdelt();
+    const id = setInterval(fetchGdelt, 15 * 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
@@ -172,11 +188,13 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         getTerminatorLayer(!!showTerminator),
         ...buildAuroraLayer(auroraData, true, true, now),
         ...infra,
+        // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
+        ...buildGdeltLayer(gdeltData, true, true, -2),
         ...missionLayers,
         ...orbital
       ]
     });
-  }, [now, satellitesRef, drStateRef, cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, viewState.zoom, showTerminator, mission, auroraData]);
+  }, [now, satellitesRef, drStateRef, cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, viewState.zoom, showTerminator, mission, auroraData, gdeltData]);
 
   return (
     <div className="w-full h-full bg-black relative overflow-hidden">
