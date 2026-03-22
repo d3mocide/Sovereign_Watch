@@ -46,6 +46,7 @@ redis_data/
 .antigravity/
 .gemini/
 .claude/worktrees/
+.vscode/
 
 # Keep the intelligence, ignore the research noise
 docs/research/

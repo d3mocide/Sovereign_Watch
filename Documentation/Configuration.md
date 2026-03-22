@@ -212,8 +212,17 @@ On a first-time setup, some services wait until a specific UTC hour (e.g., 3:00 
 | Feature | Variable | Force-Sync Value |
 | :--- | :--- | :--- |
 | **FCC Towers** | `POLL_FCC_START_HOUR` | `-1` |
-| **Satellite TLEs** | `ORBITAL_TLE_FETCH_HOUR` | `-1` |
+| **Satellite TLEs** | `SPACE_TLE_FETCH_HOUR` | `-1` |
 | **RadioReference** | `RF_RR_FETCH_HOUR` | `-1` |
+
+### Space Pulse Intervals (Optional)
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `SATNOGS_DB_INTERVAL_H` | `24` | SatNOGS Transmitter DB fetch (hours) |
+| `SATNOGS_NETWORK_INTERVAL_H` | `1` | SatNOGS Network Observations fetch (hours) |
+| `AURORA_INTERVAL_S` | `300` | NOAA Aurora Forecast fetch (seconds, 5m) |
+| `KP_INTERVAL_S` | `900` | NOAA Kp-Index fetch (seconds, 15m) |
 
 ### Manual Force-Sync via Redis
 If a service has already run and you want to force it to run again before the 7-day cooldown expires, you must clear its timestamp from Redis using the following commands:
@@ -229,7 +238,7 @@ docker exec -it sovereign-redis redis-cli DEL rf_pulse:last_radioref_fetch
 docker exec -it sovereign-redis redis-cli DEL infra:last_cables_fetch
 
 # Force Satellite TLE refetch
-docker exec -it sovereign-redis redis-cli DEL orbital:last_tle_fetch
+docker exec -it sovereign-redis redis-cli DEL space:last_tle_fetch
 ```
 
 After clearing the key, restart the corresponding container to trigger the sync.

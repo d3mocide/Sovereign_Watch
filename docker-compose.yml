@@ -109,7 +109,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       # UTC hour (0-23) at which Celestrak TLE refreshes are allowed to run.
       # Set to -1 to disable hour gating and fetch immediately when interval elapses.
-      - ORBITAL_TLE_FETCH_HOUR=${ORBITAL_TLE_FETCH_HOUR:-2}
+      - SPACE_TLE_FETCH_HOUR=${SPACE_TLE_FETCH_HOUR:-${ORBITAL_TLE_FETCH_HOUR:-2}}
       # SatNOGS transmitter catalog refresh interval (hours)
       - SATNOGS_DB_INTERVAL_H=${SATNOGS_DB_INTERVAL_H:-24}
       # SatNOGS observation poll interval (hours)

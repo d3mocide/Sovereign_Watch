@@ -82,8 +82,9 @@ Full documentation is in the [`Documentation/`](./Documentation/) folder:
 | [Deployment & Upgrade Guide](./Documentation/Deployment.md) | Install, run, upgrade, troubleshoot      |
 | [Configuration Reference](./Documentation/Configuration.md) | All `.env` variables                     |
 | [ADS-B Poller](./Documentation/pollers/ADSB.md)             | Aviation data ingestion                  |
-| [AIS Maritime Poller](./Documentation/pollers/AIS.md)       | Maritime data ingestion                  |
-| [Orbital Pulse](./Documentation/pollers/Orbital.md)         | Satellite tracking                       |
+| [AIS Maritime Poller](./Documentation/pollers/AIS.md)       | Maritime vessel positions                |
+| [Space Pulse](./Documentation/pollers/Space.md)             | SGP4, SatNOGS, and Space Weather         |
+| [JS8Call Radio](./Documentation/pollers/JS8Call.md)         | HF Radio / JS8Call Terminal              |
 | [Infra Poller](./Documentation/pollers/Infra.md)            | Internet outages + submarine cables      |
 | [RF Pulse](./Documentation/pollers/RF.md)                   | RF repeaters + NOAA weather radio        |
 | [TAK Protocol Reference](./Documentation/TAK_Protocol.md)   | Internal message schema (CoT/Protobuf)   |
@@ -104,7 +105,7 @@ graph TD
     subgraph "Ingestion (Python Pollers)"
         A[ADS-B Network] -->|JSON| B(Ingestion Services)
         C[AIS Stream] -->|JSON| B
-        Z[Orbital TLE Feed] -->|TLE| B
+        Z[Space Domain Feed] -->|TLE/SatNOGS/NOAA| B
         H3[H3 Coverage: Live Poller Pulse] -->|JSON| B
         JS[Sovereign JS8Call] -->|UDP Bridge| B
         RF[RF Pulse: ARD/NOAA/RepBook/RadioRef] -->|REST API/SOAP| B
@@ -148,7 +149,7 @@ All upstream data is sourced from **public, open-access networks**.
 | :---------------- | :------------------------------------------ | :----------------------- |
 | Aviation (ADS-B)  | adsb.fi, adsb.lol, airplanes.live           | Every 2–30 seconds       |
 | Maritime (AIS)    | AISStream.io WebSocket                      | Event-driven (real time) |
-| Orbital           | Celestrak TLE + SGP4 propagation            | Every 5 seconds          |
+| Space             | Celestrak, SatNOGS, NOAA SWPC               | 5s (SGP4) / 1h (Obs)     |
 | Internet Outages  | IODA (Georgia Tech)                         | Every 30 minutes         |
 | Submarine Cables  | TeleGeography                               | Every 24 hours           |
 | RF Infrastructure | RepeaterBook, ARD, NOAA NWR, RadioReference | Every 6–168 hours        |
@@ -160,7 +161,6 @@ All upstream data is sourced from **public, open-access networks**.
 
 > [!IMPORTANT]
 > Sovereign Watch ingests telemetry and intelligence from public, open-source networks (e.g., ADS-B, AIS, public API feeds). All data is strictly derivative of these unencrypted, publicly broadcasted signals.
-
 > [!WARNING]
 > **All data is provided "AS IS" without any warranty of accuracy, reliability, or completeness.** The developers assume no responsibility for decisions taken based on the intelligence presented. Sovereign Watch is designed purely for research, educational, and hobbyist data fusion purposes.
 

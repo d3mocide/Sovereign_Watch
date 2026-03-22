@@ -1,5 +1,5 @@
 {
-  "python.languageServer": "Pylance",
+  "python.languageServer": "Jedi",
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.indexing": true,
@@ -7,14 +7,14 @@
     "backend/api",
     "backend/ingestion/aviation_poller",
     "backend/ingestion/maritime_poller",
-    "backend/ingestion/orbital_pulse",
+    "backend/ingestion/space_pulse",
     "backend/ingestion/rf_pulse",
     "backend/ingestion/infra_poller"
   ],
   "typescript.tsdk": "frontend/node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true
   },
   "[typescript]": {
