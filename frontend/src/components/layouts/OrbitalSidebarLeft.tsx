@@ -118,6 +118,9 @@ export const OrbitalSidebarLeft: React.FC<OrbitalSidebarLeftProps> = ({
         <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000">
             <OrbitalCategoryPills filters={filters} onFilterChange={onFilterChange} trackCount={trackCount} />
 
+
+
+
             {/* NORAD / Name search */}
             <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-black/60 border border-white/15 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
                 <Search size={11} className="text-white/30 shrink-0" />

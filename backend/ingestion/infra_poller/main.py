@@ -25,7 +25,7 @@ import traceback
 import zipfile
 from datetime import datetime, UTC
 
-import httpx
+import aiohttp
 import psycopg2
 from psycopg2.extras import execute_values
 import redis.asyncio as aioredis
@@ -245,15 +245,16 @@ class InfraPollerService:
             return self._geocode_cache[cache_key]
 
         try:
-            async with httpx.AsyncClient(
-                timeout=10.0, headers={"User-Agent": USER_AGENT}
+            timeout = aiohttp.ClientTimeout(total=10.0)
+            async with aiohttp.ClientSession(
+                timeout=timeout, headers={"User-Agent": USER_AGENT}
             ) as client:
-                resp = await client.get(
+                async with client.get(
                     NOMINATIM_URL,
                     params={"q": f"{region_name}, {country_code}", "format": "json", "limit": 1},
-                )
-                resp.raise_for_status()
-                data = resp.json()
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
             if data:
                 lat = float(data[0]["lat"])
                 lon = float(data[0]["lon"])
@@ -294,17 +295,20 @@ class InfraPollerService:
 
     async def _fetch_cables_and_stations(self):
         logger.info("Fetching submarine cables and landing stations...")
-        async with httpx.AsyncClient(
-            timeout=30.0, headers={"User-Agent": USER_AGENT}
+        timeout = aiohttp.ClientTimeout(total=30.0)
+        async with aiohttp.ClientSession(
+            timeout=timeout, headers={"User-Agent": USER_AGENT}
         ) as client:
-            cables_resp = await client.get(CABLES_URL)
-            cables_resp.raise_for_status()
-            await self.redis.set("infra:cables", cables_resp.text)
+            async with client.get(CABLES_URL) as cables_resp:
+                cables_resp.raise_for_status()
+                cables_text = await cables_resp.text()
+                await self.redis.set("infra:cables", cables_text)
             logger.info("Stored submarine cables in Redis")
 
-            stations_resp = await client.get(STATIONS_URL)
-            stations_resp.raise_for_status()
-            await self.redis.set("infra:stations", stations_resp.text)
+            async with client.get(STATIONS_URL) as stations_resp:
+                stations_resp.raise_for_status()
+                stations_text = await stations_resp.text()
+                await self.redis.set("infra:stations", stations_text)
             logger.info("Stored landing stations in Redis")
 
     # -----------------------------------------------------------------------
@@ -325,15 +329,17 @@ class InfraPollerService:
         now       = int(time.time())
         from_time = now - (24 * 3600)
 
-        async with httpx.AsyncClient(
-            timeout=30.0, headers={"User-Agent": USER_AGENT}
+        timeout = aiohttp.ClientTimeout(total=30.0)
+        async with aiohttp.ClientSession(
+            timeout=timeout, headers={"User-Agent": USER_AGENT}
         ) as client:
-            resp = await client.get(
+            async with client.get(
                 IODA_URL,
                 params={"from": from_time, "until": now, "entityType": "country"},
-            )
-            resp.raise_for_status()
-            data = resp.json().get("data", [])
+            ) as resp:
+                resp.raise_for_status()
+                parsed = await resp.json()
+                data = parsed.get("data", [])
 
         outages = []
         for entry in data:
@@ -410,26 +416,26 @@ class InfraPollerService:
 
     async def _download_fcc_zip(self, dest_path: str) -> None:
         """Stream-download the FCC ASR zip with retry/backoff."""
-        timeout = httpx.Timeout(
-            connect=FCC_CONNECT_TIMEOUT_S, read=FCC_READ_TIMEOUT_S, write=None, pool=None
+        timeout = aiohttp.ClientTimeout(
+            sock_connect=FCC_CONNECT_TIMEOUT_S, sock_read=FCC_READ_TIMEOUT_S
         )
         for attempt in range(1, FCC_MAX_RETRIES + 1):
             try:
                 logger.info("FCC download attempt %d/%d", attempt, FCC_MAX_RETRIES)
-                async with httpx.AsyncClient(
-                    timeout=timeout, headers={"User-Agent": USER_AGENT}, follow_redirects=True
+                async with aiohttp.ClientSession(
+                    timeout=timeout, headers={"User-Agent": USER_AGENT}
                 ) as client:
-                    async with client.stream("GET", FCC_TOWERS_URL) as resp:
+                    async with client.get(FCC_TOWERS_URL) as resp:
                         resp.raise_for_status()
                         total = 0
                         with open(dest_path, "wb") as fh:
-                            async for chunk in resp.aiter_bytes(FCC_DOWNLOAD_CHUNK_BYTES):
+                            async for chunk in resp.content.iter_chunked(FCC_DOWNLOAD_CHUNK_BYTES):
                                 fh.write(chunk)
                                 total += len(chunk)
                                 logger.info("FCC download: %.1f MB", total / 1_000_000)
                 logger.info("FCC zip downloaded: %.1f MB total", total / 1_000_000)
                 return
-            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 logger.warning("FCC download attempt %d failed: %s", attempt, exc)
                 if attempt < FCC_MAX_RETRIES:
                     backoff = 30 * attempt

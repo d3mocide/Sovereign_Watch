@@ -9,12 +9,13 @@ import React, {
 } from "react";
 import { Globe, RotateCcw, ChevronUp, ChevronDown, Plus, Minus } from "lucide-react";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
+import { PassGeometryWidget } from "./PassGeometryWidget";
 import type { FeatureCollection } from "geojson";
 import type { MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { CoTEntity, JS8Station, MissionProps, RFSite, GroundTrackPoint } from "../../types";
+import { CoTEntity, JS8Station, MissionProps, RFSite, GroundTrackPoint, SatNOGSStation } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
 import { SaveLocationForm } from "./SaveLocationForm";
@@ -108,6 +109,15 @@ interface TacticalMapProps {
   worldCountriesData: FeatureCollection | null;
   showTerminator?: boolean;
   missionArea: import('../../types').MissionLocation | null;
+  satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
+  /** Pass geometry data bubbled up from SidebarRight → rendered as floating HUD widget */
+  passGeometry?: {
+    pass?: { points: { azimuth: number; elevation: number; time: string; isAos?: boolean; isTca?: boolean; isLos?: boolean }[] };
+    nextPassAos?: string;
+    nextPassMaxEl?: number;
+    satelliteName?: string;
+    nextPassDuration?: number;
+  } | null;
 }
 
 type InfraPickObject = {
@@ -162,6 +172,8 @@ export function OrbitalMap({
   outagesData,
   worldCountriesData,
   missionArea,
+  satnogsStationsRef,
+  passGeometry,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -561,6 +573,7 @@ export function OrbitalMap({
     predictedGroundTrackRef,
     observerRef,
     worldCountriesData,
+    satnogsStationsRef,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
@@ -914,6 +927,17 @@ export function OrbitalMap({
       >
         <SpaceWeatherPanel visible={true} />
       </div>
+
+      {/* Pass Geometry HUD — bottom-right corner, slides left when sidebar is open */}
+      <PassGeometryWidget
+        visible={!!selectedEntity && (passGeometry?.pass?.points?.length ?? 0) > 0}
+        sidebarOpen={!!selectedEntity}
+        pass={passGeometry?.pass}
+        satelliteName={passGeometry?.satelliteName}
+        nextPassAos={passGeometry?.nextPassAos}
+        nextPassMaxEl={passGeometry?.nextPassMaxEl}
+        nextPassDuration={passGeometry?.nextPassDuration}
+      />
     </>
   );
 }

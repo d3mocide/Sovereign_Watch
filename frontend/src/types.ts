@@ -253,7 +253,17 @@ export interface MapFilters {
   showCommercial: boolean;
   showPrivate: boolean;
   showAurora: boolean;
+  showSatNOGS: boolean;
   [key: string]: boolean;
+}
+
+export interface SatNOGSStation {
+  id: number;
+  name: string;
+  status: string;
+  lat: number;
+  lon: number;
+  altitude: number;
 }
 
 /** A parsed FCC tower record returned by /api/infra/towers */

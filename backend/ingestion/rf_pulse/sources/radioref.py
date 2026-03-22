@@ -36,10 +36,8 @@ import os
 import time
 from datetime import datetime, UTC
 
-import httpx
-import zeep
-import zeep.exceptions
-from zeep.transports import AsyncTransport
+import aiohttp
+from lxml import etree
 
 from sources.fips_states import STATE_FIPS
 
@@ -94,6 +92,44 @@ class RadioReferenceSource:
             "version":  "latest",
             "style":    "rpc",
         }
+
+    async def _post_soap(self, method: str, params: dict, client: aiohttp.ClientSession) -> etree._Element:
+        auth = self._auth_info()
+        auth_xml = "".join(f"<{k}>{v}</{k}>" for k, v in auth.items())
+        params_xml = "".join(f"<{k}>{v}</{k}>" for k, v in params.items())
+        
+        body = f"""<?xml version="1.0" encoding="utf-8"?>
+<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap-env:Body>
+        <ns0:{method} xmlns:ns0="http://api.radioreference.com/soap2">
+            {params_xml}
+            <authInfo>{auth_xml}</authInfo>
+        </ns0:{method}>
+    </soap-env:Body>
+</soap-env:Envelope>"""
+
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": f"http://api.radioreference.com/soap2#{method}"
+        }
+
+        async with client.post("https://api.radioreference.com/soap2/index.php", data=body, headers=headers) as resp:
+            resp.raise_for_status()
+            content = await resp.read()
+            # Parse XML and strip namespaces for easier searching
+            parser = etree.XMLParser(recover=True, remove_blank_text=True)
+            root = etree.fromstring(content, parser)
+            
+            # Find the Body element
+            for child in root:
+                if "Body" in child.tag:
+                    fault = child.find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault")
+                    if fault is not None:
+                        fault_str = fault.findtext("faultstring", default="Unknown SOAP Fault")
+                        raise Exception(f"SOAP Fault in {method}: {fault_str}")
+                    return child
+
+            return root
 
     # ------------------------------------------------------------------
     # Main loop
@@ -152,70 +188,87 @@ class RadioReferenceSource:
 
     async def _fetch_and_publish(self):
         headers = {"User-Agent": "SovereignWatch/1.0"}
-        transport = AsyncTransport(
-            client=httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers),
-            wsdl_client=httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
-        )
-        settings = zeep.Settings(strict=False, xml_huge_tree=True)
-        client = zeep.AsyncClient(WSDL_URL, transport=transport, settings=settings)
-
-        auth = self._auth_info()
-        published = 0
+        timeout = aiohttp.ClientTimeout(total=60.0)
         
-        # Mapping helpers
-        stype_mapping = {
-            1: "Motorola Type II", 2: "Motorola Type II", 3: "Motorola Type II",
-            5: "P25", 6: "P25", 8: "P25", 11: "EDACS", 12: "LTR", 13: "DMR", 14: "NXDN",
-        }
-        mode_mapping = {
-            "1": "FM", "2": "NFM", "3": "DMR", "4": "P25", "10": "P25 Phase 2", "11": "D-Star", "14": "YSF Fusion", "15": "NXDN",
-        }
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+            published = 0
+            
+            stype_mapping = {
+                "1": "Motorola Type II", "2": "Motorola Type II", "3": "Motorola Type II",
+                "5": "P25", "6": "P25", "8": "P25", "11": "EDACS", "12": "LTR", "13": "DMR", "14": "NXDN",
+            }
+            mode_mapping = {
+                "1": "FM", "2": "NFM", "3": "DMR", "4": "P25", "10": "P25 Phase 2", "11": "D-Star", "14": "YSF Fusion", "15": "NXDN",
+            }
 
-        state_ids_to_scan = []
-        if _ENV_STATES == "AUTO" or not _ENV_STATES:
-            # Dynamically calc which states are geographically relevant
-            # We add a 300 mile buffer to state centers so boundary counties aren't missed
-            for s_info in STATE_FIPS.values():
-                dist = _haversine_mi(CENTER_LAT, CENTER_LON, s_info["lat"], s_info["lon"])
-                if dist <= (RR_RADIUS_MI + 300):
-                    state_ids_to_scan.append(s_info["fips"])
-        else:
-            state_ids_to_scan = [int(s.strip()) for s in _ENV_STATES.split(",") if s.strip().isdigit()]
+            state_ids_to_scan = []
+            if _ENV_STATES == "AUTO" or not _ENV_STATES:
+                for s_info in STATE_FIPS.values():
+                    dist = _haversine_mi(CENTER_LAT, CENTER_LON, s_info["lat"], s_info["lon"])
+                    if dist <= (RR_RADIUS_MI + 300):
+                        state_ids_to_scan.append(s_info["fips"])
+            else:
+                state_ids_to_scan = [int(s.strip()) for s in _ENV_STATES.split(",") if s.strip().isdigit()]
 
-        logger.info(
-            "RadioReference: scanning %d state(s) (IDs: %s) for sites within %d mi of %.4f,%.4f",
-            len(state_ids_to_scan), state_ids_to_scan, RR_RADIUS_MI, CENTER_LAT, CENTER_LON,
-        )
+            logger.info(
+                "RadioReference: scanning %d state(s) (IDs: %s) for sites within %d mi of %.4f,%.4f",
+                len(state_ids_to_scan), state_ids_to_scan, RR_RADIUS_MI, CENTER_LAT, CENTER_LON,
+            )
 
-        for stid in state_ids_to_scan:
-            try:
-                state_info = await client.service.getStateInfo(stid=stid, authInfo=auth)
-            except zeep.exceptions.Fault:
-                continue
-
-            # 1. Fetch Trunked Sites
-            seen_sys_ids = set()
-            stubs = []
-            if hasattr(state_info, "trsList") and state_info.trsList:
-                stubs.extend(state_info.trsList)
-
-            counties = state_info.countyList if hasattr(state_info, "countyList") else []
-            for county in counties:
+            for stid in state_ids_to_scan:
                 try:
-                    county_info = await client.service.getCountyInfo(ctid=county.ctid, authInfo=auth)
-                    if hasattr(county_info, "trsList") and county_info.trsList:
-                        stubs.extend(county_info.trsList)
-                    
-                    # 2. Fetch Conventional Frequencies from Categories
-                    if hasattr(county_info, "cats") and county_info.cats:
-                        for cat in county_info.cats:
-                            if not hasattr(cat, "subcats") or not cat.subcats:
-                                continue
-                            for sc in cat.subcats:
-                                # Skip if no location or too far
+                    state_info_resp = await self._post_soap("getStateInfo", {"stid": stid}, client)
+                    state_name = state_info_resp.findtext(".//stateName", default="")
+                except Exception as e:
+                    logger.warning(f"Error fetching state {stid}: {e}")
+                    continue
+
+                seen_sys_ids = set()
+                stubs = []
+                
+                # Extract TRS list from State
+                for trs in state_info_resp.findall(".//trsList/item"):
+                    sid = trs.findtext("sid")
+                    if sid:
+                        stubs.append({
+                            "sid": sid,
+                            "sName": trs.findtext("sName", ""),
+                            "sType": trs.findtext("sType", ""),
+                            "sCity": trs.findtext("sCity", ""),
+                        })
+
+                # Extract counties
+                counties = [c.findtext("ctid") for c in state_info_resp.findall(".//countyList/item") if c.findtext("ctid")]
+                logger.info("RadioReference: %s has %d counties to process.", state_name, len(counties))
+                
+                for cidx, ctid in enumerate(counties, start=1):
+                    if cidx % 10 == 0:
+                        logger.info("RadioReference: [%s] processing county %d/%d", state_name, cidx, len(counties))
+                    try:
+                        county_info = await self._post_soap("getCountyInfo", {"ctid": ctid}, client)
+                        ct_name = county_info.findtext(".//ctName", default="")
+                        
+                        for trs in county_info.findall(".//trsList/item"):
+                            sid = trs.findtext("sid")
+                            if sid:
+                                stubs.append({
+                                    "sid": sid,
+                                    "sName": trs.findtext("sName", ""),
+                                    "sType": trs.findtext("sType", ""),
+                                    "sCity": trs.findtext("sCity", ""),
+                                })
+                        
+                        # Conventional Frequencies
+                        for cat in county_info.findall(".//cats/item"):
+                            cat_name = cat.findtext("cName", "")
+                            for sc in cat.findall(".//subcats/item"):
+                                scid = sc.findtext("scid")
+                                if not scid:
+                                    continue
+                                
                                 try:
-                                    sc_lat = float(sc.lat or 0)
-                                    sc_lon = float(sc.lon or 0)
+                                    sc_lat = float(sc.findtext("lat") or 0)
+                                    sc_lon = float(sc.findtext("lon") or 0)
                                 except (TypeError, ValueError):
                                     sc_lat, sc_lon = 0.0, 0.0
                                 
@@ -223,55 +276,63 @@ class RadioReferenceSource:
                                     if _haversine_mi(CENTER_LAT, CENTER_LON, sc_lat, sc_lon) > RR_RADIUS_MI:
                                         continue
                                 
-                                # Pull freqs in subcategory
                                 try:
-                                    freqs = await client.service.getSubcatFreqs(scid=sc.scid, authInfo=auth)
-                                    if not freqs:
-                                        continue
-                                    for f in freqs:
-                                        f_mode = mode_mapping.get(str(f.mode), "FM")
+                                    freqs_resp = await self._post_soap("getSubcatFreqs", {"scid": scid}, client)
+                                    for f in freqs_resp.findall(".//item"): # assuming it returns array of freqs
+                                        # sometimes it's wrapped in a return element
+                                        fid = f.findtext("fid")
+                                        if not fid:
+                                            continue
+                                            
+                                        f_mode = mode_mapping.get(f.findtext("mode", ""), "FM")
+                                        desc = f.findtext("descr") or f.findtext("alpha", "")
+                                        out_f = f.findtext("out")
+                                        in_f = f.findtext("in")
+                                        tone = f.findtext("tone")
+                                        
                                         record = {
                                             "source": "radioref",
-                                            "site_id": f"rr:conv:{f.fid}",
+                                            "site_id": f"rr:conv:{fid}",
                                             "service": "public_safety",
-                                            "name": f.descr or f.alpha,
+                                            "name": desc,
                                             "lat": sc_lat,
                                             "lon": sc_lon,
                                             "modes": [f_mode],
-                                            "output_freq": float(f.out) if f.out else None,
-                                            "input_freq": float(f.in_prop) if hasattr(f, "in_prop") and f.in_prop else None, # Zeep maps "in" to "in_prop"
-                                            "tone_ctcss": f.tone if f.tone and f.tone.replace(".", "").isdigit() else None,
+                                            "output_freq": float(out_f) if out_f else None,
+                                            "input_freq": float(in_f) if in_f else None,
+                                            "tone_ctcss": tone if tone and tone.replace(".", "").isdigit() else None,
                                             "status": "Active",
-                                            "city": getattr(county_info, "ctName", None),
-                                            "state": state_info.stateName,
+                                            "city": ct_name,
+                                            "state": state_name,
                                             "country": "US",
-                                            "meta": {"type": "conventional", "cat": cat.cName, "subcat": sc.scName, "alpha": f.alpha},
+                                            "meta": {"type": "conventional", "cat": cat_name, "subcat": sc.findtext("scName", ""), "alpha": f.findtext("alpha", "")},
                                         }
                                         await self.producer.send(self.topic, value=record)
                                         published += 1
-                                except zeep.exceptions.Fault:
+                                except Exception:
                                     continue
-                except zeep.exceptions.Fault:
-                    continue
+                    except Exception:
+                        continue
 
                 # Fetch and publish Sites for each unique system stub
                 for stub in stubs:
-                    if stub.sid in seen_sys_ids:
+                    sid = stub["sid"]
+                    if sid in seen_sys_ids:
                         continue
-                    seen_sys_ids.add(stub.sid)
+                    seen_sys_ids.add(sid)
                     
                     try:
-                        # Fetch sites for the system to get precise locations and freqs
-                        sites = await client.service.getTrsSites(sid=stub.sid, authInfo=auth)
-                        if not sites:
-                            continue
-                            
-                        sys_mode = stype_mapping.get(stub.sType, "P25")
+                        sites_resp = await self._post_soap("getTrsSites", {"sid": sid}, client)
+                        sys_mode = stype_mapping.get(stub["sType"], "P25")
                         
-                        for site in sites:
+                        for site in sites_resp.findall(".//item"):
+                            site_id = site.findtext("siteId")
+                            if not site_id:
+                                continue
+                                
                             try:
-                                s_lat = float(site.lat or 0)
-                                s_lon = float(site.lon or 0)
+                                s_lat = float(site.findtext("lat") or 0)
+                                s_lon = float(site.findtext("lon") or 0)
                             except (TypeError, ValueError):
                                 s_lat, s_lon = 0.0, 0.0
                                 
@@ -279,37 +340,36 @@ class RadioReferenceSource:
                                 if _haversine_mi(CENTER_LAT, CENTER_LON, s_lat, s_lon) > RR_RADIUS_MI:
                                     continue
                             
-                            # Use first frequency if available
                             primary_freq = None
-                            if hasattr(site, "siteFreqs") and site.siteFreqs:
-                                for f in site.siteFreqs:
-                                    if f.freq:
-                                        primary_freq = float(f.freq)
-                                        break
-                                        
+                            for f in site.findall(".//siteFreqs/item"):
+                                freq_val = f.findtext("freq")
+                                if freq_val:
+                                    primary_freq = float(freq_val)
+                                    break
+                                    
                             record = {
                                 "source": "radioref",
-                                "site_id": f"rr:site:{site.siteId}",
+                                "site_id": f"rr:site:{site_id}",
                                 "service": "public_safety",
-                                "name": f"{stub.sName}: {site.siteDescr}",
+                                "name": f"{stub['sName']}: {site.findtext('siteDescr', '')}",
                                 "lat": s_lat,
                                 "lon": s_lon,
                                 "modes": [sys_mode],
                                 "output_freq": primary_freq,
                                 "status": "Active",
-                                "city": site.siteLocation or stub.sCity,
-                                "state": state_info.stateName,
+                                "city": site.findtext("siteLocation") or stub["sCity"],
+                                "state": state_name,
                                 "country": "US",
                                 "meta": {
                                     "type": "trunked_site", 
-                                    "system_name": stub.sName, 
-                                    "system_id": stub.sid,
-                                    "site_id": site.siteId
+                                    "system_name": stub["sName"], 
+                                    "system_id": sid,
+                                    "site_id": site_id
                                 },
                             }
                             await self.producer.send(self.topic, value=record)
                             published += 1
-                    except zeep.exceptions.Fault:
+                    except Exception:
                         continue
 
-        logger.info("RadioReference: published %d sites/frequencies to %s", published, self.topic)
+            logger.info("RadioReference: published %d sites/frequencies to %s", published, self.topic)

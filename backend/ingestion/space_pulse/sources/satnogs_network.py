@@ -44,7 +44,7 @@ class SatNOGSNetworkSource:
         # In-memory cache of observation IDs seen this session to avoid re-publishing
         self._seen_ids: set[int] = set()
 
-    async def loop(self):
+    async def run(self):
         while True:
             try:
                 last_fetch = await self.redis_client.get("satnogs_pulse:network:last_fetch")
@@ -59,6 +59,8 @@ class SatNOGSNetworkSource:
                         )
                         await asyncio.sleep(wait_sec)
                         continue
+                else:
+                    logger.info("SatNOGS Network: no prior fetch timestamp — fetching immediately on startup.")
 
                 await self._fetch_and_publish()
                 await self.redis_client.set(
@@ -68,6 +70,7 @@ class SatNOGSNetworkSource:
             except Exception:
                 logger.exception("SatNOGS Network fetch error")
             await asyncio.sleep(self.interval_sec)
+
 
     async def _fetch_and_publish(self):
         logger.info("SatNOGS Network: fetching recent observations (window=%dh)", OBSERVATION_WINDOW_H)

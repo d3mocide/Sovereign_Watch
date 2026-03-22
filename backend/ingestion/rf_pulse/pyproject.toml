@@ -7,9 +7,7 @@ dependencies = [
     "aiokafka==0.13.0",
     # [asyncio] extra was removed in redis 7.x; async support is now built-in
     "redis==7.3.0",
-    "httpx==0.28.1",
     "aiohttp==3.13.3",
-    "zeep==4.3.2",
     "beautifulsoup4==4.14.3",
     "lxml==6.0.2",
     "python-dotenv==1.2.2",

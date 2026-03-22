@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 
-import httpx
+import aiohttp
 
 logger = logging.getLogger("rf_pulse.repeaterbook")
 
@@ -49,8 +49,8 @@ class RepeaterBookSource:
                     ex=int(self.interval_sec * 2),
                 )
 
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 401:
+            except aiohttp.ClientResponseError as exc:
+                if exc.status == 401:
                     logger.warning(
                         "RepeaterBook: 401 Unauthorized — API access restricted. "
                         "Set REPEATERBOOK_API_TOKEN or apply for allowlist access. "
@@ -77,10 +77,11 @@ class RepeaterBookSource:
             "format": "json",
         }
 
-        async with httpx.AsyncClient(timeout=RB_TIMEOUT, headers=headers) as client:
-            resp = await client.get(RB_BASE_URL, params=params)
-            resp.raise_for_status()
-            raw = resp.json()
+        timeout = aiohttp.ClientTimeout(total=RB_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+            async with client.get(RB_BASE_URL, params=params) as resp:
+                resp.raise_for_status()
+                raw = await resp.json()
 
         results = raw.get("results") or []
         published = 0

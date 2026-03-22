@@ -13,6 +13,7 @@ import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useEntityWorker } from "./hooks/useEntityWorker";
+import { useSatNOGS } from "./hooks/useSatNOGS";
 import { useInfraData } from "./hooks/useInfraData";
 import { useJS8Stations } from "./hooks/useJS8Stations";
 import { useMissionArea } from "./hooks/useMissionArea";
@@ -51,6 +52,15 @@ function App() {
   // Orbital Dashboard State
   const [orbitalViewMode, setOrbitalViewMode] = useState<'2D' | '3D'>('2D');
   const selectedSatNorad = selectedEntity?.uid ? parseInt(selectedEntity.uid.replace(/\D/g, ''), 10) || null : null;
+
+  // Pass geometry bubbled up from SidebarRight → drives the floating PassGeometryWidget in OrbitalMap
+  const [passGeometry, setPassGeometry] = useState<{
+    pass?: { points: { azimuth: number; elevation: number; time: string; isAos?: boolean; isTca?: boolean; isLos?: boolean }[] };
+    nextPassAos?: string;
+    nextPassMaxEl?: number;
+    satelliteName?: string;
+    nextPassDuration?: number;
+  } | null>(null);
 
   // Live satellite entity map exposed from OrbitalMap's entity worker.
   // Keyed as "SAT-<NORAD_ID>" — same as the CoT UID used by the backend.
@@ -243,6 +253,7 @@ function App() {
       showSatComms: false,
       showSatSurveillance: true,
       showSatOther: true,
+      showSatNOGS: false,
       showRepeaters: false,
       showHam: true,
       showNoaa: true,
@@ -314,7 +325,6 @@ function App() {
   const handleOrbitalFilterChange = useCallback((key: string, value: unknown) => {
     setOrbitalSatFilters(prev => ({ ...prev, [key]: value }));
   }, []);
-
 
   // Velocity Vector Toggle
   const [showVelocityVectors, setShowVelocityVectors] = useState(() => {
@@ -463,6 +473,8 @@ function App() {
     };
   }, [filters, orbitalSatFilters, showTerminator]);
   
+  const { stationsRef, fetchVerification } = useSatNOGS(orbitalFilters.showSatNOGS);
+
   const tacticalFilters = useMemo(() => ({
     ...filters,
     showTerminator
@@ -782,6 +794,10 @@ function App() {
             }}
             onOpenAnalystPanel={handleOpenAnalystPanel}
             onHistoryLoaded={setHistorySegments}
+            fetchSatnogsVerification={fetchVerification}
+            onPassData={(pass, nextPassAos, nextPassMaxEl, satelliteName, nextPassDuration) =>
+              setPassGeometry({ pass, nextPassAos, nextPassMaxEl, satelliteName, nextPassDuration })
+            }
           />
         ) : null
       }
@@ -892,6 +908,8 @@ function App() {
           stationsData={stationsData}
           outagesData={outagesData}
           worldCountriesData={worldCountriesData}
+          satnogsStationsRef={stationsRef}
+          passGeometry={passGeometry}
           onSatellitesRefReady={(ref) => {
             orbitalSatellitesRef.current = ref;
           }}

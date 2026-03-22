@@ -15,9 +15,10 @@ import { buildTowerLayer } from "./buildTowerLayer";
 import { maidenheadToLatLon } from "../utils/map/geoUtils";
 import { buildAuroraLayer } from "./buildAuroraLayer";
 import { buildJammingLayer } from "./buildJammingLayer";
+import { getSatNOGSLayer } from "./SatNOGSLayer";
 
 import type { H3CellData } from "./buildH3CoverageLayer";
-import type { GroundTrackPoint } from "../types";
+import type { GroundTrackPoint, SatNOGSStation } from "../types";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -57,6 +58,7 @@ interface LayerCompositionOptions {
   setSelectedInfra: (info: unknown) => void;
   /** Historical flight path segments from TrackHistoryPanel */
   historySegments?: HistorySegment[];
+  satnogsStations?: SatNOGSStation[];
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -95,6 +97,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     setHoveredInfra,
     setSelectedInfra,
     historySegments,
+    satnogsStations,
   } = options;
 
   // JS8 station layers
@@ -192,6 +195,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
     ...infraLayers,
+    getSatNOGSLayer(satnogsStations || [], !!filters?.showSatNOGS),
     // Jamming zones sit above infra but below entity chevrons
     ...buildJammingLayer(jammingData, !!filters?.showJamming, globeMode, now),
     ...getOrbitalLayers({

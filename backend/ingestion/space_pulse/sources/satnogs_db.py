@@ -32,7 +32,7 @@ class SatNOGSDBSource:
         self.topic         = topic
         self.interval_sec  = fetch_interval_h * 3600
 
-    async def loop(self):
+    async def run(self):
         while True:
             try:
                 last_fetch = await self.redis_client.get("satnogs_pulse:db:last_fetch")

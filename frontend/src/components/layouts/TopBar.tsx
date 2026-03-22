@@ -125,7 +125,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
             </div>
             {/* Center Area - View Mode Toggle / Telemetry cluster */}
-            <div className="ml-12 mr-auto hidden items-center gap-6 xl:flex relative z-10">
+            <div className="ml-12 hidden items-center gap-6 xl:flex relative z-10">
                 <div className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-full shadow-inner" role="tablist" aria-label="View Modes">
                     <button
                         role="tab"
@@ -184,7 +184,10 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <span className={viewMode === 'DASHBOARD' ? 'block drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'hidden'}>DASHBOARD</span>
                     </button>
                 </div>
-                {/* Kp Index Space Weather Monitor */}
+            </div>
+
+            {/* Centered Kp Index Space Weather Monitor */}
+            <div className="flex-1 hidden xl:flex items-center justify-center relative z-10">
                 <KpIndexWidget />
             </div>
 

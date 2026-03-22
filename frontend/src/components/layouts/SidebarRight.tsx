@@ -7,7 +7,7 @@ import { satAzEl } from '../../utils/map/geoUtils';
 import { AnalysisWidget } from '../widgets/AnalysisWidget';
 import { Compass } from '../widgets/Compass';
 import { PayloadInspector } from '../widgets/PayloadInspector';
-import { PolarPlotWidget } from '../widgets/PolarPlotWidget';
+
 import { TrackHistoryPanel } from '../widgets/TrackHistoryPanel';
 import { TimeTracked } from './TimeTracked';
 
@@ -18,19 +18,42 @@ import { NAV_STATUS_MAP, SHIP_TYPE_MAP } from '../../constants/maritime';
 // violating Rules of Hooks in the main component's conditional branches)
 // ---------------------------------------------------------------------------
 
-function formatCountdown(isoTarget: string, now: number): string {
-  const delta = Math.round((Date.parse(isoTarget) - now) / 1000);
-  if (Math.abs(delta) < 5) return 'NOW';
-  const sign = delta < 0 ? 'T+' : 'T-';
-  const abs = Math.abs(delta);
-  const h = Math.floor(abs / 3600);
-  const m = Math.floor((abs % 3600) / 60);
-  const s = abs % 60;
-  if (h > 0) return `${sign}${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${sign}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+
+function SatelliteSpectrumVerification({ noradIdStr, fetchSatnogsVerification }: { noradIdStr: string, fetchSatnogsVerification?: (noradId: string) => Promise<any> }) {
+  const [verificationData, setVerificationData] = useState<any>(null);
+
+  useEffect(() => {
+    if (noradIdStr && fetchSatnogsVerification) {
+      fetchSatnogsVerification(noradIdStr)
+        .then(data => setVerificationData(data))
+        .catch(err => console.error('Error fetching SatNOGS verification:', err));
+    }
+  }, [noradIdStr, fetchSatnogsVerification]);
+
+  if (!verificationData) return null;
+
+  return (
+    <section className="space-y-1 mb-2">
+      <div className="flex items-center gap-2 text-purple-400 pb-1">
+        <Radio size={14} className="animate-pulse" />
+        <h3 className="text-[10px] font-bold tracking-[.2em]">SPECTRUM_VERIFICATION</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+        <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
+          <div className="text-white/40 mb-1">STATION_COUNT</div>
+          <div className="text-purple-300 font-bold">{verificationData.station_count || 0}</div>
+        </div>
+        <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
+          <div className="text-white/40 mb-1">LAST_OBS</div>
+          <div className="text-purple-300 font-bold">{verificationData.last_observation ? new Date(verificationData.last_observation).toLocaleTimeString() : '---'}</div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
+function SatelliteInspectorSection({ entity, fetchSatnogsVerification, onPassData }: { entity: CoTEntity, fetchSatnogsVerification?: (noradId: string) => Promise<any>, onPassData?: (pass: any, nextPassAos?: string, nextPassMaxEl?: number, satelliteName?: string, nextPassDuration?: number) => void }) {
   const { lat: obsLat, lon: obsLon } = useMissionLocation();
   const [now, setNow] = useState(() => Date.now());
 
@@ -46,11 +69,13 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
     skip: !noradIdStr,
   });
 
-  // Tick every second for live az/el and countdown
+  // Live az/el and countdown tick
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+
 
   // Live az/el from current entity position
   const altKm = (entity.altitude || 0) / 1000;
@@ -81,6 +106,18 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
       })),
     }
     : undefined;
+
+  // Bubble pass data up to OrbitalMap so it can render the floating HUD widget
+  useEffect(() => {
+    onPassData?.(
+      polarPass,
+      nextPass?.aos,
+      nextPass?.max_elevation,
+      entity.callsign,
+      nextPass?.duration_seconds,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextPass?.aos, polarPass != null, entity.callsign]);
 
   return (
     <section className="space-y-1 pt-2">
@@ -116,31 +153,12 @@ function SatelliteInspectorSection({ entity }: { entity: CoTEntity }) {
         </div>
       )}
 
-      {/* Next pass countdown */}
-      {nextPass && (
-        <div className="mt-1 px-2 py-1.5 rounded bg-purple-400/5 border border-purple-400/20 flex items-center justify-between">
-          <span className="text-[8px] text-purple-400/60 font-bold tracking-widest uppercase">Next Pass</span>
-          <div className="flex gap-3 text-[10px] font-mono">
-            <div className="flex items-center gap-1">
-              <span className="text-[7px] text-white/30 uppercase">AOS:</span>
-              <span className="text-white/80">{formatCountdown(nextPass.aos, now)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[7px] text-white/30 uppercase">TCA:</span>
-              <span className="text-purple-300">{nextPass.max_elevation.toFixed(0)}°</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[7px] text-white/30 uppercase">DUR:</span>
-              <span className="text-white/80">{Math.round(nextPass.duration_seconds / 60)}m</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Next pass countdown moved to PassGeometryWidget footer */}
 
-      {/* Pass Geometry polar plot — fills remaining sidebar space */}
-      <div className="mt-1 flex-1 min-h-0 border border-white/10 rounded overflow-hidden" style={{ minHeight: 200 }}>
-        <PolarPlotWidget pass={polarPass} />
-      </div>
+
+
+
+
     </section>
   );
 }
@@ -180,6 +198,8 @@ interface SidebarRightProps {
   onCenterMap?: () => void;
   onOpenAnalystPanel?: () => void;
   onHistoryLoaded?: (segments: HistorySegment[]) => void;
+  fetchSatnogsVerification?: (noradId: string) => Promise<any>;
+  onPassData?: (pass: any, nextPassAos?: string, nextPassMaxEl?: number, satelliteName?: string, nextPassDuration?: number) => void;
 }
 
 export const SidebarRight: React.FC<SidebarRightProps> = ({
@@ -188,6 +208,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   onCenterMap,
   onOpenAnalystPanel,
   onHistoryLoaded,
+  fetchSatnogsVerification,
+  onPassData,
 }) => {
   const [showInspector, setShowInspector] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -951,8 +973,15 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           </>
         )}
 
+        {isSat && (
+          <SatelliteSpectrumVerification 
+            noradIdStr={entity.detail?.norad_id ? String(entity.detail.norad_id) : (entity.uid?.replace?.(/^SAT-/i, '') ?? '')}
+            fetchSatnogsVerification={fetchSatnogsVerification} 
+          />
+        )}
         {/* Positional Group */}
         <section className="space-y-2">
+
           <div className="flex items-center gap-2 text-hud-green/40 pb-1">
             <h3 className="text-[10px] text-white/50 font-bold">Positional_Telemetry</h3>
           </div>
@@ -1007,7 +1036,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                   </div>
                 </div>
                 {/* Live az/el, orbital params, next pass countdown */}
-                <SatelliteInspectorSection entity={entity} />
+                <SatelliteInspectorSection entity={entity} fetchSatnogsVerification={fetchSatnogsVerification} onPassData={onPassData} />
               </>
             ) : isShip ? (
               <>

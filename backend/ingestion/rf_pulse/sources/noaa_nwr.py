@@ -5,7 +5,7 @@ NOAA NWR source adapter.
 import asyncio
 import logging
 import time
-import httpx
+import aiohttp
 import re
 
 logger = logging.getLogger("rf_pulse.noaa_nwr")
@@ -49,10 +49,11 @@ class NOAANWRSource:
     async def _fetch_and_publish(self):
         logger.info("NOAA NWR adapter: Fetching data from %s", NOAA_JS_URL)
 
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            resp = await client.get(NOAA_JS_URL)
-            resp.raise_for_status()
-            content = resp.text
+        timeout = aiohttp.ClientTimeout(total=TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.get(NOAA_JS_URL) as resp:
+                resp.raise_for_status()
+                content = await resp.text()
 
         # Parse the raw JS arrays (SITENAME, CALLSIGN, FREQ, LAT, LON, STATUS)
         # using simple regex. We only care about unique stations by callsign.

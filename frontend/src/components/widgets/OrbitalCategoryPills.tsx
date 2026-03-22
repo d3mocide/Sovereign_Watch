@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, Cloud, Wifi, Eye, Globe, ChevronDown, ChevronRight } from 'lucide-react';
+import { Navigation, Cloud, Wifi, Eye, Globe, ChevronDown, ChevronRight, Radio } from 'lucide-react';
+
 
 interface OrbitalCategoryPillsProps {
   filters: import('../../types').MapFilters | undefined;
@@ -48,6 +49,21 @@ export const OrbitalCategoryPills: React.FC<OrbitalCategoryPillsProps> = ({ filt
           <button
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
+              onFilterChange('showSatNOGS', !filters?.showSatNOGS);
+            }}
+            className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-teal-400 outline-none ${filters?.showSatNOGS
+              ? 'bg-teal-400/20 text-teal-400 border border-teal-400/30'
+              : 'text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent'
+              }`}
+            title="Toggle SatNOGS Network"
+            aria-label="Toggle SatNOGS Network"
+            aria-pressed={filters?.showSatNOGS}
+          >
+            <Radio size={11} className={filters?.showSatNOGS ? 'animate-pulse' : ''} aria-hidden="true" />
+          </button>
+          <button
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
               onFilterChange('showAurora', !filters?.showAurora);
             }}
             className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-purple-400 outline-none ${filters?.showAurora
@@ -60,6 +76,7 @@ export const OrbitalCategoryPills: React.FC<OrbitalCategoryPillsProps> = ({ filt
           >
             <Globe size={11} className={filters?.showAurora ? 'animate-pulse' : ''} aria-hidden="true" />
           </button>
+
           <span className="text-sm font-mono font-bold tracking-wider text-purple-400">{trackCount.toLocaleString()}</span>
         </div>
       </div>

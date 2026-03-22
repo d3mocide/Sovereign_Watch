@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Sovereign Watch infrastructure ingestion poller"
 requires-python = ">=3.12"
 dependencies = [
-    "httpx==0.28.1",
+    "aiohttp==3.13.3",
     "redis==7.3.0",
     "psycopg2-binary>=2.9.9",
 ]

@@ -18,6 +18,7 @@ GET /api/satnogs/verify/{norad_id}
 
 import json
 import logging
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from core.database import db
 
@@ -208,3 +209,52 @@ async def verify_spectrum(norad_id: str):
     if db.redis_client:
         await db.redis_client.set(cache_key, json.dumps(result, default=str), ex=CACHE_TTL_OBSERVATIONS)
     return result
+
+
+@router.get("/stations")
+async def get_stations():
+    """Proxy the SatNOGS network stations API to bypass CORS and add caching."""
+    cache_key = "satnogs:stations:all"
+    if db.redis_client:
+        cached = await db.redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+
+    try:
+        headers = {
+            "User-Agent": "SovereignWatch/1.0 (admin@sovereignwatch.local)",
+            "Accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
+            resp = await client.get("https://network.satnogs.org/api/stations/")
+            resp.raise_for_status()
+            
+            # The API might return paginated results or a flat list. Usually it's a flat list.
+            data = resp.json()
+            if isinstance(data, dict) and "results" in data:
+                data = data["results"]
+                
+            # Filter and simplify fields to minimize payload
+            stations = []
+            for s in data:
+                lat = s.get("lat")
+                lon = s.get("lng")
+                if lat is not None and lon is not None:
+                    stations.append({
+                        "id": s.get("id"),
+                        "name": s.get("name"),
+                        "status": s.get("status"),
+                        "lat": float(lat),
+                        "lon": float(lon),
+                        "altitude": float(s.get("alt") or 0)
+                    })
+                    
+            if db.redis_client and stations:
+                # Cache for 24 hours (86400 seconds)
+                await db.redis_client.set(cache_key, json.dumps(stations, default=str), ex=86400)
+                
+            return stations
+
+    except Exception as e:
+        logger.error(f"Failed to fetch SatNOGS stations: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch upstream SatNOGS network stations")

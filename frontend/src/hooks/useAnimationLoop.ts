@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, MutableRefObject } from "react";
 import type { FeatureCollection } from "geojson";
 import type { PickingInfo } from "@deck.gl/core";
-import { CoTEntity, HistorySegment, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint } from "../types";
+import { CoTEntity, HistorySegment, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint, SatNOGSStation } from "../types";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 import { filterEntity, filterSatellite } from "../utils/filters";
@@ -74,6 +74,7 @@ interface UseAnimationLoopOptions {
   observerRef?: MutableRefObject<{ lat: number; lon: number; radiusKm: number } | null>;
   /** Historical track segments loaded by TrackHistoryPanel — rendered as a PathLayer */
   historySegmentsRef?: MutableRefObject<HistorySegment[]>;
+  satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
 }
 
 /** Returns true if the satellite should be visible given the current filters. */
@@ -128,6 +129,7 @@ export function useAnimationLoop({
   currentMissionRef,
   worldCountriesData,
   historySegmentsRef,
+  satnogsStationsRef,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -461,6 +463,7 @@ export function useAnimationLoop({
         setHoveredInfra: setHoveredInfra || (() => {}),
         setSelectedInfra: setSelectedInfra || (() => {}),
         historySegments: historySegmentsRef?.current,
+        satnogsStations: satnogsStationsRef?.current || [],
       });
 
       if (mapLoaded && overlayRef.current?.setProps) {

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 
-import httpx
+import aiohttp
 
 logger = logging.getLogger("rf_pulse.ard")
 
@@ -53,10 +53,11 @@ class ARDSource:
     async def _fetch_and_publish(self):
         logger.info("Fetching ARD master list from GitHub")
 
-        async with httpx.AsyncClient(timeout=ARD_TIMEOUT) as client:
-            resp = await client.get(ARD_CSV_URL)
-            resp.raise_for_status()
-            data = resp.json()
+        timeout = aiohttp.ClientTimeout(total=ARD_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.get(ARD_CSV_URL) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
 
         published = 0
 
