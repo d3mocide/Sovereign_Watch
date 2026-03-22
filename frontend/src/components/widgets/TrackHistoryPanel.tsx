@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { AlertTriangle, Navigation } from 'lucide-react';
+import { AlertTriangle, Navigation, Activity } from 'lucide-react';
 import { CoTEntity, HistorySegment } from '../../types';
 
 interface TrackPoint {
@@ -171,17 +171,20 @@ export function TrackHistoryPanel({ entity, onHistoryLoaded }: TrackHistoryPanel
 
   if (loading) {
     return (
-      <div className="p-3 text-[10px] text-white/40 font-mono flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-hud-green/50 animate-pulse" />
-        FETCHING_TRACK_DATA…
+      <div className="p-4 text-[10px] text-white/40 font-mono flex flex-col items-center justify-center gap-2 h-32" aria-live="polite" aria-busy={true}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-hud-green/50 animate-pulse" />
+          <span>FETCHING_TRACK_DATA…</span>
+        </div>
       </div>
     );
   }
 
   if (error || points.length === 0) {
     return (
-      <div className="p-3 text-[10px] text-white/30 font-mono">
-        {error === 'FETCH_FAILED' ? 'ERR: HISTORY_UNAVAILABLE' : 'NO_TRACK_DATA (72H WINDOW)'}
+      <div className="p-4 flex flex-col items-center justify-center gap-2 h-32 text-[10px] text-white/30 font-mono" aria-live="polite">
+        <Activity size={24} className="text-white/10" aria-hidden="true" />
+        <span>{error === 'FETCH_FAILED' ? 'ERR: HISTORY_UNAVAILABLE' : 'NO_TRACK_DATA (72H WINDOW)'}</span>
       </div>
     );
   }
