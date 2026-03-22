@@ -74,7 +74,7 @@ This starts all services:
 | `sovereign-redis` | Redis cache and pub/sub |
 | `sovereign-adsb-poller` | ADS-B aviation ingestion |
 | `sovereign-ais-poller` | AIS maritime ingestion |
-| `sovereign-orbital-pulse` | Satellite TLE + SGP4 propagation |
+| `sovereign-space-pulse` | SGP4, SatNOGS, and Space Weather |
 | `sovereign-infra-poller` | Internet outages + submarine cables |
 | `sovereign-rf-pulse` | RF infrastructure ingestion |
 | `sovereign-js8call` | JS8Call HF radio terminal |
@@ -91,6 +91,7 @@ docker compose logs -f
 # View a specific service
 docker compose logs -f sovereign-backend
 docker compose logs -f sovereign-adsb-poller
+docker compose logs -f sovereign-space-pulse
 ```
 
 ### 5. Access the Interface
@@ -111,8 +112,9 @@ After a fresh start, allow time for the pollers to populate data:
 | :--- | :--- |
 | Aviation (ADS-B) | ~5–10 seconds |
 | Maritime (AIS) | ~10–30 seconds (first vessel arrives) |
-| Satellites (Orbital) | ~30–60 seconds (initial TLE fetch + propagation) |
+| Space (SGP4/SatNOGS) | ~30–60 seconds (initial fetch + propagation) |
 | RF Infrastructure (ARD, NOAA NWR) | ~2–5 minutes |
+| JS8Call Radio Traffic | ~5–10 seconds |
 | RepeaterBook (if enabled) | ~3–10 minutes |
 | Submarine cables | ~1–2 minutes |
 | Internet outages | ~2–5 minutes |
@@ -207,7 +209,7 @@ docker compose up -d --build sovereign-adsb-poller
 docker compose logs -f
 
 # Specific service
-docker compose logs -f sovereign-orbital-pulse
+docker compose logs -f sovereign-space-pulse
 docker compose logs -f sovereign-rf-pulse
 
 # Last 50 lines
@@ -257,21 +259,18 @@ The Nginx configuration is at `nginx/`. No changes are needed for standard deplo
 
 ## Data Retention
 
-Sovereign Watch uses two separate hypertables, each with its own retention policy:
+Sovereign Watch uses multiple hypertables with independent retention policies to balance storage vs. tactical depth:
 
 | Hypertable | Data | Retention | Compression |
 | :--- | :--- | :--- | :--- |
-| `tracks` | AIS vessels, ADS-B aircraft | **72 hours** | After 1 hour |
-| `orbital_tracks` | Satellite positions | **12 hours** | After 2 hours |
+| `tracks` | AIS vessels, ADS-B aircraft | **72 hours** | After 4 hours |
+| `satnogs_observations` | Multi-source spectrum verification | **30 days** | After 1 day |
+| `space_weather_kp` | NOAA Kp-Index / Storm levels | **7 days** | After 1 day |
+| `jamming_events` | ADS-B interference / GPS jamming | **7 days** | After 1 day |
 
-Satellite positions are deterministic (reproducible from TLE via SGP4) so a short
-window is sufficient; the `/api/orbital/groundtrack/{norad_id}` endpoint can
-regenerate any historical position on demand. AIS/ADS-B tracks, which cannot be
-reproduced after the fact, are retained for 72 hours to match the API's
-`TRACK_HISTORY_MAX_HOURS` setting.
+**Note on Satellites:** Orbital positions are no longer stored in a hypertable. They are **deterministic** (reproducible from TLE via SGP4) so positions are computed in-memory on demand by the API via `/api/tracks/history/{norad_id}`. This significantly reduces I/O while maintaining full historical fidelity.
 
-See `agent_docs/TIMESCALE_RETENTION.md` for the full retention reference including
-monitoring queries, manual cleanup commands, and migration scripts.
+See `agent_docs/TIMESCALE_RETENTION.md` for the full retention reference including monitoring queries and manual cleanup commands.
 
 ---
 

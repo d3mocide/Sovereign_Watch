@@ -4,33 +4,32 @@
 
 ## Verification Override (Host Tools Allowed)
 
-Containers may not be running during Claude sessions. Run lint and unit tests on the
-host directly — do NOT spin up docker compose just to verify:
+Containers may not be running during Claude sessions. Run lint and unit tests on the host directly — do NOT spin up docker compose just to verify.
+
+**IMPORTANT:** Always follow the **Targeted Verification** rule (Section 5 of `AGENTS.md`): Only run the suites for the components/languages you have actually modified.
 
 ```bash
 cd frontend && pnpm run lint && pnpm run test
 cd backend/api && ruff check . && python -m pytest
 cd backend/ingestion/<poller> && ruff check . && python -m pytest
+cd js8call && ruff check . && python -m pytest
 ```
 
 If containers ARE already running, prefer:
 
 ```bash
-docker compose exec frontend pnpm run lint
-docker compose exec backend-api ruff check .
+docker compose exec sovereign-frontend pnpm run lint
+docker compose exec sovereign-backend ruff check
+docker compose exec sovereign-adsb-poller ruff check
+docker compose exec sovereign-ais-poller ruff check
+docker compose exec sovereign-space-pulse ruff check
+docker compose exec sovereign-rf-pulse ruff check
+docker compose exec sovereign-infra-poller ruff check
+docker compose exec sovereign-js8call ruff check
 ```
 
 **Container-first still applies for:** building images, running the application, and
 ingestion poller changes (always require rebuild + restart).
-
-## MCP / LSP Tools
-
-MCP tool availability is detected at session start. If the `## MCP Tools Active`
-banner appears above, prefer LSP tools (definition, references, hover, rename) over
-grep. The playbook is injected automatically when the binary is present.
-
-To enable: `./tools/mcp-language-server/build.sh` (requires Go 1.24+), then
-`npm install -g typescript typescript-language-server pyright`.
 
 ## Map Layer Work
 

@@ -1,3 +1,28 @@
+## [0.45.0] - 2026-03-22
+
+### Added
+
+- **JS8Call Radio Service**: Integrated a dedicated microservice for HF radio intelligence.
+  - **Headless Terminal**: Python-based runner for headless JS8Call support via virtual audio routing.
+  - **KiwiSDR Audio Bridge**: Automated audio ingestion from global WikiSDR nodes for remote signal processing.
+  - **Tactical Terminal UI**: High-fidelity React terminal component for real-time monitoring and GhostNet participation.
+  - **UDP Control Bridge**: Synchronized frequency and status between the frontend and the underlying JS8Call instance.
+- **Space Pulse Unified Ingestion**: Expanded the orbital tracker into a comprehensive Space Domain situational awareness suite.
+  - **SatNOGS Integration**: Cross-referencing mission telemetry with SatNOGS ground station observations.
+  - **Space Weather Monitor**: Real-time tracking of Aurora GeoJSON and Kp-index risk metrics directly on the tactical HUD.
+- **Dynamic Documentation Suite**: Newly created `Space.md` and `JS8Call.md` guides covering detailed poller logic and integration instructions.
+
+### Changed
+
+- **Documentation Overhaul**: Synchronized `README.md`, `Deployment.md`, `Development.md`, and `Configuration.md` with the current service architecture.
+- **Service Naming Standardization**: Migrated from `sovereign-orbital-pulse` to `sovereign-space-pulse` across all configurations and environment variables (`SPACE_TLE_FETCH_HOUR`).
+- **Tactical Verification Logic**: Updated `AGENTS.md` and `.cursorrules` to implement targeted, component-specific verification to reduce development overhead.
+- **Frontend Tooling**: Formalized `pnpm` as the primary package manager for all UI development tasks.
+
+### Removed
+
+- **Model Context Protocol (MCP) Support**: Decommissioned baked-in MCP server infrastructure, including wrappers, bridges, and isolated Docker services, to streamline the codebase.
+
 ## [0.44.0] - 2026-03-21
 
 ### Added

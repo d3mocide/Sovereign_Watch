@@ -70,70 +70,6 @@ Point your editor's Python interpreter at `backend/api/.venv`. Pylance and pyrig
 
 ---
 
-## LSP Server Installation (One-Time)
-
-Language Server Protocol gives your editor (and AI coding tools) **semantic understanding** of the codebase — exact symbol definitions, all call sites, accurate type information — instead of text-search guesses. On memory-constrained hardware, it also eliminates expensive full-repo grep scans.
-
-`.mcp.json` uses wrapper scripts (`tools/mcp-language-server/run-*.sh`) and relies on whichever `bash` is first on PATH:
-
-```
-bash (PATH) ──▶ run-*.sh wrappers ──▶ ./tools/bin/mcp-language-server + LSP stdio
-```
-
-### Windows (WSL or Git Bash)
-
-- If using WSL bash: install a distro (`wsl --install -d Ubuntu`).
-- If using Git Bash: install Git for Windows and ensure `C:\Program Files\Git\bin` is before `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps` in PATH.
-- Verify resolution in PowerShell:
-
-```powershell
-Get-Command bash -All
-```
-
-Your preferred `bash.exe` should be first in the list.
-
-### Linux / macOS
-
-`bash` is typically already on PATH. Verify with:
-
-```bash
-command -v bash
-```
-
-### Build and Install (All Hosts)
-
-The wrappers use a locally built pinned binary. This is a one-time setup:
-
-**Step 1 — build the MCP bridge binary (requires `git` and `go 1.24+`):**
-
-```bash
-./tools/mcp-language-server/build.sh
-```
-
-This clones `isaacphi/mcp-language-server` at the pinned tag, verifies the commit hash, and writes the binary to `tools/bin/mcp-language-server`. The pinned version, expected commit, and SHA-256 are in `tools/mcp-language-server/VERSION`.
-
-> **Do not** run `npm install -g mcp-language-server` — that package name resolves to a non-pinned version of this LSP-MCP server on the npm registry.
-
-**Step 2 — install the TypeScript and Python LSP servers globally:**
-
-```bash
-# TypeScript / JavaScript LSP
-npm install -g typescript typescript-language-server
-
-# Python LSP — matches pyrightconfig.json at the project root
-npm install -g pyright
-```
-
-These only need to be installed once per machine. Restart Claude Code after setup.
-
-**Optional quick validation (recommended):**
-
-```bash
-./tools/mcp-language-server/check.sh
-```
-
-This prints a PASS/FAIL summary and exact fix commands for missing MCP prerequisites.
-
 ---
 
 ## Editor Setup
@@ -161,7 +97,6 @@ All four are VS Code-family editors and read `.vscode/settings.json` automatical
 **Cursor / Windsurf / Antigravity extras:**
 
 - `.cursorrules` at the project root is auto-loaded as AI context for Cursor, Windsurf, and compatible Google-augmented VS Code forks (Antigravity). It contains the project overview, directory map, architectural rules, and key commands.
-- Antigravity users: the `mcp-language-server` in `.mcp.json` also works with Gemini CLI's MCP support — see the [Gemini CLI](#gemini-cli) section below.
 
 ---
 
@@ -200,8 +135,6 @@ lspconfig.ts_ls.setup({
 })
 ```
 
-> The `.mcp.json` MCP server is specific to Claude Code and does not apply to Neovim.
-
 ---
 
 ### All Other LSP-Capable Editors
@@ -220,17 +153,6 @@ Point your editor's Python LSP at `pyrightconfig.json` and its TypeScript LSP at
 
 ## AI Coding Tool Setup
 
-### Claude Code
-
-No setup required beyond completing [LSP Server Installation](#lsp-server-installation-one-time) above. Two files are auto-loaded at session start:
-
-| File | Purpose |
-| :--- | :--- |
-| `CLAUDE.md` | Session rules, verification commands, git workflow |
-| `.mcp.json` | Registers `pyright` and `tsserver` MCP servers via wrapper scripts — enables `goToDefinition`, `findReferences`, `hover`, `rename` as Claude tools |
-
-See [CLAUDE.md](../CLAUDE.md) for session-specific instructions and the LSP tool preference table.
-
 ---
 
 ### Cursor
@@ -244,25 +166,6 @@ No setup required. Two files are auto-loaded:
 
 ---
 
-### Gemini CLI
-
-Gemini CLI reads `GEMINI.md` at the project root when present. That file does not yet exist in this project — the interim approach is to wire MCP manually.
-
-Add to `~/.gemini/settings.json` on your host:
-
-```json
-{
-  "mcpServers": {
-    "lsp": {
-      "command": "mcp-language-server",
-      "args": ["--workspace", "/path/to/Sovereign_Watch"]
-    }
-  }
-}
-```
-
-This gives Gemini CLI the same `goToDefinition` / `findReferences` capabilities that Claude Code gets via `.mcp.json`. Replace `/path/to/Sovereign_Watch` with your actual clone path.
-
 ---
 
 ### OpenAI Codex CLI
@@ -272,22 +175,6 @@ Codex CLI reads `AGENTS.md` at the project root (OpenAI convention). That file i
 No additional configuration needed.
 
 ---
-
-### Other MCP-Compatible Tools
-
-Any tool that supports the Model Context Protocol can use the project's LSP server. Point it at `.mcp.json` or replicate its contents:
-
-```json
-{
-  "mcpServers": {
-    "lsp": {
-      "command": "mcp-language-server",
-      "args": ["--workspace", "/path/to/Sovereign_Watch"]
-    }
-  }
-}
-```
-
 ---
 
 ## Development Workflow
@@ -298,10 +185,9 @@ With `node_modules` installed locally (see [Local Dependencies](#local-dependenc
 
 ```bash
 cd frontend
-
-npm run lint          # ESLint
-npm run test          # Vitest unit tests
-npx tsc --noEmit      # Type check without building
+pnpm run lint          # ESLint
+pnpm run test          # Vitest unit tests
+pnpm tsc --noEmit      # Type check without building
 ```
 
 ---
@@ -346,7 +232,7 @@ After installing, do **Ctrl+Shift+P → Python: Restart Language Server** in VS 
 ```bash
 docker compose up -d --build sovereign-adsb-poller
 docker compose up -d --build sovereign-ais-poller
-docker compose up -d --build sovereign-orbital-pulse
+docker compose up -d --build sovereign-space-pulse
 docker compose up -d --build sovereign-infra-poller
 docker compose up -d --build sovereign-rf-pulse
 ```
@@ -355,6 +241,7 @@ docker compose up -d --build sovereign-rf-pulse
 # Lint and test on host (no rebuild needed for these)
 cd backend/ingestion/aviation_poller && ruff check . && python -m pytest
 cd backend/ingestion/maritime_poller && ruff check . && python -m pytest
+cd backend/ingestion/space_pulse && ruff check . && python -m pytest
 ```
 
 ---
@@ -368,5 +255,4 @@ cd backend/ingestion/maritime_poller && ruff check . && python -m pytest
 | [API Reference](./API_Reference.md) | REST endpoints, WebSocket feed, SSE streaming |
 | [TAK Protocol Reference](./TAK_Protocol.md) | Internal message schema (Protobuf / CoT) |
 | [AGENTS.md](../AGENTS.md) | Architectural invariants and rules for all contributors |
-| [CLAUDE.md](../CLAUDE.md) | Claude Code-specific overrides and LSP tool usage |
 | [z-ordering.md](../agent_docs/z-ordering.md) | **Mandatory reading before touching any map layer** |

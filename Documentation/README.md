@@ -19,21 +19,22 @@
 
 Each poller is a standalone microservice that ingests data from external sources and publishes it to the Redpanda message bus in TAK-compatible JSON format.
 
-| Document                                      | Poller                              | Container                 |
-| :-------------------------------------------- | :---------------------------------- | :------------------------ |
-| [ADS-B Poller Guide](./pollers/ADSB.md)       | Aviation / ADS-B transponders       | `sovereign-adsb-poller`   |
-| [AIS Maritime Poller Guide](./pollers/AIS.md) | Maritime vessel positions           | `sovereign-ais-poller`    |
-| [Orbital Pulse Guide](./pollers/Orbital.md)   | Satellite tracking via TLE + SGP4   | `sovereign-orbital-pulse` |
-| [Infra Poller Guide](./pollers/Infra.md)      | Internet outages + submarine cables | `sovereign-infra-poller`  |
-| [RF Pulse Guide](./pollers/RF.md)             | RF repeaters + NOAA weather radio   | `sovereign-rf-pulse`      |
+| Document                                      | Poller                              | Container               |
+| :-------------------------------------------- | :---------------------------------- | :---------------------- |
+| [ADS-B Poller Guide](./pollers/ADSB.md)       | Aviation / ADS-B transponders       | `sovereign-adsb-poller` |
+| [AIS Maritime Poller Guide](./pollers/AIS.md) | Maritime vessel positions           | `sovereign-ais-poller`  |
+| [Space Pulse Guide](./pollers/Space.md)       | SGP4, SatNOGS, Space Weather        | `sovereign-space-pulse` |
+| [JS8Call Radio Guide](./pollers/JS8Call.md)   | HF Radio / JS8Call Terminal         | `sovereign-js8call`     |
+| [Infra Poller Guide](./pollers/Infra.md)      | Internet outages + submarine cables | `sovereign-infra-poller`|
+| [RF Pulse Guide](./pollers/RF.md)             | RF repeaters + NOAA weather radio   | `sovereign-rf-pulse`    |
 
 ### Architecture & Protocols
 
-| Document                                                | Description                                                       |
-| :------------------------------------------------------ | :---------------------------------------------------------------- |
-| [TAK Protocol Reference](./TAK_Protocol.md)             | Internal message schema (Protobuf / CoT) used across all services |
-| [API Reference](./API_Reference.md)                     | All REST endpoints, WebSocket feed, and SSE streaming             |
-| [AI Configuration](./AI_Configuration.md) | How to configure the AI models                                    |
+| Document                                    | Description                                                       |
+| :------------------------------------------ | :---------------------------------------------------------------- |
+| [TAK Protocol Reference](./TAK_Protocol.md) | Internal message schema (Protobuf / CoT) used across all services |
+| [API Reference](./API_Reference.md)         | All REST endpoints, WebSocket feed, and SSE streaming             |
+| [AI Configuration](./AI_Configuration.md)   | How to configure the AI models                                    |
 
 ### User Guides
 
@@ -51,8 +52,11 @@ Each poller is a standalone microservice that ingests data from external sources
 | ADS-B   | adsb.lol                      | Every **2 seconds**               |
 | ADS-B   | airplanes.live                | Every **30 seconds** (backup)     |
 | AIS     | AISStream.io                  | **Event-driven** WebSocket stream |
-| Orbital | Celestrak TLE fetch           | Every **6 hours**                 |
-| Orbital | SGP4 propagation              | Every **5 seconds**               |
+| Space   | Celestrak TLE fetch           | Every **6 hours**                 |
+| Space   | SGP4 propagation              | Every **5 seconds**               |
+| Space   | SatNOGS Network (Obs)         | Every **1 hour**                  |
+| Space   | NOAA Aurora Forecast          | Every **5 minutes**               |
+| Space   | NOAA Kp-Index                 | Every **15 minutes**              |
 | Infra   | IODA internet outages         | Every **30 minutes**              |
 | Infra   | Submarine cables & stations   | Every **24 hours**                |
 | RF      | RepeaterBook                  | Every **6 hours**                 |
@@ -64,7 +68,7 @@ Each poller is a standalone microservice that ingests data from external sources
 
 ## System Architecture (Summary)
 
-```
+```text
 [External Sources] → [Python Pollers] → [Redpanda Kafka Bus] → [TimescaleDB]
                                     ↘ [Redis Cache]
 [Frontend React/Deck.gl] ← [FastAPI Backend] ← [TimescaleDB / Redis]

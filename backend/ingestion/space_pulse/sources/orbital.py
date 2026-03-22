@@ -51,7 +51,7 @@ class OrbitalSource:
         self.sat_array = None
 
         self.fetch_interval_hours = 6
-        self.fetch_hour = int(os.getenv("ORBITAL_TLE_FETCH_HOUR", "2"))
+        self.fetch_hour = int(os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "2")))
         self.propagate_interval_sec = 5
 
         self.groups = [

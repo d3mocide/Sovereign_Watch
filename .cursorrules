@@ -1,7 +1,6 @@
 # Sovereign Watch — Cursor / Windsurf / Antigravity AI Context
 #
 # This file is auto-loaded by Cursor, Windsurf, and compatible VS Code forks.
-# For Claude Code sessions, see CLAUDE.md instead.
 # For full development rules, see AGENTS.md.
 
 ## Project Overview
@@ -40,15 +39,17 @@ backend/api/
 backend/ingestion/
   aviation_poller/       — ADS-B ingest (adsb.fi, adsb.lol, airplanes.live)
   maritime_poller/       — AIS ingest (AISStream WebSocket)
-  orbital_pulse/         — TLE fetch + SGP4 propagation
+  space_pulse/           — Orbital, SatNOGS, Space Weather
   rf_pulse/              — RF repeaters + NOAA weather radio
   infra_poller/          — Internet outages + submarine cables
+
+js8call/                 — HF radio terminal + bridge (sovereign-js8call)
+nginx/                   — Reverse proxy configuration (sovereign-nginx)
 ```
 
 ## Further Reading
 
 - Full development rules: `AGENTS.md`
-- Claude Code overrides: `CLAUDE.md`
 - Map layer ordering (required for map work): `agent_docs/z-ordering.md`
 - Deployment: `Documentation/Deployment.md`
 - API reference: `Documentation/API_Reference.md`
