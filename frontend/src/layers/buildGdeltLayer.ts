@@ -101,7 +101,9 @@ export function buildGdeltLayer(
   const features =
     threshold === -Infinity
       ? gdeltData.features
-      : gdeltData.features.filter((f) => (f.properties.tone ?? 0) <= threshold);
+      : gdeltData.features.filter(
+          (f) => (f.properties.goldstein ?? 0) <= threshold,
+        );
 
   if (!features.length) return [];
 
