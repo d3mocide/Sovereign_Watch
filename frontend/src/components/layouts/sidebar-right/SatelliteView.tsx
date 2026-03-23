@@ -133,7 +133,14 @@ function SatelliteInspectorSection({
       entity.callsign,
       nextPass?.duration_seconds,
     );
-  }, [nextPass?.aos, polarPass != null, entity.callsign]);
+  }, [
+    onPassData,
+    polarPass,
+    nextPass?.aos,
+    nextPass?.max_elevation,
+    nextPass?.duration_seconds,
+    entity.callsign,
+  ]);
 
   return (
     <section className="space-y-1 pt-2">
