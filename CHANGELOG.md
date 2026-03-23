@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.46.2] - 2026-03-22
+
+### Added
+
+- **GDELT Enrichment Pipeline**: Expanded GDELT ingestion/storage/API/frontend contracts to carry actor, country, event class, and media-intensity metadata end-to-end.
+- **GDELT Analyst Fallback**: Added direct GDELT event fallback and geopolitical persona/context enrichment for Analyst mode when `gdelt-*` entities are selected.
+- **Domain Label Toggle**: Added independent UI toggle for GDELT domain tags in the Global Event Tracking control.
+
+### Changed
+
+- **GDELT UID Stability**: Replaced headline-derived identifiers with `event_id`-based UIDs across composition/layer selection paths.
+- **GDELT Label Rendering**: Improved domain tag readability, guarded malformed numeric host artifacts, and defaulted label rendering to OFF.
+- **GDELT Schema Parsing**: Updated poller SOURCEURL handling to follow the current feed shape using last-column extraction to tolerate upstream column drift.
+
+### Fixed
+
+- **Sidebar Source Crash**: Prevented empty/malformed GDELT source links from opening invalid local URLs by adding explicit URL validation and disabled fallback state.
+- **Historian Insert Typing**: Fixed GDELT `event_date` SQL type inference failure in historian upsert path.
+- **Missing GDELT Columns**: Added/validated migrations for enriched fields in `gdelt_events`, eliminating runtime API query failures.
+- **Domain Tag Artifacting**: Removed floating/blank tag boxes caused by malformed domain values and invalid URL extraction.
+
 ## [0.46.1] - 2026-03-22
 
 ### Changed

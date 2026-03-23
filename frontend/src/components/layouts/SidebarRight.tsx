@@ -154,7 +154,6 @@ function SatelliteInspectorSection({
       entity.callsign,
       nextPass?.duration_seconds,
     );
-     
   }, [nextPass?.aos, polarPass != null, entity.callsign]);
 
   return (
@@ -1106,9 +1105,19 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </h3>
                 <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
                   <div className="flex gap-2">
-                    <span className="text-white/30 w-16">Domain:</span>
+                    <span className="text-white/30 w-16">Class:</span>
                     <span className="text-white/80">
-                      {detail.domain || "UNKNOWN"}
+                      {detail.quad_class === 1
+                        ? "VERBAL_COOP"
+                        : detail.quad_class === 2
+                          ? "MATERIAL_COOP"
+                          : detail.quad_class === 3
+                            ? "VERBAL_CONFLICT"
+                            : detail.quad_class === 4
+                              ? "MATERIAL_CONFLICT"
+                              : detail.event_root_code ||
+                                detail.domain ||
+                                "UNKNOWN"}
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -1138,20 +1147,66 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               <Crosshair size={12} />
               CENTER_VIEW
             </button>
-            <a
-              href={detail.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]"
-            >
-              <ExternalLink size={12} />
-              VIEW_SOURCE
-            </a>
+            {detail.url && detail.url.startsWith("http") ? (
+              <a
+                href={detail.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]"
+              >
+                <ExternalLink size={12} />
+                VIEW_SOURCE
+              </a>
+            ) : (
+              <span
+                title="Source URL unavailable for this event"
+                className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/10 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/20 cursor-not-allowed select-none"
+              >
+                <ExternalLink size={12} />
+                SOURCE_UNAVAILABLE
+              </span>
+            )}
           </div>
         </div>
 
         {/* Signal data body */}
         <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
+          <section className="space-y-2">
+            <h3
+              className={`text-[10px] ${theme.text} font-bold uppercase tracking-wider`}
+            >
+              Parties_Involved
+            </h3>
+            <div className="space-y-1 text-mono-xs font-medium">
+              {(detail.actor1 || detail.actor1_country) && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">ACTOR 1:</span>
+                  <span className="text-white/80 truncate">
+                    {detail.actor1 || "—"}{" "}
+                    {detail.actor1_country && (
+                      <span className="text-white/50">
+                        ({detail.actor1_country})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {(detail.actor2 || detail.actor2_country) && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">ACTOR 2:</span>
+                  <span className="text-white/80 truncate">
+                    {detail.actor2 || "—"}{" "}
+                    {detail.actor2_country && (
+                      <span className="text-white/50">
+                        ({detail.actor2_country})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="space-y-2">
             <h3
               className={`text-[10px] ${theme.text} font-bold uppercase tracking-wider`}
@@ -1178,11 +1233,62 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </span>
               </div>
               <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">DOMAIN:</span>
-                <span className="text-white/70 truncate" title={detail.domain}>
-                  {detail.domain || "N/A"}
+                <span className="text-white/30">CLASS:</span>
+                <span
+                  className="text-white/70 truncate"
+                  title={
+                    detail.event_root_code ||
+                    detail.domain ||
+                    (detail.quad_class != null
+                      ? String(detail.quad_class)
+                      : "N/A")
+                  }
+                >
+                  {detail.quad_class === 1
+                    ? "VERBAL_COOP"
+                    : detail.quad_class === 2
+                      ? "MATERIAL_COOP"
+                      : detail.quad_class === 3
+                        ? "VERBAL_CONFLICT"
+                        : detail.quad_class === 4
+                          ? "MATERIAL_CONFLICT"
+                          : detail.event_root_code || detail.domain || "N/A"}
                 </span>
               </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3
+              className={`text-[10px] text-white/60 font-bold uppercase tracking-wider`}
+            >
+              Media_Coverage
+            </h3>
+            <div className="space-y-1 text-mono-xs font-medium">
+              {detail.num_articles != null && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">ARTICLES:</span>
+                  <span className="text-white/80 tabular-nums font-bold">
+                    {detail.num_articles}
+                  </span>
+                </div>
+              )}
+              {detail.num_sources != null && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">SOURCES:</span>
+                  <span className="text-white/80 tabular-nums font-bold">
+                    {detail.num_sources}
+                  </span>
+                </div>
+              )}
+              {detail.num_mentions != null && (
+                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">MENTIONS:</span>
+                  <span className="text-white/80 tabular-nums font-bold">
+                    {detail.num_mentions}
+                  </span>
+                </div>
+              )}
             </div>
           </section>
 

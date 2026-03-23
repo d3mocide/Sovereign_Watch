@@ -226,6 +226,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
           true,
           true,
           -2,
+          true,
           onHover || (() => {}),
           onGdeltClick,
         ),

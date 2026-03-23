@@ -69,13 +69,13 @@ export interface JammingZone {
   h3_index: string;
   centroid_lat: number;
   centroid_lon: number;
-  confidence: number;          // 0.0–1.0
+  confidence: number; // 0.0–1.0
   affected_count: number;
   avg_nic: number | null;
   avg_nacp: number | null;
   kp_at_event: number;
   active: boolean;
-  assessment: 'jamming' | 'space_weather' | 'mixed' | 'equipment';
+  assessment: "jamming" | "space_weather" | "mixed" | "equipment";
   time: string;
 }
 
@@ -83,9 +83,9 @@ export interface JammingZone {
 export interface SpaceWeatherStatus {
   kp: number | null;
   kp_fraction?: number | null;
-  storm_level: string;          // 'quiet'|'unsettled'|'active'|'G1'–'G5'
+  storm_level: string; // 'quiet'|'unsettled'|'active'|'G1'–'G5'
   aurora_active: boolean;
-  gps_degradation_risk: 'low' | 'moderate' | 'high' | 'unknown';
+  gps_degradation_risk: "low" | "moderate" | "high" | "unknown";
   time: string | null;
 }
 
@@ -99,9 +99,9 @@ export interface KpHistoryPoint {
 export interface IntelEvent {
   id: string;
   time: Date;
-  type: 'new' | 'lost' | 'alert';
+  type: "new" | "lost" | "alert";
   message: string;
-  entityType?: 'air' | 'sea' | 'orbital' | 'infra';
+  entityType?: "air" | "sea" | "orbital" | "infra";
   classification?: EntityClassification;
 }
 
@@ -117,7 +117,7 @@ export interface MissionLocation {
 
 export interface MissionProps {
   savedMissions: MissionLocation[];
-  currentMission: { lat: number; lon: number; radius_nm: number; } | null;
+  currentMission: { lat: number; lon: number; radius_nm: number } | null;
   onSwitchMission: (mission: MissionLocation) => void;
   onDeleteMission: (id: string) => void;
   onPresetSelect: (radius: number) => void;
@@ -187,21 +187,28 @@ export interface KiwiNode {
 }
 
 export interface WebSDRNode {
-  url: string;          // Full HTTP URL e.g. http://websdr.ewi.utwente.nl:8901/
-  name: string;         // Operator callsign / name
-  location: string;     // City/country
+  url: string; // Full HTTP URL e.g. http://websdr.ewi.utwente.nl:8901/
+  name: string; // Operator callsign / name
+  location: string; // City/country
   lat: number;
   lon: number;
-  bands: string[];      // e.g. ["hf", "2m", "70cm"]
+  bands: string[]; // e.g. ["hf", "2m", "70cm"]
   freq_min_khz: number;
   freq_max_khz: number;
   users: number;
   distance_km: number;
 }
 
-export type RFService = 'ham' | 'gmrs' | 'public_safety' | 'noaa_nwr';
-export type RFMode = 'FM' | 'DMR' | 'P25' | 'D-Star' | 'Fusion' | 'NXDN' | 'TETRA';
-export type EmcommFlag = 'ARES' | 'RACES' | 'SKYWARN' | 'CERT' | 'WICEN';
+export type RFService = "ham" | "gmrs" | "public_safety" | "noaa_nwr";
+export type RFMode =
+  | "FM"
+  | "DMR"
+  | "P25"
+  | "D-Star"
+  | "Fusion"
+  | "NXDN"
+  | "TETRA";
+export type EmcommFlag = "ARES" | "RACES" | "SKYWARN" | "CERT" | "WICEN";
 
 export interface RFSite {
   id: string;
@@ -259,6 +266,7 @@ export interface MapFilters {
   showAurora: boolean;
   showSatNOGS: boolean;
   showGdelt: boolean;
+  showGdeltLabels?: boolean;
   geodent?: boolean; // Geodent toggle synonym
   // Infrastructure
   showCables?: boolean;

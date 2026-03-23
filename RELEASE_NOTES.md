@@ -1,37 +1,49 @@
-# Release - v0.46.1 - Bug Squash Hardening
+# Release - v0.46.2 - GDELT Enrichment & Stability
 
 ## High-Level Summary
 
-This patch release is a large-scale stabilization pass focused on reliability and developer velocity. The frontend now enforces TypeScript compiler checks in the standard workflow, and a broad set of map/layer/infrastructure type contract issues were resolved. The result is a significantly cleaner Problems panel, safer runtime event handling, and fewer regressions slipping through lint-only validation.
+This patch release hardens Sovereign Watch's GDELT intelligence pipeline from ingestion through UI analytics. GDELT events now carry richer geopolitical context (actors, countries, class, media intensity), the Analyst workflow can reason directly over GDELT selections, and frontend map/label behavior is safer and clearer under malformed or sparse source data conditions.
 
 ## Key Features
 
-- **Typecheck Workflow Added**: Frontend now includes `pnpm run typecheck` and `pnpm run verify` to gate both lint and compiler checks.
-- **Massive Bug Squash**: Type and contract fixes across tactical/orbital map rendering, tooltip data shaping, replay utilities, and JS8 websocket payload parsing.
-- **Deck.gl Typing Alignment**: Path/polygon accessors and pick-info adapters updated to match strict Deck v9 typings.
-- **Map Callback Hardening**: Unknown event payloads are safely narrowed before property access in map movement/load flows.
+- **Full GDELT Metadata Enrichment**: Added actor/country/event-class/media fields across poller, historian, database schema, API, and map layers.
+- **Stable GDELT Entity IDs**: Replaced headline substring UIDs with `event_id` identifiers to prevent collisions and improve entity continuity.
+- **Analyst GDELT Fallback**: Added dedicated GDELT fallback context in the analysis router with geopolitical persona specialization.
+- **Independent Domain Tag Toggle**: Added a separate GDELT label toggle in the Global Event Tracking footer control.
 
 ## Technical Details
 
-- **Frontend Script Changes**:
-   - Added `typecheck`: `tsc --noEmit`
-   - Added `verify`: `pnpm run lint && pnpm run typecheck`
-- **Compiler Diagnostics**: Resolved the previously uncaught TypeScript backlog in frontend hooks, map components, and layer builders.
-- **Version Metadata**: Frontend package bumped to `0.46.1`.
+- **Database**:
+  - Added `actor1_country`, `actor2_country`, `event_code`, `event_root_code`, `quad_class`, `num_mentions`, `num_sources`, `num_articles`, `event_date` to `gdelt_events`.
+- **Ingestion**:
+  - Poller now extracts enriched columns and resolves SOURCEURL using last-column strategy to tolerate GDELT schema drift.
+- **Historian**:
+  - Upsert query expanded for enriched fields and fixed `event_date` casting/type inference path.
+- **API**:
+  - `/api/gdelt/events` now exposes enriched properties and validated domain extraction for labels/source links.
+- **Frontend**:
+  - Sidebar and tooltip now display event class, actor countries, and media metrics.
+  - Domain labels are readability-tuned and default to OFF, with explicit user toggle.
 
 ## Upgrade Instructions
 
-1. **Pull the latest changes**:
+1. **Pull latest source and tags**
    ```bash
    git pull origin main --tags
    ```
-2. **Rebuild frontend/backend containers**:
+
+2. **Rebuild and restart affected services**
    ```bash
-   docker compose up -d --build sovereign-frontend sovereign-backend
+   docker compose up -d --build sovereign-gdelt-pulse sovereign-backend sovereign-frontend sovereign-nginx
    ```
-3. **Run verification**:
+
+3. **Verify frontend compile health**
    ```bash
    cd frontend
    pnpm run verify
-   pnpm run test -- --run
+   ```
+
+4. **Validate GDELT API payload shape (optional sanity)**
+   ```bash
+   curl "http://localhost/api/gdelt/events?refresh=true&limit=5"
    ```
