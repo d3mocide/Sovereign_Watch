@@ -96,6 +96,7 @@ async def get_gdelt_events(
                 "properties": {
                     "event_id": r["event_id"],
                     "name": r["headline"],
+                    "actor1": r["actor1"],
                     "actor2": r["actor2"],
                     "timestamp": r["time"].isoformat(),
                     "url": r["url"],
