@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.46.3] - 2026-03-23
+
+### Added
+
+- **SidebarRight View Modules**: Added focused domain view components under `frontend/src/components/layouts/sidebar-right/` (`JS8View`, `RepeaterView`, `TowerView`, `InfraView`, `GdeltView`, `SatelliteView`, `ShipView`, `AircraftView`).
+- **Shared Sidebar Types**: Added `frontend/src/components/layouts/sidebar-right/types.ts` with shared contracts (`BaseViewProps`, `SatelliteViewProps`, `AircraftViewProps`, `InfraDetail`, `InfraProperties`).
+
+### Changed
+
+- **SidebarRight Architecture**: Converted `SidebarRight.tsx` into a lightweight orchestrator that routes by `entity.type` and renders each view with `key={entity.uid}` for deterministic local state reset.
+
+### Fixed
+
+- **GDELT Actor1 API Omission**: Restored missing `actor1` in GeoJSON properties returned by `backend/api/routers/gdelt.py`.
+- **GDELT Actor1 Frontend Mapping**: Added `actor1` to GDELT layer interfaces and feature-to-point mapping in `frontend/src/layers/buildGdeltLayer.ts`.
+- **Tooltip Goldstein/Tone Mismatch**: Corrected GDELT tooltip `TONE (GS)`/`STATUS` logic in `frontend/src/components/map/MapTooltip.tsx` to use `goldstein` thresholds (with `?? 0` fallback), aligning displayed status with map color encoding.
+
 ## [0.46.2] - 2026-03-22
 
 ### Added

@@ -16,47 +16,6 @@ The frontend has **13 files exceeding 500 lines**, several exceeding 1,000. The 
 
 ## File-by-File Findings
 
-### 1. `SidebarRight.tsx` — 1,866 lines
-**Path:** `frontend/src/components/layouts/SidebarRight.tsx`
-
-**What it does:** Entity detail panel for every tracked entity type.
-
-**Problems:**
-- Six distinct entity type renderers live inline, each with their own helper functions (`snrClass`, `formatFreq`, `getHamBand`, `getGdeltTheme`, etc.)
-- Imports from 4 separate hook systems and all domain model constants
-- Uses imperative if/else chains to select which inspector to render
-
-**Sections that should be separate files:**
-
-| Extract to | Current lines | Responsibility |
-|---|---|---|
-| `inspectors/RadioStationInspector.tsx` | 310–449 | JS8Call callsign, SNR, grid, band |
-| `inspectors/RepeaterInspector.tsx` | 450–631 | Amateur radio freq, modes, coverage |
-| `inspectors/TowerInspector.tsx` | 632–775 | Cell/comms tower specs |
-| `inspectors/InfrastructureInspector.tsx` | 776–1027 | Substations, SCADA, outages |
-| `inspectors/GdeltEventInspector.tsx` | 1028–1340 | News events, tone analysis |
-| `inspectors/SatelliteInspector.tsx` | 1341–1378 | Orbital mechanics, pass predictions |
-| `inspectors/InspectorHelpers.ts` | scattered | Shared formatting utilities |
-
-**Recommended pattern:**
-```tsx
-// SidebarRight.tsx becomes a router ~100 lines
-const INSPECTOR_MAP = {
-  aircraft: AircraftInspector,
-  vessel: VesselInspector,
-  satellite: SatelliteInspector,
-  js8call: RadioStationInspector,
-  repeater: RepeaterInspector,
-  tower: TowerInspector,
-  infrastructure: InfrastructureInspector,
-  gdelt: GdeltEventInspector,
-};
-const Inspector = INSPECTOR_MAP[entity.type];
-return <Inspector entity={entity} />;
-```
-
----
-
 ### 2. `ListeningPost.tsx` — 1,522 lines
 **Path:** `frontend/src/components/js8call/ListeningPost.tsx`
 
@@ -362,7 +321,7 @@ Ordered by impact vs risk (lower risk items first):
 
 | Priority | File | Action | Risk |
 |---|---|---|---|
-| 1 | `SidebarRight.tsx` | Extract 6 inspector components | Low — pure UI, no shared state changes |
+| Done | `SidebarRight.tsx` | Extract 6 inspector components | Low — pure UI, no shared state changes |
 | 2 | `IntelFeed.tsx` | Extract domain filter functions | Low — pure functions |
 | 3 | `useEntityWorker.ts` | Extract alert engines | Medium — needs test coverage |
 | 4 | `ListeningPost.tsx` | Extract WaterfallRenderer + KiwiSDRController | Medium — canvas/WS lifecycle |
