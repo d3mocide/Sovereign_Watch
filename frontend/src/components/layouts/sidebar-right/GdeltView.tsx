@@ -123,7 +123,7 @@ export const GdeltView: React.FC<BaseViewProps> = ({
               e.stopPropagation();
               onCenterMap?.();
             }}
-            className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${theme.btn} border border-${theme.base}/50 py-1.5 rounded text-[10px] font-bold tracking-widest ${theme.text} transition-all active:scale-[0.98]`}
+            className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${theme.btn} border ${theme.border} py-1.5 rounded text-[10px] font-bold tracking-widest ${theme.text} transition-all active:scale-[0.98]`}
           >
             <Crosshair size={12} />
             CENTER_VIEW
