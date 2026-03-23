@@ -12,3 +12,9 @@ dependencies = [
     "lxml==6.0.2",
     "python-dotenv==1.2.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.2",
+    "pytest-asyncio==1.3.0",
+]

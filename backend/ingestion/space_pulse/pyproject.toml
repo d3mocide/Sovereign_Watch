@@ -17,3 +17,10 @@ dependencies = [
     # Direct TimescaleDB writes (space weather Kp/aurora)
     "psycopg2-binary>=2.9.9",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.2",
+    "sgp4==2.25",
+    "numpy==2.4.3",
+]

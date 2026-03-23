@@ -1,0 +1,233 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Restrict the default GITHUB_TOKEN to read-only access.
+# Individual jobs can elevate permissions if needed (none do here).
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Frontend — lint + unit tests
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm run test --run
+
+  # ---------------------------------------------------------------------------
+  # Backend API — pytest
+  # ---------------------------------------------------------------------------
+  backend-api:
+    name: Backend API (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          pip install --quiet \
+            pytest==9.0.2 \
+            pytest-asyncio==1.3.0 \
+            httpx==0.28.1 \
+            fastapi==0.135.1 \
+            starlette \
+            pydantic==2.12.5 \
+            pydantic-settings==2.13.1 \
+            python-dotenv==1.2.2 \
+            sse-starlette==3.3.2
+
+      - name: Run tests
+        working-directory: backend/api
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # Aviation Poller — pytest
+  # ---------------------------------------------------------------------------
+  aviation-poller:
+    name: Aviation Poller (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          pip install --quiet \
+            pytest==9.0.2 \
+            pytest-asyncio==1.3.0 \
+            fakeredis==2.34.1 \
+            h3==4.4.2
+
+      - name: Run tests
+        working-directory: backend/ingestion/aviation_poller
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # Maritime Poller — pytest
+  # ---------------------------------------------------------------------------
+  maritime-poller:
+    name: Maritime Poller (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest==9.0.2
+
+      - name: Run tests
+        working-directory: backend/ingestion/maritime_poller
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # RF Pulse — pytest
+  # ---------------------------------------------------------------------------
+  rf-pulse:
+    name: RF Pulse (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0
+
+      - name: Run tests
+        working-directory: backend/ingestion/rf_pulse
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # Space Pulse — pytest
+  # ---------------------------------------------------------------------------
+  space-pulse:
+    name: Space Pulse (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: |
+          pip install --quiet \
+            pytest==9.0.2 \
+            sgp4==2.25 \
+            numpy==2.4.3
+
+      - name: Run tests
+        working-directory: backend/ingestion/space_pulse
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure Poller — pytest
+  # ---------------------------------------------------------------------------
+  infra-poller:
+    name: Infrastructure Poller (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest==9.0.2 psycopg2-binary
+
+      - name: Run tests
+        working-directory: backend/ingestion/infra_poller
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # GDELT Pulse — pytest
+  # ---------------------------------------------------------------------------
+  gdelt-pulse:
+    name: GDELT Pulse (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0
+
+      - name: Run tests
+        working-directory: backend/ingestion/gdelt_pulse
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # JS8Call Bridge — pytest
+  # ---------------------------------------------------------------------------
+  js8call:
+    name: JS8Call Bridge (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0
+
+      - name: Run tests
+        working-directory: js8call
+        run: python -m pytest tests/ -v
