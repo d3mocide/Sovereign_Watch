@@ -21,21 +21,7 @@ All RF infrastructure records are stored in the `rf_sites` TimescaleDB table and
 
 ## Data Sources
 
-### 1. RepeaterBook
-
-| Feed | URL | Auth |
-| :--- | :--- | :--- |
-| **RepeaterBook API** | `repeaterbook.com/api/export.php` | `REPEATERBOOK_API_TOKEN` required |
-
-RepeaterBook is the most comprehensive directory of amateur radio repeaters in North America. Data includes frequency pairs, CTCSS/DCS tones, operating modes (FM, DMR, P25, Fusion, D-STAR), access restrictions, and emergency communications (EMCOMM) flags.
-
-**Polling interval:** Every **6 hours** (configurable via `RF_REPEATERBOOK_INTERVAL_H`)
-
-> This source is **disabled** unless `REPEATERBOOK_API_TOKEN` is set in `.env`.
-
----
-
-### 2. Amateur Radio Directory (ARD)
+### 1. Amateur Radio Directory (ARD)
 
 | Feed | URL | Auth |
 | :--- | :--- | :--- |
@@ -47,7 +33,7 @@ ARD provides supplemental amateur radio repeater data via public web pages. The 
 
 ---
 
-### 3. NOAA Weather Radio (NWR)
+### 2. NOAA Weather Radio (NWR)
 
 | Feed | URL | Auth |
 | :--- | :--- | :--- |
@@ -59,7 +45,7 @@ NOAA Weather Radio All Hazards is a nationwide network of radio stations broadca
 
 ---
 
-### 4. RadioReference
+### 3. RadioReference
 
 | Feed | URL | Auth |
 | :--- | :--- | :--- |
@@ -77,7 +63,6 @@ RadioReference provides comprehensive data on trunked radio systems, conventiona
 
 | Source | Interval | Env Override | Required Credentials |
 | :--- | :--- | :--- | :--- |
-| RepeaterBook | Every **6 hours** | `RF_REPEATERBOOK_INTERVAL_H` | `REPEATERBOOK_API_TOKEN` |
 | ARD | Every **24 hours** | `RF_ARD_INTERVAL_H` | None |
 | NOAA NWR | Every **168 hours** (weekly) | `RF_NOAA_INTERVAL_H` | None |
 | RadioReference | Every **24 hours** | *(hardcoded)* | `RADIOREF_APP_KEY` + `RADIOREF_USERNAME` + `RADIOREF_PASSWORD` |
@@ -88,11 +73,9 @@ RadioReference provides comprehensive data on trunked radio systems, conventiona
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `REPEATERBOOK_API_TOKEN` | *(empty)* | RepeaterBook API token (enables RepeaterBook ingestion) |
 | `RADIOREF_APP_KEY` | *(empty)* | RadioReference application key |
 | `RADIOREF_USERNAME` | *(empty)* | RadioReference account username |
 | `RADIOREF_PASSWORD` | *(empty)* | RadioReference account password |
-| `RF_REPEATERBOOK_INTERVAL_H` | `6` | RepeaterBook fetch interval (hours) |
 | `RF_ARD_INTERVAL_H` | `24` | ARD fetch interval (hours) |
 | `RF_NOAA_INTERVAL_H` | `168` | NOAA NWR fetch interval (hours) |
 | `KAFKA_BROKERS` | `sovereign-redpanda:9092` | Redpanda bootstrap servers |
@@ -103,10 +86,9 @@ RadioReference provides comprehensive data on trunked radio systems, conventiona
 ## Data Flow
 
 ```
-RepeaterBook API  ─┐
-ARD (web scrape)  ─┤→  RFPulseService.run()  →  rf_raw Kafka topic
-NOAA NWR CSV     ─┤       (concurrent source loops)
-RadioReference   ─┘
+ARD (web scrape)  ─┐
+NOAA NWR CSV     ─┤→  RFPulseService.run()  →  rf_raw Kafka topic
+RadioReference   ─┘       (concurrent source loops)
 
 Backend API historian reads rf_raw topic
     ↓
@@ -124,7 +106,7 @@ Each RF site record includes:
 | Field | Description |
 | :--- | :--- |
 | `id` | UUID primary key |
-| `source` | Source name: `repeaterbook`, `ard`, `noaa_nwr`, `radioref` |
+| `source` | Source name: `ard`, `noaa_nwr`, `radioref` |
 | `site_id` | Source-specific identifier |
 | `service` | Service type: `ham`, `noaa`, `public_safety`, etc. |
 | `callsign` | Station callsign |
@@ -160,7 +142,7 @@ GET /api/rf/sites?lat=45.51&lon=-122.67&radius_nm=100&modes=DMR&emcomm_only=true
 | `services` | string[] | Filter by service type (e.g., `ham`, `noaa`) |
 | `modes` | string[] | Filter by digital mode (e.g., `DMR`, `P25`) |
 | `emcomm_only` | bool | Return only EMCOMM-designated stations |
-| `source` | string | Filter by data source |
+| `source` | string | Filter by data source: `ard`, `noaa_nwr`, `radioref` |
 
 Results are spatially sorted by distance from the query point and limited to 5,000 records. Results are cached in Redis for 1 hour per unique query.
 
@@ -182,9 +164,9 @@ The RF layer is toggled in the **Infrastructure** tab of the Settings HUD.
 
 | Symptom | Likely Cause | Resolution |
 | :--- | :--- | :--- |
-| No repeaters visible | RepeaterBook token missing | Set `REPEATERBOOK_API_TOKEN` in `.env` |
-| Only NOAA/ARD data | RepeaterBook/RadioReference disabled | Check credential env vars are set |
-| Stale repeater data | First fetch not yet complete | RF data loads once at startup; wait for first cycle |
+| No RF sites visible | ARD/NOAA not yet fetched | RF data loads at startup; wait for first cycle |
+| Only NOAA/ARD data | RadioReference disabled | Check `RADIOREF_APP_KEY`/`USERNAME`/`PASSWORD` are set |
+| Stale RF data | First fetch not yet complete | RF data loads once at startup; wait for first cycle |
 | `zeep` / SOAP errors | RadioReference API changes | Check logs; SOAP endpoint may require credential renewal |
 
 ---

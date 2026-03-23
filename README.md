@@ -154,7 +154,7 @@ All upstream data is sourced from **public, open-access networks**.
 | Space             | Celestrak, SatNOGS, NOAA SWPC               | 5s (SGP4) / 1h (Obs)     |
 | Internet Outages  | IODA (Georgia Tech)                         | Every 30 minutes         |
 | Submarine Cables  | TeleGeography                               | Every 24 hours           |
-| RF Infrastructure | RepeaterBook, ARD, NOAA NWR, RadioReference | Every 6–168 hours        |
+| RF Infrastructure | ARD, NOAA NWR, RadioReference               | Every 24–168 hours       |
 | GDELT (OSINT)     | GDELTproject.org                            | Every 15 minutes         |
 | WebSDR            | Global Network                              | Discovery (on-demand)    |
 

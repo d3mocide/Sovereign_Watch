@@ -32,7 +32,6 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
   const [rfExpanded, setRfExpanded] = useState(false);
   const [envExpanded, setEnvExpanded] = useState(false);
   const [integrations, setIntegrations] = useState<{
-    repeaterbook_enabled?: boolean;
     radioref_enabled?: boolean;
   } | null>(null);
 

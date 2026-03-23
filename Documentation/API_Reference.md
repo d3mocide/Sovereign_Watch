@@ -301,7 +301,6 @@ Returns which optional features are enabled based on environment credentials.
 **Response:**
 ```json
 {
-  "repeaterbook_enabled": true,
   "radioref_enabled": false
 }
 ```
@@ -323,7 +322,7 @@ Query RF infrastructure sites within a geographic area.
 | `services` | string[] | `[]` | Filter by service: `ham`, `noaa`, `public_safety`, etc. |
 | `modes` | string[] | `[]` | Filter by mode: `FM`, `DMR`, `P25`, `D-STAR`, `Fusion`, etc. |
 | `emcomm_only` | bool | `false` | Return only EMCOMM-designated stations |
-| `source` | string | *(all)* | Filter by source: `repeaterbook`, `ard`, `noaa_nwr`, `radioref` |
+| `source` | string | *(all)* | Filter by source: `ard`, `noaa_nwr`, `radioref` |
 
 Results are ordered by distance from the query point. Max 5,000 results. Responses cached in Redis for 1 hour.
 
@@ -334,7 +333,7 @@ Results are ordered by distance from the query point. Max 5,000 results. Respons
   "results": [
     {
       "id": "uuid",
-      "source": "repeaterbook",
+      "source": "ard",
       "callsign": "W7ABC",
       "output_freq": 146.520,
       "input_freq": 146.520,

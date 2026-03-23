@@ -59,7 +59,6 @@ Each poller is a standalone microservice that ingests data from external sources
 | Space   | NOAA Kp-Index                 | Every **15 minutes**              |
 | Infra   | IODA internet outages         | Every **30 minutes**              |
 | Infra   | Submarine cables & stations   | Every **24 hours**                |
-| RF      | RepeaterBook                  | Every **6 hours**                 |
 | RF      | Amateur Radio Directory (ARD) | Every **24 hours**                |
 | RF      | NOAA Weather Radio            | Every **168 hours** (weekly)      |
 | RF      | RadioReference                | Every **24 hours**                |

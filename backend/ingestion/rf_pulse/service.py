@@ -12,7 +12,6 @@ import os
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 
-from sources.repeaterbook import RepeaterBookSource
 from sources.ard import ARDSource
 from sources.noaa_nwr import NOAANWRSource
 from sources.radioref import RadioReferenceSource
@@ -25,12 +24,10 @@ REDIS_PORT    = int(os.getenv("REDIS_PORT", "6379"))
 TOPIC_OUT     = "rf_raw"
 
 # Fetch intervals
-REPEATERBOOK_INTERVAL_H = int(os.getenv("RF_REPEATERBOOK_INTERVAL_H", "6"))
 ARD_INTERVAL_H          = int(os.getenv("RF_ARD_INTERVAL_H", "24"))
 NOAA_INTERVAL_H         = int(os.getenv("RF_NOAA_INTERVAL_H", "168"))
 RADIOREF_INTERVAL_H     = int(os.getenv("RF_RADIOREF_INTERVAL_H", "168"))
 
-RB_TOKEN = os.getenv("REPEATERBOOK_API_TOKEN", "")
 RR_KEY   = os.getenv("RADIOREF_APP_KEY", "")
 RR_USER  = os.getenv("RADIOREF_USERNAME", "")
 RR_PASS  = os.getenv("RADIOREF_PASSWORD", "")
@@ -72,18 +69,6 @@ class RFPulseService:
             ),
         ]
 
-        if RB_TOKEN:
-            self.sources.append(
-                RepeaterBookSource(
-                    producer=self.producer,
-                    redis_client=self.redis_client,
-                    topic=TOPIC_OUT,
-                    fetch_interval_h=REPEATERBOOK_INTERVAL_H,
-                )
-            )
-        else:
-            logger.info("REPEATERBOOK_API_TOKEN not set, skipping RepeaterBook ingestion module.")
-            
         if RR_KEY and RR_USER and RR_PASS:
             self.sources.append(
                 RadioReferenceSource(
