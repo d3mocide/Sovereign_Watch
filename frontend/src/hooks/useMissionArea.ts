@@ -13,9 +13,9 @@ interface UseMissionAreaOptions {
   } | null>;
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   knownUidsRef: React.MutableRefObject<Set<string>>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   prevCourseRef: React.MutableRefObject<Map<string, any>>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   drStateRef: React.MutableRefObject<Map<string, any>>;
   visualStateRef: React.MutableRefObject<
     Map<string, { lon: number; lat: number; alt: number }>
@@ -140,7 +140,7 @@ export function useMissionArea({
         console.error("Failed to set mission focus:", error);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [flyTo],
   );
 
@@ -220,7 +220,7 @@ export function useMissionArea({
     // Poll every 2 seconds for external updates
     const timer = setInterval(loadActiveMission, 2000);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   // Clear entities when mission area changes (New Selection, Preset, or External Update)

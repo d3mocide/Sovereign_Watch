@@ -46,7 +46,6 @@ function formatCountdown(isoTime: string | undefined, now: number): string {
 
 export function PassGeometryWidget({
   visible,
-  sidebarOpen,
   pass,
   satelliteName,
   nextPassAos,

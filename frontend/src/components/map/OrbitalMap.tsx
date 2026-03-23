@@ -50,9 +50,9 @@ const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== 'false';
 const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith('pk.');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const MapboxAdapterLazy: React.ComponentType<any> = lazy(() => import("./MapboxAdapter"));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const MapLibreAdapterLazy: React.ComponentType<any> = lazy(() => import("./MapLibreAdapter"));
 
 // DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
@@ -167,7 +167,6 @@ export function OrbitalMap({
   worldCountriesData,
   missionArea,
   satnogsStationsRef,
-  onPassData: _onPassData,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -501,7 +500,7 @@ export function OrbitalMap({
       satRefExposedRef.current = true;
       onSatellitesRefReady(satellitesRef);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const {

@@ -1,5 +1,5 @@
-import { Layer } from '@deck.gl/core';
-import { H3HexagonLayer } from '@deck.gl/geo-layers';
+import { Layer } from "@deck.gl/core";
+import { H3HexagonLayer } from "@deck.gl/geo-layers";
 
 export interface H3CellData {
   cell: string;
@@ -18,7 +18,7 @@ export interface H3CellData {
  */
 export function buildH3CoverageLayer(
   cells: H3CellData[],
-  visible: boolean
+  visible: boolean,
 ): Layer[] {
   if (!visible || !cells || cells.length === 0) {
     return [];
@@ -26,7 +26,7 @@ export function buildH3CoverageLayer(
 
   return [
     new H3HexagonLayer<H3CellData>({
-      id: 'h3-coverage-layer',
+      id: "h3-coverage-layer",
       data: cells,
       pickable: true,
       wireframe: true,
@@ -36,20 +36,16 @@ export function buildH3CoverageLayer(
       getFillColor: (d: H3CellData) => {
         // Green (#00ff88) for 10s interval, Grey (#334444) for 60s
         const baseColor = d.interval_s <= 10 ? [0, 255, 136] : [51, 68, 68];
-        
+
         // Scale opacity based on count (0-10 mapped to 5-30) to make it very subtle
-        const opacity = Math.min(30, 5 + (d.count * 2.5));
+        const opacity = Math.min(30, 5 + d.count * 2.5);
         return [...baseColor, opacity] as [number, number, number, number];
       },
       getLineColor: [255, 255, 255, 10], // Even more subtle lines
       lineWidthMinPixels: 1,
-      parameters: {
-        depthWrite: false,
-        depthTest: false,
-      },
       updateTriggers: {
-        getFillColor: [cells]
-      }
-    })
+        getFillColor: [cells],
+      },
+    }),
   ];
 }

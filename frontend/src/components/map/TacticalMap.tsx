@@ -26,13 +26,7 @@ import {
   parseMissionHash,
   updateMissionHash,
 } from "../../hooks/useMissionHash";
-import {
-  CoTEntity,
-  JS8Station,
-  MissionLocation,
-  RFSite,
-  Tower,
-} from "../../types";
+import { CoTEntity, JS8Station, RFSite, Tower } from "../../types";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { AltitudeLegend } from "./AltitudeLegend";
 import { MapContextMenu } from "./MapContextMenu";
@@ -75,11 +69,10 @@ const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== "false";
 const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith("pk.");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MapboxAdapterLazy: React.ComponentType<any> = lazy(
   () => import("./MapboxAdapter"),
 );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const MapLibreAdapterLazy: React.ComponentType<any> = lazy(
   () => import("./MapLibreAdapter"),
 );
@@ -106,7 +99,23 @@ interface TacticalMapProps {
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
   showHistoryTails?: boolean;
-  missionArea: MissionLocation | null;
+  missionArea: {
+    aotShapes: { maritime: number[][]; aviation: number[][] } | null;
+    handleSetFocus: (
+      lat: number,
+      lon: number,
+      radius?: number,
+    ) => Promise<void>;
+    showSaveForm: boolean;
+    setShowSaveForm: React.Dispatch<React.SetStateAction<boolean>>;
+    saveFormCoords: { lat: number; lon: number } | null;
+    setSaveFormCoords: React.Dispatch<
+      React.SetStateAction<{ lat: number; lon: number } | null>
+    >;
+    handleSaveFormSubmit: (name: string, radius: number) => void;
+    handleSaveFormCancel: () => void;
+    handleReturnHome: () => Promise<void>;
+  };
   globeMode?: boolean;
   onToggleGlobe?: () => void; // Added prop for Globe toggle
   replayMode?: boolean;
@@ -176,6 +185,10 @@ type InfraPickInfo = {
   y?: number;
 };
 
+function isInfraPickInfo(value: unknown): value is InfraPickInfo {
+  return typeof value === "object" && value !== null;
+}
+
 export function TacticalMap({
   onCountsUpdate,
   filters,
@@ -214,7 +227,6 @@ export function TacticalMap({
   towersData,
   onBoundsChange,
   gdeltData: propGdeltData,
-  showTerminator,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -231,7 +243,8 @@ export function TacticalMap({
     lat: number;
     lon: number;
   } | null>(null);
-  const handleHoveredInfra = useCallback((info: InfraPickInfo) => {
+  const handleHoveredInfra = useCallback((info: unknown) => {
+    if (!isInfraPickInfo(info)) return;
     const obj = info?.object || null;
     if (obj) {
       let lat = 0,
@@ -240,13 +253,13 @@ export function TacticalMap({
         [lon, lat] = info.coordinate;
       } else {
         const geom = obj.geometry;
-        if (geom.type === "Point") {
+        if (geom?.type === "Point") {
           [lon, lat] = geom.coordinates as [number, number];
-        } else if (geom.type === "LineString") {
+        } else if (geom?.type === "LineString") {
           [lon, lat] = (geom.coordinates as [number, number][])[0];
-        } else if (geom.type === "Polygon") {
+        } else if (geom?.type === "Polygon") {
           [lon, lat] = (geom.coordinates as [number, number][][])[0][0];
-        } else if (geom.type === "MultiPolygon") {
+        } else if (geom?.type === "MultiPolygon") {
           [lon, lat] = (geom.coordinates as [number, number][][][])[0][0][0];
         }
       }
@@ -259,15 +272,16 @@ export function TacticalMap({
       const entity: CoTEntity = {
         uid: String(props.id || obj.id || `infra-${Date.now()}`),
         type: entityType,
-        callsign:
+        callsign: String(
           props.name ||
-          props.region ||
-          props.fcc_id ||
-          (isOutage
-            ? "INTERNET OUTAGE"
-            : isTower
-              ? "FCC TOWER"
-              : "Unknown Infra"),
+            props.region ||
+            props.fcc_id ||
+            (isOutage
+              ? "INTERNET OUTAGE"
+              : isTower
+                ? "FCC TOWER"
+                : "Unknown Infra"),
+        ),
         lat,
         lon,
         altitude: 0,
@@ -610,8 +624,8 @@ export function TacticalMap({
     selectedEntity,
     filters,
     setHoveredInfra: handleHoveredInfra,
-    setSelectedInfra: (info: InfraPickInfo) => {
-      if (!info || !info.object) return;
+    setSelectedInfra: (info: unknown) => {
+      if (!isInfraPickInfo(info) || !info.object) return;
 
       const props = info.object.properties || {};
       const isTower =
@@ -666,7 +680,10 @@ export function TacticalMap({
     auroraData,
     jammingData,
     gdeltData,
-    gdeltToneThreshold: filters?.gdeltToneThreshold,
+    gdeltToneThreshold:
+      typeof filters?.gdeltToneThreshold === "number"
+        ? filters.gdeltToneThreshold
+        : undefined,
     historySegmentsRef,
   });
 
@@ -683,7 +700,7 @@ export function TacticalMap({
   });
 
   // Mission Area Handlers that bridge to context menu UI
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const handleContextMenu = useCallback((e: any) => {
     e.preventDefault();
     const { lngLat, point } = e;
@@ -706,11 +723,11 @@ export function TacticalMap({
 
   const handleMapLoad = useCallback((evt?: unknown) => {
     // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
-    if (evt?.target) {
+    const target = (evt as { target?: unknown } | undefined)?.target;
+    if (target && typeof target === "object") {
+      const mapTarget = target as { getMap?: () => unknown };
       mapInstanceRef.current =
-        typeof evt.target.getMap === "function"
-          ? evt.target.getMap()
-          : evt.target;
+        typeof mapTarget.getMap === "function" ? mapTarget.getMap() : target;
     }
     setMapLoaded(true);
   }, []);
@@ -803,9 +820,26 @@ export function TacticalMap({
             }
             onLoad={handleMapLoad}
             onMove={(evt: unknown) => {
-              if (onBoundsChange && evt.target && evt.target.getBounds) {
-                const bounds = evt.target.getBounds();
-                if (bounds && typeof bounds.getSouth === "function") {
+              const moveEvt = evt as {
+                target?: { getBounds?: () => unknown };
+                originalEvent?: unknown;
+                viewState?: Partial<typeof viewState>;
+              };
+
+              if (onBoundsChange && moveEvt.target?.getBounds) {
+                const bounds = moveEvt.target.getBounds() as {
+                  getSouth?: () => number;
+                  getNorth?: () => number;
+                  getWest?: () => number;
+                  getEast?: () => number;
+                };
+                if (
+                  bounds &&
+                  typeof bounds.getSouth === "function" &&
+                  typeof bounds.getNorth === "function" &&
+                  typeof bounds.getWest === "function" &&
+                  typeof bounds.getEast === "function"
+                ) {
                   onBoundsChange({
                     minLat: bounds.getSouth(),
                     maxLat: bounds.getNorth(),
@@ -816,7 +850,7 @@ export function TacticalMap({
               }
               // If user interacts (drags/pans), disable Follow Mode to prevent fighting.
               if (
-                evt.originalEvent &&
+                moveEvt.originalEvent &&
                 followModeRef.current &&
                 onFollowModeChange
               ) {
@@ -824,13 +858,19 @@ export function TacticalMap({
                 onFollowModeChange(false);
               }
 
-              const nextViewState = { ...evt.viewState };
+              const nextViewState = {
+                latitude: moveEvt.viewState?.latitude ?? viewState.latitude,
+                longitude: moveEvt.viewState?.longitude ?? viewState.longitude,
+                zoom: moveEvt.viewState?.zoom ?? viewState.zoom,
+                pitch: moveEvt.viewState?.pitch ?? viewState.pitch,
+                bearing: moveEvt.viewState?.bearing ?? viewState.bearing,
+              };
               if (globeMode) {
                 // Lock pitch/bearing to 0 in state
                 nextViewState.pitch = 0;
                 nextViewState.bearing = 0;
               }
-              setViewState(nextViewState as Record<string, number>);
+              setViewState(nextViewState);
             }}
             mapStyle={mapStyle}
             {...(_enableMapbox && _isValidToken
@@ -1044,7 +1084,6 @@ export function TacticalMap({
       <AltitudeLegend visible={filters?.showAir ?? true} />
       <SpeedLegend visible={filters?.showSea ?? true} />
       <RFLegend visible={!!showRepeaters} />
-
     </>
   );
 }

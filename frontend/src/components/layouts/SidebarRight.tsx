@@ -80,11 +80,9 @@ function SatelliteSpectrumVerification({
 
 function SatelliteInspectorSection({
   entity,
-  fetchSatnogsVerification,
   onPassData,
 }: {
   entity: CoTEntity;
-  fetchSatnogsVerification?: (noradId: string) => Promise<any>;
   onPassData?: (
     pass: any,
     nextPassAos?: string,
@@ -156,7 +154,7 @@ function SatelliteInspectorSection({
       entity.callsign,
       nextPass?.duration_seconds,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [nextPass?.aos, polarPass != null, entity.callsign]);
 
   return (
@@ -1605,7 +1603,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 {/* Live az/el, orbital params, next pass countdown */}
                 <SatelliteInspectorSection
                   entity={entity}
-                  fetchSatnogsVerification={fetchSatnogsVerification}
                   onPassData={onPassData}
                 />
               </>

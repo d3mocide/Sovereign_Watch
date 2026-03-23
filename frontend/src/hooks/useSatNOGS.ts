@@ -4,7 +4,7 @@ import type { SatNOGSStation } from "../types";
 export interface UseSatNOGSResult {
   stationsRef: MutableRefObject<SatNOGSStation[]>;
   loading: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   fetchVerification: (noradId: string) => Promise<any>;
 }
 

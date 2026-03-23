@@ -1,15 +1,24 @@
-import { PathLayer, LineLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
+import { LineLayer, PathLayer } from "@deck.gl/layers";
 import { CoTEntity } from "../types";
-
-interface GapBridgeDatum { path: number[][]; entity: CoTEntity }
-interface TrailPathDatum { path: number[][] }
 import {
   altitudeToColor,
-  speedToColor,
   entityColor,
+  speedToColor,
 } from "../utils/map/colorUtils";
 import { getDistanceMeters } from "../utils/map/geoUtils";
+
+type PathPoint3D = [number, number, number];
+interface GapBridgeDatum {
+  path: PathPoint3D[];
+  entity: CoTEntity;
+}
+interface TrailPathDatum {
+  path: PathPoint3D[];
+}
+
+const toPath3D = (points: number[][]): PathPoint3D[] =>
+  points.map((pt) => [pt[0] ?? 0, pt[1] ?? 0, pt[2] ?? 0]);
 
 export function buildTrailLayers(
   interpolated: CoTEntity[],
@@ -30,7 +39,7 @@ export function buildTrailLayers(
             e.trail.length >= 2 &&
             (!currentSelected || e.uid !== currentSelected.uid),
         ),
-        getPath: (d: CoTEntity) => d.smoothedTrail || [],
+        getPath: (d: CoTEntity) => toPath3D(d.smoothedTrail || []),
         getColor: (d: CoTEntity) => {
           const isShip = d.type.includes("S");
           return isShip
@@ -43,7 +52,10 @@ export function buildTrailLayers(
         jointRounded: true,
         capRounded: true,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -50.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -50.0 : 0,
+        },
       }),
     );
 
@@ -63,8 +75,8 @@ export function buildTrailLayers(
             const last = d.trail![d.trail!.length - 1];
             return {
               path: [
-                [last[0], last[1], last[2]],
-                [d.lon, d.lat, d.altitude || 0],
+                [last[0], last[1], last[2]] as PathPoint3D,
+                [d.lon, d.lat, d.altitude || 0] as PathPoint3D,
               ],
               entity: d,
             };
@@ -77,18 +89,23 @@ export function buildTrailLayers(
         capRounded: true,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -50.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -50.0 : 0,
+        },
       }),
     );
   }
 
   // 2. Selected Entity Highlight Trail
-  const selectedEntity = currentSelected ? interpolated.find((e) => e.uid === currentSelected.uid) : null;
+  const selectedEntity = currentSelected
+    ? interpolated.find((e) => e.uid === currentSelected.uid)
+    : null;
 
   if (selectedEntity) {
     const entity = selectedEntity;
     if (entity.smoothedTrail && entity.smoothedTrail.length >= 2) {
-      const trailPath = entity.smoothedTrail;
+      const trailPath = toPath3D(entity.smoothedTrail);
 
       const isShip = entity.type.includes("S");
       const trailColor = isShip
@@ -97,7 +114,7 @@ export function buildTrailLayers(
 
       layers.push(
         new PathLayer({
-          id: `selected-trail-${currentSelected.uid}-${globeMode ? "globe" : "merc"}`,
+          id: `selected-trail-${entity.uid}-${globeMode ? "globe" : "merc"}`,
           data: [{ path: trailPath }],
           getPath: (d: TrailPathDatum) => d.path,
           getColor: trailColor,
@@ -108,23 +125,33 @@ export function buildTrailLayers(
           capRounded: true,
           opacity: 1.0,
           wrapLongitude: !globeMode,
-          parameters: { depthTest: !!globeMode, depthBias: globeMode ? -50.0 : 0 },
+          parameters: {
+            depthTest: !!globeMode,
+            depthBias: globeMode ? -50.0 : 0,
+          },
         }),
         // Gap bridge for selection
         new LineLayer({
-          id: `selected-gap-bridge-${currentSelected.uid}-${globeMode ? "globe" : "merc"}`,
+          id: `selected-gap-bridge-${entity.uid}-${globeMode ? "globe" : "merc"}`,
           data: [entity],
           getSourcePosition: () => {
             const last = entity.trail![entity.trail!.length - 1];
             return [last[0], last[1], last[2]];
           },
-          getTargetPosition: () => [entity.lon, entity.lat, entity.altitude || 0],
+          getTargetPosition: () => [
+            entity.lon,
+            entity.lat,
+            entity.altitude || 0,
+          ],
           getColor: trailColor,
           getWidth: 3.5,
           widthMinPixels: 2.5,
           pickable: false,
           wrapLongitude: !globeMode,
-          parameters: { depthTest: !!globeMode, depthBias: globeMode ? -50.0 : 0 },
+          parameters: {
+            depthTest: !!globeMode,
+            depthBias: globeMode ? -50.0 : 0,
+          },
         }),
       );
     }

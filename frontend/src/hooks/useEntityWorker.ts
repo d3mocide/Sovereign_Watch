@@ -1,16 +1,22 @@
-import { useEffect, useRef, MutableRefObject } from "react";
-import { CoTEntity, TrailPoint, DRState, VisualState } from "../types";
-import { getDistanceMeters, getBearing, uidToHash, chaikinSmooth } from "../utils/map/geoUtils";
+import { MutableRefObject, useEffect, useRef } from "react";
 import type { EntityClassification } from "../types";
+import { CoTEntity, DRState, TrailPoint, VisualState } from "../types";
+import {
+  chaikinSmooth,
+  getBearing,
+  getDistanceMeters,
+  uidToHash,
+} from "../utils/map/geoUtils";
 
 /** Helper to compute or reuse smoothed trail geometry */
 const getSmoothedTrail = (trail: TrailPoint[], existing?: CoTEntity) => {
   if (existing?.smoothedTrail && existing.trail === trail) {
     return existing.smoothedTrail;
   }
-  return trail.length >= 2 ? chaikinSmooth(trail.map(p => [p[0], p[1], p[2]])) : [];
+  return trail.length >= 2
+    ? chaikinSmooth(trail.map((p) => [p[0], p[1], p[2]]))
+    : [];
 };
-
 
 interface DecodedCotEvent {
   uid: string;
@@ -24,7 +30,7 @@ interface DecodedCotEvent {
     track?: { speed?: number; course?: number; vspeed?: number };
     contact?: { callsign?: string };
     classification?: Record<string, unknown>;
-    vesselClassification?: import('../types').VesselClassification;
+    vesselClassification?: import("../types").VesselClassification;
     norad_id?: number;
     category?: string;
     constellation?: string;
@@ -36,13 +42,13 @@ interface DecodedCotEvent {
 
 interface UseEntityWorkerOptions {
   onEvent:
-  | ((event: {
-    type: "new" | "lost" | "alert";
-    message: string;
-    entityType?: "air" | "sea" | "orbital";
-    classification?: EntityClassification;
-  }) => void)
-  | undefined;
+    | ((event: {
+        type: "new" | "lost" | "alert";
+        message: string;
+        entityType?: "air" | "sea" | "orbital";
+        classification?: EntityClassification;
+      }) => void)
+    | undefined;
   currentMissionRef: MutableRefObject<{
     lat: number;
     lon: number;
@@ -61,26 +67,30 @@ interface UseEntityWorkerReturn {
   watchedIcaosRef: MutableRefObject<Set<string>>;
 }
 
-const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+const EMERGENCY_SQUAWKS = new Set(["7500", "7600", "7700"]);
 
 function getEmergencyKey(classification?: EntityClassification): string {
   if (classification?.squawk && EMERGENCY_SQUAWKS.has(classification.squawk)) {
     return `squawk:${classification.squawk}`;
   }
-  if (classification?.emergency && classification.emergency !== 'none' && classification.emergency !== '') {
+  if (
+    classification?.emergency &&
+    classification.emergency !== "none" &&
+    classification.emergency !== ""
+  ) {
     return `emergency:${classification.emergency}`;
   }
-  return '';
+  return "";
 }
 
 function buildAlertMessage(callsign: string, emergencyKey: string): string {
-  if (emergencyKey.startsWith('squawk:')) {
+  if (emergencyKey.startsWith("squawk:")) {
     const squawk = emergencyKey.slice(7);
-    if (squawk === '7500') return `SQUAWK 7500 — ${callsign} (HIJACK)`;
-    if (squawk === '7600') return `SQUAWK 7600 — ${callsign} (Radio Failure)`;
-    if (squawk === '7700') return `SQUAWK 7700 — ${callsign} (Emergency)`;
+    if (squawk === "7500") return `SQUAWK 7500 — ${callsign} (HIJACK)`;
+    if (squawk === "7600") return `SQUAWK 7600 — ${callsign} (Radio Failure)`;
+    if (squawk === "7700") return `SQUAWK 7700 — ${callsign} (Emergency)`;
   }
-  if (emergencyKey.startsWith('emergency:')) {
+  if (emergencyKey.startsWith("emergency:")) {
     const type = emergencyKey.slice(10);
     return `EMERGENCY — ${callsign}: ${type.toUpperCase()}`;
   }
@@ -89,22 +99,24 @@ function buildAlertMessage(callsign: string, emergencyKey: string): string {
 
 // AIS nav status codes that warrant an alert
 const DISTRESS_NAV_STATUSES: Record<number, string> = {
-  2: 'NOT UNDER COMMAND',
-  6: 'AGROUND',
-  14: 'AIS-SART DISTRESS',
+  2: "NOT UNDER COMMAND",
+  6: "AGROUND",
+  14: "AIS-SART DISTRESS",
 };
 
-function getMaritimeAlertKey(vesselClassification?: import('../types').VesselClassification): string {
+function getMaritimeAlertKey(
+  vesselClassification?: import("../types").VesselClassification,
+): string {
   const navStatus = vesselClassification?.navStatus;
   if (navStatus !== undefined && navStatus in DISTRESS_NAV_STATUSES) {
     return `navStatus:${navStatus}`;
   }
-  return '';
+  return "";
 }
 
 function buildMaritimeAlertMessage(callsign: string, alertKey: string): string {
-  const code = parseInt(alertKey.slice('navStatus:'.length), 10);
-  const label = DISTRESS_NAV_STATUSES[code] ?? 'MARITIME ALERT';
+  const code = parseInt(alertKey.slice("navStatus:".length), 10);
+  const label = DISTRESS_NAV_STATUSES[code] ?? "MARITIME ALERT";
   return `${label} — ${callsign}`;
 }
 
@@ -157,7 +169,7 @@ export function useEntityWorker({
         // Fast source extraction from raw JSON string — avoids full JSON.parse per update.
         // Watchlist-sourced entities carry _source:"opensky_watchlist" and must bypass
         // the spatial gate so they render globally, not just within the AOR.
-        const rawStr = (entity.raw as string) ?? '';
+        const rawStr = (entity.raw as string) ?? "";
         const isWatchlistSource =
           rawStr.includes('"_source":"opensky_watchlist"') ||
           rawStr.includes('"_source": "opensky_watchlist"');
@@ -177,19 +189,24 @@ export function useEntityWorker({
           // entity.detail.classification.category (current: API maps classification: meta which contains all sat fields)
           const category =
             entity.detail?.category ??
-            (entity.detail?.classification as Record<string, unknown>)?.category;
+            (entity.detail?.classification as Record<string, unknown>)
+              ?.category;
           const constellation =
             entity.detail?.constellation ??
-            (entity.detail?.classification as Record<string, unknown>)?.constellation;
+            (entity.detail?.classification as Record<string, unknown>)
+              ?.constellation;
           const period_min =
             entity.detail?.periodMin ??
-            (entity.detail?.classification as Record<string, unknown>)?.periodMin;
+            (entity.detail?.classification as Record<string, unknown>)
+              ?.periodMin;
           const inclination_deg =
             entity.detail?.inclinationDeg ??
-            (entity.detail?.classification as Record<string, unknown>)?.inclinationDeg;
+            (entity.detail?.classification as Record<string, unknown>)
+              ?.inclinationDeg;
           const eccentricity =
             entity.detail?.eccentricity ??
-            (entity.detail?.classification as Record<string, unknown>)?.eccentricity;
+            (entity.detail?.classification as Record<string, unknown>)
+              ?.eccentricity;
 
           // Minimal trail for satellite if needed, but we don't need PVB here for MVP
           // We can just rely on the 30s updates and let it snap.
@@ -219,6 +236,7 @@ export function useEntityWorker({
 
           const newSat: CoTEntity = {
             ...entity,
+            type: entity.type || "a-s-K",
             lon: newLon,
             lat: newLat,
             altitude: entity.hae || 0,
@@ -249,19 +267,26 @@ export function useEntityWorker({
           const blendLat = visual ? visual.lat : newLat;
           const blendLon = visual ? visual.lon : newLon;
 
-          const lastServerTime = existingDr ? existingDr.serverTime : now - 5000;
+          const lastServerTime = existingDr
+            ? existingDr.serverTime
+            : now - 5000;
           const timeSinceLast = Math.max(now - lastServerTime, 4000); // Nominal 5s
 
           drStateRef.current.set(entity.uid, {
             serverLat: newLat,
             serverLon: newLon,
             serverSpeed: entity.detail?.track?.speed || 0,
-            serverCourseRad: ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+            serverCourseRad:
+              ((entity.detail?.track?.course || 0) * Math.PI) / 180,
             serverTime: now,
             blendLat,
             blendLon,
-            blendSpeed: existingDr ? existingDr.serverSpeed : (entity.detail?.track?.speed || 0),
-            blendCourseRad: existingDr ? existingDr.serverCourseRad : ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+            blendSpeed: existingDr
+              ? existingDr.serverSpeed
+              : entity.detail?.track?.speed || 0,
+            blendCourseRad: existingDr
+              ? existingDr.serverCourseRad
+              : ((entity.detail?.track?.course || 0) * Math.PI) / 180,
             expectedInterval: timeSinceLast,
           });
 
@@ -291,7 +316,7 @@ export function useEntityWorker({
           // (immediate, no sync delay) and the polled watchlist set (covers manual entries).
           const bypassSpatialGate =
             isWatchlistSource ||
-            existing?._source === 'opensky_watchlist' ||
+            existing?._source === "opensky_watchlist" ||
             watchedIcaosRef.current.has(entity.uid);
           if (distToCenter > maxRadiusM * 1.05 && !bypassSpatialGate) {
             // If it exists, remove it (it moved out of bounds)
@@ -403,7 +428,9 @@ export function useEntityWorker({
           lat: newLat,
           lon: newLon,
           altitude: entity.hae || 0, // Height Above Ellipsoid in meters (Proto is flat)
-          _source: isWatchlistSource ? 'opensky_watchlist' : (existingEntity?._source ?? ''),
+          _source: isWatchlistSource
+            ? "opensky_watchlist"
+            : (existingEntity?._source ?? ""),
           type: entity.type,
           course: entity.detail?.track?.course || 0,
           speed: entity.detail?.track?.speed || 0,
@@ -422,22 +449,22 @@ export function useEntityWorker({
           raw: entity.raw, // Include raw JSON from parsed proto
           classification: classification
             ? {
-              ...existingEntity?.classification,
-              ...classification,
-              // Priority: keep existing description if new one is missing/empty
-              description:
-                classification.description ||
-                existingEntity?.classification?.description ||
-                "",
-              operator:
-                classification.operator ||
-                existingEntity?.classification?.operator ||
-                "",
-              registration:
-                classification.registration ||
-                existingEntity?.classification?.registration ||
-                "",
-            }
+                ...existingEntity?.classification,
+                ...classification,
+                // Priority: keep existing description if new one is missing/empty
+                description:
+                  classification.description ||
+                  existingEntity?.classification?.description ||
+                  "",
+                operator:
+                  classification.operator ||
+                  existingEntity?.classification?.operator ||
+                  "",
+                registration:
+                  classification.registration ||
+                  existingEntity?.classification?.registration ||
+                  "",
+              }
             : existingEntity?.classification,
           vesselClassification:
             vesselClassification || existingEntity?.vesselClassification,
@@ -560,7 +587,7 @@ export function useEntityWorker({
         // Emergency alert detection: fire once when emergency state appears or changes
         if (!isShip) {
           const emergencyKey = getEmergencyKey(classification);
-          const lastAlerted = alertedEmergencyRef.current.get(entity.uid) ?? '';
+          const lastAlerted = alertedEmergencyRef.current.get(entity.uid) ?? "";
           if (emergencyKey && emergencyKey !== lastAlerted) {
             alertedEmergencyRef.current.set(entity.uid, emergencyKey);
             onEvent?.({
@@ -598,7 +625,8 @@ export function useEntityWorker({
           // Maritime alert detection
           // 1. AIS distress nav status (can change over time — track state)
           const maritimeAlertKey = getMaritimeAlertKey(vesselClassification);
-          const lastMaritimeAlert = alertedEmergencyRef.current.get(entity.uid) ?? '';
+          const lastMaritimeAlert =
+            alertedEmergencyRef.current.get(entity.uid) ?? "";
           if (maritimeAlertKey && maritimeAlertKey !== lastMaritimeAlert) {
             alertedEmergencyRef.current.set(entity.uid, maritimeAlertKey);
             onEvent?.({
@@ -606,7 +634,10 @@ export function useEntityWorker({
               message: buildMaritimeAlertMessage(callsign, maritimeAlertKey),
               entityType: "sea",
             });
-          } else if (!maritimeAlertKey && lastMaritimeAlert.startsWith('navStatus:')) {
+          } else if (
+            !maritimeAlertKey &&
+            lastMaritimeAlert.startsWith("navStatus:")
+          ) {
             alertedEmergencyRef.current.delete(entity.uid);
           }
 
@@ -619,7 +650,7 @@ export function useEntityWorker({
                 entityType: "sea",
               });
             }
-            if (vesselClassification.category === 'military') {
+            if (vesselClassification.category === "military") {
               onEvent?.({
                 type: "alert",
                 message: `MILITARY VESSEL — ${callsign}`,
@@ -653,11 +684,11 @@ export function useEntityWorker({
     // Robust WebSocket URL selection
     const getWsUrl = () => {
       const envUrl = import.meta.env.VITE_API_URL;
-      if (envUrl && !envUrl.includes('localhost')) {
-        return envUrl.replace('http', 'ws') + '/api/tracks/live';
+      if (envUrl && !envUrl.includes("localhost")) {
+        return envUrl.replace("http", "ws") + "/api/tracks/live";
       }
       // Default to proxy-friendly relative URL based on current origin
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       return `${protocol}//${window.location.host}/api/tracks/live`;
     };
 
@@ -725,10 +756,12 @@ export function useEntityWorker({
     // Best-effort: failures are silent to avoid noise when the API is starting up.
     const syncWatchlist = async () => {
       try {
-        const res = await fetch('/api/watchlist');
+        const res = await fetch("/api/watchlist");
         if (res.ok) {
           const entries: Array<{ icao24: string }> = await res.json();
-          watchedIcaosRef.current = new Set(entries.map((e) => e.icao24.toLowerCase()));
+          watchedIcaosRef.current = new Set(
+            entries.map((e) => e.icao24.toLowerCase()),
+          );
         }
       } catch {
         // intentionally silent

@@ -1,14 +1,24 @@
-import React, { useEffect, useRef, MutableRefObject } from "react";
-import type { FeatureCollection } from "geojson";
 import type { PickingInfo } from "@deck.gl/core";
-import { CoTEntity, HistorySegment, JS8Station, RFSite, DRState, VisualState, GroundTrackPoint, SatNOGSStation } from "../types";
+import type { MapboxOverlay } from "@deck.gl/mapbox";
+import type { FeatureCollection } from "geojson";
+import React, { MutableRefObject, useEffect, useRef } from "react";
+import type { MapRef } from "react-map-gl/maplibre";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
-import { getCompensatedCenter } from "../utils/map/geoUtils";
+import { composeAllLayers } from "../layers/composition";
+import {
+  CoTEntity,
+  DRState,
+  GroundTrackPoint,
+  HistorySegment,
+  JS8Station,
+  RFSite,
+  SatNOGSStation,
+  Tower,
+  VisualState,
+} from "../types";
 import { filterEntity, filterSatellite } from "../utils/filters";
 import { interpolatePVB } from "../utils/interpolation";
-import { composeAllLayers } from "../layers/composition";
-import type { MapboxOverlay } from "@deck.gl/mapbox";
-import type { MapRef } from "react-map-gl/maplibre";
+import { getCompensatedCenter } from "../utils/map/geoUtils";
 
 interface UseAnimationLoopOptions {
   entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
@@ -41,7 +51,7 @@ interface UseAnimationLoopOptions {
   cablesData?: FeatureCollection | null;
   stationsData?: FeatureCollection | null;
   outagesData?: FeatureCollection | null;
-  towersData?: unknown[];
+  towersData?: Tower[];
   /** NOAA aurora 1-hour forecast GeoJSON (from /api/space-weather/aurora) */
   auroraData?: any;
   /** Active GPS jamming zones GeoJSON (from /api/jamming/active) */
@@ -57,25 +67,35 @@ interface UseAnimationLoopOptions {
   enable3d: boolean;
   mapLoaded: boolean;
   replayMode: boolean | undefined;
-  onCountsUpdate: ((counts: { air: number; sea: number; orbital: number }) => void) | undefined;
+  onCountsUpdate:
+    | ((counts: { air: number; sea: number; orbital: number }) => void)
+    | undefined;
   onEvent:
-  | ((event: {
-    type: "new" | "lost" | "alert";
-    message: string;
-    entityType?: "air" | "sea" | "orbital";
-  }) => void)
-  | undefined;
+    | ((event: {
+        type: "new" | "lost" | "alert";
+        message: string;
+        entityType?: "air" | "sea" | "orbital";
+      }) => void)
+    | undefined;
   onEntitySelect: (entity: CoTEntity | null) => void;
   onEntityLiveUpdate: ((entity: CoTEntity) => void) | undefined;
   onFollowModeChange: ((enabled: boolean) => void) | undefined;
   js8StationsRef?: MutableRefObject<Map<string, JS8Station>>;
   ownGridRef?: MutableRefObject<string>;
   rfSitesRef?: MutableRefObject<RFSite[]>;
-  kiwiNodeRef?: MutableRefObject<{ lat: number; lon: number; host: string } | null>;
+  kiwiNodeRef?: MutableRefObject<{
+    lat: number;
+    lon: number;
+    host: string;
+  } | null>;
   showRepeaters?: boolean;
   predictedGroundTrackRef?: MutableRefObject<GroundTrackPoint[]>;
   /** Observer position for the orbital AOI ring. radiusKm is the pass-prediction horizon. */
-  observerRef?: MutableRefObject<{ lat: number; lon: number; radiusKm: number } | null>;
+  observerRef?: MutableRefObject<{
+    lat: number;
+    lon: number;
+    radiusKm: number;
+  } | null>;
   /** Historical track segments loaded by TrackHistoryPanel — rendered as a PathLayer */
   historySegmentsRef?: MutableRefObject<HistorySegment[]>;
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
@@ -142,7 +162,7 @@ export function useAnimationLoop({
     lastFrameTimeRef.current = Date.now();
   }, []);
 
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | null>(null);
 
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
@@ -152,7 +172,11 @@ export function useAnimationLoop({
       const countryCode = props?.country_code as string | undefined;
       if (countryCode) {
         const current = map[countryCode];
-        if (!current || (props?.severity as number || 0) > (current.severity as number || 0)) {
+        if (
+          !current ||
+          ((props?.severity as number) || 0) >
+            ((current.severity as number) || 0)
+        ) {
           map[countryCode] = props ?? {};
         }
       }
@@ -169,13 +193,13 @@ export function useAnimationLoop({
 
     const fetchCells = async () => {
       try {
-        const response = await fetch('/api/debug/h3_cells');
+        const response = await fetch("/api/debug/h3_cells");
         if (response.ok) {
           const data = await response.json();
           setH3Cells(data);
         }
       } catch (err) {
-        console.error('Failed to fetch H3 cells:', err);
+        console.error("Failed to fetch H3 cells:", err);
       }
     };
 
@@ -207,7 +231,7 @@ export function useAnimationLoop({
         for (const [, entity] of replayEntitiesRef.current) {
           const entityType = filterEntity(entity, filters);
           if (!entityType) continue;
-          if (entityType === 'sea') seaCount++;
+          if (entityType === "sea") seaCount++;
           else airCount++;
           interpolated.push(entity);
         }
@@ -227,19 +251,19 @@ export function useAnimationLoop({
           // Filter
           const entityType = filterEntity(entity, filters);
           if (!entityType) continue;
-          if (entityType === 'sea') seaCount++;
+          if (entityType === "sea") seaCount++;
           else airCount++;
 
           // Interpolate
           const dr = drStateRef.current.get(uid);
           const visual = visualStateRef.current.get(uid);
-          
+
           const { visual: newVisual, interpolatedEntity } = interpolatePVB(
             entity,
             dr,
             visual,
             now,
-            dt
+            dt,
           );
 
           visualStateRef.current.set(uid, newVisual);
@@ -304,7 +328,6 @@ export function useAnimationLoop({
                   );
                   map.jumpTo({
                     center: [centerLon, centerLat],
-
                   });
                 } catch (e) {
                   console.error("FollowMode jumpTo failed:", e);
@@ -389,7 +412,12 @@ export function useAnimationLoop({
       }
 
       if (
-        (airCount > 0 || seaCount > 0 || orbitalCount > 0 || (countsRef.current.air === 0 && countsRef.current.sea === 0 && countsRef.current.orbital === 0)) &&
+        (airCount > 0 ||
+          seaCount > 0 ||
+          orbitalCount > 0 ||
+          (countsRef.current.air === 0 &&
+            countsRef.current.sea === 0 &&
+            countsRef.current.orbital === 0)) &&
         (countsRef.current.air !== airCount ||
           countsRef.current.sea !== seaCount ||
           countsRef.current.orbital !== orbitalCount)
@@ -420,7 +448,7 @@ export function useAnimationLoop({
           dr,
           visual,
           now,
-          dt
+          dt,
         );
 
         visualStateRef.current.set(uid, newVisual);
@@ -437,14 +465,16 @@ export function useAnimationLoop({
       const layers = composeAllLayers({
         interpolatedEntities: interpolated,
         filteredSatellites,
-        js8Stations: js8StationsRef ? Array.from(js8StationsRef.current.values()) : [],
+        js8Stations: js8StationsRef
+          ? Array.from(js8StationsRef.current.values())
+          : [],
         rfSites: rfSitesRef?.current || [],
         h3Cells,
-        cablesData,
-        stationsData,
-        outagesData,
-        towersData,
-        worldCountriesData,
+        cablesData: cablesData ?? null,
+        stationsData: stationsData ?? null,
+        outagesData: outagesData ?? null,
+        towersData: towersData ?? [],
+        worldCountriesData: worldCountriesData ?? null,
         countryOutageMap,
         currentSelected,
         hoveredEntity,
@@ -482,7 +512,7 @@ export function useAnimationLoop({
               setHoveredEntity(null);
               setHoverPosition(null);
             }
-          }
+          },
         });
       }
 

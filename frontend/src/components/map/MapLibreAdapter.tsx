@@ -7,7 +7,8 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     // Strip globeMode — MapboxOverlay detects globe projection automatically
     // via getDefaultView(map) which returns GlobeView when the map is in globe mode.
     // Both projection and _full3d are managed internally on every map `render` event.
-    const { globeMode: _globeMode, ...rest } = props;
+    const { globeMode, ...rest } = props;
+    void globeMode;
 
     const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({
         ...rest,
@@ -27,7 +28,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
         if (overlay && overlay.setProps && !isDeadRef.current) {
             try {
                 overlay.setProps({ ...rest, _full3d: false } as any);
-            } catch (e) {
+            } catch {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
         }

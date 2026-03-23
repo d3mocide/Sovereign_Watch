@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, FastForward, SkipBack, X, Radio } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 
 interface TimeControlsProps {
     isOpen: boolean;
@@ -27,8 +27,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
     onTogglePlay,
     onSeek,
     onSpeedChange,
-    onDurationChange,
-    onClose
+    onDurationChange
 }) => {
     if (!isOpen) return null;
 

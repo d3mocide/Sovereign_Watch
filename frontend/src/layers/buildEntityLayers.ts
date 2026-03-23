@@ -1,10 +1,20 @@
-import { ScatterplotLayer, PathLayer, IconLayer, LineLayer, PolygonLayer } from "@deck.gl/layers";
 import type { Layer, PickingInfo } from "@deck.gl/core";
+import {
+  IconLayer,
+  LineLayer,
+  PathLayer,
+  PolygonLayer,
+  ScatterplotLayer,
+} from "@deck.gl/layers";
 import { CoTEntity } from "../types";
-
-interface VelocityDatum { path: number[][]; entity: CoTEntity }
 import { entityColor } from "../utils/map/colorUtils";
 import { ICON_ATLAS } from "../utils/map/iconAtlas";
+
+type PathPoint3D = [number, number, number];
+interface VelocityDatum {
+  path: PathPoint3D[];
+  entity: CoTEntity;
+}
 
 export function buildEntityLayers(
   interpolated: CoTEntity[],
@@ -24,8 +34,10 @@ export function buildEntityLayers(
   const integrityDegraded = interpolated.filter((e) => {
     const nic = e.classification?.nic;
     const nacp = e.classification?.nacP;
-    return (nic !== null && nic !== undefined && nic <= 4) ||
-           (nacp !== null && nacp !== undefined && nacp <= 6);
+    return (
+      (nic !== null && nic !== undefined && nic <= 4) ||
+      (nacp !== null && nacp !== undefined && nacp <= 6)
+    );
   });
 
   if (integrityDegraded.length > 0) {
@@ -48,7 +60,10 @@ export function buildEntityLayers(
         filled: false,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -155.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -155.0 : 0,
+        },
         updateTriggers: { getLineColor: [now] },
       }),
     );
@@ -77,7 +92,10 @@ export function buildEntityLayers(
         getFillColor: (d: CoTEntity) => entityColor(d, 120),
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -195.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -195.0 : 0,
+        },
       }),
     );
   }
@@ -94,8 +112,12 @@ export function buildEntityLayers(
           );
         } else {
           return (
-            ["helicopter", "drone"].includes(d.classification?.platform || "") ||
-            ["military", "government"].includes(d.classification?.affiliation || "")
+            ["helicopter", "drone"].includes(
+              d.classification?.platform || "",
+            ) ||
+            ["military", "government"].includes(
+              d.classification?.affiliation || "",
+            )
           );
         }
       }),
@@ -155,24 +177,24 @@ export function buildEntityLayers(
           // Basic Triangle (Point up)
           // Rotate it based on course
           const pt1 = [
-            d.lon + (sizeDeg * Math.sin(courseRad) * lonScale),
-            d.lat + (sizeDeg * Math.cos(courseRad)),
-            alt
+            d.lon + sizeDeg * Math.sin(courseRad) * lonScale,
+            d.lat + sizeDeg * Math.cos(courseRad),
+            alt,
           ];
           const pt2 = [
-            d.lon + ((sizeDeg * 0.8) * Math.sin(courseRad + 2.5) * lonScale),
-            d.lat + ((sizeDeg * 0.8) * Math.cos(courseRad + 2.5)),
-            alt
+            d.lon + sizeDeg * 0.8 * Math.sin(courseRad + 2.5) * lonScale,
+            d.lat + sizeDeg * 0.8 * Math.cos(courseRad + 2.5),
+            alt,
           ];
           const pt3 = [
             d.lon,
             d.lat, // indent for chevron
-            alt
+            alt,
           ];
           const pt4 = [
-            d.lon + ((sizeDeg * 0.8) * Math.sin(courseRad - 2.5) * lonScale),
-            d.lat + ((sizeDeg * 0.8) * Math.cos(courseRad - 2.5)),
-            alt
+            d.lon + sizeDeg * 0.8 * Math.sin(courseRad - 2.5) * lonScale,
+            d.lat + sizeDeg * 0.8 * Math.cos(courseRad - 2.5),
+            alt,
           ];
 
           return [pt1, pt2, pt3, pt4, pt1] as number[][];
@@ -183,7 +205,10 @@ export function buildEntityLayers(
         pickable: true,
         // wrapLongitude off in globe mode: native geographic polygons don't need it and it causes culling
         wrapLongitude: false,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -200.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -200.0 : 0,
+        },
         onHover: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
             setHoveredEntity(info.object);
@@ -196,7 +221,8 @@ export function buildEntityLayers(
         onClick: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
             const entity = info.object;
-            const newSelection = selectedEntity?.uid === entity.uid ? null : entity;
+            const newSelection =
+              selectedEntity?.uid === entity.uid ? null : entity;
             onEntitySelect(newSelection);
           } else {
             onEntitySelect(null);
@@ -204,8 +230,8 @@ export function buildEntityLayers(
         },
         updateTriggers: {
           getPolygon: [currentSelected?.uid, now],
-        }
-      })
+        },
+      }),
     );
   } else {
     // Standard 2D / 3D Pitch Map Mode uses heavily optimized sprites
@@ -235,7 +261,10 @@ export function buildEntityLayers(
         getColor: (d: CoTEntity) => entityColor(d),
         pickable: true,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -100.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -100.0 : 0,
+        },
         onHover: (info: PickingInfo<CoTEntity>) => {
           if (info.object) {
             setHoveredEntity(info.object);
@@ -259,7 +288,7 @@ export function buildEntityLayers(
           getSize: [currentSelected?.uid],
           getAngle: [now],
         },
-      })
+      }),
     );
   }
 
@@ -285,7 +314,10 @@ export function buildEntityLayers(
         filled: false,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -210.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -210.0 : 0,
+        },
         updateTriggers: { getRadius: [now], getLineColor: [now] },
       }),
     );
@@ -306,13 +338,13 @@ export function buildEntityLayers(
             const dLat = (distMeters * Math.cos(courseRad)) / R;
             const dLon =
               (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
-            const target = [
+            const target: PathPoint3D = [
               d.lon + dLon * (180 / Math.PI),
               d.lat + dLat * (180 / Math.PI),
               d.altitude || 0,
             ];
             return {
-              path: [[d.lon, d.lat, d.altitude || 0], target],
+              path: [[d.lon, d.lat, d.altitude || 0] as PathPoint3D, target],
               entity: d,
             };
           }),
@@ -324,7 +356,10 @@ export function buildEntityLayers(
         capRounded: true,
         pickable: false,
         wrapLongitude: !globeMode,
-        parameters: { depthTest: !!globeMode, depthBias: globeMode ? -250.0 : 0 },
+        parameters: {
+          depthTest: !!globeMode,
+          depthBias: globeMode ? -250.0 : 0,
+        },
       }),
     );
   }

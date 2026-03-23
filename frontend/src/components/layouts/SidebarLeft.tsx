@@ -1,29 +1,35 @@
-import React from 'react';
-import { SystemStatus } from '../widgets/SystemStatus';
-import { IntelFeed } from '../widgets/IntelFeed';
-import { MissionNavigator } from '../widgets/MissionNavigator';
-import { SearchWidget } from '../widgets/SearchWidget';
-import { JS8Widget } from '../widgets/JS8Widget';
+import React from "react";
+import { IntelFeed } from "../widgets/IntelFeed";
+import { JS8Widget } from "../widgets/JS8Widget";
+import { MissionNavigator } from "../widgets/MissionNavigator";
+import { SearchWidget } from "../widgets/SearchWidget";
+import { SystemStatus } from "../widgets/SystemStatus";
 
-import { SystemHealth } from '../../hooks/useSystemHealth';
-import { IntelEvent, MissionProps, JS8Station, JS8LogEntry, JS8StatusLine } from '../../types';
+import { SystemHealth } from "../../hooks/useSystemHealth";
+import {
+  IntelEvent,
+  JS8LogEntry,
+  JS8Station,
+  JS8StatusLine,
+  MissionProps,
+} from "../../types";
 
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number; orbital: number };
-  filters: import('../../types').MapFilters;
-  onFilterChange: (key: string, value: boolean) => void;
+  filters: import("../../types").MapFilters;
+  onFilterChange: (key: string, value: boolean | number) => void;
   events: IntelEvent[];
   missionProps: MissionProps | null;
   health?: SystemHealth;
-  mapActions: import('../../types').MapActions | null;
-  onEntitySelect: (entity: import('../../types').CoTEntity) => void;
+  mapActions: import("../../types").MapActions | null;
+  onEntitySelect: (entity: import("../../types").CoTEntity) => void;
   js8Stations?: JS8Station[];
   js8LogEntries?: JS8LogEntry[];
   js8StatusLine?: JS8StatusLine;
   js8BridgeConnected?: boolean;
   js8Connected?: boolean;
   js8KiwiConnecting?: boolean;
-  js8ActiveKiwiConfig?: import('../../types').KiwiConfig | null;
+  js8ActiveKiwiConfig?: import("../../types").KiwiConfig | null;
   sendMessage?: (target: string, message: string) => void;
   sendAction?: (payload: object) => void;
 }
@@ -38,22 +44,19 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onEntitySelect,
   js8Stations = [],
   js8LogEntries = [],
-  js8StatusLine = { callsign: '--', grid: '----', freq: '--' },
+  js8StatusLine = { callsign: "--", grid: "----", freq: "--" },
   js8BridgeConnected = false,
   js8Connected = false,
   js8KiwiConnecting = false,
   js8ActiveKiwiConfig = null,
-  sendMessage = () => { },
-  sendAction = () => { },
+  sendMessage = () => {},
+  sendAction = () => {},
 }) => {
   return (
     <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
       {/* Search Widget */}
       {mapActions && (
-        <SearchWidget
-          mapActions={mapActions}
-          onEntitySelect={onEntitySelect}
-        />
+        <SearchWidget mapActions={mapActions} onEntitySelect={onEntitySelect} />
       )}
 
       {/* Mission Navigator */}
@@ -72,7 +75,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         <IntelFeed
           events={events}
           onEntitySelect={onEntitySelect}
-          mapActions={mapActions}
+          mapActions={mapActions ?? undefined}
           filters={filters}
           onFilterChange={onFilterChange}
         />
@@ -86,7 +89,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         connected={js8BridgeConnected}
         js8Connected={js8Connected}
         kiwiConnecting={js8KiwiConnecting}
-        activeKiwiConfig={js8ActiveKiwiConfig}
+        activeKiwiConfig={js8ActiveKiwiConfig ?? undefined}
         sendMessage={sendMessage}
         sendAction={sendAction}
       />

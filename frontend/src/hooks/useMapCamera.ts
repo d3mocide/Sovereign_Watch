@@ -4,20 +4,20 @@ import { buildGraticule } from "../utils/map/geoUtils";
 
 // Detect Mapbox token presence at module level (same pattern as TacticalMap)
 const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
-const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== 'false';
-const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith('pk.');
+const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== "false";
+const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith("pk.");
 const _isMapbox = _enableMapbox && _isValidToken;
 
 interface UseMapCameraOptions {
-  mapRef: React.RefObject<MapRef>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mapRef: React.RefObject<MapRef | null>;
+
   mapInstanceRef: React.MutableRefObject<any>;
   mapLoaded: boolean;
   globeMode: boolean | undefined;
   enable3d: boolean;
   setEnable3d: React.Dispatch<React.SetStateAction<boolean>>;
   mapToken: string;
-  mapStyleMode?: 'dark' | 'satellite';
+  mapStyleMode?: "dark" | "satellite";
 }
 
 export function useMapCamera({
@@ -28,13 +28,20 @@ export function useMapCamera({
   enable3d,
   setEnable3d,
   mapToken,
-  mapStyleMode = 'dark',
+  mapStyleMode = "dark",
 }: UseMapCameraOptions) {
   // Globe projection: Mapbox GL JS uses a string argument; MapLibre GL JS v5 uses { type }.
   // MapLibre v5 also requires the style to be loaded before setProjection can be called.
   useEffect(() => {
     if (!mapLoaded) return;
-    const map = mapInstanceRef.current ?? (mapRef.current?.getMap?.() as unknown as { setProjection?: (p: unknown) => void; isStyleLoaded?: () => boolean; on?: (e: string, cb: () => void) => void; off?: (e: string, cb: () => void) => void });
+    const map =
+      mapInstanceRef.current ??
+      (mapRef.current?.getMap?.() as unknown as {
+        setProjection?: (p: unknown) => void;
+        isStyleLoaded?: () => boolean;
+        on?: (e: string, cb: () => void) => void;
+        off?: (e: string, cb: () => void) => void;
+      });
     if (!map || typeof map.setProjection !== "function") return;
 
     const applyProjection = () => {
@@ -83,9 +90,10 @@ export function useMapCamera({
     const LAYER_ID = "graticule-lines";
 
     // White lines over satellite imagery; light blue over dark tactical basemap
-    const lineColor = mapStyleMode === 'satellite'
-      ? "rgba(255, 255, 255, 0.35)"
-      : "rgba(80, 180, 255, 0.45)";
+    const lineColor =
+      mapStyleMode === "satellite"
+        ? "rgba(255, 255, 255, 0.35)"
+        : "rgba(80, 180, 255, 0.45)";
 
     const add = () => {
       if (!map.getSource(SOURCE_ID)) {
@@ -180,13 +188,17 @@ export function useMapCamera({
       //
       // Dark tactical mode: use a deep navy atmosphere but with reduced
       // opacity to allow the StarField background to show through.
-      if (globeMode && mapStyleMode !== 'satellite') {
+      const atmosphereCapableMap = map as typeof map & {
+        setAtmosphere?: (value: unknown) => void;
+      };
+
+      if (globeMode && mapStyleMode !== "satellite") {
         try {
-          if (typeof map.setAtmosphere === 'function') {
-            map.setAtmosphere({
-              "color": "rgba(12, 30, 58, 0.4)",      // Semi-transparent deep navy
-              "halo-color": "rgba(0, 13, 31, 0.6)",  // Darker outer halo
-              "intensity": 5,                        // Glow intensity
+          if (typeof atmosphereCapableMap.setAtmosphere === "function") {
+            atmosphereCapableMap.setAtmosphere({
+              color: "rgba(12, 30, 58, 0.4)", // Semi-transparent deep navy
+              "halo-color": "rgba(0, 13, 31, 0.6)", // Darker outer halo
+              intensity: 5, // Glow intensity
             });
           }
         } catch (e) {
@@ -194,8 +206,8 @@ export function useMapCamera({
         }
       } else {
         // Clear atmosphere if not in Dark Globe mode
-        if (typeof map.setAtmosphere === 'function') {
-          map.setAtmosphere(null);
+        if (typeof atmosphereCapableMap.setAtmosphere === "function") {
+          atmosphereCapableMap.setAtmosphere(null);
         }
         // Also ensure any stale sky layers are removed if they somehow exist
         if (map.getLayer(SKY_LAYER_ID)) {
@@ -217,7 +229,6 @@ export function useMapCamera({
     };
   }, [mapLoaded, enable3d, mapToken, globeMode, mapStyleMode]);
 
-
   const setViewMode = (mode: "2d" | "3d") => {
     const map = mapRef.current?.getMap();
     if (!mapRef.current || !map) return;
@@ -225,10 +236,10 @@ export function useMapCamera({
       setEnable3d(false);
       // Reset projection to flat mercator (switching back to Mapbox adapter)
       try {
-        (map as unknown as { setProjection: (p: unknown) => void }).setProjection(
-          mapToken ? "mercator" : { type: "mercator" },
-        );
-      } catch (_) {
+        (
+          map as unknown as { setProjection: (p: unknown) => void }
+        ).setProjection(mapToken ? "mercator" : { type: "mercator" });
+      } catch {
         // Ignore projection errors during rapid state transitions
       }
       mapRef.current.flyTo({

@@ -39,7 +39,7 @@ let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function updateMissionHash(
   viewState?: { lat: number; lon: number; zoom: number },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   filters?: Record<string, any>
 ) {
   const currentState = parseMissionHash();

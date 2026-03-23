@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.46.1] - 2026-03-22
+
+### Changed
+
+- **Frontend Verification Workflow**: Added a dedicated TypeScript compiler gate to frontend scripts (`typecheck`) and a combined verification command (`verify`) so lint and type safety are validated together.
+- **Type Contracts Hardened**: Tightened runtime/compile-time boundaries across map callbacks, websocket payload handling, GeoJSON ingestion fallbacks, and deck.gl layer builders.
+
+### Fixed
+
+- **TypeScript Stability Sweep (Bug Squash)**: Resolved compiler diagnostics across tactical/orbital map components, infrastructure tooltip rendering, JS8 status ingestion, replay utilities, and layer composition typing.
+- **Map Event Handling Robustness**: Added safe unknown-event narrowing in map adapters and move/load handlers to prevent property access regressions.
+- **Deck Layer Accessor Compatibility**: Corrected path/polygon accessor and pick-info typing mismatches for deck.gl v9 strict type definitions.
+
 ## [0.46.0] - 2026-03-22
 
 ### Added

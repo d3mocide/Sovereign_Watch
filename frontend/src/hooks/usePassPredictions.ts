@@ -97,7 +97,7 @@ export function usePassPredictions(
       clearInterval(timer);
       controller.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [skip, observerLat, observerLon, hours, minElevation, noradIds?.join(','), category, triggerCount]);
 
   return { passes, loading, error, refetch };

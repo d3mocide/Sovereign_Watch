@@ -1,13 +1,15 @@
 {
   "name": "sovereign-watch-ui",
   "private": true,
-  "version": "0.46.0",
+  "version": "0.46.1",
 
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm run lint && pnpm run typecheck",
     "preview": "vite preview",
     "test": "vitest"
   },

@@ -1,25 +1,32 @@
-import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
+import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { FeatureCollection } from "geojson";
-import { CoTEntity, HistorySegment, JS8Station, RFSite, MapFilters, Tower } from "../types";
+import { getTerminatorLayer } from "../components/map/TerminatorLayer";
+import {
+  CoTEntity,
+  HistorySegment,
+  JS8Station,
+  MapFilters,
+  RFSite,
+  Tower,
+} from "../types";
+import { maidenheadToLatLon } from "../utils/map/geoUtils";
+import { buildAOTLayers } from "./buildAOTLayers";
+import { buildAuroraLayer } from "./buildAuroraLayer";
+import { buildEntityLayers } from "./buildEntityLayers";
+import { buildGdeltLayer } from "./buildGdeltLayer";
+import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
+import { buildInfraLayers } from "./buildInfraLayers";
+import { buildJammingLayer } from "./buildJammingLayer";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildRFLayers } from "./buildRFLayers";
-import { buildInfraLayers } from "./buildInfraLayers";
-import { getOrbitalLayers } from "./OrbitalLayer";
-import { buildAOTLayers } from "./buildAOTLayers";
-import { buildTrailLayers } from "./buildTrailLayers";
-import { buildEntityLayers } from "./buildEntityLayers";
-import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
-import { getTerminatorLayer } from "../components/map/TerminatorLayer";
 import { buildTowerLayer } from "./buildTowerLayer";
-import { maidenheadToLatLon } from "../utils/map/geoUtils";
-import { buildAuroraLayer } from "./buildAuroraLayer";
-import { buildJammingLayer } from "./buildJammingLayer";
+import { buildTrailLayers } from "./buildTrailLayers";
+import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
-import { buildGdeltLayer } from "./buildGdeltLayer";
 
-import type { H3CellData } from "./buildH3CoverageLayer";
 import type { GroundTrackPoint, SatNOGSStation } from "../types";
+import type { H3CellData } from "./buildH3CoverageLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -114,7 +121,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   let js8Layers: Layer[] = [];
   if (js8Stations.length > 0 && ownGrid) {
     const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
-    const selectedJS8Callsign = currentSelected?.type === "js8" ? currentSelected.callsign : null;
+    const selectedJS8Callsign =
+      currentSelected?.type === "js8" ? currentSelected.callsign : null;
     js8Layers = buildJS8Layers(
       js8Stations,
       ownLat,
@@ -136,7 +144,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       onEntitySelect,
       setHoveredEntity,
-      setHoverPosition
+      setHoverPosition,
     );
   }
 
@@ -151,7 +159,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     currentSelected,
     globeMode,
     worldCountriesData,
-    countryOutageMap
+    countryOutageMap,
   );
 
   // KiwiSDR node marker layer
@@ -163,7 +171,10 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       new ScatterplotLayer({
         id: "kiwi-node-core",
         data: [kiwiNode],
-        getPosition: (d: { lat: number; lon: number; host: string }) => [d.lon, d.lat],
+        getPosition: (d: { lat: number; lon: number; host: string }) => [
+          d.lon,
+          d.lat,
+        ],
         getFillColor: [251, 113, 133, 180 + pulse * 75],
         getLineColor: [251, 113, 133, 200],
         getRadius: 4000,
@@ -172,7 +183,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         getLineWidth: 1200,
         lineWidthUnits: "meters",
         pickable: true,
-      })
+      }),
     );
 
     // Kiwi Node Label (re-enabled as requested by user - HUD style)
@@ -180,8 +191,12 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       new TextLayer({
         id: "kiwi-node-label",
         data: [kiwiNode],
-        getPosition: (d: { lat: number; lon: number; host: string }) => [d.lon, d.lat],
-        getText: (d: { lat: number; lon: number; host: string }) => `LIVE SDR\n${d.host}`,
+        getPosition: (d: { lat: number; lon: number; host: string }) => [
+          d.lon,
+          d.lat,
+        ],
+        getText: (d: { lat: number; lon: number; host: string }) =>
+          `LIVE SDR\n${d.host}`,
         getSize: 10,
         getColor: [240, 240, 240, 255],
         background: true,
@@ -195,7 +210,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         billboard: true,
         pickable: false,
         lineHeight: 1.2,
-      })
+      }),
     );
   }
 
@@ -243,7 +258,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       hoveredEntity: hoveredEntity,
       now,
       showHistoryTails: historyTails,
-      showFootprints: !!filters?.showFootprints,
       projectionMode: globeMode ? "globe" : "mercator",
       zoom,
       predictedGroundTrack: predictedGroundTrack,
@@ -265,66 +279,80 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       observer,
       currentMission
         ? {
-          lat: currentMission.lat,
-          lon: currentMission.lon,
-          radiusKm: (Number(filters?.rfRadius) || 300) * 1.852,
-        }
+            lat: currentMission.lat,
+            lon: currentMission.lon,
+            radiusKm: (Number(filters?.rfRadius) || 300) * 1.852,
+          }
         : null,
     ),
     ...repeaterLayers,
     ...kiwiLayers,
     ...buildTowerLayer(
-      towersData || [], 
-      filters?.showTowers === true, 
-      globeMode, 
-      setHoveredInfra, 
-      setSelectedInfra
+      towersData || [],
+      filters?.showTowers === true,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
     ),
     // Historical flight path (solid coverage segments + ghost gap segments)
-    ...(historySegments && historySegments.length > 0 ? [
-      new PathLayer({
-        id: 'history-track-solid',
-        data: historySegments.filter(s => !s.isGap),
-        getPath: (d: HistorySegment) => d.path,
-        getColor: [0, 255, 65, 160],
-        getWidth: 2,
-        widthUnits: 'pixels',
-        jointRounded: true,
-        capRounded: true,
-        pickable: false,
-      }),
-      new PathLayer({
-        id: 'history-track-gap',
-        data: historySegments.filter(s => s.isGap),
-        getPath: (d: HistorySegment) => d.path,
-        getColor: [251, 191, 36, 80],
-        getWidth: 1,
-        widthUnits: 'pixels',
-        dashJustified: true,
-        getDashArray: [4, 4],
-        extensions: [],
-        pickable: false,
-      }),
-      // Start dot (oldest point) and end dot (current / newest)
-      new ScatterplotLayer({
-        id: 'history-track-endpoints',
-        data: (() => {
-          const solid = historySegments.filter(s => !s.isGap);
-          if (solid.length === 0) return [];
-          const firstSeg = solid[0];
-          const lastSeg = solid[solid.length - 1];
-          return [
-            { pos: firstSeg.path[0], color: [0, 255, 65, 220] as [number, number, number, number] },
-            { pos: lastSeg.path[lastSeg.path.length - 1], color: [255, 200, 0, 220] as [number, number, number, number] },
-          ];
-        })(),
-        getPosition: (d: { pos: [number, number, number]; color: [number, number, number, number] }) => d.pos,
-        getFillColor: (d: { pos: [number, number, number]; color: [number, number, number, number] }) => d.color,
-        getRadius: 5,
-        radiusUnits: 'pixels',
-        pickable: false,
-      }),
-    ] : []),
+    ...(historySegments && historySegments.length > 0
+      ? [
+          new PathLayer({
+            id: "history-track-solid",
+            data: historySegments.filter((s) => !s.isGap),
+            getPath: (d: HistorySegment) => d.path,
+            getColor: [0, 255, 65, 160],
+            getWidth: 2,
+            widthUnits: "pixels",
+            jointRounded: true,
+            capRounded: true,
+            pickable: false,
+          }),
+          new PathLayer({
+            id: "history-track-gap",
+            data: historySegments.filter((s) => s.isGap),
+            getPath: (d: HistorySegment) => d.path,
+            getColor: [251, 191, 36, 80],
+            getWidth: 1,
+            widthUnits: "pixels",
+            dashJustified: true,
+            getDashArray: [4, 4],
+            extensions: [],
+            pickable: false,
+          }),
+          // Start dot (oldest point) and end dot (current / newest)
+          new ScatterplotLayer({
+            id: "history-track-endpoints",
+            data: (() => {
+              const solid = historySegments.filter((s) => !s.isGap);
+              if (solid.length === 0) return [];
+              const firstSeg = solid[0];
+              const lastSeg = solid[solid.length - 1];
+              return [
+                {
+                  pos: firstSeg.path[0],
+                  color: [0, 255, 65, 220] as [number, number, number, number],
+                },
+                {
+                  pos: lastSeg.path[lastSeg.path.length - 1],
+                  color: [255, 200, 0, 220] as [number, number, number, number],
+                },
+              ];
+            })(),
+            getPosition: (d: {
+              pos: [number, number, number];
+              color: [number, number, number, number];
+            }) => d.pos,
+            getFillColor: (d: {
+              pos: [number, number, number];
+              color: [number, number, number, number];
+            }) => d.color,
+            getRadius: 5,
+            radiusUnits: "pixels",
+            pickable: false,
+          }),
+        ]
+      : []),
     ...buildTrailLayers(
       interpolatedEntities,
       currentSelected,

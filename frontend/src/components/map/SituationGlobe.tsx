@@ -1,17 +1,17 @@
-import React, { useEffect, useRef, useState, useMemo, Suspense } from 'react';
-import type { FeatureCollection } from 'geojson';
-import { MapRef } from 'react-map-gl/maplibre';
-import MapLibreAdapter from './MapLibreAdapter';
-import { CoTEntity, DRState } from '../../types';
-import { buildInfraLayers } from '../../layers/buildInfraLayers';
-import { getOrbitalLayers } from '../../layers/OrbitalLayer';
-import { interpolatePVB } from '../../utils/interpolation';
-import { buildAOTLayers } from '../../layers/buildAOTLayers';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { StarField } from './StarField';
-import { getTerminatorLayer } from './TerminatorLayer';
-import { buildAuroraLayer } from '../../layers/buildAuroraLayer';
-import { buildGdeltLayer } from '../../layers/buildGdeltLayer';
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { FeatureCollection } from "geojson";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { MapRef } from "react-map-gl/maplibre";
+import { buildAOTLayers } from "../../layers/buildAOTLayers";
+import { buildAuroraLayer } from "../../layers/buildAuroraLayer";
+import { buildGdeltLayer } from "../../layers/buildGdeltLayer";
+import { buildInfraLayers } from "../../layers/buildInfraLayers";
+import { getOrbitalLayers } from "../../layers/OrbitalLayer";
+import { CoTEntity, DRState } from "../../types";
+import { interpolatePVB } from "../../utils/interpolation";
+import MapLibreAdapter from "./MapLibreAdapter";
+import { StarField } from "./StarField";
+import { getTerminatorLayer } from "./TerminatorLayer";
 
 interface SituationGlobeProps {
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
@@ -26,7 +26,8 @@ interface SituationGlobeProps {
   onHover?: (entity: any | null, pos: { x: number; y: number } | null) => void;
 }
 
-const DARK_MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const DARK_MAP_STYLE =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   satellitesRef,
@@ -42,7 +43,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
 }) => {
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
-  
+
   const [viewState, setViewState] = useState({
     latitude: 15,
     longitude: 0,
@@ -53,7 +54,9 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
 
   const [now, setNow] = useState(0);
   const lastFrameTimeRef = useRef(0);
-  const visualStateRef = useRef<Map<string, { lat: number; lon: number; alt: number }>>(new Map());
+  const visualStateRef = useRef<
+    Map<string, { lat: number; lon: number; alt: number }>
+  >(new Map());
   const [auroraData, setAuroraData] = useState<any>(null);
   const [gdeltData, setGdeltData] = useState<any>(null);
 
@@ -64,11 +67,16 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       try {
         const r = await fetch("/api/space-weather/aurora");
         if (r.ok && !cancelled) setAuroraData(await r.json());
-      } catch { /* silent fail */ }
+      } catch {
+        /* silent fail */
+      }
     };
     fetchAurora();
     const id = setInterval(fetchAurora, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
@@ -78,11 +86,16 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       try {
         const r = await fetch("/api/gdelt/events");
         if (r.ok && !cancelled) setGdeltData(await r.json());
-      } catch { /* silent fail */ }
+      } catch {
+        /* silent fail */
+      }
     };
     fetchGdelt();
     const id = setInterval(fetchGdelt, 15 * 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   // Auto-rotation logic
@@ -91,7 +104,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     lastFrameTimeRef.current = Date.now();
 
     const rotate = () => {
-      setViewState(prev => ({
+      setViewState((prev) => ({
         ...prev,
         longitude: (prev.longitude + 0.08) % 360,
       }));
@@ -110,7 +123,11 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       const countryCode = props?.country_code as string | undefined;
       if (countryCode) {
         const current = map[countryCode];
-        if (!current || (props?.severity as number || 0) > (current.severity as number || 0)) {
+        if (
+          !current ||
+          ((props?.severity as number) || 0) >
+            ((current.severity as number) || 0)
+        ) {
           map[countryCode] = props ?? {};
         }
       }
@@ -129,22 +146,23 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     const filteredSats: CoTEntity[] = [];
     satellitesRef.current.forEach((sat, uid) => {
       // Filter for Intel/Surveillance assets specifically as requested
-      const cat = (sat.detail?.category as string)?.toLowerCase() || '';
-      const isIntel = cat.includes('intel') || 
-                      cat.includes('surveillance') || 
-                      cat.includes('military') || 
-                      cat.includes('isr');
-      
+      const cat = (sat.detail?.category as string)?.toLowerCase() || "";
+      const isIntel =
+        cat.includes("intel") ||
+        cat.includes("surveillance") ||
+        cat.includes("military") ||
+        cat.includes("isr");
+
       if (!isIntel) return;
-      
+
       const dr = drStateRef.current.get(uid);
       const visual = visualStateRef.current.get(uid);
       const { visual: nextVisual, interpolatedEntity } = interpolatePVB(
         sat,
-        dr, 
+        dr,
         visual,
         now,
-        dt
+        dt,
       );
       visualStateRef.current.set(uid, nextVisual);
       filteredSats.push(interpolatedEntity);
@@ -155,13 +173,18 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       cablesData,
       stationsData,
       outagesData,
-      { showCables: true, showLandingStations: false, showOutages: true, cableOpacity: 0.5 },
+      {
+        showCables: true,
+        showLandingStations: false,
+        showOutages: true,
+        cableOpacity: 0.5,
+      },
       () => {}, // No-op hover
       () => {}, // No-op click
       null,
       true, // globeMode
       worldCountriesData,
-      countryOutageMap
+      countryOutageMap,
     );
 
     // 3. Build Orbital Layers
@@ -171,8 +194,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       hoveredEntity: null,
       now,
       showHistoryTails: false,
-      showFootprints: false,
-      projectionMode: 'globe',
+      projectionMode: "globe",
       zoom: viewState.zoom,
       onEntitySelect: () => {},
       onHover: () => {},
@@ -184,7 +206,13 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       { showRepeaters: true } as any,
       true, // globeMode
       null, // observer
-      mission ? { lat: mission.lat, lon: mission.lon, radiusKm: mission.radius_nm * 1.852 } : null
+      mission
+        ? {
+            lat: mission.lat,
+            lon: mission.lon,
+            radiusKm: mission.radius_nm * 1.852,
+          }
+        : null,
     );
 
     overlayRef.current.setProps({
@@ -202,27 +230,62 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
           onGdeltClick,
         ),
         ...missionLayers,
-        ...orbital
-      ]
+        ...orbital,
+      ],
     });
-  }, [now, satellitesRef, drStateRef, cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, viewState.zoom, showTerminator, mission, auroraData, gdeltData, onHover, onGdeltClick]);
+  }, [
+    now,
+    satellitesRef,
+    drStateRef,
+    cablesData,
+    stationsData,
+    outagesData,
+    worldCountriesData,
+    countryOutageMap,
+    viewState.zoom,
+    showTerminator,
+    mission,
+    auroraData,
+    gdeltData,
+    onHover,
+    onGdeltClick,
+  ]);
 
   return (
     <div className="w-full h-full bg-black relative overflow-hidden">
       <StarField active={true} contained={true} />
       <div className="relative z-[1] w-full h-full">
-        <Suspense fallback={<div className="flex items-center justify-center w-full h-full text-[10px] text-white/20 uppercase tracking-widest">Initialising Global View...</div>}>
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center w-full h-full text-[10px] text-white/20 uppercase tracking-widest">
+              Initialising Global View...
+            </div>
+          }
+        >
           <MapLibreAdapter
             ref={mapRef}
             viewState={viewState}
-            onMove={evt => setViewState(evt.viewState)}
+            onMove={(evt: unknown) => {
+              const next = (evt as { viewState?: Partial<typeof viewState> })
+                .viewState;
+              if (!next) return;
+              setViewState((prev) => ({
+                latitude: next.latitude ?? prev.latitude,
+                longitude: next.longitude ?? prev.longitude,
+                zoom: next.zoom ?? prev.zoom,
+                pitch: next.pitch ?? prev.pitch,
+                bearing: next.bearing ?? prev.bearing,
+              }));
+            }}
             mapStyle={DARK_MAP_STYLE}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: "100%", height: "100%" }}
             globeMode={true}
             showAttribution={false}
             deckProps={{
-              id: 'situation-globe-overlay',
-              onOverlayLoaded: (ov) => { overlayRef.current = ov; }
+              id: "situation-globe-overlay",
+              onOverlayLoaded: (ov) => {
+                overlayRef.current = ov;
+              },
             }}
           />
         </Suspense>

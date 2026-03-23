@@ -26,6 +26,7 @@ venv/
 .venv/
 env/
 .env-python/
+.pnpm-store/
 
 # Logs
 *.log

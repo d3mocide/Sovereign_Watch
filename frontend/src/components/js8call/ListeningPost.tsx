@@ -541,7 +541,7 @@ export default function ListeningPost({
     // Only re-create the WebSocket when wfMode or analyserNode changes.
     // wfSkip is read via closure but doesn't need to close/reopen the socket;
     // wfOffset is read via wfOffsetRef; zoom is sent separately via SET_ZOOM action.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [wfMode, analyserNode]);
 
   // Sync local frequency and mode with active config from bridge

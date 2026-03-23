@@ -1,46 +1,67 @@
-import type { Layer } from "@deck.gl/core";
+import type { Layer, PickingInfo } from "@deck.gl/core";
 import { ScatterplotLayer } from "@deck.gl/layers";
-
-type TowerRecord = {
-  id: string;
-  fccId?: string;
-  type?: string;
-  owner?: string;
-  status?: string;
-  heightM?: number;
-  elevationM?: number;
-  coordinates: [number, number];
-};
+import type { Tower } from "../types";
 
 type TowerPickInfo = {
-  object?: TowerRecord;
+  object?: {
+    id: string;
+    type: "tower";
+    geometry: {
+      type: "Point";
+      coordinates: [number, number];
+    };
+    properties: {
+      id: string;
+      name: string;
+      entity_type: "tower";
+      fcc_id?: string;
+      tower_type?: string;
+      owner?: string;
+      status?: string;
+      height_m?: number;
+      elevation_m?: number;
+      source: "FCC";
+    };
+  };
   coordinate?: [number, number];
   x?: number;
   y?: number;
 };
 
-const normalizeTowerInfo = (info: TowerPickInfo): TowerPickInfo => {
+const normalizeTowerInfo = (info: PickingInfo<Tower>): TowerPickInfo => {
   const tower = info?.object;
-  if (!tower) return info;
+  const coordinate = Array.isArray(info.coordinate)
+    ? ([info.coordinate[0] ?? 0, info.coordinate[1] ?? 0] as [number, number])
+    : undefined;
+
+  if (!tower) {
+    return {
+      coordinate,
+      x: info.x,
+      y: info.y,
+    };
+  }
 
   const coordinates = Array.isArray(tower.coordinates)
     ? tower.coordinates
-    : (info.coordinate ?? [0, 0]);
+    : (coordinate ?? [0, 0]);
   const properties = {
     id: tower.id,
     name: `FCC TOWER: ${tower.fccId || "UNKNOWN"}`,
-    entity_type: "tower",
+    entity_type: "tower" as const,
     fcc_id: tower.fccId,
     tower_type: tower.type,
     owner: tower.owner,
     status: tower.status,
     height_m: tower.heightM,
     elevation_m: tower.elevationM,
-    source: "FCC",
+    source: "FCC" as const,
   };
 
   return {
-    ...info,
+    coordinate,
+    x: info.x,
+    y: info.y,
     object: {
       id: tower.id,
       type: "tower",
@@ -54,16 +75,16 @@ const normalizeTowerInfo = (info: TowerPickInfo): TowerPickInfo => {
 };
 
 export const buildTowerLayer = (
-  towers: TowerRecord[],
+  towers: Tower[],
   visible: boolean,
   globeMode: boolean,
-  onHover: (info: TowerPickInfo) => void,
-  onSelect: (info: TowerPickInfo) => void,
+  onHover: (info: unknown) => void,
+  onSelect: (info: unknown) => void,
 ): Layer[] => {
   if (!visible || !towers || towers.length === 0) return [];
 
   return [
-    new ScatterplotLayer({
+    new ScatterplotLayer<Tower>({
       id: `fcc-towers-layer-${globeMode ? "globe" : "merc"}`,
       data: towers,
       pickable: true,
@@ -74,19 +95,14 @@ export const buildTowerLayer = (
       radiusMinPixels: 2,
       radiusMaxPixels: 12,
       lineWidthMinPixels: 1,
-      getPosition: (d: TowerRecord) => d.coordinates,
+      getPosition: (d: Tower) => d.coordinates,
       getFillColor: [249, 115, 22, 200], // Orange-500
       getLineColor: [0, 0, 0, 150],
       wrapLongitude: !globeMode,
-      parameters: {
-        depthTest: !!globeMode,
-        // Using Slot 3-4 transition depthBias (closer than cables, behind entities)
-        depthBias: globeMode ? -105.0 : 0,
-      },
-      onHover: (info: TowerPickInfo) => {
+      onHover: (info: PickingInfo<Tower>) => {
         onHover(normalizeTowerInfo(info));
       },
-      onClick: (info: TowerPickInfo) => {
+      onClick: (info: PickingInfo<Tower>) => {
         if (info.object) {
           onSelect(normalizeTowerInfo(info));
         }

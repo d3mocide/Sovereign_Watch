@@ -276,7 +276,7 @@ function App() {
 
       hashState.activeLayers.forEach(layer => {
         if (layer in hashFilters) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (hashFilters as any)[layer] = true;
         }
       });

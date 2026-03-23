@@ -40,7 +40,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
                     ...rest,
                     _full3d: true
                 } as any);
-            } catch (e) {
+            } catch {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
         }

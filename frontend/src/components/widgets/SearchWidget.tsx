@@ -74,7 +74,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                 if (response.ok) {
                     const historyMatches = await response.json();
                     
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                     
                     historyMatches.forEach((item: any) => {
                         // Only add if not already found in live results
                         if (!seenUids.has(item.entity_id)) {

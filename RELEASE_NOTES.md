@@ -1,32 +1,37 @@
-# Release - v0.46.0 - OSINT Convergence & Orbital Refinement
+# Release - v0.46.1 - Bug Squash Hardening
 
 ## High-Level Summary
 
-This release marks the full integration of the **GEODENT (GDELT Pulse)** data pipe, transforming Sovereign Watch into a unified tactical and OSINT monitoring platform. Operators can now monitor global stability via real-time news events from the GDELT Project, fused directly into the intelligence stream alongside aviation and maritime telemetry. Additionally, this update refines the orbital visualization suite, ensuring that satellite mission timing and space weather metrics are perfectly aligned within the high-fidelity HUD.
+This patch release is a large-scale stabilization pass focused on reliability and developer velocity. The frontend now enforces TypeScript compiler checks in the standard workflow, and a broad set of map/layer/infrastructure type contract issues were resolved. The result is a significantly cleaner Problems panel, safer runtime event handling, and fewer regressions slipping through lint-only validation.
 
 ## Key Features
 
-- **GEODENT (GDELT)**: Real-time global event ingestion (every 15 mins) providing tactical context via conflict, protest, and diplomatic reports.
-- **Orbital HUD Refinement**: Repositioned the Polar Plot geometry widget to prevent overlap and improved visual coherence with the Space Weather monitor.
-- **Intelligence Stream Fusion**: GDELT headlines are now fully interactive, allowing users to "Fly To" OSINT event locations and identify nearby tactical assets with a single click.
-- **Default Terminator Logic**: Synchronized day/night terminator visibility across all map projections by default.
-- **Stabilized UI Loop**: Resolved critical React lifecycle and TypeScript errors in the orbital map and map abstraction layers.
+- **Typecheck Workflow Added**: Frontend now includes `pnpm run typecheck` and `pnpm run verify` to gate both lint and compiler checks.
+- **Massive Bug Squash**: Type and contract fixes across tactical/orbital map rendering, tooltip data shaping, replay utilities, and JS8 websocket payload parsing.
+- **Deck.gl Typing Alignment**: Path/polygon accessors and pick-info adapters updated to match strict Deck v9 typings.
+- **Map Callback Hardening**: Unknown event payloads are safely narrowed before property access in map movement/load flows.
 
 ## Technical Details
 
-- **Microservice Additions**: `sovereign-gdelt-pulse` (Python ingestion) and corresponding FastAPI routers.
-- **Protocol Updates**: Multi-INT HUD now supports GDELT-specific metadata (Goldstein Scale, Average Tone).
-- **Tooling**: Standardized `pnpm` usage and component-specific verification rules established in `AGENTS.md`.
+- **Frontend Script Changes**:
+   - Added `typecheck`: `tsc --noEmit`
+   - Added `verify`: `pnpm run lint && pnpm run typecheck`
+- **Compiler Diagnostics**: Resolved the previously uncaught TypeScript backlog in frontend hooks, map components, and layer builders.
+- **Version Metadata**: Frontend package bumped to `0.46.1`.
 
 ## Upgrade Instructions
 
 1. **Pull the latest changes**:
    ```bash
-   git pull origin main
+   git pull origin main --tags
    ```
-2. **Rebuild Ingestion Services**:
+2. **Rebuild frontend/backend containers**:
    ```bash
-   docker compose up -d --build sovereign-gdelt-pulse sovereign-backend sovereign-frontend
+   docker compose up -d --build sovereign-frontend sovereign-backend
    ```
-3. **Verify Documentation**:
-   Review [Documentation/pollers/GEODENT.md](Documentation/pollers/GEODENT.md) for data pipe verification steps.
+3. **Run verification**:
+   ```bash
+   cd frontend
+   pnpm run verify
+   pnpm run test -- --run
+   ```

@@ -1,4 +1,4 @@
-import { CoTEntity } from '../types';
+import { CoTEntity } from "../types";
 
 /**
  * Processes raw replay data into a map of entities, each containing a time-sorted list of snapshots.
@@ -7,19 +7,24 @@ import { CoTEntity } from '../types';
  * @returns A Map where the key is the entity UID and the value is an array of CoTEntity snapshots sorted by time.
  */
 interface ReplayPoint {
-  uid: string;
+  uid?: string;
+  entity_id?: string;
   lat: number;
   lon: number;
   hae?: number;
+  alt?: number;
   type?: string;
   course?: number;
+  heading?: number;
   speed?: number;
   callsign?: string;
-  time?: number;
+  time?: number | string;
   meta?: string | Record<string, unknown>;
 }
 
-export function processReplayData(data: ReplayPoint[]): Map<string, CoTEntity[]> {
+export function processReplayData(
+  data: ReplayPoint[],
+): Map<string, CoTEntity[]> {
   const cache = new Map<string, CoTEntity[]>();
 
   data.forEach((pt: ReplayPoint) => {
@@ -30,30 +35,45 @@ export function processReplayData(data: ReplayPoint[]): Map<string, CoTEntity[]>
     // Parse meta safely
     let meta: Record<string, unknown> = {};
     try {
-      meta = typeof pt.meta === 'string' ? JSON.parse(pt.meta) : pt.meta || {};
-    } catch { /* ignore */ }
+      meta = typeof pt.meta === "string" ? JSON.parse(pt.meta) : pt.meta || {};
+    } catch {
+      /* ignore */
+    }
 
-    const cls = meta.classification || {};
+    const cls = (meta.classification ?? {}) as Record<string, unknown>;
     // Ships: CoT type contains 'S'; classification lives in vesselClassification.
     // Aircraft: CoT type contains 'A' (and not 'S'); classification lives in classification.
-    const isShip = (pt.type as string)?.includes('S');
+    const resolvedUid = pt.uid || pt.entity_id;
+    if (!resolvedUid) return;
+
+    const resolvedType = pt.type || "a-f-G";
+    const isShip = resolvedType.includes("S");
+    const resolvedTime =
+      typeof pt.time === "number"
+        ? pt.time
+        : typeof pt.time === "string"
+          ? Date.parse(pt.time)
+          : Date.now();
 
     const entity: CoTEntity = {
-      uid: pt.entity_id,
-      type: pt.type,
+      uid: resolvedUid,
+      type: resolvedType,
       lat: pt.lat,
       lon: pt.lon,
-      altitude: pt.alt,
-      speed: pt.speed,
-      course: pt.heading,
-      callsign: meta.callsign || pt.entity_id,
-      time: Date.parse(pt.time),
-      lastSeen: Date.parse(pt.time),
+      altitude: pt.alt ?? pt.hae ?? 0,
+      speed: pt.speed ?? 0,
+      course: pt.heading ?? pt.course ?? 0,
+      callsign: (meta.callsign as string) || pt.callsign || resolvedUid,
+      time: resolvedTime,
+      lastSeen: resolvedTime,
       trail: [], // Replay doesn't need trails yet or we can generate them
       uidHash: 0, // Will be computed by map
       // Map meta.classification into the correct top-level field so that
       // filterEntity() in useAnimationLoop can apply category filters in replay.
-      vesselClassification: isShip && cls.category ? { category: cls.category } : undefined,
+      vesselClassification:
+        isShip && typeof cls.category === "string"
+          ? { category: cls.category }
+          : undefined,
       classification: !isShip && Object.keys(cls).length > 0 ? cls : undefined,
     };
 
