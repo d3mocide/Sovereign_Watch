@@ -336,10 +336,20 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
           <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
             <span className="text-[8px] text-white/40 block leading-tight">
-              SOURCE DOMAIN
+              EVENT CLASS
             </span>
             <span className="text-[10px] text-hud-green font-mono font-bold leading-tight uppercase">
-              {String(entity.detail?.domain || "OPEN SOURCE")}
+              {entity.detail?.quad_class === 1
+                ? "VERBAL COOP"
+                : entity.detail?.quad_class === 2
+                  ? "MATERIAL COOP"
+                  : entity.detail?.quad_class === 3
+                    ? "VERBAL CONFLICT"
+                    : entity.detail?.quad_class === 4
+                      ? "MATERIAL CONFLICT"
+                      : entity.detail?.event_root_code
+                        ? `CAMEO:${entity.detail.event_root_code}`
+                        : "OPEN SOURCE"}
             </span>
           </div>
           <div>
@@ -366,14 +376,27 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   : "STABLE"}
             </span>
           </div>
-          <div className="col-span-2">
-            <span className="text-[8px] text-white/40 block leading-tight">
-              DATA SOURCE
-            </span>
-            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
-              GDELT GLOBAL EVENT MONITOR
-            </span>
-          </div>
+          {entity.detail?.actor1_country || entity.detail?.actor2_country ? (
+            <div className="col-span-2">
+              <span className="text-[8px] text-white/40 block leading-tight">
+                COUNTRIES
+              </span>
+              <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
+                {[entity.detail?.actor1_country, entity.detail?.actor2_country]
+                  .filter(Boolean)
+                  .join(" ↔ ")}
+              </span>
+            </div>
+          ) : (
+            <div className="col-span-2">
+              <span className="text-[8px] text-white/40 block leading-tight">
+                DATA SOURCE
+              </span>
+              <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
+                GDELT GLOBAL EVENT MONITOR
+              </span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">

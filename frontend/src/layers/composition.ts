@@ -230,6 +230,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       !!filters?.showGdelt,
       globeMode,
       gdeltToneThreshold,
+      filters?.showGdeltLabels === true,
       (entity, pos) => {
         setHoveredEntity(entity);
         setHoverPosition(pos);
@@ -237,7 +238,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       (g) => {
         // Transform GDELT point into a virtual entity for the sidebar
         onEntitySelect({
-          uid: `gdelt-${g.name.slice(0, 10)}`,
+          uid: `gdelt-${g.event_id}`,
           type: "gdelt",
           callsign: g.name,
           lat: g.lat,

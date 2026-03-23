@@ -4,11 +4,13 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+
 from aiokafka import AIOKafkaConsumer
-from core.database import db
 from core.config import settings
+from core.database import db
 
 logger = logging.getLogger("SovereignWatch.Historian")
+
 
 async def rf_sites_cleanup_task():
     """
@@ -17,7 +19,9 @@ async def rf_sites_cleanup_task():
     upserts; this task evicts them so the table doesn't grow unbounded.
     Runs once at startup (after a short delay) then every 24 hours.
     """
-    logger.info("RF sites cleanup task started (24-hour interval, 30-day staleness threshold)")
+    logger.info(
+        "RF sites cleanup task started (24-hour interval, 30-day staleness threshold)"
+    )
     await asyncio.sleep(300)  # wait 5 min for DB pool to be fully ready
     while True:
         if db.pool:
@@ -45,11 +49,16 @@ async def historian_task():
     """
     logger.info("Historian task started")
     consumer = AIOKafkaConsumer(
-        "adsb_raw", "ais_raw", "orbital_raw", "rf_raw",
-        "satnogs_transmitters", "satnogs_observations", "gdelt_raw",
+        "adsb_raw",
+        "ais_raw",
+        "orbital_raw",
+        "rf_raw",
+        "satnogs_transmitters",
+        "satnogs_observations",
+        "gdelt_raw",
         bootstrap_servers=settings.KAFKA_BROKERS,
         group_id="historian-writer-v2",
-        auto_offset_reset="earliest"
+        auto_offset_reset="earliest",
     )
 
     try:
@@ -160,8 +169,16 @@ async def historian_task():
 
         gdelt_upsert_sql = """
             INSERT INTO gdelt_events (
-                time, event_id, headline, url, goldstein, tone, lat, lon, geom
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, ST_SetSRID(ST_MakePoint($8,$7), 4326))
+                time, event_id, actor1, actor2, headline, url, goldstein, tone, lat, lon, geom,
+                actor1_country, actor2_country, event_code, event_root_code,
+                quad_class, num_mentions, num_sources, num_articles, event_date
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                ST_SetSRID(ST_MakePoint($10, $9), 4326),
+                $11, $12, $13, $14, $15, $16, $17, $18,
+                CASE WHEN ($19::text) IS NOT NULL AND length(($19::text)) = 8
+                     THEN to_date(($19::text), 'YYYYMMDD') ELSE NULL END
+            )
             ON CONFLICT (event_id, time) DO NOTHING
         """
 
@@ -171,25 +188,35 @@ async def historian_task():
 
         async for msg in consumer:
             try:
-                data = json.loads(msg.value.decode('utf-8'))
+                data = json.loads(msg.value.decode("utf-8"))
 
                 if msg.topic == "rf_raw":
                     key = (data.get("source", ""), data.get("site_id", ""))
                     rf_batch[key] = data
                     now = time.time()
-                    if len(rf_batch) >= BATCH_SIZE or (now - rf_last_flush > FLUSH_INTERVAL and rf_batch):
+                    if len(rf_batch) >= BATCH_SIZE or (
+                        now - rf_last_flush > FLUSH_INTERVAL and rf_batch
+                    ):
                         if db.pool:
                             try:
                                 rows = [
                                     (
-                                        r["source"], r["site_id"], r["service"],
-                                        r.get("callsign"), r.get("name"),
-                                        r["lat"], r["lon"],
-                                        r.get("output_freq"), r.get("input_freq"),
-                                        r.get("tone_ctcss"), r.get("tone_dcs"),
-                                        r.get("modes", []), r.get("use_access", "OPEN"),
+                                        r["source"],
+                                        r["site_id"],
+                                        r["service"],
+                                        r.get("callsign"),
+                                        r.get("name"),
+                                        r["lat"],
+                                        r["lon"],
+                                        r.get("output_freq"),
+                                        r.get("input_freq"),
+                                        r.get("tone_ctcss"),
+                                        r.get("tone_dcs"),
+                                        r.get("modes", []),
+                                        r.get("use_access", "OPEN"),
                                         r.get("status", "Unknown"),
-                                        r.get("city"), r.get("state"),
+                                        r.get("city"),
+                                        r.get("state"),
                                         r.get("country", "US"),
                                         r.get("emcomm_flags", []),
                                         json.dumps(r.get("meta", {})),
@@ -202,7 +229,9 @@ async def historian_task():
                                 rf_batch.clear()
                                 rf_last_flush = now
                             except Exception as rf_err:
-                                logger.error("Historian RF batch flush error: %s", rf_err)
+                                logger.error(
+                                    "Historian RF batch flush error: %s", rf_err
+                                )
                     continue
 
                 if msg.topic == "satnogs_transmitters":
@@ -210,19 +239,28 @@ async def historian_task():
                     if uuid:
                         satnogs_tx_batch[uuid] = data
                     now = time.time()
-                    if len(satnogs_tx_batch) >= BATCH_SIZE or (now - satnogs_tx_last_flush > FLUSH_INTERVAL and satnogs_tx_batch):
+                    if len(satnogs_tx_batch) >= BATCH_SIZE or (
+                        now - satnogs_tx_last_flush > FLUSH_INTERVAL
+                        and satnogs_tx_batch
+                    ):
                         if db.pool:
                             try:
                                 rows = [
                                     (
-                                        r["uuid"], r["norad_id"],
-                                        r.get("sat_name"), r.get("description"),
+                                        r["uuid"],
+                                        r["norad_id"],
+                                        r.get("sat_name"),
+                                        r.get("description"),
                                         bool(r.get("alive", True)),
                                         r.get("type", "Transmitter"),
-                                        r.get("uplink_low"), r.get("uplink_high"),
-                                        r.get("downlink_low"), r.get("downlink_high"),
-                                        r.get("mode"), bool(r.get("invert", False)),
-                                        r.get("baud"), r.get("status", "active"),
+                                        r.get("uplink_low"),
+                                        r.get("uplink_high"),
+                                        r.get("downlink_low"),
+                                        r.get("downlink_high"),
+                                        r.get("mode"),
+                                        bool(r.get("invert", False)),
+                                        r.get("baud"),
+                                        r.get("status", "active"),
                                     )
                                     for r in satnogs_tx_batch.values()
                                 ]
@@ -231,7 +269,10 @@ async def historian_task():
                                 satnogs_tx_batch.clear()
                                 satnogs_tx_last_flush = now
                             except Exception as stx_err:
-                                logger.error("Historian SatNOGS transmitter flush error: %s", stx_err)
+                                logger.error(
+                                    "Historian SatNOGS transmitter flush error: %s",
+                                    stx_err,
+                                )
                     continue
 
                 if msg.topic == "satnogs_observations":
@@ -239,7 +280,9 @@ async def historian_task():
                         try:
                             start_str = data.get("start")
                             if start_str:
-                                obs_time = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                                obs_time = datetime.fromisoformat(
+                                    start_str.replace("Z", "+00:00")
+                                )
                             else:
                                 obs_time = datetime.now(timezone.utc)
                             obs_row = (
@@ -264,7 +307,10 @@ async def historian_task():
                             async with db.pool.acquire() as conn:
                                 await conn.execute(satnogs_obs_insert_sql, *obs_row)
                         except Exception as sobs_err:
-                            logger.error("Historian SatNOGS observation insert error: %s", sobs_err)
+                            logger.error(
+                                "Historian SatNOGS observation insert error: %s",
+                                sobs_err,
+                            )
                     continue
 
                 if msg.topic == "gdelt_raw":
@@ -273,21 +319,36 @@ async def historian_task():
                             # GDelt events are unique by (event_id, time).
                             # We timestamp them by ingestion time or original time.
                             ts_ms = data.get("time")
-                            event_time = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
+                            event_time = datetime.fromtimestamp(
+                                ts_ms / 1000.0, tz=timezone.utc
+                            )
                             row = (
                                 event_time,
                                 data.get("event_id"),
+                                data.get("actor1") or data.get("headline"),
+                                data.get("actor2"),
                                 data.get("headline"),
                                 data.get("url"),
                                 data.get("goldstein"),
                                 data.get("tone"),
                                 data.get("lat"),
                                 data.get("lon"),
+                                data.get("actor1_country"),
+                                data.get("actor2_country"),
+                                data.get("event_code"),
+                                data.get("event_root_code"),
+                                data.get("quad_class"),
+                                data.get("num_mentions"),
+                                data.get("num_sources"),
+                                data.get("num_articles"),
+                                data.get("event_date"),
                             )
                             async with db.pool.acquire() as conn:
                                 await conn.execute(gdelt_upsert_sql, *row)
                         except Exception as gdelt_err:
-                            logger.error("Historian GDELT event insert error: %s", gdelt_err)
+                            logger.error(
+                                "Historian GDELT event insert error: %s", gdelt_err
+                            )
                     continue
 
                 # --- Parsing Logic ---
@@ -332,20 +393,28 @@ async def historian_task():
                         if _tle_hash_cache.get(norad_id) == tle_hash:
                             continue  # TLE unchanged — skip redundant DB write
                         try:
-                            sat_name    = classification.get("name") or callsign
-                            category    = classification.get("category")
+                            sat_name = classification.get("name") or callsign
+                            category = classification.get("category")
                             constellation = classification.get("constellation")
-                            period_min  = classification.get("period_min")
-                            incl_deg    = classification.get("inclination_deg")
+                            period_min = classification.get("period_min")
+                            incl_deg = classification.get("inclination_deg")
                             eccentricity = classification.get("eccentricity")
                             async with db.pool.acquire() as conn:
                                 await conn.execute(
                                     satellite_upsert_sql,
-                                    norad_id, sat_name, category, constellation,
-                                    tle_line1, tle_line2,
-                                    float(period_min)   if period_min   is not None else None,
-                                    float(incl_deg)     if incl_deg     is not None else None,
-                                    float(eccentricity) if eccentricity is not None else None,
+                                    norad_id,
+                                    sat_name,
+                                    category,
+                                    constellation,
+                                    tle_line1,
+                                    tle_line2,
+                                    float(period_min)
+                                    if period_min is not None
+                                    else None,
+                                    float(incl_deg) if incl_deg is not None else None,
+                                    float(eccentricity)
+                                    if eccentricity is not None
+                                    else None,
                                 )
                             _tle_hash_cache[norad_id] = tle_hash
                         except Exception as sat_err:
@@ -353,20 +422,21 @@ async def historian_task():
                     continue  # orbital_raw never goes into the tracks batch
 
                 # ADS-B and AIS rows → tracks hypertable
-                meta = json.dumps({
-                    "callsign": callsign,
-                    "how": data.get("how"),
-                    "ce": point.get("ce"),
-                    "le": point.get("le"),
-                    "classification": classification
-                })
+                meta = json.dumps(
+                    {
+                        "callsign": callsign,
+                        "how": data.get("how"),
+                        "ce": point.get("ce"),
+                        "le": point.get("le"),
+                        "classification": classification,
+                    }
+                )
                 batch.append((ts, uid, etype, lat, lon, alt, speed, heading, meta))
 
                 # --- Batch Flush Logic ---
                 now = time.time()
-                flush_needed = (
-                    len(batch) >= BATCH_SIZE
-                    or (now - last_flush > FLUSH_INTERVAL and batch)
+                flush_needed = len(batch) >= BATCH_SIZE or (
+                    now - last_flush > FLUSH_INTERVAL and batch
                 )
                 if flush_needed:
                     if db.pool:
@@ -408,21 +478,31 @@ async def historian_task():
             try:
                 async with db.pool.acquire() as conn:
                     await conn.executemany(insert_sql, batch)
-                logger.info(f"Historian: flushed {len(batch)} track records on shutdown")
+                logger.info(
+                    f"Historian: flushed {len(batch)} track records on shutdown"
+                )
             except Exception as e:
                 logger.error(f"Historian shutdown flush error: {e}")
         if rf_batch and db.pool:
             try:
                 rows = [
                     (
-                        r["source"], r["site_id"], r["service"],
-                        r.get("callsign"), r.get("name"),
-                        r["lat"], r["lon"],
-                        r.get("output_freq"), r.get("input_freq"),
-                        r.get("tone_ctcss"), r.get("tone_dcs"),
-                        r.get("modes", []), r.get("use_access", "OPEN"),
+                        r["source"],
+                        r["site_id"],
+                        r["service"],
+                        r.get("callsign"),
+                        r.get("name"),
+                        r["lat"],
+                        r["lon"],
+                        r.get("output_freq"),
+                        r.get("input_freq"),
+                        r.get("tone_ctcss"),
+                        r.get("tone_dcs"),
+                        r.get("modes", []),
+                        r.get("use_access", "OPEN"),
                         r.get("status", "Unknown"),
-                        r.get("city"), r.get("state"),
+                        r.get("city"),
+                        r.get("state"),
                         r.get("country", "US"),
                         r.get("emcomm_flags", []),
                         json.dumps(r.get("meta", {})),
@@ -432,29 +512,41 @@ async def historian_task():
                 ]
                 async with db.pool.acquire() as conn:
                     await conn.executemany(rf_upsert_sql, rows)
-                logger.info("Historian: flushed %d RF site records on shutdown", len(rows))
+                logger.info(
+                    "Historian: flushed %d RF site records on shutdown", len(rows)
+                )
             except Exception as e:
                 logger.error("Historian RF shutdown flush error: %s", e)
         if satnogs_tx_batch and db.pool:
             try:
                 rows = [
                     (
-                        r["uuid"], r["norad_id"],
-                        r.get("sat_name"), r.get("description"),
+                        r["uuid"],
+                        r["norad_id"],
+                        r.get("sat_name"),
+                        r.get("description"),
                         bool(r.get("alive", True)),
                         r.get("type", "Transmitter"),
-                        r.get("uplink_low"), r.get("uplink_high"),
-                        r.get("downlink_low"), r.get("downlink_high"),
-                        r.get("mode"), bool(r.get("invert", False)),
-                        r.get("baud"), r.get("status", "active"),
+                        r.get("uplink_low"),
+                        r.get("uplink_high"),
+                        r.get("downlink_low"),
+                        r.get("downlink_high"),
+                        r.get("mode"),
+                        bool(r.get("invert", False)),
+                        r.get("baud"),
+                        r.get("status", "active"),
                     )
                     for r in satnogs_tx_batch.values()
                 ]
                 async with db.pool.acquire() as conn:
                     await conn.executemany(satnogs_tx_upsert_sql, rows)
-                logger.info("Historian: flushed %d SatNOGS transmitter records on shutdown", len(rows))
+                logger.info(
+                    "Historian: flushed %d SatNOGS transmitter records on shutdown",
+                    len(rows),
+                )
             except Exception as e:
-                logger.error("Historian SatNOGS transmitter shutdown flush error: %s", e)
+                logger.error(
+                    "Historian SatNOGS transmitter shutdown flush error: %s", e
+                )
         await consumer.stop()
         logger.info("Historian consumer stopped")
-

@@ -242,6 +242,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
       "showAurora",
       "showJamming",
       "showGdelt",
+      "showGdeltLabels",
     ];
 
     // Object holding the new state for all boolean toggles

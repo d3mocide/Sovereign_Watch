@@ -357,8 +357,28 @@ CREATE TABLE IF NOT EXISTS gdelt_events (
     lat         DOUBLE PRECISION NOT NULL,
     lon         DOUBLE PRECISION NOT NULL,
     geom        GEOMETRY(POINT, 4326),
+    actor1_country  TEXT,
+    actor2_country  TEXT,
+    event_code      TEXT,
+    event_root_code TEXT,
+    quad_class      SMALLINT,
+    num_mentions    INT,
+    num_sources     INT,
+    num_articles    INT,
+    event_date      DATE,
     UNIQUE (event_id, time)
 );
+
+-- Migration: add enriched columns to existing gdelt_events tables
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS actor1_country  TEXT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS actor2_country  TEXT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS event_code      TEXT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS event_root_code TEXT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS quad_class      SMALLINT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS num_mentions    INT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS num_sources     INT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS num_articles    INT;
+ALTER TABLE gdelt_events ADD COLUMN IF NOT EXISTS event_date      DATE;
 
 SELECT create_hypertable('gdelt_events', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
 SELECT add_retention_policy('gdelt_events', INTERVAL '7 days');

@@ -7,6 +7,7 @@ import {
   Radio,
   Satellite,
   Ship,
+  Tags,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -267,20 +268,47 @@ export const IntelFeed = ({
               </span>
             </div>
           </div>
-          <button
-            className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-            onClick={() => onFilterChange?.("showGdelt", !filters?.showGdelt)}
-            aria-label="Toggle GDELT OSINT Events"
-            aria-pressed={filters?.showGdelt}
-          >
-            <div
-              className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters?.showGdelt ? "bg-amber-400" : "bg-white/10 hover:bg-white/20"}`}
+          <div className="ml-auto flex items-center">
+            <button
+              className="p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              onClick={() =>
+                onFilterChange?.(
+                  "showGdeltLabels",
+                  !(filters?.showGdeltLabels ?? false),
+                )
+              }
+              aria-label="Toggle GDELT Domain Labels"
+              aria-pressed={filters?.showGdeltLabels ?? false}
+              title={
+                (filters?.showGdeltLabels ?? false)
+                  ? "Hide domain labels"
+                  : "Show domain labels"
+              }
+            >
+              <Tags
+                size={12}
+                className={
+                  (filters?.showGdeltLabels ?? false)
+                    ? "text-amber-400"
+                    : "text-white/35"
+                }
+              />
+            </button>
+            <button
+              className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              onClick={() => onFilterChange?.("showGdelt", !filters?.showGdelt)}
+              aria-label="Toggle GDELT OSINT Events"
+              aria-pressed={filters?.showGdelt}
             >
               <div
-                className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters?.showGdelt ? "left-3.5" : "left-0.5"}`}
-              />
-            </div>
-          </button>
+                className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${filters?.showGdelt ? "bg-amber-400" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                <div
+                  className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${filters?.showGdelt ? "left-3.5" : "left-0.5"}`}
+                />
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>
