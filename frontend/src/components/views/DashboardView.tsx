@@ -18,6 +18,12 @@ import { usePassPredictions } from "../../hooks/usePassPredictions";
 import { CoTEntity, DRState, IntelEvent, MissionProps } from "../../types";
 import { calculateZoom } from "../../utils/map/geoUtils";
 import { SituationGlobe } from "../map/SituationGlobe";
+import { SituationGlobeGL } from "../map/SituationGlobeGL";
+
+// Use the globe.gl + Three.js backend when VITE_ENABLE_GLOBE_GL=true.
+// Falls back to the MapLibre globe implementation when unset.
+const _useGlobeGL = import.meta.env.VITE_ENABLE_GLOBE_GL === "true";
+const GlobeWidget = _useGlobeGL ? SituationGlobeGL : SituationGlobe;
 import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
 import { NewsWidget } from "../widgets/NewsWidget";
 
@@ -799,7 +805,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Global Right */}
-          <SituationGlobe
+          <GlobeWidget
             satellitesRef={satellitesRef}
             cablesData={cablesData}
             stationsData={stationsData}
