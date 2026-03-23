@@ -60,7 +60,6 @@ const STREAM_ABBR: Record<string, string> = {
   aviation: "ADSB",
   maritime: "AIS",
   orbital: "ORB",
-  repeaterbook: "RBOOK",
   radioref: "RREF",
   rf_public: "RF",
   ai: "AI",

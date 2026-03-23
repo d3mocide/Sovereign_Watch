@@ -142,7 +142,6 @@ async def get_ai_config():
 async def get_features_config():
     """Return enabled functionality based on environment."""
     return {
-        "repeaterbook_enabled": bool(os.getenv("REPEATERBOOK_API_TOKEN")),
         "radioref_enabled": bool(
             os.getenv("RADIOREF_APP_KEY") and
             os.getenv("RADIOREF_USERNAME") and
@@ -163,11 +162,7 @@ async def get_streams_config():
     # Check Aviation (Always active, no key required for ADS-B Exchange public/local)
     aviation_status = "Active"
 
-    # Check RF/Repeaters
     # Check RF sources
-    rb_key = os.getenv("REPEATERBOOK_API_TOKEN")
-    rb_status = "Active" if rb_key and rb_key != "your_token_here" else "Missing Key"
-
     rr_key = os.getenv("RADIOREF_APP_KEY")
     rr_user = os.getenv("RADIOREF_USERNAME")
     rr_pass = os.getenv("RADIOREF_PASSWORD")
@@ -187,7 +182,6 @@ async def get_streams_config():
         {"id": "aviation", "name": "Aviation Tracking", "status": aviation_status},
         {"id": "maritime", "name": "Maritime AIS", "status": maritime_status},
         {"id": "orbital", "name": "Orbital Assets", "status": orbital_status},
-        {"id": "repeaterbook", "name": "RepeaterBook", "status": rb_status},
         {"id": "radioref", "name": "RadioReference", "status": rr_status},
         {"id": "rf_public", "name": "Public RF Assets", "status": rf_public_status},
         {"id": "ai", "name": "AI Analysis", "status": ai_status},

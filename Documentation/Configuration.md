@@ -70,14 +70,6 @@ Sovereign Watch uses **LiteLLM** as a unified AI gateway. It supports a triple-m
 
 ## RF Infrastructure
 
-### RepeaterBook
-
-| Variable                     | Default   | Required         | Description                                                   |
-| :--------------------------- | :-------- | :--------------- | :------------------------------------------------------------ |
-| `REPEATERBOOK_API_TOKEN`     | _(empty)_ | For RepeaterBook | RepeaterBook API token. Ingestion is **disabled** if not set. |
-| `RF_RB_RADIUS_MI`            | `200`     | No               | RepeaterBook query radius in **miles**.                       |
-| `RF_REPEATERBOOK_INTERVAL_H` | `6`       | No               | Fetch interval in hours.                                      |
-
 ### RadioReference
 
 | Variable            | Default   | Required     | Description                                                                                          |
@@ -90,7 +82,6 @@ Sovereign Watch uses **LiteLLM** as a unified AI gateway. It supports a triple-m
 
 | Variable                     | Default | Description                                        |
 | :--------------------------- | :------ | :------------------------------------------------- |
-| `RF_REPEATERBOOK_INTERVAL_H` | `6`     | RepeaterBook fetch interval (hours)                |
 | `RF_ARD_INTERVAL_H`          | `24`    | Amateur Radio Directory fetch interval (hours)     |
 | `RF_NOAA_INTERVAL_H`         | `168`   | NOAA Weather Radio fetch interval (hours) — weekly |
 
@@ -155,7 +146,6 @@ The following features are automatically enabled or disabled based on credential
 
 | Feature                  | Enabled When                                                               |
 | :----------------------- | :------------------------------------------------------------------------- |
-| RepeaterBook ingestion   | `REPEATERBOOK_API_TOKEN` is set                                            |
 | RadioReference ingestion | `RADIOREF_APP_KEY` + `RADIOREF_USERNAME` + `RADIOREF_PASSWORD` are all set |
 | Mapbox 3D terrain        | `VITE_MAPBOX_TOKEN` is set and `VITE_ENABLE_MAPBOX=true`                   |
 | Claude AI analysis       | `ANTHROPIC_API_KEY` is set                                                 |

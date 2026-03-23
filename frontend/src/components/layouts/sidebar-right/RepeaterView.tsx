@@ -177,7 +177,7 @@ export const RepeaterView: React.FC<BaseViewProps> = ({
         </div>
         <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
           <span>
-            SRC: <span className="text-teal-400/70">REPEATERBOOK_API</span>
+            SRC: <span className="text-teal-400/70">RF_DATA</span>
           </span>
           <span>
             <TimeTracked lastSeen={entity.lastSeen} />
