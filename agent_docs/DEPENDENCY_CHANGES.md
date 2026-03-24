@@ -1,5 +1,7 @@
 # Dependency Changes & Upgrade Log
 
+> Historical migration note: this file documents the transition away from legacy `requirements.txt` files. The current project standard is `pyproject.toml` + `uv.lock` across Python services.
+
 **Date:** 2026-03-16
 **Branch:** `claude/audit-dependencies-tApww`
 **Triggered by:** Dependency audit identifying no lock files, unpinned packages, outdated versions, and supply-chain risks.
@@ -57,7 +59,7 @@ When a new version is available, update the version string and download URL in `
 └── uv.lock          ← Machine-generated: full dependency graph with hashes; commit this file
 ```
 
-**The old `requirements.txt` files are superseded by `pyproject.toml` + `uv.lock` and can be removed after testing.**
+**The old `requirements.txt` files are superseded by `pyproject.toml` + `uv.lock` and are no longer the active dependency source of truth.**
 
 ### Updating dependencies in future
 

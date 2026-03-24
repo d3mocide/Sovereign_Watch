@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.46.4] - 2026-03-23
+
+### Added
+
+- **Local CI Dry-Run Helper**: Added `tools/run-ci-checks.ps1` to run workflow-equivalent checks locally (all jobs, selected jobs, or changed-file-derived jobs), with optional dependency installation and pass/fail summary output.
+- **Tooling Documentation**: Added `tools/README.md` and integrated the CI dry-run workflow into the development guide for faster pre-push validation.
+
+### Changed
+
+- **Agent/Developer Execution Policy**: Standardized guidance to **host-first** for lint/tests/static analysis and **docker-first** for runtime/parity checks, while keeping ingestion runtime changes container-rebuild-required.
+- **Dev Environment Standardization**: Updated active docs and agent guidance to align on `pyproject.toml` + `uv.lock` dependency management and Ruff-based Python tooling.
+- **VS Code Workspace Settings**: Aligned settings for Pylance + Ruff workflows and modernized JS/TS SDK setting keys.
+
+### Fixed
+
+- **CI Workflow Dependency Gaps**: Added missing test dependencies in `.github/workflows/ci.yml` (including `uvicorn`, `pyyaml`, `protobuf`, and poller-specific runtime libs such as `aiohttp`/`psycopg2-binary`) so job environments match test imports.
+- **JS8Call Test Stability**: Removed manual network exploration scripts from pytest discovery by renaming them out of `test_*.py`, preventing collection-time external HTTP/WebSocket failures.
+- **Backend API Test Import Robustness**: Hardened dependency stubs in API tests so collection is resilient in lightweight local environments.
+- **Poller Test Compatibility**: Updated async test helpers (`rf_pulse` and `gdelt_pulse`) for Python 3.14 event-loop behavior (`asyncio.run`), eliminating `no current event loop` failures.
+
 ## [0.46.3] - 2026-03-23
 
 ### Added

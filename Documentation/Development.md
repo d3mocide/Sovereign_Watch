@@ -13,7 +13,8 @@
 | :--- | :--- | :--- |
 | **Node.js** | 20+ | Required for frontend tooling and LSP servers |
 | **pnpm** | 9+ | All frontend dependencies use pnpm. npm is used only for global LSP servers |
-| **Python** | 3.11+ | Required for backend lint, tests, and LSP on the host |
+| **Python** | 3.12+ | Required for backend lint, tests, and LSP on the host |
+| **uv** | latest | Python package manager used by backend services (`pyproject.toml` + `uv.lock`) |
 | **Docker** | 24+ | Required for infrastructure services (DB, bus, cache) |
 | **Docker Compose** | v2 | Included with Docker Desktop |
 
@@ -27,7 +28,7 @@
 | Ingestion pollers | Always Docker | Depend on Redpanda being reachable on the compose network |
 | Frontend (Vite/React) | **Local recommended** | `node_modules` on the host gives editors full type resolution for Deck.gl, MapLibre, etc. HMR also tends to be more reliable without a bind-mount layer |
 | Backend API (FastAPI) | **Local recommended** | A local `.venv` gives Pylance/pyright access to FastAPI, asyncpg, pydantic types without Docker exec |
-| Lint · tests · LSP servers | Always local | Host tools only — no containers involved |
+| Lint · tests · LSP servers | Local recommended | Fastest feedback loop; container execution remains available when needed |
 
 ---
 
@@ -59,9 +60,8 @@ Your editor can now resolve all Deck.gl, MapLibre, React, and Tailwind types fro
 
 ```bash
 cd backend/api
-python3 -m venv .venv
+uv sync --group dev
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
 Point your editor's Python interpreter at `backend/api/.venv`. Pylance and pyright then resolve FastAPI, asyncpg, pydantic, LiteLLM, and every other dependency from the venv rather than guessing.
@@ -80,9 +80,9 @@ All four are VS Code-family editors and read `.vscode/settings.json` automatical
 
 **What's pre-configured:**
 
-- Python: Pylance (Pyright engine), Black formatter, import organisation on save
+- Python: Pylance (Pyright engine), Ruff formatter, import organisation on save
 - TypeScript / TSX: tsserver, Prettier formatter
-- Extra Python paths for all five ingestion pollers
+- Extra Python paths for all six ingestion pollers
 
 **Recommended extensions:**
 
@@ -90,6 +90,7 @@ All four are VS Code-family editors and read `.vscode/settings.json` automatical
 | :--- | :--- | :--- |
 | Python | `ms-python.python` | Python language support |
 | Pylance | `ms-python.vscode-pylance` | Fast Pyright-powered IntelliSense |
+| Ruff | `charliermarsh.ruff` | Python linting and formatting |
 | ESLint | `dbaeumer.vscode-eslint` | TypeScript/React linting |
 | Prettier | `esbenp.prettier-vscode` | TypeScript/CSS/JSON formatting |
 | Docker | `ms-azuretools.vscode-docker` | Compose file support + container logs |
@@ -106,8 +107,8 @@ All four are VS Code-family editors and read `.vscode/settings.json` automatical
 **Python (PyCharm or IntelliJ with Python plugin):**
 
 1. **Settings → Python Interpreter** → Add Interpreter → Docker Compose, select `backend-api` service — or point at a local `.venv` if you prefer running tools on the host.
-2. Install the **Pylance** plugin (JetBrains Marketplace) — it reads `pyrightconfig.json` at the project root automatically.
-3. Mark `backend/api` as a Sources Root for correct import resolution.
+2. Mark `backend/api` as a Sources Root for correct import resolution.
+3. Enable Ruff integration (external tool or plugin) so lint/format behavior matches CI and VS Code.
 
 **TypeScript (WebStorm or IntelliJ):**
 
@@ -146,7 +147,7 @@ Any editor with LSP support will work out of the box:
 
 | Config file | What it controls |
 | :--- | :--- |
-| `pyrightconfig.json` (project root) | Python LSP — covers `backend/api` and all five ingestion pollers |
+| `pyrightconfig.json` (project root) | Python LSP — covers `backend/api` and all six ingestion pollers |
 | `frontend/tsconfig.json` | TypeScript LSP — strict mode, ES2020, React JSX |
 | `.editorconfig` (project root) | Formatting baseline — indentation, line endings, charset |
 
@@ -184,7 +185,7 @@ No additional configuration needed.
 
 ### Frontend (TypeScript · React · Vite)
 
-With `node_modules` installed locally (see [Local Dependencies](#local-dependencies-recommended)), all of these run directly on the host. Vite HMR is active whenever the frontend container is running — saves reflect in the browser instantly.
+With `node_modules` installed locally (see [Local Dependencies](#local-dependencies-recommended)), all of these run directly on the host. Vite HMR is active when you run the local dev server (`pnpm run dev`) or the frontend container.
 
 ```bash
 cd frontend
@@ -223,9 +224,11 @@ docker compose exec sovereign-backend python -m pytest
 ```bash
 # From the repo root — installs poller deps into the root .venv for IDE use only
 # (Runtime still uses each poller's own Docker image)
-.venv\Scripts\pip install redis==7.3.0 psycopg2-binary requests   # Windows
+uv venv
+uv pip install --python .venv redis==7.3.0 psycopg2-binary requests aiohttp   # Windows
 # or
-.venv/bin/pip install redis==7.3.0 psycopg2-binary requests        # Linux / macOS
+uv venv
+uv pip install --python .venv redis==7.3.0 psycopg2-binary requests aiohttp   # Linux / macOS
 ```
 
 After installing, do **Ctrl+Shift+P → Python: Restart Language Server** in VS Code to clear cached errors.
@@ -238,6 +241,7 @@ docker compose up -d --build sovereign-ais-poller
 docker compose up -d --build sovereign-space-pulse
 docker compose up -d --build sovereign-infra-poller
 docker compose up -d --build sovereign-rf-pulse
+docker compose up -d --build sovereign-gdelt-pulse
 ```
 
 ```bash
@@ -246,6 +250,46 @@ cd backend/ingestion/aviation_poller && ruff check . && python -m pytest
 cd backend/ingestion/maritime_poller && ruff check . && python -m pytest
 cd backend/ingestion/space_pulse && ruff check . && python -m pytest
 ```
+
+---
+
+### CI Dry Run (Local)
+
+To mirror GitHub Actions test jobs before pushing, use the helper script:
+
+`tools/run-ci-checks.ps1`
+
+Run from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1
+```
+
+Useful options:
+
+- `-Jobs <list>`: run specific jobs only (for example `frontend,backend-api`).
+- `-ChangedFiles <list>`: auto-select jobs from changed paths using the same mapping as `.github/workflows/ci.yml`.
+- `-InstallDeps`: install each job's CI dependencies before running tests.
+- `-ContinueOnFailure`: keep running remaining jobs after a failure.
+- `-VerbosePytest`: run pytest with extra verbosity.
+
+Examples:
+
+```powershell
+# Selected jobs only
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -Jobs backend-api,rf-pulse
+
+# Auto-select from changed files
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -ChangedFiles backend/api/main.py,js8call/server.py
+
+# Run all jobs, install dependencies, continue after failures
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -Jobs all -InstallDeps -ContinueOnFailure
+```
+
+Exit code behavior:
+
+- `0` when all selected jobs pass
+- `1` when any selected job fails
 
 ---
 

@@ -1,55 +1,58 @@
-# Release - v0.46.3 - Sidebar Modularization & GDELT Fidelity Fixes
+# Release - v0.46.4 - CI Reliability & Agent Tooling Standardization
 
 ## High-Level Summary
 
-This patch release focuses on maintainability and intelligence-display correctness. The right sidebar has been decomposed from a monolithic component into focused domain views with explicit shared types, and GDELT actor/tone rendering has been corrected end-to-end so sidebar and tooltip metrics match backend payloads and map color semantics.
+This release focuses on developer and agent reliability: CI jobs now install the dependencies their tests actually import, release-risky manual scripts are removed from pytest discovery, and project guidance is standardized around host-first code checks with Docker-first runtime parity. The result is fewer false CI failures and a more deterministic workflow for both humans and coding agents.
 
 ## Key Features
 
-- **SidebarRight Decomposition**: Split the previous 1,866-line `SidebarRight.tsx` into focused view modules under `sidebar-right/`:
-  - `JS8View`, `RepeaterView`, `TowerView`, `InfraView`, `GdeltView`, `SatelliteView`, `ShipView`, `AircraftView`.
-- **Thin Orchestrator Pattern**: `SidebarRight.tsx` now routes by entity type and passes `key={entity.uid}` to each view, eliminating previous `prevUid` / state-reset anti-patterns.
-- **Shared Sidebar Contracts**: Added `sidebar-right/types.ts` with `BaseViewProps`, `SatelliteViewProps`, `AircraftViewProps`, `InfraDetail`, and `InfraProperties`.
-- **GDELT Actor 1 Integrity**: `actor1` is now included in backend GeoJSON properties and mapped through frontend GDELT layer typing.
-- **Tooltip Metric Consistency**: GDELT `TONE (GS)` and `STATUS` now use Goldstein scale (`goldstein`) instead of average tone (`tone`), matching map dot color logic.
+- **Local CI Dry-Run Command**: Added `tools/run-ci-checks.ps1` to mirror CI jobs locally (all jobs, selected jobs, or changed-file-derived selection).
+- **Integrated Developer Docs**: Added `tools/README.md` and documented local CI dry-run usage in `Documentation/Development.md`.
+- **Agent Policy Alignment**: Unified guidance in `AGENTS.md` for host-first lint/tests/static analysis and Docker-first runtime validation.
 
 ## Technical Details
 
-- **Frontend**:
-  - Refactored sidebar detail rendering into per-domain components under `frontend/src/components/layouts/sidebar-right/`.
-  - Added per-view local state ownership and deterministic state reset on entity change via `key={entity.uid}`.
-  - Updated GDELT layer interfaces/mapping to include `actor1` in `GdeltFeature.properties` and `GdeltPoint`.
-  - Updated `MapTooltip.tsx` GDELT section to drive value/status thresholds from `goldstein` and use nullish coalescing for zero-safe display.
-- **Backend API**:
-  - Updated `backend/api/routers/gdelt.py` GeoJSON property mapping to include `"actor1": r["actor1"]`.
+- **CI Workflow Hardening** (`.github/workflows/ci.yml`):
+  - Added missing backend test dependencies (`uvicorn`, `pyyaml`, `protobuf`).
+  - Added poller/runtime deps where required by tests (`aiohttp`, `psycopg2-binary`, etc.).
+  - Simplified frontend test invocation to use the script-defined non-watch mode.
+- **Test Suite Stability**:
+  - `js8call/tests/test_json.py`, `test_ws.py`, and `test_kiwi.py` were moved to `manual_test_*.py` names to prevent external-network calls during pytest collection.
+  - Added missing `__init__.py` files to test directories to reduce namespace/collection ambiguity.
+  - Updated async helper wrappers in `rf_pulse` and `gdelt_pulse` tests to use `asyncio.run`, fixing Python 3.14 event-loop compatibility issues.
+  - Strengthened backend API tests with explicit dependency stubs for collection-time imports in minimal local environments.
+- **Dev Tooling Standardization**:
+  - Standardized active docs and internal agent assets on `pyproject.toml` + `uv.lock` for Python dependencies.
+  - Standardized on Pylance (language intelligence) + Ruff (lint/format) in guidance and VS Code settings.
 
 ## Upgrade Instructions
 
-1. **Pull latest source and tags**
-   ```bash
-   git pull origin main --tags
-   ```
+1. Pull latest changes:
 
-2. **Rebuild and restart affected services**
-   ```bash
-  docker compose up -d --build sovereign-backend sovereign-frontend sovereign-nginx
-   ```
+```bash
+git pull origin dev
+```
 
-3. **Run targeted frontend verification**
-   ```bash
-   cd frontend
-  pnpm run lint
-  pnpm run test
-   ```
+2. Rebuild and restart runtime services for parity:
 
-4. **Run targeted backend API verification**
-  ```bash
-  cd backend/api
-  ruff check .
-  python -m pytest
-  ```
+```bash
+docker compose up -d --build
+```
 
-5. **Validate GDELT API payload shape (optional sanity)**
-   ```bash
-   curl "http://localhost/api/gdelt/events?refresh=true&limit=5"
-   ```
+3. Run local CI dry-run before pushing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -Jobs all -ContinueOnFailure
+```
+
+4. If only specific areas changed, run targeted suites:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -Jobs frontend,backend-api,rf-pulse,gdelt-pulse,js8call
+```
+
+5. Optional focused dependency install in local CI dry-run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run-ci-checks.ps1 -Jobs all -InstallDeps
+```

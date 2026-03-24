@@ -1,18 +1,7 @@
 {
-  "python.languageServer": "Jedi",
-  "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.autoImportCompletions": true,
-  "python.analysis.indexing": true,
-  "python.analysis.extraPaths": [
-    "backend/api",
-    "backend/ingestion/aviation_poller",
-    "backend/ingestion/maritime_poller",
-    "backend/ingestion/space_pulse",
-    "backend/ingestion/rf_pulse",
-    "backend/ingestion/infra_poller"
-  ],
-  "typescript.tsdk": "frontend/node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "python.languageServer": "Pylance",
+  "js/ts.tsdk.path": "frontend/node_modules/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true

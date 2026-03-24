@@ -192,7 +192,7 @@ Sovereign Watch is configured for **Hot Module Replacement** in development:
 | **Backend API** | Save any `.py` file | Uvicorn auto-reloads (no restart needed) |
 | **Ingestion Pollers** | Save any `.py` file | **Requires manual restart:** `docker compose restart sovereign-adsb-poller` |
 
-**Important:** Only rebuild containers when `Dockerfile` or dependency files (`requirements.txt`, `package.json`) change:
+**Important:** Only rebuild containers when `Dockerfile` or dependency files (`pyproject.toml`, `uv.lock`, `package.json`, `pnpm-lock.yaml`) change:
 
 ```bash
 # Rebuild a specific service

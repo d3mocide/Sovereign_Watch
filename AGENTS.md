@@ -37,7 +37,10 @@
 
 ## 2. Mandatory Architectural Invariants
 
-- **Container-First**: Do NOT run `npm`, `node`, `python`, `pip`, or `go` directly on the host shell for build/runtime tasks. Use Docker Compose (`docker compose build <service>`, `docker compose up -d --build <service>`).
+- **Execution Standard (Agent/Developer):**
+  - **Host-First for code checks**: Run linting, unit tests, and static analysis on the host by default for speed and tool availability.
+  - **Docker-First for runtime/parity**: Use Docker Compose for image builds, service startup/runtime validation, and integration checks that depend on compose networking.
+  - **Ingestion runtime rule**: Poller code/config changes still require container rebuild + restart (`docker compose up -d --build <service>`).
 - **Communication**: All inter-service communication must use **TAK Protocol V1 (Protobuf)** via `tak.proto`. No ad-hoc JSON.
 - **Rendering**: Hybrid Architecture (WebGL2 for visuals, WebGPU/Workers for compute). Do not downgrade to Leaflet.
   - **Map Layer Reference**: `agent_docs/z-ordering.md` documents the full draw-order stack, `depthTest`/`depthBias` rules, and animation loop data threading. It is injected automatically when you edit files in `frontend/src/layers/` or `frontend/src/components/map/`.
@@ -83,7 +86,7 @@ To avoid excessive runtime, **only** run verification suites for the components/
 
 ### Verification Decision Gate (Efficiency + Parity)
 
-Use this gate to avoid unnecessary container overhead while preserving container-first architecture:
+Use this gate to avoid unnecessary container overhead while preserving runtime parity:
 
 1. **Inner-loop code checks (preferred on host):**
    - Linting
@@ -111,7 +114,7 @@ Use this gate to avoid unnecessary container overhead while preserving container
 │   ├── src/          # Source Code
 │   └── package.json  # Frontend Dependencies
 ├── backend/          # Microservices Root
-│   ├── api/          # FastAPI Server (has requirements.txt)
+│   ├── api/          # FastAPI Server (pyproject.toml + uv.lock)
 │   ├── ingestion/    # Data Ingestion Services (Python Pollers)
 │   │   ├── aviation_poller/   # ADS-B, OpenSky
 │   │   ├── maritime_poller/   # AIS (AISStream)

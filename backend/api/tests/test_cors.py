@@ -1,23 +1,42 @@
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 import os
 import sys
+import types
 from httpx import AsyncClient, ASGITransport
 
 # Add the api directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Mock litellm
-mock_litellm = MagicMock()
-sys.modules["litellm"] = mock_litellm
+# Mock heavy dependencies before importing main so that modules which are
+# not installed (asyncpg, redis, aiokafka, litellm) never need to be resolved.
+_mock_asyncpg = MagicMock()
+_mock_asyncpg.create_pool = AsyncMock()
+sys.modules["asyncpg"] = _mock_asyncpg
 
-# Mock dependencies
-with patch("asyncpg.create_pool", new=AsyncMock()) as _mock_pool, \
-     patch("redis.from_url", new=AsyncMock()) as _mock_redis, \
-     patch("aiokafka.AIOKafkaConsumer", new=MagicMock()) as _mock_kafka:
+_mock_redis_pkg = types.ModuleType("redis")
+_mock_redis_asyncio = types.ModuleType("redis.asyncio")
+_mock_redis_asyncio.from_url = AsyncMock()
+_mock_redis_asyncio.Redis = MagicMock()
+_mock_redis_pkg.asyncio = _mock_redis_asyncio
+sys.modules["redis"] = _mock_redis_pkg
+sys.modules["redis.asyncio"] = _mock_redis_asyncio
 
-    from main import app
+_mock_aiokafka = types.ModuleType("aiokafka")
+_mock_aiokafka.AIOKafkaConsumer = MagicMock()
+_mock_aiokafka.AIOKafkaProducer = MagicMock()
+sys.modules["aiokafka"] = _mock_aiokafka
+
+_mock_numpy = types.ModuleType("numpy")
+_mock_numpy.bool_ = bool
+_mock_numpy.isscalar = lambda _obj: False
+_mock_numpy.ndarray = tuple
+sys.modules["numpy"] = _mock_numpy
+
+sys.modules["litellm"] = MagicMock()
+
+from main import app  # noqa: E402
 
 @pytest.mark.asyncio
 async def test_cors_allowed_origin():
