@@ -1,4 +1,4 @@
-name: CI
+name: CI Smoke
 
 on:
   push:
@@ -6,31 +6,16 @@ on:
   pull_request:
     branches: [main]
 
-# Restrict the default GITHUB_TOKEN to read-only access.
-# Individual jobs can elevate permissions if needed (none do here).
 permissions:
   contents: read
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Detect which component trees actually changed.
-  # Every test job reads these outputs and skips itself when its tree is
-  # unchanged.  Changes to this workflow file always set every flag to true
-  # so the full suite re-validates after pipeline edits.
-  # ---------------------------------------------------------------------------
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      frontend:        ${{ steps.filter.outputs.frontend }}
-      backend-api:     ${{ steps.filter.outputs.backend-api }}
-      aviation-poller: ${{ steps.filter.outputs.aviation-poller }}
-      maritime-poller: ${{ steps.filter.outputs.maritime-poller }}
-      rf-pulse:        ${{ steps.filter.outputs.rf-pulse }}
-      space-pulse:     ${{ steps.filter.outputs.space-pulse }}
-      infra-poller:    ${{ steps.filter.outputs.infra-poller }}
-      gdelt-pulse:     ${{ steps.filter.outputs.gdelt-pulse }}
-      js8call:         ${{ steps.filter.outputs.js8call }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      python: ${{ steps.filter.outputs.python }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,36 +26,14 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
-            backend-api:
-              - 'backend/api/**'
-              - '.github/workflows/ci.yml'
-            aviation-poller:
-              - 'backend/ingestion/aviation_poller/**'
-              - '.github/workflows/ci.yml'
-            maritime-poller:
-              - 'backend/ingestion/maritime_poller/**'
-              - '.github/workflows/ci.yml'
-            rf-pulse:
-              - 'backend/ingestion/rf_pulse/**'
-              - '.github/workflows/ci.yml'
-            space-pulse:
-              - 'backend/ingestion/space_pulse/**'
-              - '.github/workflows/ci.yml'
-            infra-poller:
-              - 'backend/ingestion/infra_poller/**'
-              - '.github/workflows/ci.yml'
-            gdelt-pulse:
-              - 'backend/ingestion/gdelt_pulse/**'
-              - '.github/workflows/ci.yml'
-            js8call:
+            python:
+              - 'backend/**'
               - 'js8call/**'
+              - 'tools/run-ci-checks.ps1'
               - '.github/workflows/ci.yml'
 
-  # ---------------------------------------------------------------------------
-  # Frontend — lint + unit tests
-  # ---------------------------------------------------------------------------
-  frontend:
-    name: Frontend (lint + test)
+  frontend-smoke:
+    name: Frontend Smoke
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
@@ -88,26 +51,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
+      - name: Typecheck smoke
+        run: pnpm run typecheck
 
-      - name: Unit tests
-        run: pnpm run test
-
-  # ---------------------------------------------------------------------------
-  # Backend API — pytest
-  # ---------------------------------------------------------------------------
-  backend-api:
-    name: Backend API (pytest)
+  python-smoke:
+    name: Python Smoke
     needs: changes
-    if: needs.changes.outputs.backend-api == 'true'
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,196 +72,71 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
-      - name: Install test dependencies
-        run: |
-          pip install --quiet \
-            pytest==9.0.2 \
-            pytest-asyncio==1.3.0 \
-            httpx==0.28.1 \
-            fastapi==0.135.1 \
-            uvicorn==0.42.0 \
-            starlette \
-            pydantic==2.12.5 \
-            pydantic-settings==2.13.1 \
-            pyyaml \
-            protobuf \
-            python-dotenv==1.2.2 \
-            sse-starlette==3.3.2
-
-      - name: Run tests
+      - name: Backend API smoke
         working-directory: backend/api
-        run: python -m pytest tests/ -v
-
-  # ---------------------------------------------------------------------------
-  # Aviation Poller — pytest
-  # ---------------------------------------------------------------------------
-  aviation-poller:
-    name: Aviation Poller (pytest)
-    needs: changes
-    if: needs.changes.outputs.aviation-poller == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
         run: |
-          pip install --quiet \
-            pytest==9.0.2 \
-            pytest-asyncio==1.3.0 \
-            fakeredis==2.34.1 \
-            h3==4.4.2
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
 
-      - name: Run tests
+          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          deps = list(pyproject.get('project', {}).get('dependencies', []))
+          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
+          PY
+          python -m pytest tests/test_cors.py -q
+
+      - name: Aviation poller smoke
         working-directory: backend/ingestion/aviation_poller
-        run: python -m pytest tests/ -v
-
-  # ---------------------------------------------------------------------------
-  # Maritime Poller — pytest
-  # ---------------------------------------------------------------------------
-  maritime-poller:
-    name: Maritime Poller (pytest)
-    needs: changes
-    if: needs.changes.outputs.maritime-poller == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2
-
-      - name: Run tests
-        working-directory: backend/ingestion/maritime_poller
-        run: python -m pytest tests/ -v
-
-  # ---------------------------------------------------------------------------
-  # RF Pulse — pytest
-  # ---------------------------------------------------------------------------
-  rf-pulse:
-    name: RF Pulse (pytest)
-    needs: changes
-    if: needs.changes.outputs.rf-pulse == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
-
-      - name: Run tests
-        working-directory: backend/ingestion/rf_pulse
-        run: python -m pytest tests/ -v
-
-  # ---------------------------------------------------------------------------
-  # Space Pulse — pytest
-  # ---------------------------------------------------------------------------
-  space-pulse:
-    name: Space Pulse (pytest)
-    needs: changes
-    if: needs.changes.outputs.space-pulse == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
         run: |
-          pip install --quiet \
-            pytest==9.0.2 \
-            aiohttp \
-            psycopg2-binary \
-            sgp4==2.25 \
-            numpy==2.4.3
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
 
-      - name: Run tests
+          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          deps = list(pyproject.get('project', {}).get('dependencies', []))
+          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
+          PY
+          python -m pytest tests/test_utils.py -q
+
+      - name: Space pulse smoke
         working-directory: backend/ingestion/space_pulse
-        run: python -m pytest tests/ -v
+        env:
+          SPACE_PULSE_CACHE_DIR: /tmp/space_pulse_cache
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
 
-  # ---------------------------------------------------------------------------
-  # Infrastructure Poller — pytest
-  # ---------------------------------------------------------------------------
-  infra-poller:
-    name: Infrastructure Poller (pytest)
-    needs: changes
-    if: needs.changes.outputs.infra-poller == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          deps = list(pyproject.get('project', {}).get('dependencies', []))
+          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
+          PY
+          python -m pytest tests/test_orbital.py -q
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 psycopg2-binary aiohttp
-
-      - name: Run tests
+      - name: Infrastructure poller smoke
         working-directory: backend/ingestion/infra_poller
-        run: python -m pytest tests/ -v
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
 
-  # ---------------------------------------------------------------------------
-  # GDELT Pulse — pytest
-  # ---------------------------------------------------------------------------
-  gdelt-pulse:
-    name: GDELT Pulse (pytest)
-    needs: changes
-    if: needs.changes.outputs.gdelt-pulse == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          deps = list(pyproject.get('project', {}).get('dependencies', []))
+          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
+          PY
+          python -m pytest tests/test_infra.py -q
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
-
-      - name: Run tests
-        working-directory: backend/ingestion/gdelt_pulse
-        run: python -m pytest tests/ -v
-
-  # ---------------------------------------------------------------------------
-  # JS8Call Bridge — pytest
-  # ---------------------------------------------------------------------------
-  js8call:
-    name: JS8Call Bridge (pytest)
-    needs: changes
-    if: needs.changes.outputs.js8call == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
-
-      - name: Run tests
-        working-directory: js8call
-        run: python -m pytest tests/ -v

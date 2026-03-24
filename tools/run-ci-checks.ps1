@@ -27,6 +27,16 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$venvPythonWindows = Join-Path $repoRoot ".venv/Scripts/python.exe"
+$venvPythonUnix = Join-Path $repoRoot ".venv/bin/python"
+$pythonExe = "python"
+
+if (Test-Path $venvPythonWindows) {
+    $pythonExe = $venvPythonWindows
+}
+elseif (Test-Path $venvPythonUnix) {
+    $pythonExe = $venvPythonUnix
+}
 
 function Write-Section {
     param([string]$Message)
@@ -83,72 +93,60 @@ $jobDefinitions = [ordered]@{
     "backend-api" = @{
         WorkingDir  = "backend/api"
         InstallCmds = @(
-            @("python", @("-m", "pip", "install", "--quiet",
+            @($pythonExe, @("-m", "pip", "install", "--quiet",
+                "-e", ".",
                 "pytest==9.0.2",
-                "pytest-asyncio==1.3.0",
-                "httpx==0.28.1",
-                "fastapi==0.135.1",
-                "uvicorn==0.42.0",
-                "starlette",
-                "pydantic==2.12.5",
-                "pydantic-settings==2.13.1",
-                "pyyaml",
-                "protobuf",
-                "python-dotenv==1.2.2",
-                "sse-starlette==3.3.2"
+                "pytest-asyncio==1.3.0"
             ))
         )
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "aviation-poller" = @{
         WorkingDir  = "backend/ingestion/aviation_poller"
         InstallCmds = @(
-            @("python", @("-m", "pip", "install", "--quiet",
+            @($pythonExe, @("-m", "pip", "install", "--quiet",
+                "-e", ".",
                 "pytest==9.0.2",
                 "pytest-asyncio==1.3.0",
-                "fakeredis==2.34.1",
-                "h3==4.4.2"
+                "fakeredis==2.34.1"
             ))
         )
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "maritime-poller" = @{
         WorkingDir  = "backend/ingestion/maritime_poller"
-        InstallCmds = @(@("python", @("-m", "pip", "install", "--quiet", "pytest==9.0.2")))
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        InstallCmds = @(@($pythonExe, @("-m", "pip", "install", "--quiet", "-e", ".", "pytest==9.0.2")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "rf-pulse" = @{
         WorkingDir  = "backend/ingestion/rf_pulse"
-        InstallCmds = @(@("python", @("-m", "pip", "install", "--quiet", "pytest==9.0.2", "pytest-asyncio==1.3.0", "aiohttp")))
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        InstallCmds = @(@($pythonExe, @("-m", "pip", "install", "--quiet", "-e", ".", "pytest==9.0.2", "pytest-asyncio==1.3.0")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "space-pulse" = @{
         WorkingDir  = "backend/ingestion/space_pulse"
         InstallCmds = @(
-            @("python", @("-m", "pip", "install", "--quiet",
-                "pytest==9.0.2",
-                "aiohttp",
-                "psycopg2-binary",
-                "sgp4==2.25",
-                "numpy==2.4.3"
+            @($pythonExe, @("-m", "pip", "install", "--quiet",
+                "-e", ".",
+                "pytest==9.0.2"
             ))
         )
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "infra-poller" = @{
         WorkingDir  = "backend/ingestion/infra_poller"
-        InstallCmds = @(@("python", @("-m", "pip", "install", "--quiet", "pytest==9.0.2", "psycopg2-binary", "aiohttp")))
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        InstallCmds = @(@($pythonExe, @("-m", "pip", "install", "--quiet", "-e", ".", "pytest==9.0.2")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "gdelt-pulse" = @{
         WorkingDir  = "backend/ingestion/gdelt_pulse"
-        InstallCmds = @(@("python", @("-m", "pip", "install", "--quiet", "pytest==9.0.2", "pytest-asyncio==1.3.0", "aiohttp")))
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        InstallCmds = @(@($pythonExe, @("-m", "pip", "install", "--quiet", "-e", ".", "pytest==9.0.2", "pytest-asyncio==1.3.0")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
     "js8call" = @{
         WorkingDir  = "js8call"
-        InstallCmds = @(@("python", @("-m", "pip", "install", "--quiet", "pytest==9.0.2", "pytest-asyncio==1.3.0", "aiohttp")))
-        TestCmds    = @(@("python", @("-m", "pytest", "tests/", "-v")))
+        InstallCmds = @(@($pythonExe, @("-m", "pip", "install", "--quiet", "-e", ".", "pytest==9.0.2", "pytest-asyncio==1.3.0")))
+        TestCmds    = @(@($pythonExe, @("-m", "pytest", "tests/", "-v")))
     }
 }
 
