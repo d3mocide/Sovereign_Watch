@@ -11,346 +11,22 @@ import {
   Signal,
   TrendingUp,
 } from "lucide-react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePassPredictions } from "../../hooks/usePassPredictions";
 import { CoTEntity, DRState, IntelEvent, MissionProps } from "../../types";
-import { calculateZoom } from "../../utils/map/geoUtils";
 import { SituationGlobe } from "../map/SituationGlobe";
 import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
+import { MiniTacticalMap } from "../widgets/MiniMap";
+import type { RFSiteResult } from "../widgets/MiniMap";
 import { NewsWidget } from "../widgets/NewsWidget";
-
-const DARK_MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+import { OutageAlertPanel } from "../widgets/OutageAlertPanel";
+import { RFSiteSearchPanel } from "../widgets/RFSiteSearchPanel";
+import { StreamStatusMonitor } from "../widgets/StreamStatusMonitor";
+import { TrackSparkline } from "../widgets/TrackSparkline";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface StreamStatus {
-  id: string;
-  name: string;
-  status: string;
-}
-
-interface OutageItem {
-  country: string;
-  country_code: string;
-  severity: number;
-}
-
-interface RFSiteResult {
-  id: string;
-  callsign: string;
-  name: string;
-  service: string;
-  emcomm_flags: string[] | null;
-  city: string | null;
-  state: string | null;
-  modes: string[];
-  lat?: number;
-  lon?: number;
-}
-
-type TrackSnapshot = { air: number; sea: number; orbital: number };
 type PassCategory = "intel" | "weather" | "gps";
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const STREAM_ABBR: Record<string, string> = {
-  aviation: "ADSB",
-  maritime: "AIS",
-  orbital: "ORB",
-  radioref: "RREF",
-  rf_public: "RF",
-  ai: "AI",
-};
-
-function streamDotClass(status: string): string {
-  if (status === "Active") return "bg-hud-green shadow-[0_0_4px_#00ff41]";
-  if (status === "Missing Key") return "bg-amber-400 shadow-[0_0_4px_#fbbf24]";
-  return "bg-white/20";
-}
-
-function streamTextClass(status: string): string {
-  if (status === "Active") return "text-hud-green";
-  if (status === "Missing Key") return "text-amber-400";
-  return "text-white/25";
-}
-
-function severityColor(s: number): string {
-  if (s >= 60) return "text-alert-red";
-  if (s >= 25) return "text-amber-400";
-  return "text-yellow-300";
-}
-
-function severityBarClass(s: number): string {
-  if (s >= 60) return "bg-alert-red";
-  if (s >= 25) return "bg-amber-400";
-  return "bg-yellow-300";
-}
-
-// ─── Mini Sparkline ───────────────────────────────────────────────────────────
-
-const Sparkline: React.FC<{
-  data: TrackSnapshot[];
-  width?: number;
-  height?: number;
-}> = ({ data, width = 96, height = 22 }) => {
-  if (data.length < 2) {
-    return (
-      <svg width={width} height={height} className="opacity-20 flex-shrink-0">
-        <line
-          x1={0}
-          y1={height / 2}
-          x2={width}
-          y2={height / 2}
-          stroke="#00ff41"
-          strokeWidth={1}
-        />
-      </svg>
-    );
-  }
-  const maxAirSea = Math.max(1, ...data.map((d) => Math.max(d.air, d.sea)));
-  const pad = 2;
-  const norm = (v: number, max: number) =>
-    height - pad - (v / max) * (height - pad * 2);
-  const buildPath = (vals: number[], max: number) => {
-    const step = width / (vals.length - 1);
-    return vals
-      .map(
-        (v, i) =>
-          `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${norm(v, max).toFixed(1)}`,
-      )
-      .join(" ");
-  };
-  return (
-    <svg width={width} height={height} className="flex-shrink-0">
-      <path
-        d={buildPath(
-          data.map((d) => d.air),
-          maxAirSea,
-        )}
-        stroke="#00ff41"
-        strokeWidth={1.5}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d={buildPath(
-          data.map((d) => d.sea),
-          maxAirSea,
-        )}
-        stroke="#22d3ee"
-        strokeWidth={1.5}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-};
-
-// ─── Mini Tactical Map ────────────────────────────────────────────────────────
-
-function makeMissionCircle(
-  lat: number,
-  lon: number,
-  radiusNm: number,
-): GeoJSON.Feature<GeoJSON.Polygon> {
-  const NM_TO_DEG = 1 / 60;
-  const cosLat = Math.cos((lat * Math.PI) / 180);
-  const safeCos = Math.max(Math.abs(cosLat), 0.0001);
-  const N = 128;
-  const coords: [number, number][] = [];
-  for (let i = 0; i <= N; i++) {
-    const a = (i / N) * 2 * Math.PI;
-    coords.push([
-      lon + ((radiusNm * NM_TO_DEG) / safeCos) * Math.sin(a),
-      lat + radiusNm * NM_TO_DEG * Math.cos(a),
-    ]);
-  }
-  return {
-    type: "Feature",
-    geometry: { type: "Polygon", coordinates: [coords] },
-    properties: {},
-  };
-}
-
-interface MiniMapProps {
-  mission: { lat: number; lon: number; radius_nm: number };
-  entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
-  satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
-  rfSites: RFSiteResult[];
-}
-
-const MiniTacticalMap: React.FC<MiniMapProps> = ({
-  mission,
-  entitiesRef,
-  satellitesRef,
-  rfSites,
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const mapReadyRef = useRef(false);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const zoom = Math.max(2, calculateZoom(mission.radius_nm) - 1.0);
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: DARK_MAP_STYLE,
-      center: [mission.lon, mission.lat],
-      zoom,
-      interactive: false,
-      attributionControl: false,
-    });
-    mapRef.current = map;
-    map.on("load", () => {
-      const circle = makeMissionCircle(
-        mission.lat,
-        mission.lon,
-        mission.radius_nm,
-      );
-      map.addSource("mission-circle", { type: "geojson", data: circle });
-      map.addLayer({
-        id: "mission-fill",
-        type: "fill",
-        source: "mission-circle",
-        paint: { "fill-color": "#00ff41", "fill-opacity": 0.05 },
-      });
-      map.addLayer({
-        id: "mission-border",
-        type: "line",
-        source: "mission-circle",
-        paint: {
-          "line-color": "#00ff41",
-          "line-width": 1.5,
-          "line-opacity": 0.7,
-        },
-      });
-      map.addSource("entities", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "ent-air",
-        type: "circle",
-        source: "entities",
-        filter: ["==", ["get", "etype"], "air"],
-        paint: {
-          "circle-radius": 2.5,
-          "circle-color": "#00ff41",
-          "circle-opacity": 0.85,
-        },
-      });
-      map.addLayer({
-        id: "ent-sea",
-        type: "circle",
-        source: "entities",
-        filter: ["==", ["get", "etype"], "sea"],
-        paint: {
-          "circle-radius": 2.5,
-          "circle-color": "#22d3ee",
-          "circle-opacity": 0.85,
-        },
-      });
-      map.addSource("orbital", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "ent-orbital",
-        type: "circle",
-        source: "orbital",
-        paint: {
-          "circle-radius": 2,
-          "circle-color": "#a855f7",
-          "circle-opacity": 0.6,
-        },
-      });
-      map.addSource("emcomm", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "ent-emcomm",
-        type: "circle",
-        source: "emcomm",
-        paint: {
-          "circle-radius": 2,
-          "circle-color": "#fbbf24",
-          "circle-opacity": 0.8,
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#fbbf2433",
-        },
-      });
-      mapReadyRef.current = true;
-    });
-    return () => {
-      mapReadyRef.current = false;
-      map.remove();
-      mapRef.current = null;
-    };
-  }, [mission.lat, mission.lon, mission.radius_nm]);
-
-  const updateLayers = useCallback(() => {
-    const map = mapRef.current;
-    if (!map || !mapReadyRef.current) return;
-    const airSea: GeoJSON.Feature[] = [];
-    entitiesRef.current.forEach((e) => {
-      airSea.push({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [e.lon, e.lat] },
-        properties: {
-          etype: e.vesselClassification !== undefined ? "sea" : "air",
-        },
-      });
-    });
-    const orb: GeoJSON.Feature[] = [];
-    satellitesRef.current.forEach((e) => {
-      if (e.detail?.constellation !== "Starlink") {
-        orb.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [e.lon, e.lat] },
-          properties: {},
-        });
-      }
-    });
-    const emcomm: GeoJSON.Feature[] = [];
-    rfSites.forEach((s) => {
-      if (s.lat !== undefined && s.lon !== undefined) {
-        emcomm.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [s.lon, s.lat] },
-          properties: {},
-        });
-      }
-    });
-
-    (map.getSource("entities") as maplibregl.GeoJSONSource | undefined)?.setData(
-      { type: "FeatureCollection", features: airSea },
-    );
-    (map.getSource("orbital") as maplibregl.GeoJSONSource | undefined)?.setData(
-      { type: "FeatureCollection", features: orb },
-    );
-    (map.getSource("emcomm") as maplibregl.GeoJSONSource | undefined)?.setData({
-      type: "FeatureCollection",
-      features: emcomm,
-    });
-  }, [entitiesRef, satellitesRef, rfSites]);
-
-  useEffect(() => {
-    const t0 = setTimeout(updateLayers, 1500);
-    const ti = setInterval(updateLayers, 5000);
-    return () => {
-      clearTimeout(t0);
-      clearInterval(ti);
-    };
-  }, [updateLayers]);
-
-  return <div ref={containerRef} className="w-full h-full" />;
-};
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
@@ -387,10 +63,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const obsLat = mission?.lat ?? 45.5152;
   const obsLon = mission?.lon ?? -122.6784;
 
-  // ── New state ──
   const [passCategory, setPassCategory] = useState<PassCategory>("intel");
-  const [streamStatuses, setStreamStatuses] = useState<StreamStatus[]>([]);
-  const [outages, setOutages] = useState<OutageItem[]>([]);
   const [rfEmcomm, setRfEmcomm] = useState<{
     count: number;
     results: RFSiteResult[];
@@ -422,55 +95,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       skip: !mission,
     },
   );
-
-  // ── Fetch stream health (60s refresh) ──
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch("/api/config/streams");
-        if (r.ok) setStreamStatuses(await r.json());
-      } catch {
-        /* non-critical */
-      }
-    };
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  // ── Fetch internet outages (30min refresh) ──
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch("/api/infra/outages");
-        if (r.ok) {
-          const geojson = await r.json();
-          const items: OutageItem[] = (geojson.features ?? [])
-            .map(
-              (f: {
-                properties: {
-                  country: string;
-                  country_code: string;
-                  severity: number;
-                };
-              }) => ({
-                country: f.properties.country,
-                country_code: f.properties.country_code,
-                severity: f.properties.severity,
-              }),
-            )
-            .sort((a: OutageItem, b: OutageItem) => b.severity - a.severity)
-            .slice(0, 20);
-          setOutages(items);
-        }
-      } catch {
-        /* non-critical */
-      }
-    };
-    load();
-    const t = setInterval(load, 30 * 60_000);
-    return () => clearInterval(t);
-  }, []);
 
   // ── Fetch RF EmComm sites when mission changes ──
   useEffect(() => {
@@ -596,36 +220,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           title="30-second track count history (green=air, cyan=sea)"
         >
           <TrendingUp size={9} className="text-white/20" />
-          <Sparkline data={trackHistory} />
+          <TrackSparkline data={trackHistory} />
         </div>
         <div className="h-3 w-px bg-white/10" />
 
         {/* Stream health dots */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-white/25 uppercase tracking-widest">
-            Streams
-          </span>
-          <div className="flex items-center gap-1">
-            {streamStatuses.length === 0 ? (
-              <span className="text-[8px] text-white/15">—</span>
-            ) : (
-              streamStatuses.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-0.5"
-                  title={`${s.name}: ${s.status}`}
-                >
-                  <div
-                    className={`h-1.5 w-1.5 rounded-full ${streamDotClass(s.status)}`}
-                  />
-                  <span className={`text-[9px] ${streamTextClass(s.status)}`}>
-                    {STREAM_ABBR[s.id] ?? s.id.toUpperCase()}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <StreamStatusMonitor />
         <div className="h-3 w-px bg-white/10" />
 
         {/* RF EmComm count */}
@@ -780,7 +380,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               TACTICAL OVERVIEW
             </div>
 
-            {/* Track Counters (Moved here for better spatial grouping) */}
+            {/* Track Counters */}
             <div className="absolute bottom-2 left-2 flex gap-1 pointer-events-none z-10 animate-in fade-in slide-in-from-right-2 duration-700">
               <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">
                 AIR {trackCounts.air}
@@ -874,122 +474,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Right — Global Stability */}
         <div className="flex flex-col border-l border-white/5 min-h-0 overflow-hidden">
-            {selectedGdelt ? (
-              <div className="flex flex-col flex-1 bg-black/40">
-                <div className="p-4 border-b border-white/5 bg-red-500/5">
-                  <div className="flex items-center justify-between mb-4">
-                    <button 
-                      onClick={() => setSelectedGdelt(null)}
-                      className="text-[9px] font-bold text-white/30 hover:text-white flex items-center gap-1 transition-colors uppercase tracking-widest"
-                    >
-                      <Signal size={10} className="rotate-180" /> Back to Matrix
-                    </button>
-                    <div className="px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[8px] text-red-400 font-bold animate-pulse">
-                      LIVE EVENT
-                    </div>
+          {selectedGdelt ? (
+            <div className="flex flex-col flex-1 bg-black/40">
+              <div className="p-4 border-b border-white/5 bg-red-500/5">
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => setSelectedGdelt(null)}
+                    className="text-[9px] font-bold text-white/30 hover:text-white flex items-center gap-1 transition-colors uppercase tracking-widest"
+                  >
+                    <Signal size={10} className="rotate-180" /> Back to Matrix
+                  </button>
+                  <div className="px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[8px] text-red-400 font-bold animate-pulse">
+                    LIVE EVENT
                   </div>
+                </div>
 
-                  <h3 className="text-sm font-black text-white uppercase tracking-tight leading-none mb-1">
-                    {selectedGdelt.name}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-red-500 font-bold uppercase">{selectedGdelt.domain}</span>
-                    <div className="h-1 w-1 rounded-full bg-white/20" />
-                    <span className="text-[10px] text-white/40 font-mono">
-                      LAT: {selectedGdelt.lat.toFixed(4)} LON: {selectedGdelt.lon.toFixed(4)}
+                <h3 className="text-sm font-black text-white uppercase tracking-tight leading-none mb-1">
+                  {selectedGdelt.name}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-red-500 font-bold uppercase">{selectedGdelt.domain}</span>
+                  <div className="h-1 w-1 rounded-full bg-white/20" />
+                  <span className="text-[10px] text-white/40 font-mono">
+                    LAT: {selectedGdelt.lat.toFixed(4)} LON: {selectedGdelt.lon.toFixed(4)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
+                    <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Stability (GS)</span>
+                    <span className={`text-2xl font-black tabular-nums ${selectedGdelt.tone < -2 ? 'text-red-500' : 'text-hud-green'}`}>
+                      {selectedGdelt.tone.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
+                    <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Alert Level</span>
+                    <span className={`text-xs font-bold ${selectedGdelt.tone <= -5 ? 'text-red-500' : 'text-amber-500'} uppercase`}>
+                      {selectedGdelt.tone <= -5 ? 'Critical Conflict' : 'Rising Tension'}
                     </span>
                   </div>
                 </div>
 
-                <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
-                      <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Stability (GS)</span>
-                      <span className={`text-2xl font-black tabular-nums ${selectedGdelt.tone < -2 ? 'text-red-500' : 'text-hud-green'}`}>
-                        {selectedGdelt.tone.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="bg-white/[0.03] border border-white/5 p-3 rounded">
-                      <span className="text-[9px] text-white/30 block mb-1 uppercase tracking-widest">Alert Level</span>
-                      <span className={`text-xs font-bold ${selectedGdelt.tone <= -5 ? 'text-red-500' : 'text-amber-500'} uppercase`}>
-                        {selectedGdelt.tone <= -5 ? 'Critical Conflict' : 'Rising Tension'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/[0.02] p-4 rounded border border-white/5">
-                    <span className="text-[10px] text-white font-bold block mb-2 uppercase tracking-tight">Intelligence Source</span>
-                    <p className="text-[11px] text-white/60 leading-relaxed mb-4">
-                      Direct monitoring of geolocated news reporting originating from {selectedGdelt.domain}. 
-                      The Goldstein scale assessment shows a persistent focus on localized instability.
-                    </p>
-                    <a 
-                      href={selectedGdelt.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 bg-hud-green text-black font-black text-[10px] py-2.5 rounded hover:bg-white transition-all uppercase tracking-widest"
-                    >
-                      Access Intel Stream <Globe size={12} />
-                    </a>
-                  </div>
+                <div className="bg-white/[0.02] p-4 rounded border border-white/5">
+                  <span className="text-[10px] text-white font-bold block mb-2 uppercase tracking-tight">Intelligence Source</span>
+                  <p className="text-[11px] text-white/60 leading-relaxed mb-4">
+                    Direct monitoring of geolocated news reporting originating from {selectedGdelt.domain}.
+                    The Goldstein scale assessment shows a persistent focus on localized instability.
+                  </p>
+                  <a
+                    href={selectedGdelt.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 bg-hud-green text-black font-black text-[10px] py-2.5 rounded hover:bg-white transition-all uppercase tracking-widest"
+                  >
+                    Access Intel Stream <Globe size={12} />
+                  </a>
                 </div>
               </div>
-            ) : (
-              <GdeltBreakdownWidget gdeltData={gdeltData} />
-            )}
+            </div>
+          ) : (
+            <GdeltBreakdownWidget gdeltData={gdeltData} />
+          )}
 
-          {/* Internet Outages */}
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-              <Globe size={11} className="text-red-400/70" />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
-                Internet Outages
-              </span>
-              {outages.length > 0 && (
-                <span className="ml-auto text-[9px] text-alert-red/60">
-                  {outages.length} regions
-                </span>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {outages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-[9px] text-white/15 uppercase tracking-widest">
-                  No Outages Detected
-                </div>
-              ) : (
-                outages.map((o) => (
-                  <div
-                    key={o.country_code}
-                    className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-white/50 w-7 flex-shrink-0 tabular-nums font-bold">
-                        {o.country_code}
-                      </span>
-                      <span
-                        className={`text-[9px] flex-1 truncate ${severityColor(o.severity)}`}
-                      >
-                        {o.country}
-                      </span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${severityBarClass(o.severity)}`}
-                            style={{ width: `${Math.min(100, o.severity)}%` }}
-                          />
-                        </div>
-                        <span
-                          className={`text-[8px] tabular-nums w-6 text-right ${severityColor(o.severity)}`}
-                        >
-                          {Math.round(o.severity)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <OutageAlertPanel />
         </div>
       </div>
 
@@ -1090,90 +639,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* RF EmComm Sites */}
-        <div className="flex flex-col border-r border-white/5 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-            <Antenna size={11} className="text-amber-400/70" />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
-              Emergency Comm Sites
-            </span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <span className="text-[9px] font-bold text-amber-400 tabular-nums">
-                {rfEmcomm.count}
-              </span>
-              <div className="h-1.5 w-px bg-white/10" />
-              <span className="text-[7px] text-white/30 uppercase tracking-tighter">
-                Regional Grid
-              </span>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-black/10">
-            {rfEmcomm.results.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-center opacity-30">
-                <Antenna size={24} strokeWidth={1} />
-                <span className="text-[9px] uppercase tracking-widest">
-                  Scanning for Local Infrastructure...
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {/* Summary Bar */}
-                <div className="flex items-center gap-3 px-3 py-1.5 bg-amber-400/5 border-b border-white/5">
-                  {(["ARES", "RACES", "SKYWARN"] as const).map((flag) => {
-                    const count = rfEmcomm.results.filter((s) =>
-                      s.emcomm_flags?.includes(flag),
-                    ).length;
-                    return (
-                      <div key={flag} className="flex items-center gap-1">
-                        <span className="text-[7px] text-white/30 font-bold">
-                          {flag}:
-                        </span>
-                        <span className="text-[8px] text-amber-400 font-mono">
-                          {count}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Status Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-1 xl:grid-cols-2 gap-px bg-white/[0.03]">
-                  {rfEmcomm.results.slice(0, 32).map((site) => (
-                    <div
-                      key={site.id}
-                      className="bg-black/40 p-2 border-b border-white/[0.02] hover:bg-white/5 transition-all group cursor-default"
-                    >
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
-                          <span className="text-[9px] font-bold text-amber-500/90 group-hover:text-amber-400 transition-colors">
-                            {site.callsign}
-                          </span>
-                        </div>
-                        <span className="text-[7px] text-white/20 font-mono">
-                          {site.modes?.[0] || site.service}
-                        </span>
-                      </div>
-
-                      <div className="flex items-baseline gap-1 overflow-hidden">
-                        <span className="text-[8px] text-white/40 truncate flex-1">
-                          {site.city || "Unknown QTH"}
-                        </span>
-                        {site.emcomm_flags &&
-                          site.emcomm_flags.length > 0 &&
-                          (site.emcomm_flags.includes("RACES") ||
-                            site.emcomm_flags.includes("ARES")) && (
-                            <span className="text-[6px] text-amber-500/40 font-black tracking-tighter">
-                              CERT
-                            </span>
-                          )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <RFSiteSearchPanel count={rfEmcomm.count} results={rfEmcomm.results} />
 
         {/* News Feed */}
         <div className="flex flex-col overflow-hidden">
