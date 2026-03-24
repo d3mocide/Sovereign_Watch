@@ -117,21 +117,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
+      - name: Install project + test dependencies
+        working-directory: backend/api
         run: |
-          pip install --quiet \
+          python -m pip install --quiet -e . \
             pytest==9.0.2 \
-            pytest-asyncio==1.3.0 \
-            httpx==0.28.1 \
-            fastapi==0.135.1 \
-            uvicorn==0.42.0 \
-            starlette \
-            pydantic==2.12.5 \
-            pydantic-settings==2.13.1 \
-            pyyaml \
-            protobuf \
-            python-dotenv==1.2.2 \
-            sse-starlette==3.3.2
+            pytest-asyncio==1.3.0
 
       - name: Run tests
         working-directory: backend/api
@@ -153,13 +144,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/aviation_poller
         run: |
-          pip install --quiet \
+          python -m pip install --quiet -e . \
             pytest==9.0.2 \
             pytest-asyncio==1.3.0 \
-            fakeredis==2.34.1 \
-            h3==4.4.2
+            fakeredis==2.34.1
 
       - name: Run tests
         working-directory: backend/ingestion/aviation_poller
@@ -181,8 +172,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/maritime_poller
+        run: python -m pip install --quiet -e . pytest==9.0.2
 
       - name: Run tests
         working-directory: backend/ingestion/maritime_poller
@@ -204,8 +196,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/rf_pulse
+        run: python -m pip install --quiet -e . pytest==9.0.2 pytest-asyncio==1.3.0
 
       - name: Run tests
         working-directory: backend/ingestion/rf_pulse
@@ -227,14 +220,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/space_pulse
         run: |
-          pip install --quiet \
-            pytest==9.0.2 \
-            aiohttp \
-            psycopg2-binary \
-            sgp4==2.25 \
-            numpy==2.4.3
+          python -m pip install --quiet -e . \
+            pytest==9.0.2
 
       - name: Run tests
         working-directory: backend/ingestion/space_pulse
@@ -256,8 +246,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 psycopg2-binary aiohttp
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/infra_poller
+        run: python -m pip install --quiet -e . pytest==9.0.2
 
       - name: Run tests
         working-directory: backend/ingestion/infra_poller
@@ -279,8 +270,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
+      - name: Install project + test dependencies
+        working-directory: backend/ingestion/gdelt_pulse
+        run: python -m pip install --quiet -e . pytest==9.0.2 pytest-asyncio==1.3.0
 
       - name: Run tests
         working-directory: backend/ingestion/gdelt_pulse
@@ -302,8 +294,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
-        run: pip install --quiet pytest==9.0.2 pytest-asyncio==1.3.0 aiohttp
+      - name: Install project + test dependencies
+        working-directory: js8call
+        run: python -m pip install --quiet -e . pytest==9.0.2 pytest-asyncio==1.3.0
 
       - name: Run tests
         working-directory: js8call
