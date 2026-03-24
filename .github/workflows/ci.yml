@@ -108,6 +108,8 @@ jobs:
 
       - name: Space pulse smoke
         working-directory: backend/ingestion/space_pulse
+        env:
+          SPACE_PULSE_CACHE_DIR: /tmp/space_pulse_cache
         run: |
           python - <<'PY'
           import pathlib
