@@ -19,22 +19,19 @@
     "@deck.gl/layers": "9.2.11",
     "@deck.gl/mapbox": "9.2.11",
     "@deck.gl/mesh-layers": "9.2.11",
-    "globe.gl": "^2.33.0",
     "lucide-react": "0.577.0",
     "mapbox-gl": "3.20.0",
     "maplibre-gl": "5.20.1",
     "protobufjs": "8.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-map-gl": "8.1.0",
-    "three": "^0.176.0"
+    "react-map-gl": "8.1.0"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@playwright/test": "1.58.2",
     "@tailwindcss/vite": "4.2.1",
     "@types/geojson": "^7946.0.16",
-    "@types/three": "^0.176.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "8.57.1",
