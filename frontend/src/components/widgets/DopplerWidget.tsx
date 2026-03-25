@@ -89,6 +89,7 @@ export const DopplerWidget: React.FC<DopplerWidgetProps> = ({ referenceFreqMhz =
             type="number"
             value={f0}
             onChange={(e) => setF0(Number(e.target.value))}
+            aria-label="Reference frequency in MHz"
             className="w-16 bg-white/5 border border-white/10 rounded text-[9px] text-white/80 font-mono px-1 outline-none focus:border-purple-400/50"
             step="0.001"
           />

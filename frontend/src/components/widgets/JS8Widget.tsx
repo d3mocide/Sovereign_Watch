@@ -361,6 +361,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                       value={msgTarget}
                       onChange={(e) => setMsgTarget(e.target.value)}
                       placeholder="To"
+                      aria-label="Message target callsign"
                       className="w-16 bg-black/40 border border-white/10 rounded-sm px-1.5 py-1 text-[10px] text-indigo-300 placeholder:text-white/10 focus:border-indigo-500/50 outline-none"
                     />
                     <div className="relative flex-1">
@@ -369,6 +370,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                         value={msgInput}
                         onChange={(e) => setMsgInput(e.target.value)}
                         placeholder={js8Connected ? "Type message..." : "RADIO OFFLINE"}
+                        aria-label="Message text"
                         disabled={!js8Connected}
                         className="w-full bg-black/40 border border-white/10 rounded-sm pl-2 pr-7 py-1 text-[10px] text-slate-300 placeholder:text-white/10 focus:border-indigo-500/50 outline-none disabled:opacity-50"
                       />
