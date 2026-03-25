@@ -2,12 +2,16 @@ import type { FeatureCollection } from "geojson";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { MainHud } from "./components/layouts/MainHud";
+import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { OrbitalSidebarLeft } from "./components/layouts/OrbitalSidebarLeft";
 import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
 import { TopBar } from "./components/layouts/TopBar";
+import { IntelGlobe } from "./components/map/IntelGlobe";
+import type { MapStyleKey } from "./components/map/intelMapStyles";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
+import { OsintTicker } from "./components/widgets/OsintTicker";
 import { DashboardView } from "./components/views/DashboardView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
@@ -144,27 +148,38 @@ function App() {
 
   // View Mode Persistence
   const [viewMode, setViewModeState] = useState<
-    "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD"
+    "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD" | "INTEL"
   >(() => {
     const saved = localStorage.getItem("viewMode");
     if (
       saved === "ORBITAL" ||
       saved === "TACTICAL" ||
       saved === "RADIO" ||
-      saved === "DASHBOARD"
+      saved === "DASHBOARD" ||
+      saved === "INTEL"
     ) {
-      return saved as "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD";
+      return saved as "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD" | "INTEL";
     }
     return "TACTICAL";
   });
 
   const setViewMode = useCallback(
-    (mode: "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD") => {
+    (mode: "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD" | "INTEL") => {
       setViewModeState(mode);
       localStorage.setItem("viewMode", mode);
     },
     [],
   );
+
+  // Intel Globe map style
+  const [intelMapStyle, setIntelMapStyle] = useState<MapStyleKey>(() => {
+    return (localStorage.getItem("intelMapStyle") as MapStyleKey) || "dark";
+  });
+
+  const handleIntelMapStyleChange = useCallback((style: MapStyleKey) => {
+    setIntelMapStyle(style);
+    localStorage.setItem("intelMapStyle", style);
+  }, []);
 
   // Background Data Maintenance (Cleanup & Counting)
   // This runs regardless of viewMode, ensuring Dashboard counts are live.
@@ -211,7 +226,7 @@ function App() {
       // 4. Update trackCounts state ONLY if we are in a non-map view.
       // In TACTICAL and ORBITAL modes, useAnimationLoop handles high-frequency,
       // filter-aware counts that provide a much better UX.
-      if (viewMode === "DASHBOARD" || viewMode === "RADIO") {
+      if (viewMode === "DASHBOARD" || viewMode === "RADIO" || viewMode === "INTEL") {
         if (
           air !== countsRef.current.air ||
           sea !== countsRef.current.sea ||
@@ -853,6 +868,8 @@ function App() {
             }
             onSystemHealthClose={() => setIsSystemHealthOpen(false)}
             onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            intelMapStyle={intelMapStyle}
+            onIntelMapStyleChange={handleIntelMapStyleChange}
           />
         }
         leftSidebar={
@@ -883,6 +900,10 @@ function App() {
               selectedSatNorad={selectedSatNorad}
               setSelectedSatNorad={handleSetSelectedSatNorad}
               trackCount={trackCounts.orbital}
+            />
+          ) : viewMode === "INTEL" ? (
+            <IntelSidebar
+              onFlyTo={(lat, lon) => mapActions?.flyTo(lat, lon)}
             />
           ) : null
         }
@@ -1041,6 +1062,19 @@ function App() {
               orbitalSatellitesRef.current = ref;
             }}
           />
+        ) : viewMode === "INTEL" ? (
+          <div className="absolute inset-0 flex flex-col">
+            <IntelGlobe
+              gdeltData={gdeltData as import("geojson").FeatureCollection | null}
+              worldCountriesData={worldCountriesData}
+              onEntitySelect={handleEntitySelect}
+              mapStyle={intelMapStyle}
+            />
+            {/* OSINT ticker pinned to bottom of the globe area */}
+            <div className="absolute bottom-0 left-0 right-0 z-10">
+              <OsintTicker />
+            </div>
+          </div>
         ) : viewMode === "DASHBOARD" ? (
           <DashboardView
             events={events}
