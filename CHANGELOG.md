@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.47.2] - 2026-03-24
+
+### Added
+
+- **Filter Preset Expansion**: Added two new System Settings quick presets in `frontend/src/components/widgets/FilterPresets.tsx`: **Orbital Only** and **Map Layers**.
+- **Listening Post Modular Assets**: Added `frontend/src/components/js8call/kiwi/RadioModeConfig.ts` and `frontend/src/components/js8call/kiwi/WaterfallColorMaps.ts` to isolate mode/waterfall configuration.
+- **Watchlist State Management**: Added `frontend/src/hooks/useWatchlist.ts` and `frontend/src/components/widgets/WatchlistManager.tsx` to separate watchlist behavior from monolithic settings rendering.
+
+### Changed
+
+- **System Settings Architecture**: Refactored `frontend/src/components/widgets/SystemSettingsWidget.tsx` into a slimmer orchestration layer by delegating watchlist and preset responsibilities to focused modules.
+- **Listening Post Composition**: Refactored `frontend/src/components/js8call/ListeningPost.tsx` to consume extracted KiwiSDR configuration modules.
+- **Search Widget Accessibility**: Improved search semantics with explicit input labeling and clearer action accessibility in `frontend/src/components/widgets/SearchWidget.tsx`.
+
+### Fixed
+
+- **Filter Coverage Consistency**: Included previously unmanaged orbital-related flags (`showSatNOGS`, `showH3Coverage`, `showTerminator`) in preset management so "Clear All" and preset application paths remain coherent.
+
 ## [0.47.1] - 2026-03-24
 
 ### Added
@@ -12,17 +30,11 @@
 ### Changed
 
 - **Entity Worker Architecture**: Refactored `frontend/src/hooks/useEntityWorker.ts` to import alert engines, trail smoothing, and worker protocol helpers instead of maintaining inline implementations.
-- **Dashboard Composition**: Refactored `frontend/src/components/DashboardView.tsx` to consume extracted widget components and reduce inline rendering/state logic.
-- **Intel Feed Processing**: Updated `frontend/src/components/IntelFeed.tsx` to use centralized domain filters and shared event style categorization.
-
-### Fixed
-
 - **Logic Drift Risk in Duplicated Paths**: Reduced risk of behavioral drift and inconsistent emergency/distress handling by consolidating previously duplicated inline logic into single-source modules.
 
 ## [0.47.0] - 2026-03-24
 
 ### Added
-
 - **Intelligence Feed Throttling**: Implemented a 1-second rate-limiting throttle for 'new' and 'lost' entity events in `App.tsx` to reduce visual noise during high-traffic periods, while ensuring critical alerts remain immediate.
 - **Orbital Assets Theming**: Updated `PassPredictorWidget` and the dashboard orbital passes grid to use a unified purple color theme (`text-purple-400`, etc.) for intelligence-related satellites.
 

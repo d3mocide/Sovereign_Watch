@@ -3,8 +3,10 @@ import {
   Copy,
   Download,
   Globe,
+  Layers,
   Plane,
   Save,
+  Satellite,
   Ship,
   Trash2,
   Upload,
@@ -60,6 +62,9 @@ const ALL_FILTER_KEYS = [
   "showJamming",
   "showGdelt",
   "showGdeltLabels",
+  "showSatNOGS",
+  "showH3Coverage",
+  "showTerminator",
 ];
 
 function loadCustomPresets(): Record<string, Record<string, unknown>> {
@@ -90,7 +95,9 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
     }
   };
 
-  const applyPreset = (presetType: "air" | "sea" | "all" | "clear") => {
+  const applyPreset = (
+    presetType: "air" | "sea" | "orbital" | "map" | "all" | "clear",
+  ) => {
     const newFilters: Record<string, boolean> = {};
     ALL_FILTER_KEYS.forEach((k) => {
       newFilters[k] = false;
@@ -118,6 +125,31 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
       newFilters.showHsc = true;
       newFilters.showPilot = true;
       newFilters.showSpecial = true;
+    } else if (presetType === "orbital") {
+      newFilters.showSatellites = true;
+      newFilters.showSatGPS = true;
+      newFilters.showSatWeather = true;
+      newFilters.showSatComms = true;
+      newFilters.showSatSurveillance = true;
+      newFilters.showSatOther = true;
+      newFilters.showConstellation_Starlink = true;
+      newFilters.showSatNOGS = true;
+    } else if (presetType === "map") {
+      const orbitalKeys = [
+        "showSatellites",
+        "showSatGPS",
+        "showSatWeather",
+        "showSatComms",
+        "showSatSurveillance",
+        "showSatOther",
+        "showConstellation_Starlink",
+        "showSatNOGS",
+      ];
+      ALL_FILTER_KEYS.forEach((k) => {
+        if (!orbitalKeys.includes(k)) {
+          newFilters[k] = true;
+        }
+      });
     } else if (presetType === "all") {
       ALL_FILTER_KEYS.forEach((k) => {
         newFilters[k] = true;
@@ -242,6 +274,24 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
         >
           <Ship size={12} className="text-sea-accent" />
           <span className="text-[9px] font-bold tracking-wider">SEA ONLY</span>
+        </button>
+        <button
+          onClick={() => applyPreset("orbital")}
+          className="flex items-center gap-1.5 p-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-white/70 hover:text-white focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+        >
+          <Satellite size={12} className="text-purple-400" />
+          <span className="text-[9px] font-bold tracking-wider">
+            ORBITAL ONLY
+          </span>
+        </button>
+        <button
+          onClick={() => applyPreset("map")}
+          className="flex items-center gap-1.5 p-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-white/70 hover:text-white focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+        >
+          <Layers size={12} className="text-hud-green" />
+          <span className="text-[9px] font-bold tracking-wider">
+            MAP LAYERS
+          </span>
         </button>
         <button
           onClick={() => applyPreset("all")}
