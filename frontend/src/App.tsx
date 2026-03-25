@@ -181,6 +181,10 @@ function App() {
     localStorage.setItem("intelMapStyle", style);
   }, []);
 
+  // Intel Globe spin state (no persistence — always starts off)
+  const [intelSpin, setIntelSpin] = useState(false);
+  const handleIntelSpinToggle = useCallback(() => setIntelSpin((v) => !v), []);
+
   // Background Data Maintenance (Cleanup & Counting)
   // This runs regardless of viewMode, ensuring Dashboard counts are live.
   useEffect(() => {
@@ -904,11 +908,30 @@ function App() {
               onFlyTo={(lat, lon) => mapActions?.flyTo(lat, lon)}
               mapStyle={intelMapStyle}
               onMapStyleChange={handleIntelMapStyleChange}
+              spin={intelSpin}
+              onSpinToggle={handleIntelSpinToggle}
+              onGenerateSitrep={(context) => {
+                setSelectedEntity({
+                  uid: "sitrep-intel",
+                  type: "sitrep",
+                  callsign: "INTEL SITREP",
+                  lat: 0,
+                  lon: 0,
+                  altitude: 0,
+                  course: 0,
+                  speed: 0,
+                  lastSeen: Date.now(),
+                  trail: [],
+                  uidHash: 0,
+                  detail: { sitrep_context: context },
+                } as import("./types").CoTEntity);
+                setIsAIAnalystOpen(true);
+              }}
             />
           ) : null
         }
         rightSidebar={
-          viewMode === "TACTICAL" || viewMode === "ORBITAL" ? (
+          viewMode === "TACTICAL" || viewMode === "ORBITAL" || viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
               {/* Entity Details Sidebar */}
               {selectedEntity && (
@@ -1069,6 +1092,7 @@ function App() {
               worldCountriesData={worldCountriesData}
               onEntitySelect={handleEntitySelect}
               mapStyle={intelMapStyle}
+              spin={intelSpin}
             />
             {/* OSINT ticker pinned to bottom of the globe area */}
             <div className="absolute bottom-0 left-0 right-0 z-10">

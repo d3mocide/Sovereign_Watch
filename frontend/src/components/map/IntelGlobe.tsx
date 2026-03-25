@@ -7,7 +7,8 @@
  *   2. GDELT event dots (ScatterplotLayer, existing buildGdeltLayer)
  *   3. Conflict arc projections (ArcLayer, buildGdeltArcLayer)
  *
- * The map is always in globe (3D) projection and uses the CARTO dark-matter style.
+ * Auto-spin: when `spin` is true the globe rotates at ~3°/s.
+ * User interaction (onMove) pauses spin for 3 s before resuming.
  */
 import "maplibre-gl/dist/maplibre-gl.css";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +19,9 @@ import { buildGdeltArcLayer } from "../../layers/buildGdeltArcLayer";
 import { buildCountryHeatLayer, type ActorEntry } from "../../layers/buildCountryHeatLayer";
 import { type MapStyleKey, resolveMapStyle } from "./intelMapStyles";
 
+const SPIN_DEG_PER_SEC = 3;
+const SPIN_RESUME_DELAY_MS = 3000;
+
 const MapLibreAdapterLazy = lazy(() => import("./MapLibreAdapter"));
 
 interface IntelGlobeProps {
@@ -25,6 +29,8 @@ interface IntelGlobeProps {
   worldCountriesData: FeatureCollection | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
   mapStyle?: MapStyleKey;
+  /** When true the globe auto-rotates; pauses 3 s after any user interaction. */
+  spin?: boolean;
 }
 
 export function IntelGlobe({
@@ -32,8 +38,8 @@ export function IntelGlobe({
   worldCountriesData,
   onEntitySelect,
   mapStyle: mapStyleProp = "dark",
+  spin = false,
 }: IntelGlobeProps) {
-  // Always globe (3D) projection
   const [viewState, setViewState] = useState({
     latitude: 20,
     longitude: 15,
@@ -42,14 +48,21 @@ export function IntelGlobe({
     bearing: 0,
   });
 
+  // Mutable refs for rAF loop — avoids stale closures
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const spinRef = useRef(spin);
+  spinRef.current = spin;
+  const lastInteractionRef = useRef<number>(0); // timestamp of last onMove
+
   // Actors for country heat layer
   const [actors, setActors] = useState<ActorEntry[]>([]);
 
-  // Animation tick for arc pulse (0→1 once per second)
+  // animTick drives arc opacity pulse (0→1 per second)
   const animTickRef = useRef(0);
   const [animTick, setAnimTick] = useState(0);
 
-  // Fetch actors on mount and refresh every 5 minutes
+  // Fetch actors on mount and every 5 minutes
   useEffect(() => {
     const fetchActors = async () => {
       try {
@@ -59,7 +72,7 @@ export function IntelGlobe({
           if (Array.isArray(data)) setActors(data);
         }
       } catch {
-        // silently ignore — country heat just won't show
+        // silently ignore
       }
     };
     fetchActors();
@@ -67,19 +80,40 @@ export function IntelGlobe({
     return () => clearInterval(interval);
   }, []);
 
-  // Animation loop — continuous tick for smooth arc pulse
+  // Combined rAF loop: arc pulse tick + globe spin
   useEffect(() => {
     let last = performance.now();
     let raf: number;
+
     const loop = (now: number) => {
-      const dt = (now - last) / 1000; // seconds
+      const dt = (now - last) / 1000; // seconds elapsed
       last = now;
+
+      // Arc pulse
       animTickRef.current = (animTickRef.current + dt) % 1;
       setAnimTick(animTickRef.current);
+
+      // Globe spin — only when enabled and user has been idle ≥ SPIN_RESUME_DELAY_MS
+      if (spinRef.current) {
+        const idleMs = now - lastInteractionRef.current;
+        if (idleMs >= SPIN_RESUME_DELAY_MS) {
+          setViewState((prev) => ({
+            ...prev,
+            longitude: prev.longitude + SPIN_DEG_PER_SEC * dt,
+          }));
+        }
+      }
+
       raf = requestAnimationFrame(loop);
     };
+
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
+  }, []); // stable — reads spin/viewState via refs
+
+  const handleMove = useCallback((evt: any) => {
+    lastInteractionRef.current = performance.now();
+    setViewState(evt.viewState);
   }, []);
 
   // IntelGlobe uses the sidebar for GDELT detail; no floating tooltip needed.
@@ -106,25 +140,8 @@ export function IntelGlobe({
   );
 
   const layers = [
-    // 1. Country threat heat
-    ...buildCountryHeatLayer(
-      worldCountriesData as any,
-      actors,
-      true,
-      true,
-      animTick,
-    ),
-    // 2. GDELT event dots (all events — no tone filter in Intel view)
-    ...buildGdeltLayer(
-      gdeltData as any,
-      true,
-      true,
-      -Infinity,
-      false, // no domain labels — too noisy at global zoom
-      handleHover,
-      handleGdeltClick,
-    ),
-    // 3. Conflict arc projections
+    ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, animTick),
+    ...buildGdeltLayer(gdeltData as any, true, true, -Infinity, false, handleHover, handleGdeltClick),
     ...buildGdeltArcLayer(gdeltData as any, true, true, animTick),
   ];
 
@@ -133,7 +150,7 @@ export function IntelGlobe({
       <Suspense fallback={<div className="absolute inset-0 bg-tactical-bg" />}>
         <MapLibreAdapterLazy
           viewState={viewState}
-          onMove={(evt: any) => setViewState(evt.viewState)}
+          onMove={handleMove}
           mapStyle={resolveMapStyle(mapStyleProp) as string}
           style={{ width: "100%", height: "100%" }}
           globeMode={true}

@@ -2,14 +2,21 @@
  * IntelSidebar — Left panel for the INTEL globe view.
  *
  * Sections:
- *  1. ACTIVE CONFLICT ZONES — countries ranked by event count + threat level
- *  2. ACTIVE ACTORS — same data, presented as an actor list with intel score badge
- *
- * Data is fetched from /api/gdelt/actors.
- * Clicking a zone calls onFlyTo(lat, lon) to centre the globe on that country.
+ *  1. Header — title, refresh, time window, map style, spin toggle
+ *  2. ACTIVE CONFLICT ZONES — countries ranked by event count + threat level
+ *  3. ACTIVE ACTORS — actor list with intel score badge
+ *  4. SITREP SUMMARY footer — hot zones count + GENERATE SITREP button
  */
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, Activity, Globe2, RefreshCw, Layers } from "lucide-react";
+import {
+  AlertTriangle,
+  Activity,
+  Globe2,
+  RefreshCw,
+  Layers,
+  RotateCcw,
+  FileText,
+} from "lucide-react";
 import { type MapStyleKey, MAP_STYLE_LABELS } from "../map/intelMapStyles";
 
 export interface ActorEntry {
@@ -30,6 +37,10 @@ interface IntelSidebarProps {
   onFlyTo?: (lat: number, lon: number) => void;
   mapStyle?: MapStyleKey;
   onMapStyleChange?: (style: MapStyleKey) => void;
+  spin?: boolean;
+  onSpinToggle?: () => void;
+  /** Called with a pre-formatted context string when the user requests a SITREP. */
+  onGenerateSitrep?: (context: string) => void;
 }
 
 function threatColor(level: ActorEntry["threat_level"]): string {
@@ -59,7 +70,45 @@ function threatBadgeBg(level: ActorEntry["threat_level"]): string {
   }
 }
 
-export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: IntelSidebarProps) {
+/** Build the SITREP context string from the current actors list. */
+function buildSitrepContext(actors: ActorEntry[], timeWindow: number): string {
+  const critical = actors.filter((a) => a.threat_level === "CRITICAL");
+  const elevated = actors.filter((a) => a.threat_level === "ELEVATED");
+  const totalEvents = actors.reduce((s, a) => s + a.event_count, 0);
+
+  const lines: string[] = [
+    `INTEL SITREP — OSINT GLOBE ANALYSIS`,
+    `Time Window: Last ${timeWindow} hours`,
+    `Total GDELT Events Indexed: ${totalEvents}`,
+    ``,
+    `CRITICAL THREAT ACTORS (${critical.length}):`,
+    ...critical.map(
+      (a) =>
+        `  ${a.actor} — ${a.event_count} events, Goldstein avg ${a.avg_goldstein.toFixed(1)}, ${a.material_conflict} material conflict incidents`,
+    ),
+    ``,
+    `ELEVATED THREAT ACTORS (${elevated.length}):`,
+    ...elevated.map(
+      (a) => `  ${a.actor} — ${a.event_count} events, Goldstein avg ${a.avg_goldstein.toFixed(1)}`,
+    ),
+    ``,
+    `TOP ACTORS BY EVENT COUNT:`,
+    ...actors.slice(0, 8).map(
+      (a) => `  ${a.actor} (${a.threat_level}): ${a.event_count} total, ${a.verbal_conflict} verbal conflict, ${a.material_conflict} material conflict`,
+    ),
+  ];
+
+  return lines.join("\n");
+}
+
+export function IntelSidebar({
+  onFlyTo,
+  mapStyle = "dark",
+  onMapStyleChange,
+  spin = false,
+  onSpinToggle,
+  onGenerateSitrep,
+}: IntelSidebarProps) {
   const [actors, setActors] = useState<ActorEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -101,6 +150,11 @@ export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: I
   const formatTime = (d: Date) =>
     d.toISOString().split("T")[1].split(".")[0];
 
+  const handleSitrep = useCallback(() => {
+    if (!onGenerateSitrep || !actors.length) return;
+    onGenerateSitrep(buildSitrepContext(actors, timeWindow));
+  }, [onGenerateSitrep, actors, timeWindow]);
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden font-mono text-xs select-none">
 
@@ -113,13 +167,32 @@ export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: I
               INTEL // OSINT GLOBE
             </span>
           </div>
-          <button
-            onClick={() => fetchActors(true)}
-            className="p-0.5 text-white/30 hover:text-hud-green transition-colors"
-            title="Refresh actor data"
-          >
-            <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Globe spin toggle */}
+            {onSpinToggle && (
+              <button
+                onClick={onSpinToggle}
+                title={spin ? "Pause globe rotation" : "Start globe rotation"}
+                className={`p-0.5 rounded-sm transition-colors ${
+                  spin
+                    ? "text-hud-green border border-hud-green/40 bg-hud-green/10"
+                    : "text-white/30 hover:text-hud-green border border-transparent"
+                }`}
+              >
+                <RotateCcw
+                  size={10}
+                  className={spin ? "animate-spin-slow" : ""}
+                />
+              </button>
+            )}
+            <button
+              onClick={() => fetchActors(true)}
+              className="p-0.5 text-white/30 hover:text-hud-green transition-colors"
+              title="Refresh actor data"
+            >
+              <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
         {lastUpdated && (
           <div className="text-[9px] text-white/30 tracking-wider">
@@ -278,10 +351,10 @@ export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: I
 
       {/* SITREP Summary footer */}
       <div className="shrink-0 px-3 py-2 bg-black/30 border border-white/10 rounded-sm backdrop-blur-md">
-        <div className="text-[9px] text-white/30 tracking-wider mb-1">
+        <div className="text-[9px] text-white/30 tracking-wider mb-1.5">
           ▶ SITREP SUMMARY
         </div>
-        <div className="flex justify-between text-[9px]">
+        <div className="flex justify-between text-[9px] mb-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-white/40">HOT ZONES</span>
             <span className="text-red-400 font-bold">
@@ -295,12 +368,28 @@ export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: I
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-white/40">NEW REPORTS</span>
+            <span className="text-white/40">REPORTS</span>
             <span className="text-hud-green font-bold">
               {actors.reduce((s, a) => s + a.event_count, 0)}
             </span>
           </div>
         </div>
+
+        {/* Generate SITREP button */}
+        {onGenerateSitrep && (
+          <button
+            onClick={handleSitrep}
+            disabled={!actors.length}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[9px] font-black tracking-widest transition-all ${
+              actors.length
+                ? "bg-hud-green/10 border border-hud-green/40 text-hud-green hover:bg-hud-green/20 hover:shadow-[0_0_12px_rgba(0,255,65,0.2)]"
+                : "bg-white/5 border border-white/10 text-white/20 cursor-not-allowed"
+            }`}
+          >
+            <FileText size={10} />
+            GENERATE AI SITREP
+          </button>
+        )}
       </div>
     </div>
   );
