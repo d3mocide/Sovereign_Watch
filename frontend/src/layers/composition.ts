@@ -222,7 +222,15 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     ...infraLayers,
     getSatNOGSLayer(satnogsStations || [], !!filters?.showSatNOGS),
     // Jamming zones sit above infra but below entity chevrons
-    ...buildJammingLayer(jammingData, !!filters?.showJamming, globeMode, now),
+    ...buildJammingLayer(
+      jammingData,
+      !!filters?.showJamming,
+      globeMode,
+      now,
+      setHoveredEntity,
+      setHoverPosition,
+      onEntitySelect,
+    ),
     // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
     // Auto-enabled when a mission area is active (shows all events in AOT)
     ...buildGdeltLayer(

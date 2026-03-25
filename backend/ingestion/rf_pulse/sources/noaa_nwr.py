@@ -3,6 +3,7 @@ NOAA NWR source adapter.
 """
 
 import asyncio
+import json
 import logging
 import time
 import aiohttp
@@ -42,8 +43,16 @@ class NOAANWRSource:
                     "rf_pulse:noaa_nwr:last_fetch", str(time.time()),
                     ex=int(self.interval_sec * 2),
                 )
-            except Exception:
+            except Exception as e:
                 logger.exception("NOAA NWR fetch error")
+                try:
+                    await self.redis_client.set(
+                        "poller:noaa_nwr:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(self.interval_sec)
 
     async def _fetch_and_publish(self):

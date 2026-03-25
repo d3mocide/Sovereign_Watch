@@ -57,9 +57,9 @@ _TOKEN_URL = (
 # ---------------------------------------------------------------------------
 # Unit-conversion helpers
 # ---------------------------------------------------------------------------
-_M_TO_FT = 3.28084          # metres → feet
-_MS_TO_KT = 1.94384         # m/s   → knots
-_MS_TO_FTMIN = 196.85       # m/s   → ft/min
+_M_TO_FT = 3.28084  # metres → feet
+_MS_TO_KT = 1.94384  # m/s   → knots
+_MS_TO_FTMIN = 196.85  # m/s   → ft/min
 
 # ---------------------------------------------------------------------------
 # Bounding-box helper
@@ -170,8 +170,8 @@ class OpenSkyClient:
     (8 000 credits/day → ~1 request / 10 s).  Leave both empty for anonymous
     access (400 credits/day → ~1 request / 215 s).
 
-    The rate_limit_period constructor argument controls aiolimiter; defaults
-    are set conservatively so the daily budget is never exhausted.
+    Separate rate limiters for bbox and watchlist modes allow testing with
+    slower pacing for watchlist queries (e.g., OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD=120s).
     """
 
     def __init__(
@@ -179,23 +179,33 @@ class OpenSkyClient:
         client_id: str = "",
         client_secret: str = "",
         rate_limit_period: Optional[float] = None,
+        watchlist_rate_limit_period: Optional[float] = None,
     ):
         self._client_id = client_id
         self._client_secret = client_secret
         self._authenticated = bool(client_id and client_secret)
 
-        # Conservative defaults: burn ≤ 50 % of daily budget
+        # Conservative defaults for bbox mode: burn ≤ 50 % of daily budget
         if rate_limit_period is None:
             # Authenticated: 4 000 req budget → 1 req / 21.6 s; use 22 s
             # Anonymous:       200 req budget → 1 req / 432 s; use 300 s (5 min)
             rate_limit_period = 22.0 if self._authenticated else 300.0
 
+        # Watchlist mode default: same as bbox, but can be overridden for testing
+        if watchlist_rate_limit_period is None:
+            watchlist_rate_limit_period = rate_limit_period
+
         self.rate_limit_period = rate_limit_period
-        self._limiter = AsyncLimiter(1, rate_limit_period)
+        self.watchlist_rate_limit_period = watchlist_rate_limit_period
+
+        # Separate limiters for bbox and watchlist modes
+        self._limiter_bbox = AsyncLimiter(1, rate_limit_period)
+        self._limiter_watchlist = AsyncLimiter(1, watchlist_rate_limit_period)
 
         # Cooldown (same pattern as AviationSource)
         self.cooldown_until: float = 0.0
         self._cooldown_step: float = 30.0
+        self._consecutive_penalties: int = 0
 
         # OAuth2 token cache
         self._access_token: Optional[str] = None
@@ -204,6 +214,9 @@ class OpenSkyClient:
         self._next_token_retry_at: float = 0.0
 
         self._session: Optional[aiohttp.ClientSession] = None
+
+        # Track server-requested Retry-After for rate limit compliance
+        self._retry_after_until: float = 0.0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -222,9 +235,10 @@ class OpenSkyClient:
                 "falling back to anonymous access until refresh succeeds"
             )
         logger.info(
-            "OpenSkyClient ready — %s, rate_limit_period=%.0fs",
+            "OpenSkyClient ready — %s, bbox_rate_period=%.0fs, watchlist_rate_period=%.0fs",
             auth_mode,
             self.rate_limit_period,
+            self.watchlist_rate_limit_period,
         )
 
     async def close(self) -> None:
@@ -240,10 +254,11 @@ class OpenSkyClient:
 
     def penalize(self) -> None:
         now = time.time()
-        if now < self.cooldown_until:
-            self._cooldown_step = min(self._cooldown_step * 2, 300.0)
-        else:
+        if self._consecutive_penalties == 0:
             self._cooldown_step = 30.0
+        else:
+            self._cooldown_step = min(self._cooldown_step * 2, 300.0)
+        self._consecutive_penalties += 1
         self.cooldown_until = now + self._cooldown_step
         logger.warning(
             "opensky penalized — cooling down for %.0fs (until %s)",
@@ -256,6 +271,7 @@ class OpenSkyClient:
             logger.info("opensky recovered — cooldown cleared")
         self.cooldown_until = 0.0
         self._cooldown_step = 30.0
+        self._consecutive_penalties = 0
 
     # ------------------------------------------------------------------
     # OAuth2 token management
@@ -327,18 +343,33 @@ class OpenSkyClient:
     # ------------------------------------------------------------------
     # Internal fetch helper
     # ------------------------------------------------------------------
-    async def _fetch_states(self, params: Dict) -> Optional[Dict]:
+    async def _fetch_states(
+        self, params: Dict, limiter: AsyncLimiter
+    ) -> Optional[Dict]:
         """
         Shared HTTP GET to /api/states/all with rate-limiting, auth, and
         error handling.  Returns the parsed JSON payload or None on failure.
         Callers are responsible for extracting 'states' from the result.
+
+        The ``limiter`` parameter specifies which rate limiter to use
+        (e.g., _limiter_bbox for bbox queries, _limiter_watchlist for watchlist).
+
+        If OpenSky sends a Retry-After header (RFC 7231), this method respects it
+        by updating _retry_after_until and logging the server's request.
         """
         if not self._session:
             raise RuntimeError("Client not started; call start() first")
 
         await self._ensure_token()
 
-        async with self._limiter:
+        # Check if server requested a retry delay
+        now = time.time()
+        if now < self._retry_after_until:
+            wait_secs = self._retry_after_until - now
+            logger.debug("opensky: honoring Retry-After — waiting %.0fs", wait_secs)
+            await asyncio.sleep(wait_secs)
+
+        async with limiter:
             fetched_at = time.time()
             try:
                 async with self._session.get(
@@ -347,6 +378,26 @@ class OpenSkyClient:
                     headers=self._auth_headers(),
                     timeout=aiohttp.ClientTimeout(total=15.0),
                 ) as resp:
+                    # Check for Retry-After header
+                    if "Retry-After" in resp.headers:
+                        retry_after_str = resp.headers.get("Retry-After", "60")
+                        try:
+                            retry_after_secs = int(retry_after_str)
+                            self._retry_after_until = fetched_at + retry_after_secs
+                            logger.warning(
+                                "opensky: Retry-After header received — "
+                                "server requests %.0fs delay (until %s)",
+                                retry_after_secs,
+                                time.strftime(
+                                    "%H:%M:%S", time.localtime(self._retry_after_until)
+                                ),
+                            )
+                        except ValueError:
+                            logger.warning(
+                                "opensky: Retry-After header present but unparseable: %s",
+                                retry_after_str,
+                            )
+
                     if resp.status == 429:
                         logger.warning("opensky: rate limited (429)")
                         self.penalize()
@@ -404,7 +455,7 @@ class OpenSkyClient:
             "lamax": lamax,
             "lomax": lomax,
         }
-        payload = await self._fetch_states(params)
+        payload = await self._fetch_states(params, self._limiter_bbox)
         if payload is None:
             return []
 
@@ -418,7 +469,11 @@ class OpenSkyClient:
 
         logger.debug(
             "opensky: bbox fetched %d airborne contacts (%.2f/%.2f → %.2f/%.2f)",
-            len(aircraft), lamin, lomin, lamax, lomax,
+            len(aircraft),
+            lamin,
+            lomin,
+            lamax,
+            lomax,
         )
         return aircraft
 
@@ -443,7 +498,7 @@ class OpenSkyClient:
             return []
 
         params = {"icao24": ",".join(icao24s)}
-        payload = await self._fetch_states(params)
+        payload = await self._fetch_states(params, self._limiter_watchlist)
         if payload is None:
             return []
 
@@ -458,6 +513,7 @@ class OpenSkyClient:
 
         logger.debug(
             "opensky: watchlist fetched %d/%d airborne contacts",
-            len(aircraft), len(icao24s),
+            len(aircraft),
+            len(icao24s),
         )
         return aircraft

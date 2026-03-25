@@ -15,7 +15,7 @@ dependencies = [
     "sgp4==2.25",
     "numpy==2.4.3",
     # Direct TimescaleDB writes (space weather Kp/aurora)
-    "psycopg2-binary>=2.9.9",
+    "psycopg2-binary==2.9.11",
 ]
 
 [dependency-groups]

@@ -322,11 +322,11 @@ Ordered by impact vs risk (lower risk items first):
 | Priority | File | Action | Risk |
 |---|---|---|---|
 | Done | `SidebarRight.tsx` | Extract 6 inspector components | Low — pure UI, no shared state changes |
-| 2 | `IntelFeed.tsx` | Extract domain filter functions | Low — pure functions |
-| 3 | `useEntityWorker.ts` | Extract alert engines | Medium — needs test coverage |
-| 4 | `ListeningPost.tsx` | Extract WaterfallRenderer + KiwiSDRController | Medium — canvas/WS lifecycle |
-| 5 | `DashboardView.tsx` | Extract MiniMap + panel widgets | Low — independent panels |
-| 6 | `SystemSettingsWidget.tsx` | Extract 3 sub-widgets + useWatchlist hook | Low |
+| Done | `IntelFeed.tsx` | Extract domain filter functions | Low — pure functions |
+| Done | `useEntityWorker.ts` | Extract alert engines | Medium — needs test coverage |
+| Done | `ListeningPost.tsx` | Extract WaterfallRenderer + KiwiSDRController | Medium — canvas/WS lifecycle |
+| Done | `DashboardView.tsx` | Extract MiniMap + panel widgets | Low — independent panels |
+| Done | `SystemSettingsWidget.tsx` | Extract 3 sub-widgets + useWatchlist hook | Low |
 | 7 | `SystemStatus.tsx` | Extract layer controls + integration status | Low |
 | 8 | `useAnimationLoop.ts` | Extract interpolation and filter engines | High — performance critical |
 | 9 | `TacticalMap.tsx` + `OrbitalMap.tsx` | Extract shared map base | High — core rendering path |

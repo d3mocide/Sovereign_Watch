@@ -1,20 +1,20 @@
 import asyncio
-import logging
 import json
+import logging
 import os
 import time
 from typing import Dict, List, Optional, Set
-from aiokafka import AIOKafkaProducer
-import redis.asyncio as redis
 
+import redis.asyncio as redis
+from aiokafka import AIOKafkaProducer
+from arbitration import Arbitrator
+from classification import classify_aircraft
+from h3_sharding import H3PriorityManager
+from jamming import JammingAnalyzer
 from multi_source_poller import MultiSourcePoller
 from opensky_client import OpenSkyClient, nm_radius_to_bbox
 from opensky_watchlist import WatchlistManager
-from classification import classify_aircraft
-from arbitration import Arbitrator
-from utils import safe_float, parse_altitude
-from h3_sharding import H3PriorityManager
-from jamming import JammingAnalyzer
+from utils import parse_altitude, safe_float
 
 # Config - Read from ENV (set in docker-compose.yml)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
@@ -38,14 +38,27 @@ _OPENSKY_RATE_PERIOD_RAW = os.getenv("OPENSKY_RATE_LIMIT_PERIOD", "0")
 OPENSKY_RATE_LIMIT_PERIOD: Optional[float] = (
     float(_OPENSKY_RATE_PERIOD_RAW) if float(_OPENSKY_RATE_PERIOD_RAW) > 0 else None
 )
+# Separate rate limit for watchlist queries (defaults to same as bbox if not set)
+_OPENSKY_WATCHLIST_RATE_PERIOD_RAW = os.getenv(
+    "OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD", "0"
+)
+OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD: Optional[float] = (
+    float(_OPENSKY_WATCHLIST_RATE_PERIOD_RAW)
+    if float(_OPENSKY_WATCHLIST_RATE_PERIOD_RAW) > 0
+    else None
+)
 
 # OpenSky watchlist config
 # Watchlist can be enabled independently from the bbox loop.
-OPENSKY_WATCHLIST_ENABLED = os.getenv("OPENSKY_WATCHLIST_ENABLED", "false").lower() == "true"
+OPENSKY_WATCHLIST_ENABLED = (
+    os.getenv("OPENSKY_WATCHLIST_ENABLED", "false").lower() == "true"
+)
 # Auto-seed: when aircraft of these affiliation types are spotted in the
 # primary AOR, automatically add their ICAO24 to the global watchlist so
 # they continue to be tracked after they exit the local coverage area.
-OPENSKY_WATCHLIST_AUTO_SEED = os.getenv("OPENSKY_WATCHLIST_AUTO_SEED", "true").lower() == "true"
+OPENSKY_WATCHLIST_AUTO_SEED = (
+    os.getenv("OPENSKY_WATCHLIST_AUTO_SEED", "true").lower() == "true"
+)
 # Comma-separated affiliation types to auto-seed (classify_aircraft affiliation field)
 _SEED_TYPES_RAW = os.getenv("OPENSKY_WATCHLIST_SEED_TYPES", "military,government,drone")
 OPENSKY_WATCHLIST_SEED_TYPES: Set[str] = {
@@ -60,6 +73,7 @@ OPENSKY_WATCHLIST_TTL_SECONDS: Optional[float] = (
 OPENSKY_WATCHLIST_BATCH_SIZE = int(os.getenv("OPENSKY_WATCHLIST_BATCH_SIZE", "100"))
 
 logger = logging.getLogger("poller_service")
+
 
 class PollerService:
     def __init__(self):
@@ -85,6 +99,7 @@ class PollerService:
                 client_id=OPENSKY_CLIENT_ID,
                 client_secret=OPENSKY_CLIENT_SECRET,
                 rate_limit_period=OPENSKY_RATE_LIMIT_PERIOD,
+                watchlist_rate_limit_period=OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD,
             )
             if _opensky_needed
             else None
@@ -129,7 +144,9 @@ class PollerService:
                 modes.append(f"watchlist({auto})")
             logger.info("OpenSky enabled: %s", ", ".join(modes))
         else:
-            logger.info("OpenSky disabled (set OPENSKY_ENABLED or OPENSKY_WATCHLIST_ENABLED)")
+            logger.info(
+                "OpenSky disabled (set OPENSKY_ENABLED or OPENSKY_WATCHLIST_ENABLED)"
+            )
 
         # Start optional watchlist manager
         if self.watchlist:
@@ -154,9 +171,13 @@ class PollerService:
             self.center_lat = mission["lat"]
             self.center_lon = mission["lon"]
             self.radius_nm = mission["radius_nm"]
-            logger.info(f"Loaded active mission: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+            logger.info(
+                f"Loaded active mission: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
+            )
         else:
-            logger.info(f"Using default mission area: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+            logger.info(
+                f"Using default mission area: ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
+            )
 
     async def shutdown(self):
         logger.info("Shutting down...")
@@ -181,7 +202,7 @@ class PollerService:
             try:
                 # Re-subscribe if connection was lost
                 if not self.pubsub.connection:
-                     await self.pubsub.subscribe("navigation-updates")
+                    await self.pubsub.subscribe("navigation-updates")
 
                 async for message in self.pubsub.listen():
                     if not self.running:
@@ -190,11 +211,17 @@ class PollerService:
                     if message["type"] == "message":
                         try:
                             mission = json.loads(message["data"])
-                            old_center = (self.center_lat, self.center_lon, self.radius_nm)
+                            old_center = (
+                                self.center_lat,
+                                self.center_lon,
+                                self.radius_nm,
+                            )
                             self.center_lat = mission["lat"]
                             self.center_lon = mission["lon"]
                             self.radius_nm = mission["radius_nm"]
-                            logger.info(f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm")
+                            logger.info(
+                                f"📍 Mission area updated: {old_center} → ({self.center_lat}, {self.center_lon}) @ {self.radius_nm}nm"
+                            )
                             # Flush stale cells and re-seed for the new AOR
                             await self.h3_manager.flush_region()
                             await self.h3_manager.initialize_region(
@@ -204,7 +231,9 @@ class PollerService:
                             logger.error(f"Failed to parse mission update: {e}")
             except (redis.ConnectionError, asyncio.CancelledError):
                 if self.running:
-                    logger.warning("Redis connection lost in listener. Retrying in 5s...")
+                    logger.warning(
+                        "Redis connection lost in listener. Retrying in 5s..."
+                    )
                     await asyncio.sleep(5)
                 else:
                     break
@@ -232,7 +261,9 @@ class PollerService:
 
                 # Clamp radius to source-specific maximum to avoid 400 errors
                 effective_radius = min(radius, source.max_radius)
-                path = source.url_format.format(lat=lat, lon=lon, radius=effective_radius)
+                path = source.url_format.format(
+                    lat=lat, lon=lon, radius=effective_radius
+                )
                 url = f"{source.base_url}{path}"
 
                 try:
@@ -249,6 +280,15 @@ class PollerService:
                             ac["_source"] = source.name
                             ac["_fetched_at"] = fetched_at
                         await self.process_aircraft_batch(aircraft, lat, lon)
+                        # Throttled heartbeat: update at most once per 30s
+                        if fetched_at - getattr(self, "_adsb_last_heartbeat", 0) >= 30:
+                            self._adsb_last_heartbeat = fetched_at
+                            try:
+                                await self.redis_client.set(
+                                    "adsb:last_fetch", str(fetched_at), ex=600
+                                )
+                            except Exception:
+                                pass
 
                     # Update cell priority based on observed traffic.
                     # Use raw count (pre-arbitration) as the activity signal.
@@ -265,6 +305,14 @@ class PollerService:
 
             except Exception as e:
                 logger.error(f"CRITICAL error in {source.name} loop: {e}")
+                try:
+                    await self.redis_client.set(
+                        "poller:adsb:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
                 await asyncio.sleep(5)
 
     async def opensky_loop(self):
@@ -300,7 +348,9 @@ class PollerService:
                     self.center_lat, self.center_lon, self.radius_nm
                 )
 
-                aircraft = await self.opensky_client.fetch_bbox(lamin, lomin, lamax, lomax)
+                aircraft = await self.opensky_client.fetch_bbox(
+                    lamin, lomin, lamax, lomax
+                )
 
                 if aircraft:
                     await self.process_aircraft_batch(
@@ -354,7 +404,7 @@ class PollerService:
                 num_batches = max(1, (len(icao_list) + batch_size - 1) // batch_size)
                 batch_cursor = batch_cursor % num_batches
                 start = batch_cursor * batch_size
-                batch = icao_list[start: start + batch_size]
+                batch = icao_list[start : start + batch_size]
                 batch_cursor += 1
 
                 aircraft = await self.opensky_client.fetch_icao_list(batch)
@@ -364,7 +414,10 @@ class PollerService:
                     await self.process_aircraft_batch(aircraft, 0.0, 0.0)
                     logger.info(
                         "Watchlist batch %d/%d: %d/%d contacts airborne",
-                        batch_cursor, num_batches, len(aircraft), len(batch),
+                        batch_cursor,
+                        num_batches,
+                        len(aircraft),
+                        len(batch),
                     )
 
             except Exception as exc:
@@ -384,9 +437,7 @@ class PollerService:
             return
 
         affiliation = (
-            tak_msg.get("detail", {})
-            .get("classification", {})
-            .get("affiliation", "")
+            tak_msg.get("detail", {}).get("classification", {}).get("affiliation", "")
         )
         if affiliation in OPENSKY_WATCHLIST_SEED_TYPES:
             icao24 = tak_msg["uid"]
@@ -395,7 +446,9 @@ class PollerService:
 
     async def loop(self):
         """Main Orchestration Loop - Spawns concurrent source tasks."""
-        logger.info(f"Initializing Parallel Ingestion - Center: ({self.center_lat}, {self.center_lon}), Radius: {self.radius_nm}nm")
+        logger.info(
+            f"Initializing Parallel Ingestion - Center: ({self.center_lat}, {self.center_lon}), Radius: {self.radius_nm}nm"
+        )
 
         # Start one independent loop per source
         tasks = []
@@ -422,7 +475,9 @@ class PollerService:
 
     async def cleanup_loop(self):
         """Background task to periodically evict stale arbitration and watchlist entries."""
-        logger.info(f"Starting cleanup loop (interval: {ARBITRATION_CLEANUP_INTERVAL}s)")
+        logger.info(
+            f"Starting cleanup loop (interval: {ARBITRATION_CLEANUP_INTERVAL}s)"
+        )
         while self.running:
             try:
                 await asyncio.sleep(ARBITRATION_CLEANUP_INTERVAL)
@@ -448,7 +503,9 @@ class PollerService:
         await asyncio.sleep(delay)
         await self.source_loop(source_idx)
 
-    async def process_aircraft_batch(self, aircraft: List[Dict], lat: float, lon: float):
+    async def process_aircraft_batch(
+        self, aircraft: List[Dict], lat: float, lon: float
+    ):
         """Process and publish a batch of aircraft from a specific source."""
         if not aircraft:
             return
@@ -492,7 +549,9 @@ class PollerService:
             published += 1
 
         if published:
-            logger.info(f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})")
+            logger.info(
+                f"Published {published}/{len(aircraft)} aircraft from ({lat:.2f}, {lon:.2f})"
+            )
 
         # Run jamming analysis periodically (every 30 s), not per-batch
         now = time.time()
@@ -530,8 +589,8 @@ class PollerService:
         # Default: "a-f-A-C-F" (Friendly - Air - Civilian - Fixed Wing)
         cot_type = "a-f-A-C-F"
 
-        affil_code = "C" # Civilian
-        plat_code = "F" # Fixed Wing
+        affil_code = "C"  # Civilian
+        plat_code = "F"  # Fixed Wing
 
         if target_class["affiliation"] == "military":
             affil_code = "M"
@@ -544,35 +603,39 @@ class PollerService:
         # Special case: Ground Vehicles (C1=Emergency, C2=Service, C3=Obstacle)
         # Mapping to Friendly - Ground - Equipment - Vehicle - Civil
         if category == "C1" or category == "C2" or category == "C3":
-             cot_type = "a-f-G-E-V-C"
+            cot_type = "a-f-G-E-V-C"
 
         # Special case: Drone
         if target_class["platform"] == "drone":
-             cot_type = f"a-f-A-{affil_code}-Q" # Q is typically drone/RPV in CoT 2525B mapping variants, or use F per spec fallback
+            cot_type = f"a-f-A-{affil_code}-Q"  # Q is typically drone/RPV in CoT 2525B mapping variants, or use F per spec fallback
 
         return {
             "uid": ac.get("hex", "").lower(),
             "_source": ac.get("_source", ""),
             "type": cot_type,
             "how": "m-g",
-            "time": source_ts * 1000, # MS timestamp adjusted for age
+            "time": source_ts * 1000,  # MS timestamp adjusted for age
             # Python time.time() is float seconds. JS/TAK usually likes MS or ISO.
             # Let's use ISO string to be safe or just matching Benthos 'now()'
             # Benthos now() is RFC3339 string.
-            "start": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            "stale": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + 120)),
+            "start": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "stale": time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 120)
+            ),
             "point": {
                 "lat": ac.get("lat"),
                 "lon": ac.get("lon"),
                 "hae": parse_altitude(ac),
                 "ce": 10.0,
-                "le": 10.0
+                "le": 10.0,
             },
             "detail": {
                 "track": {
                     "course": ac.get("track") or 0,
                     "speed": safe_float(ac.get("gs")) * 0.514444,  # Knots to m/s
-                    "vspeed": safe_float(ac.get("baro_rate") or ac.get("geom_rate") or 0)
+                    "vspeed": safe_float(
+                        ac.get("baro_rate") or ac.get("geom_rate") or 0
+                    ),
                 },
                 "contact": {
                     "callsign": (ac.get("flight", "") or ac.get("hex", "")).strip()
@@ -583,8 +646,8 @@ class PollerService:
                     # NIC  0-11: Navigation Integrity Category (higher = tighter containment radius)
                     # NACp 0-11: Navigation Accuracy Category for Position (higher = better accuracy)
                     # Missing (None) means the source did not provide the field.
-                    "nic":  int(ac["nic"])  if ac.get("nic")  is not None else None,
+                    "nic": int(ac["nic"]) if ac.get("nic") is not None else None,
                     "nacP": int(ac["nac_p"]) if ac.get("nac_p") is not None else None,
-                }
-            }
+                },
+            },
         }

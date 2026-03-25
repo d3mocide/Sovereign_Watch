@@ -317,6 +317,81 @@ async def analyze_track(
             except Exception as e:
                 logger.warning(f"Redis infra fallback failed: {e}")
 
+        # 1.1.4b JAMMING ZONE FALLBACK (Redis)
+        if (
+            (not track_summary or track_summary["points"] == 0)
+            and db.redis_client
+            and uid.startswith("jamming-")
+        ):
+            try:
+                h3_index = uid.replace("jamming-", "", 1)
+                raw = await db.redis_client.get("jamming:active_zones")
+                if raw:
+                    data = json.loads(raw)
+                    features = data.get("features", [])
+                    for f in features:
+                        props = f.get("properties", {})
+                        if str(props.get("h3_index")) != h3_index:
+                            continue
+
+                        geom = f.get("geometry", {})
+                        coords = geom.get("coordinates", [0, 0])
+                        lon = float(coords[0]) if len(coords) > 0 else 0.0
+                        lat = float(coords[1]) if len(coords) > 1 else 0.0
+                        event_time = props.get("time")
+                        assessment = str(props.get("assessment") or "mixed")
+                        confidence = float(props.get("confidence") or 0.0)
+                        affected_count = int(props.get("affected_count") or 0)
+                        avg_nic = props.get("avg_nic")
+                        avg_nacp = props.get("avg_nacp")
+                        kp_at_event = props.get("kp_at_event")
+
+                        event_dt = datetime.now(timezone.utc)
+                        if isinstance(event_time, str):
+                            try:
+                                event_dt = datetime.fromisoformat(
+                                    event_time.replace("Z", "+00:00")
+                                )
+                            except Exception:
+                                pass
+
+                        track_summary = {
+                            "start_time": event_dt,
+                            "last_seen": event_dt,
+                            "points": 1,
+                            "avg_speed": 0,
+                            "min_speed": 0,
+                            "max_speed": 0,
+                            "avg_alt": 0,
+                            "min_alt": 0,
+                            "max_alt": 0,
+                            "centroid_geom": f"SRID=4326;POINT({lon} {lat})",
+                            "type": "u-G-J",  # Unknown-Ground-Jamming
+                            "meta": {
+                                "callsign": f"GPS SIGINT {assessment.upper()}",
+                                "registration": None,
+                                "h3_index": h3_index,
+                                "entity_type": "jamming",
+                                "assessment": assessment,
+                                "confidence": confidence,
+                                "affected_count": affected_count,
+                                "avg_nic": avg_nic,
+                                "avg_nacp": avg_nacp,
+                                "kp_at_event": kp_at_event,
+                            },
+                            "waypoint_history": [
+                                {
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "alt": 0,
+                                    "time": event_dt.isoformat(),
+                                }
+                            ],
+                        }
+                        break
+            except Exception as e:
+                logger.warning(f"Jamming fallback failed: {e}")
+
         # 1.1.5 GDELT OSINT EVENT FALLBACK
         if (not track_summary or track_summary["points"] == 0) and uid.startswith(
             "gdelt-"

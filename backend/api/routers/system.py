@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -281,6 +282,155 @@ async def remove_from_watchlist(icao24: str):
 
     logger.info("Watchlist: removed %s", icao24)
     return {"status": "ok", "icao24": icao24}
+
+
+@router.get("/api/config/poller-health")
+async def get_poller_health():
+    """Return real operational health for all data source pollers based on Redis state."""
+    now = _time.time()
+
+    # Credential checks
+    ais_key = os.getenv("AISSTREAM_API_KEY", "")
+    maritime_has_creds = bool(ais_key and ais_key != "your_key_here")
+
+    rr_key  = os.getenv("RADIOREF_APP_KEY", "")
+    rr_user = os.getenv("RADIOREF_USERNAME", "")
+    rr_pass = os.getenv("RADIOREF_PASSWORD", "")
+    radioref_has_creds = bool(
+        rr_key and rr_user and rr_pass and rr_key != "your_app_key_here"
+    )
+
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    gemini_key    = os.getenv("GEMINI_API_KEY", "")
+    ai_has_creds  = bool(
+        (anthropic_key and anthropic_key != "your_key_here") or
+        (gemini_key    and gemini_key    != "your_key_here")
+    )
+
+    # (id, name, group, fetch_key, error_key, stale_after_s, has_creds)
+    # fetch_key="__space_weather__" = special: parse timestamp from kp_current JSON
+    # fetch_key=None = no Redis tracking (env-var check only)
+    POLLER_SPECS = [
+        ("adsb",          "Aviation (ADS-B)",  "Tracking",       "adsb:last_fetch",                   "poller:adsb:last_error",            300,        True),
+        ("maritime",      "Maritime AIS",       "Tracking",       "maritime:last_message_at",          "poller:maritime:last_error",        300,        maritime_has_creds),
+        ("orbital",       "Orbital (TLE)",      "Orbital",        "orbital_pulse:last_fetch",          "poller:orbital:last_error",         7 * 3600,   True),
+        ("satnogs_net",   "SatNOGS Network",    "Orbital",        "satnogs_pulse:network:last_fetch",  "poller:satnogs_network:last_error", 3 * 3600,   True),
+        ("satnogs_db",    "SatNOGS Database",   "Orbital",        "satnogs_pulse:db:last_fetch",       "poller:satnogs_db:last_error",      30 * 3600,  True),
+        ("space_weather", "Space Weather",      "Environment",    "__space_weather__",                 "poller:space_weather:last_error",   2 * 3600,   True),
+        ("gdelt",         "GDELT Events",       "Intel",          "gdelt_pulse:last_fetch",            "poller:gdelt:last_error",           1800,       True),
+        ("rf_ard",        "RF Amateur (ARD)",   "RF",             "rf_pulse:ard:last_fetch",           "poller:ard:last_error",             30 * 3600,  True),
+        ("rf_noaa",       "NOAA NWR",           "RF",             "rf_pulse:noaa_nwr:last_fetch",      "poller:noaa_nwr:last_error",        8 * 86400,  True),
+        ("radioref",      "RadioReference",     "RF",             "rf_pulse:radioref:last_fetch",      "poller:radioref:last_error",        8 * 86400,  radioref_has_creds),
+        ("infra_cables",  "Undersea Cables",    "Infrastructure", "infra:last_cables_fetch",           "poller:infra_cables:last_error",    8 * 86400,  True),
+        ("infra_towers",  "FCC Towers",         "Infrastructure", "infra:last_fcc_fetch",              "poller:infra_towers:last_error",    8 * 86400,  True),
+        ("ai",            "AI Analysis",        "Analysis",       None,                                None,                                None,       ai_has_creds),
+    ]
+
+    # Fallback when Redis is unavailable
+    if not db.redis_client:
+        return [
+            {
+                "id": sid, "name": name, "group": group,
+                "status": "no_credentials" if not has_creds else "unknown",
+                "last_success": None, "last_error_ts": None,
+                "last_error_msg": None, "stale_after_s": stale_s,
+            }
+            for sid, name, group, _, __, stale_s, has_creds in POLLER_SPECS
+        ]
+
+    # Collect all Redis keys we need
+    keys_to_fetch = []
+    for _, _, _, fetch_key, error_key, _, _ in POLLER_SPECS:
+        if fetch_key and fetch_key != "__space_weather__":
+            keys_to_fetch.append(fetch_key)
+        if error_key:
+            keys_to_fetch.append(error_key)
+    keys_to_fetch.append("space_weather:kp_current")
+
+    try:
+        raw_values = await asyncio.gather(
+            *[db.redis_client.get(k) for k in keys_to_fetch],
+            return_exceptions=True,
+        )
+        kv = {
+            k: (v if not isinstance(v, Exception) else None)
+            for k, v in zip(keys_to_fetch, raw_values)
+        }
+    except Exception as e:
+        logger.error("Redis error in poller-health: %s", e)
+        kv = {}
+
+    # Decode space-weather timestamp from cached JSON
+    sw_last_success = None
+    sw_json = kv.get("space_weather:kp_current")
+    if sw_json:
+        try:
+            sw_ts_str = json.loads(sw_json).get("time")
+            if sw_ts_str:
+                sw_last_success = datetime.fromisoformat(
+                    sw_ts_str.replace("Z", "+00:00")
+                ).timestamp()
+        except Exception:
+            pass
+
+    def _compute(fetch_key, error_key, stale_s, has_creds):
+        if not has_creds:
+            return "no_credentials", None, None, None
+
+        # Resolve last_success timestamp
+        if fetch_key == "__space_weather__":
+            last_success = sw_last_success
+        elif fetch_key:
+            raw = kv.get(fetch_key)
+            last_success = float(raw) if raw else None
+        else:
+            last_success = None  # env-var-only source
+
+        # Resolve last_error
+        last_error_ts = last_error_msg = None
+        if error_key:
+            err_raw = kv.get(error_key)
+            if err_raw:
+                try:
+                    err = json.loads(err_raw)
+                    last_error_ts  = err.get("ts")
+                    last_error_msg = err.get("msg")
+                except Exception:
+                    pass
+
+        # AI and other env-var-only sources: just report active
+        if fetch_key is None and error_key is None:
+            return "active", None, None, None
+
+        # Compute status
+        if last_success is None and last_error_ts is None:
+            status = "pending"
+        elif last_error_ts and (last_success is None or last_error_ts > last_success):
+            status = "error"
+        elif last_success is not None and stale_s is not None:
+            status = "healthy" if (now - last_success) <= stale_s else "stale"
+        else:
+            status = "pending"
+
+        return status, last_success, last_error_ts, last_error_msg
+
+    results = []
+    for sid, name, group, fetch_key, error_key, stale_s, has_creds in POLLER_SPECS:
+        status, last_success, last_error_ts, last_error_msg = _compute(
+            fetch_key, error_key, stale_s, has_creds
+        )
+        results.append({
+            "id": sid,
+            "name": name,
+            "group": group,
+            "status": status,
+            "last_success": last_success,
+            "last_error_ts": last_error_ts,
+            "last_error_msg": last_error_msg,
+            "stale_after_s": stale_s,
+        })
+
+    return results
 
 
 @router.get("/api/debug/h3_cells")

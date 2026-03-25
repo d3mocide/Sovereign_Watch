@@ -107,8 +107,8 @@ function App() {
 
     // Throttle 'new' and 'lost' events to 1 every 1s per category (dash/tactical) to prevent visual spam
     // Critical alerts (type: 'alert') always bypass this throttle.
-    if (event.type !== 'alert') {
-      const typeKey = `${event.type}-${event.entityType || 'unknown'}`;
+    if (event.type !== "alert") {
+      const typeKey = `${event.type}-${event.entityType || "unknown"}`;
       const lastTime = lastEventTimesRef.current[typeKey] || 0;
       if (now - lastTime < 1000) return;
       lastEventTimesRef.current[typeKey] = now;
@@ -309,6 +309,7 @@ function App() {
       showConstellation_Starlink: false,
       showH3Coverage: false,
       showAurora: false,
+      showJamming: true,
       showGdelt: false,
       showGdeltLabels: false,
       showTerminator: true,
@@ -365,6 +366,7 @@ function App() {
       showSatOther: true,
       showSatNOGS: true,
       showAurora: true,
+      showJamming: true,
       showConstellation_Starlink: false,
     };
     const saved = localStorage.getItem("orbitalSatFilters");

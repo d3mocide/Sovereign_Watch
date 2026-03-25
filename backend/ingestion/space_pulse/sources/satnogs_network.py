@@ -16,6 +16,7 @@ API: https://network.satnogs.org/api/observations/?format=json&status=good
 """
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime, timedelta, UTC
@@ -67,8 +68,16 @@ class SatNOGSNetworkSource:
                     "satnogs_pulse:network:last_fetch", str(time.time()),
                     ex=int(self.interval_sec * 2),
                 )
-            except Exception:
+            except Exception as e:
                 logger.exception("SatNOGS Network fetch error")
+                try:
+                    await self.redis_client.set(
+                        "poller:satnogs_network:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(self.interval_sec)
 
 

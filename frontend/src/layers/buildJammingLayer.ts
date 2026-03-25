@@ -14,14 +14,16 @@
  * Data source: /api/jamming/active (GeoJSON FeatureCollection)
  */
 
-import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import type { PickingInfo } from "@deck.gl/core";
+import { ScatterplotLayer } from "@deck.gl/layers";
+import type { CoTEntity } from "../types";
 import { JammingZone } from "../types";
 
 const ASSESSMENT_COLORS: Record<string, [number, number, number]> = {
-  jamming:       [251, 60,  60],   // Red
-  mixed:         [251, 191, 36],   // Amber
-  space_weather: [167, 102, 255],  // Purple
-  equipment:     [100, 130, 160],  // Blue-grey
+  jamming: [251, 60, 60], // Red
+  mixed: [251, 191, 36], // Amber
+  space_weather: [167, 102, 255], // Purple
+  equipment: [100, 130, 160], // Blue-grey
 };
 
 function zoneColor(
@@ -37,6 +39,9 @@ export function buildJammingLayer(
   visible: boolean,
   globeMode: boolean,
   now: number,
+  setHoveredEntity?: (entity: CoTEntity | null) => void,
+  setHoverPosition?: (pos: { x: number; y: number } | null) => void,
+  onEntitySelect?: (entity: CoTEntity | null) => void,
 ): any[] {
   if (!visible || !jammingData?.features?.length) return [];
 
@@ -50,6 +55,47 @@ export function buildJammingLayer(
     lon: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
   })) as (JammingZone & { lon: number; lat: number })[];
+
+  const zoneToEntity = (
+    zone: JammingZone & { lon: number; lat: number },
+  ): CoTEntity => {
+    const label = String(zone.assessment || "mixed").toUpperCase();
+    return {
+      uid: `jamming-${zone.h3_index}`,
+      lat: zone.lat,
+      lon: zone.lon,
+      altitude: 0,
+      type: "jamming",
+      course: 0,
+      speed: 0,
+      callsign: `GPS SIGINT ${label}`,
+      lastSeen: Date.now(),
+      trail: [],
+      uidHash: 0,
+      detail: zone as unknown as Record<string, unknown>,
+    };
+  };
+
+  const handleHover = (
+    info: PickingInfo<JammingZone & { lon: number; lat: number }>,
+  ) => {
+    if (!setHoveredEntity || !setHoverPosition) return;
+
+    if (!info.object) {
+      setHoveredEntity(null);
+      setHoverPosition(null);
+      return;
+    }
+    setHoveredEntity(zoneToEntity(info.object));
+    setHoverPosition({ x: info.x, y: info.y });
+  };
+
+  const handleClick = (
+    info: PickingInfo<JammingZone & { lon: number; lat: number }>,
+  ) => {
+    if (!onEntitySelect || !info.object) return;
+    onEntitySelect(zoneToEntity(info.object));
+  };
 
   // Pulse animation: outer ring expands and fades
   const pulse = (now % 3000) / 3000; // 0→1 over 3 s
@@ -75,9 +121,11 @@ export function buildJammingLayer(
       lineWidthUnits: "meters",
       stroked: true,
       filled: false,
-      pickable: false,
+      pickable: true,
       wrapLongitude: !globeMode,
       parameters: { depthTest: !!globeMode, depthBias: globeMode ? -30.0 : 0 },
+      onHover: handleHover,
+      onClick: handleClick,
       updateTriggers: {
         getRadius: [now],
         getLineColor: [now],
@@ -91,7 +139,8 @@ export function buildJammingLayer(
       getPosition: (d: any) => [d.lon, d.lat, 0],
       getRadius: (d: JammingZone) => 38_000 + d.confidence * 28_000,
       radiusUnits: "meters",
-      getFillColor: (d: JammingZone) => zoneColor(d, Math.round(d.confidence * 60 + 15)),
+      getFillColor: (d: JammingZone) =>
+        zoneColor(d, Math.round(d.confidence * 60 + 15)),
       getLineColor: (d: JammingZone) => zoneColor(d, 200),
       getLineWidth: 1500,
       lineWidthUnits: "meters",
@@ -100,37 +149,8 @@ export function buildJammingLayer(
       pickable: true,
       wrapLongitude: !globeMode,
       parameters: { depthTest: !!globeMode, depthBias: globeMode ? -25.0 : 0 },
-    }),
-
-    // Label: assessment + confidence
-    new TextLayer({
-      id: `jamming-labels-${globeMode ? "globe" : "merc"}`,
-      data,
-      getPosition: (d: any) => [d.lon, d.lat, 0],
-      getText: (d: JammingZone) => {
-        const icon = d.assessment === "jamming" ? "⚡" :
-                     d.assessment === "space_weather" ? "☀" :
-                     d.assessment === "mixed" ? "?" : "!";
-        return `${icon} GPS SIGINT\n${d.assessment.toUpperCase()} ${Math.round(d.confidence * 100)}%`;
-      },
-      getSize: 11,
-      getColor: [240, 240, 240, 230],
-      background: true,
-      getBackgroundColor: (d: JammingZone) => {
-        const rgb = ASSESSMENT_COLORS[d.assessment] ?? [60, 60, 60];
-        return [...rgb, 180] as [number, number, number, number];
-      },
-      getBorderColor: [255, 255, 255, 100],
-      getBorderWidth: 1,
-      backgroundPadding: [6, 4],
-      getPixelOffset: [0, -12],
-      fontFamily: "monospace",
-      fontWeight: 700,
-      billboard: true,
-      pickable: false,
-      lineHeight: 1.3,
-      wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -20.0 : 0 },
+      onHover: handleHover,
+      onClick: handleClick,
     }),
   ];
 

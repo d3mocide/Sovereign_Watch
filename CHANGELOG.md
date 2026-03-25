@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.48.0] - 2026-03-25
+
+### Added
+
+- **GPS Integrity Jamming Detection Sidebar**: New right-sidebar `JammingView` component for deep analysis of detected GPS integrity zones, including confidence trends and affected track counts.
+- **Jamming Confidence Sparkline**: Added confidence trend visualization in jamming detail view with 24-hour history filtering and trend delta calculation.
+- **Jamming AI Analysis Context**: Extended analysis router with Redis-backed fallback for `jamming-<h3>` entities, enabling AI analyst processing of GPS integrity detections.
+- **Jamming Layer Visibility Controls**: Exposed GPS Integrity Zones toggles in both tactical environmental controls and orbital quick-filter pills, with default display support.
+- **Poller Health Endpoint (`/api/config/poller-health`)**: New backend endpoint providing real-time operational health for 12 poller types across 5 categories (Tracking, Orbital, Environment, Intel, RF, Infrastructure) with stale-detection and credential validation.
+- **System Health Display**: Enhanced `SystemHealthWidget` to show per-poller status indicators (healthy, stale, error, no-credentials, pending) with human-readable timestamps.
+- **Entity Processing Engines**: Extracted animation loop concerns into dedicated modules: `EntityFilterEngine.ts` for live filtering/staleness, `EntityPositionInterpolator.ts` for satellite frame processing.
+- **Layer Visibility Controls Component**: Extracted tactical map layer toggles into `LayerVisibilityControls.tsx` for improved maintainability.
+- **OpenSky Watchlist Rate Limiting**: Added separate `OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD` environment variable to decouple watchlist query pacing from bbox queries for independent testing.
+- **Retry-After Header Handling**: OpenSky client now parses and honors OpenSky's `Retry-After` response header (RFC 7231) for rate-limit compliance.
+- **Poller Error Tracking**: All ingestion pollers now log errors to Redis with throttled heartbeat writes (30s minimum interval) for health monitoring.
+
+### Changed
+
+- **OpenSky Client Architecture**: Refactored `OpenSkyClient` to use separate `AsyncLimiter` instances for bbox and watchlist queries, enabling independent rate-limit testing.
+- **System Status Widget**: Refactored into focused orchestration layer (`SystemStatus.tsx`) with delegated responsibilities to `LayerVisibilityControls.tsx`, `IntegrationStatus.tsx`.
+- **Entity Filter Pipeline**: Consolidated entity filtering logic into `EntityFilterEngine` for consistent staleness checks and interpolation across all entity types.
+- **Intelligence Feed Rendering**: Implemented 1-second per-category throttle for feed events with critical alerts bypassing throttle for operational visibility.
+- **Search Widget Accessibility**: Improved input labeling and clear-action semantics in `SearchWidget.tsx`.
+
+### Fixed
+
+- **OpenSky Cooldown Escalation**: Fixed penalty state tracking to escalate cooldown window when repeated 429 responses occur after previous cooldown expires (prevents hammering during sustained rate limiting).
+- **System Health Widget Clipping**: Resolved overflow and visual clipping issues in `SystemHealthWidget` health list rendering.
+- **Trail Smoothing TypeScript**: Resolved type-inference regression in trail smoothing utility (`trailSmoothing.ts`).
+- **Filter Coverage Consistency**: Brought all filter presets (Orbital Only, Map Layers, Clear All) into alignment by including orbital-related flags (`showSatNOGS`, `showH3Coverage`, `showTerminator`).
+
+### Technical Details
+
+- Jamming detection now generates entity records eligible for AI analysis without manual synthesis by querying Redis active zones.
+- Poller health monitoring validates both Redis state (last fetch times) and environment credentials; stale thresholds vary by data source (5 min for real-time, 30 days for reference).
+- OpenSky separate limiters share the same OAuth2 token and cooldown state but allow independent rate-limit testing (e.g., bbox @ 22s, watchlist @ 120s for testing).
+- Entity processing engines improve code organization and testability by separating animation loop concerns from main render pipeline.
+- All error logging follows consistent key naming pattern (`<poller>:error`) for centralized health monitoring.
+
+### Dependencies
+
+- Dependency audit tool (`tools/audit-deps.sh`) now standard for all CI security checks; scans 6 Python projects via uv and 1 JavaScript project via pnpm audit.
+- Frontend pnpm overrides pin vulnerable dependencies (flatted, fast-xml-parser) to known-safe versions.
+
 ## [0.47.2] - 2026-03-24
 
 ### Added

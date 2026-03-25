@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 
@@ -74,6 +75,9 @@ class MaritimePollerService:
         
         # New: Event to signal that a reconnection is needed (e.g. area change)
         self.reconnect_event = asyncio.Event()
+
+        # Throttle Redis heartbeat writes (at most once per 30s)
+        self._last_heartbeat: float = 0.0
 
     async def setup(self):
         """Initialize Kafka producer and Redis client."""
@@ -515,6 +519,17 @@ class MaritimePollerService:
                                 tak_event = self.transform_to_tak(data)
                                 if tak_event:
                                     await self.publish_tak_event(tak_event)
+                                    now_ts = time.time()
+                                    if now_ts - self._last_heartbeat >= 30:
+                                        self._last_heartbeat = now_ts
+                                        try:
+                                            await self.redis_client.set(
+                                                "maritime:last_message_at",
+                                                str(now_ts),
+                                                ex=300,
+                                            )
+                                        except Exception:
+                                            pass
                             elif msg_type == "StandardClassBPositionReport":
                                 tak_event = self.handle_class_b_position(data)
                                 if tak_event:
@@ -557,6 +572,14 @@ class MaritimePollerService:
 
             except Exception as e:
                 logger.error(f"Error in stream loop: {e}")
+                try:
+                    await self.redis_client.set(
+                        "poller:maritime:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
                 await asyncio.sleep(1)
             finally:
                 if self.ws:

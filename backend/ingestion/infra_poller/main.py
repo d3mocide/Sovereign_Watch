@@ -289,8 +289,16 @@ class InfraPollerService:
             try:
                 await self._fetch_cables_and_stations()
                 await self.redis.set("infra:last_cables_fetch", str(time.time()))
-            except Exception:
+            except Exception as e:
                 logger.exception("Cables fetch error")
+                try:
+                    await self.redis.set(
+                        "poller:infra_cables:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(interval_s)
 
     async def _fetch_cables_and_stations(self):
@@ -410,8 +418,16 @@ class InfraPollerService:
             try:
                 await self._fetch_and_ingest_fcc_towers()
                 await self.redis.set("infra:last_fcc_fetch", str(time.time()))
-            except Exception:
+            except Exception as e:
                 logger.exception("FCC towers ingestion error")
+                try:
+                    await self.redis.set(
+                        "poller:infra_towers:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(interval_s)
 
     async def _download_fcc_zip(self, dest_path: str) -> None:

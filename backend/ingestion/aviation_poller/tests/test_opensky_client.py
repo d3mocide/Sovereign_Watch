@@ -16,15 +16,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 # opensky_client only needs aiohttp and aiolimiter — both stubbed in conftest.
-
 from opensky_client import (
+    _M_TO_FT,
+    _MS_TO_FTMIN,
+    _MS_TO_KT,
+    _NM_TO_KM,
     OpenSkyClient,
     nm_radius_to_bbox,
     translate_state_vector,
-    _M_TO_FT,
-    _MS_TO_KT,
-    _MS_TO_FTMIN,
-    _NM_TO_KM,
 )
 
 
@@ -88,25 +87,35 @@ def _make_sv(
     last_contact=1_700_000_001,
     longitude=-122.5,
     latitude=45.5,
-    baro_altitude=10_000.0,   # metres
+    baro_altitude=10_000.0,  # metres
     on_ground=False,
-    velocity=250.0,           # m/s
+    velocity=250.0,  # m/s
     true_track=90.0,
-    vertical_rate=5.0,        # m/s
+    vertical_rate=5.0,  # m/s
     sensors=None,
-    geo_altitude=10_100.0,    # metres
+    geo_altitude=10_100.0,  # metres
     squawk="1234",
     spi=False,
     position_source=0,
 ) -> List:
     return [
-        icao24, callsign, origin_country,
-        time_position, last_contact,
-        longitude, latitude,
-        baro_altitude, on_ground,
-        velocity, true_track, vertical_rate,
-        sensors, geo_altitude,
-        squawk, spi, position_source,
+        icao24,
+        callsign,
+        origin_country,
+        time_position,
+        last_contact,
+        longitude,
+        latitude,
+        baro_altitude,
+        on_ground,
+        velocity,
+        true_track,
+        vertical_rate,
+        sensors,
+        geo_altitude,
+        squawk,
+        spi,
+        position_source,
     ]
 
 
@@ -128,7 +137,7 @@ class TestTranslateStateVector:
 
         assert result is not None
         assert result["hex"] == "a1b2c3"
-        assert result["flight"] == "UAL123"   # stripped
+        assert result["flight"] == "UAL123"  # stripped
         assert result["lat"] == 45.5
         assert result["lon"] == -122.5
         assert result["squawk"] == "1234"
@@ -226,6 +235,18 @@ class TestOpenSkyClientCooldown:
         client.penalize()  # should escalate (still in cooldown window)
         assert client._cooldown_step == min(first_step * 2, 300.0)
 
+    def test_penalize_doubles_after_cooldown_expiry_without_success(self):
+        client = OpenSkyClient()
+        client.penalize()
+        first_step = client._cooldown_step
+
+        # Match the watchlist-loop behavior: wait for cooldown expiry, retry,
+        # and get another 429 before any successful response can reset state.
+        client.cooldown_until = time.time() - 1
+        client.penalize()
+
+        assert client._cooldown_step == min(first_step * 2, 300.0)
+
     def test_penalize_caps_at_300s(self):
         client = OpenSkyClient()
         # Drive cooldown to cap
@@ -239,6 +260,7 @@ class TestOpenSkyClientCooldown:
         client.reset_cooldown()
         assert client.is_healthy()
         assert client.cooldown_until == 0.0
+        assert client._consecutive_penalties == 0
 
     def test_rate_limit_period_authenticated_default(self):
         client = OpenSkyClient(client_id="id", client_secret="secret")
@@ -267,17 +289,22 @@ class TestOpenSkyClientFetch:
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.raise_for_status = MagicMock()
-        mock_response.json = AsyncMock(return_value={"time": 1_700_000_000, "states": states})
+        mock_response.json = AsyncMock(
+            return_value={"time": 1_700_000_000, "states": states}
+        )
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
         return mock_response
 
     def _make_error_response(self, status: int):
         from aiohttp import ClientResponseError
+
         mock_response = AsyncMock()
         mock_response.status = status
         mock_response.raise_for_status = MagicMock(
-            side_effect=ClientResponseError(request_info=MagicMock(), history=(), status=status)
+            side_effect=ClientResponseError(
+                request_info=MagicMock(), history=(), status=status
+            )
         )
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
@@ -312,7 +339,9 @@ class TestOpenSkyClientFetch:
     async def test_fetch_filters_on_ground(self):
         client = self._make_client()
         mock_session = MagicMock()
-        mock_session.get.return_value = self._make_state_response([_make_sv(on_ground=True)])
+        mock_session.get.return_value = self._make_state_response(
+            [_make_sv(on_ground=True)]
+        )
         client._session = mock_session
 
         aircraft = await client.fetch_bbox(44.0, -123.0, 47.0, -121.0)

@@ -10,6 +10,7 @@ API: https://db.satnogs.org/api/transmitters/?format=json&status=active
 """
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime, UTC
@@ -53,8 +54,16 @@ class SatNOGSDBSource:
                     "satnogs_pulse:db:last_fetch", str(time.time()),
                     ex=int(self.interval_sec * 2),
                 )
-            except Exception:
+            except Exception as e:
                 logger.exception("SatNOGS DB fetch error")
+                try:
+                    await self.redis_client.set(
+                        "poller:satnogs_db:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(self.interval_sec)
 
     async def _fetch_and_publish(self):

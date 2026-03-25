@@ -11,6 +11,7 @@ Two internal loops run concurrently inside run():
 """
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -223,8 +224,20 @@ class OrbitalSource:
                     continue
             try:
                 await self.fetch_tle_data()
+                await self.redis_client.set(
+                    "orbital_pulse:last_fetch", str(time.time()),
+                    ex=self.fetch_interval_hours * 3600 * 4,
+                )
             except Exception as exc:
                 logger.error("TLE update error: %s", exc)
+                try:
+                    await self.redis_client.set(
+                        "poller:orbital:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(exc)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(self.fetch_interval_hours * 3600)
 
     async def propagation_loop(self):

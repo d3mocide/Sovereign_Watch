@@ -8,6 +8,7 @@ import time
 import zipfile
 
 import aiohttp
+import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -17,12 +18,14 @@ logging.basicConfig(level=logging.INFO)
 GDELT_LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "localhost:9092")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 900))  # 15 min
+REDIS_URL = os.getenv("REDIS_URL", "redis://sovereign-redis:6379")
 
 
 class GDELTPulseService:
     def __init__(self):
         self.producer = None
         self.session = None
+        self.redis = None
         self.last_fetched_url = None
         self._running = False
 
@@ -34,6 +37,7 @@ class GDELTPulseService:
         self.session = aiohttp.ClientSession(
             headers={"User-Agent": "Mozilla/5.0 (SovereignWatch/1.0; GDELTPulse)"}
         )
+        self.redis = aioredis.from_url(REDIS_URL, decode_responses=True)
         self._running = True
 
     async def shutdown(self):
@@ -44,6 +48,8 @@ class GDELTPulseService:
             await self.producer.stop()
         if self.session:
             await self.session.close()
+        if self.redis:
+            await self.redis.aclose()
 
     async def poll_loop(self):
         """Main periodic polling loop."""
@@ -52,6 +58,15 @@ class GDELTPulseService:
                 await self.process_update()
             except Exception as e:
                 logger.error(f"Poll loop error: {e}")
+                if self.redis:
+                    try:
+                        await self.redis.set(
+                            "poller:gdelt:last_error",
+                            json.dumps({"ts": time.time(), "msg": str(e)}),
+                            ex=86400,
+                        )
+                    except Exception:
+                        pass
 
             logger.info(f"Sleeping for {POLL_INTERVAL}s...")
             await asyncio.sleep(POLL_INTERVAL)
@@ -81,6 +96,13 @@ class GDELTPulseService:
             logger.info(f"New GDELT update found: {export_url}")
             await self.fetch_and_parse(export_url)
             self.last_fetched_url = export_url
+            if self.redis:
+                try:
+                    await self.redis.set(
+                        "gdelt_pulse:last_fetch", str(time.time()), ex=POLL_INTERVAL * 4
+                    )
+                except Exception:
+                    pass
 
     async def fetch_and_parse(self, url: str):
         """Download zip, extract CSV, and push events to Kafka."""

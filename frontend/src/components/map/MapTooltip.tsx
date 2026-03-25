@@ -6,6 +6,7 @@ import {
   Satellite,
   Ship,
   Signal,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import React from "react";
@@ -27,6 +28,19 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isInfra = entity.type === "infra";
   const isOutage = entity.type === "outage";
   const isGdelt = entity.type === "gdelt";
+  const isJamming = entity.type === "jamming";
+  const jammingAssessment = String(
+    (entity.detail as Record<string, unknown> | undefined)?.assessment ||
+      "mixed",
+  );
+  const jammingColor =
+    jammingAssessment === "jamming"
+      ? "text-red-400"
+      : jammingAssessment === "space_weather"
+        ? "text-purple-400"
+        : jammingAssessment === "equipment"
+          ? "text-slate-300"
+          : "text-amber-400";
 
   const accentColor = isRepeater
     ? "text-emerald-400"
@@ -44,7 +58,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? "text-amber-400"
                 : isGdelt
                   ? "text-hud-green"
-                  : "text-air-accent";
+                  : isJamming
+                    ? jammingColor
+                    : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -62,7 +78,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? "border-amber-400/50"
                 : isGdelt
                   ? "border-hud-green/30"
-                  : "border-air-accent/50";
+                  : isJamming
+                    ? "border-amber-400/50"
+                    : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -80,7 +98,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? Signal
                 : isGdelt
                   ? Zap
-                  : Plane;
+                  : isJamming
+                    ? WifiOff
+                    : Plane;
 
   const detail = (entity.detail ?? {}) as Record<string, unknown>;
   const detailProps = (detail.properties ?? {}) as Record<string, unknown>;
@@ -124,7 +144,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                       ? "OUTAGE"
                       : isGdelt
                         ? "OSINT"
-                        : "LIVE"}
+                        : isJamming
+                          ? "SIGINT"
+                          : "LIVE"}
           </span>
         </div>
       </div>
@@ -397,6 +419,74 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               </span>
             </div>
           )}
+        </div>
+      ) : isJamming ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SIGNAL ASSESSMENT
+            </span>
+            <span
+              className={`text-[10px] font-mono font-bold leading-tight uppercase ${jammingColor}`}
+            >
+              {jammingAssessment.replaceAll("_", " ")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CONFIDENCE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {Math.round(
+                Number(
+                  (entity.detail as Record<string, unknown>)?.confidence || 0,
+                ) * 100,
+              )}
+              %
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              AFFECTED
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(
+                (entity.detail as Record<string, unknown>)?.affected_count ?? 0,
+              )}{" "}
+              tracks
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              AVG NIC
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(
+                (entity.detail as Record<string, unknown>)?.avg_nic ?? "-",
+              )}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              AVG NACp
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(
+                (entity.detail as Record<string, unknown>)?.avg_nacp ?? "-",
+              )}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SPACE WEATHER (KP)
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(
+                (entity.detail as Record<string, unknown>)?.kp_at_event ??
+                  "unknown",
+              )}
+            </span>
+          </div>
         </div>
       ) : (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">

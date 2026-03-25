@@ -3,6 +3,7 @@ import { CoTEntity, HistorySegment } from "../../types";
 import { AircraftView } from "./sidebar-right/AircraftView";
 import { GdeltView } from "./sidebar-right/GdeltView";
 import { InfraView } from "./sidebar-right/InfraView";
+import { JammingView } from "./sidebar-right/JammingView";
 import { JS8View } from "./sidebar-right/JS8View";
 import { RepeaterView } from "./sidebar-right/RepeaterView";
 import { SatelliteView } from "./sidebar-right/SatelliteView";
@@ -54,6 +55,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
   if (entity.type === "gdelt") {
     return <GdeltView key={entity.uid} {...baseProps} />;
+  }
+  if (entity.type === "jamming") {
+    return <JammingView key={entity.uid} {...baseProps} />;
   }
 
   // Trackable domain: satellite / ship / aircraft

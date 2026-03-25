@@ -16,8 +16,12 @@ import {
   Tower,
   VisualState,
 } from "../types";
-import { filterEntity, filterSatellite } from "../utils/filters";
-import { interpolatePVB } from "../utils/interpolation";
+import {
+  processEntityFrame,
+  processReplayFrame,
+} from "../engine/EntityFilterEngine";
+import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
+import { filterSatellite } from "../utils/filters";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 
 interface UseAnimationLoopOptions {
@@ -211,82 +215,47 @@ export function useAnimationLoop({
 
   useEffect(() => {
     const animate = () => {
-      // Combined pass: cleanup, count, and interpolate in a single iteration
       const entities = entitiesRef.current;
       const now = Date.now();
       const dt = Math.min(now - lastFrameTimeRef.current, 100);
       lastFrameTimeRef.current = now;
 
-      const STALE_THRESHOLD_AIR_MS = 120 * 1000;
-      const STALE_THRESHOLD_SEA_MS = 300 * 1000;
-
-      let airCount = 0;
-      let seaCount = 0;
-      let orbitalCount = 0;
-      const staleUids: string[] = [];
-      const interpolated: CoTEntity[] = [];
+      // ── Entity pass (filter + interpolate) ───────────────────────────────
+      let airCount: number;
+      let seaCount: number;
+      let interpolated: CoTEntity[];
+      let staleUids: string[] = [];
 
       if (replayMode) {
-        // REPLAY MODE: Render static snapshots from parent
-        for (const [, entity] of replayEntitiesRef.current) {
-          const entityType = filterEntity(entity, filters);
-          if (!entityType) continue;
-          if (entityType === "sea") seaCount++;
-          else airCount++;
-          interpolated.push(entity);
-        }
+        const result = processReplayFrame(replayEntitiesRef.current, filters);
+        airCount = result.airCount;
+        seaCount = result.seaCount;
+        interpolated = result.interpolated;
       } else {
-        for (const [uid, entity] of entities) {
-          const isShip = entity.type?.includes("S");
-          const threshold = isShip
-            ? STALE_THRESHOLD_SEA_MS
-            : STALE_THRESHOLD_AIR_MS;
+        const result = processEntityFrame(
+          entities,
+          drStateRef.current,
+          visualStateRef.current,
+          filters,
+          now,
+          dt,
+        );
+        airCount = result.airCount;
+        seaCount = result.seaCount;
+        interpolated = result.interpolated;
+        staleUids = result.staleUids;
 
-          // Stale check
-          if (now - entity.lastSeen > threshold) {
-            staleUids.push(uid);
-            continue;
-          }
-
-          // Filter
-          const entityType = filterEntity(entity, filters);
-          if (!entityType) continue;
-          if (entityType === "sea") seaCount++;
-          else airCount++;
-
-          // Interpolate
-          const dr = drStateRef.current.get(uid);
-          const visual = visualStateRef.current.get(uid);
-
-          const { visual: newVisual, interpolatedEntity } = interpolatePVB(
-            entity,
-            dr,
-            visual,
-            now,
-            dt,
+        // Live sidebar update for selected entity (throttled to ~30 fps)
+        const currentSelected = selectedEntityRef.current;
+        if (currentSelected && onEntityLiveUpdate && Math.floor(now / 33) % 2 === 0) {
+          const updatedSelected = interpolated.find(
+            (e) => e.uid === currentSelected.uid,
           );
-
-          visualStateRef.current.set(uid, newVisual);
-          interpolated.push(interpolatedEntity);
-
-          // Update Selected Entity Data (Live Sidebar) - Sync with interpolation
-          const currentSelected = selectedEntityRef.current;
-          if (
-            currentSelected &&
-            uid === currentSelected.uid &&
-            onEntityLiveUpdate
-          ) {
-            if (Math.floor(now / 33) % 2 === 0) {
-              onEntityLiveUpdate(interpolatedEntity);
-            }
-          }
+          if (updatedSelected) onEntityLiveUpdate(updatedSelected);
         }
       }
 
-      // FOLLOW MODE: Imperative Sync in Animation Loop (Post-Interpolation)
-      // This ensures the camera moves EXACTLY with the interpolated selection
-      // Preventing "rubber banding" or jitter.
-      // Executed ONCE per frame, not per entity.
+      // ── Follow mode (post-interpolation camera sync) ──────────────────────
       const currentSelected = selectedEntityRef.current;
       if (mapRef.current) {
         const map = mapRef.current.getMap();
@@ -296,18 +265,16 @@ export function useAnimationLoop({
           map.touchZoomRotate.isActive() ||
           map.dragRotate.isActive();
 
-        // 1. Auto-disable follow mode if user enters interaction
+        // Auto-disable follow mode if user enters interaction
         // Grace period: 3 seconds to allow FlyTo to finish
         const gracePeriodActive =
           Date.now() - lastFollowEnableRef.current < 3000;
 
         if (isUserInteracting && followModeRef.current && !gracePeriodActive) {
-          // console.log("User interaction detected - Disabling Follow Mode", ...);
           followModeRef.current = false;
           onFollowModeChange?.(false);
         }
 
-        // 2. Execute Follow Mode (if valid)
         if (followModeRef.current) {
           if (currentSelected) {
             const visual = visualStateRef.current.get(currentSelected.uid);
@@ -318,7 +285,6 @@ export function useAnimationLoop({
               } else if (map.isEasing()) {
                 // Wait for ease
               } else {
-                // DO IT
                 try {
                   const [centerLon, centerLat] = getCompensatedCenter(
                     visual.lat,
@@ -338,7 +304,7 @@ export function useAnimationLoop({
         }
       }
 
-      // Deferred stale cleanup (don't delete during iteration)
+      // ── Deferred stale cleanup ────────────────────────────────────────────
       for (const uid of staleUids) {
         const entity = entities.get(uid);
         if (entity) {
@@ -406,7 +372,8 @@ export function useAnimationLoop({
         alertedEmergencyRef?.current.delete(uid);
       }
 
-      // Count Orbitals (Satellites)
+      // ── Count orbitals ────────────────────────────────────────────────────
+      let orbitalCount = 0;
       for (const [, sat] of satellitesRef.current) {
         if (filterSatellite(sat, filters)) orbitalCount++;
       }
@@ -434,32 +401,25 @@ export function useAnimationLoop({
         });
       }
 
-      // 4. Update Layers
+      // ── Satellite pass (filter + interpolate) ─────────────────────────────
+      const filteredSatellites = processSatelliteFrame(
+        satellitesRef.current,
+        drStateRef.current,
+        visualStateRef.current,
+        filters,
+        now,
+        dt,
+      );
 
-      const filteredSatellites: CoTEntity[] = [];
-      for (const [uid, sat] of satellitesRef.current.entries()) {
-        if (!filterSatellite(sat, filters)) continue;
-
-        const dr = drStateRef.current.get(uid);
-        const visual = visualStateRef.current.get(uid);
-
-        const { visual: newVisual, interpolatedEntity } = interpolatePVB(
-          sat,
-          dr,
-          visual,
-          now,
-          dt,
+      // Live sidebar update for selected satellite
+      if (selectedEntity) {
+        const updatedSat = filteredSatellites.find(
+          (s) => s.uid === selectedEntity.uid,
         );
-
-        visualStateRef.current.set(uid, newVisual);
-        filteredSatellites.push(interpolatedEntity);
-
-        // Live Sidebar Update
-        if (selectedEntity?.uid === uid) {
-          onEntityLiveUpdate?.(interpolatedEntity);
-        }
+        if (updatedSat) onEntityLiveUpdate?.(updatedSat);
       }
 
+      // ── Layer composition + overlay update ───────────────────────────────
       const zoom = mapRef.current?.getMap()?.getZoom() ?? 0;
 
       const layers = composeAllLayers({

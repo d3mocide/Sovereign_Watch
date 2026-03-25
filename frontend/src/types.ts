@@ -264,6 +264,7 @@ export interface MapFilters {
   showCommercial: boolean;
   showPrivate: boolean;
   showAurora: boolean;
+  showJamming: boolean;
   showSatNOGS: boolean;
   showGdelt: boolean;
   showGdeltLabels?: boolean;
