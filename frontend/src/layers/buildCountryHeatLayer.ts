@@ -143,7 +143,7 @@ export function buildCountryHeatLayer(
   return [
     new GeoJsonLayer({
       id: `country-heat-${globeMode ? "globe" : "merc"}`,
-      data: countriesGeoJson,
+      data: countriesGeoJson as any,
       pickable: false,
       stroked: true,
       filled: true,
