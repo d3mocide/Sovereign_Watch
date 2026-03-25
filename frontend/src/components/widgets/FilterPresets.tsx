@@ -322,6 +322,7 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
           <input
             type="text"
             placeholder="PRESET NAME..."
+            aria-label="Custom preset name"
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
             onKeyDown={(e) => {
