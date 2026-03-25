@@ -9,7 +9,8 @@
  * Clicking a zone calls onFlyTo(lat, lon) to centre the globe on that country.
  */
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, Activity, Globe2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Activity, Globe2, RefreshCw, Layers } from "lucide-react";
+import { type MapStyleKey, MAP_STYLE_LABELS } from "../map/intelMapStyles";
 
 export interface ActorEntry {
   actor: string;
@@ -27,6 +28,8 @@ export interface ActorEntry {
 
 interface IntelSidebarProps {
   onFlyTo?: (lat: number, lon: number) => void;
+  mapStyle?: MapStyleKey;
+  onMapStyleChange?: (style: MapStyleKey) => void;
 }
 
 function threatColor(level: ActorEntry["threat_level"]): string {
@@ -56,7 +59,7 @@ function threatBadgeBg(level: ActorEntry["threat_level"]): string {
   }
 }
 
-export function IntelSidebar({ onFlyTo }: IntelSidebarProps) {
+export function IntelSidebar({ onFlyTo, mapStyle = "dark", onMapStyleChange }: IntelSidebarProps) {
   const [actors, setActors] = useState<ActorEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -141,6 +144,27 @@ export function IntelSidebar({ onFlyTo }: IntelSidebarProps) {
             </button>
           ))}
         </div>
+
+        {/* Map style selector */}
+        {onMapStyleChange && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <Layers size={9} className="text-white/30 shrink-0" />
+            <span className="text-[9px] text-white/30 tracking-wider shrink-0">STYLE:</span>
+            {(Object.keys(MAP_STYLE_LABELS) as MapStyleKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => onMapStyleChange(key)}
+                className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-sm transition-colors ${
+                  key === mapStyle
+                    ? "bg-hud-green/20 text-hud-green border border-hud-green/40"
+                    : "text-white/30 hover:text-white/60 border border-white/10"
+                }`}
+              >
+                {MAP_STYLE_LABELS[key].split(" ")[0]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Conflict Zones */}

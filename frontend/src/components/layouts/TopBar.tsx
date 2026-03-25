@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
     Globe,
     Radio,
@@ -14,10 +14,7 @@ import {
     Terminal,
     LayoutDashboard,
     Newspaper,
-    Layers,
 } from 'lucide-react';
-import type { MapStyleKey } from '../map/intelMapStyles';
-import { MAP_STYLE_LABELS } from '../map/intelMapStyles';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
@@ -43,8 +40,6 @@ interface TopBarProps {
     onToggleReplay?: () => void;
     viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL' | 'DASHBOARD' | 'INTEL';
     onViewChange?: (mode: 'TACTICAL' | 'RADIO' | 'ORBITAL' | 'DASHBOARD' | 'INTEL') => void;
-    intelMapStyle?: MapStyleKey;
-    onIntelMapStyleChange?: (style: MapStyleKey) => void;
     onAlertsClick?: () => void;
     isAlertsOpen?: boolean;
     alerts?: IntelEvent[];
@@ -70,9 +65,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     isSystemSettingsOpen, onSystemSettingsClick, onSystemSettingsClose,
     isSystemHealthOpen, onSystemHealthClick, onSystemHealthClose,
     isTerminalOpen, onTerminalClick,
-    intelMapStyle = 'dark', onIntelMapStyleChange,
 }) => {
-    const [showMapStyleMenu, setShowMapStyleMenu] = useState(false);
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -207,40 +200,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </button>
                 </div>
             </div>
-
-            {/* Map Style Selector — only visible in INTEL mode */}
-            {viewMode === 'INTEL' && onIntelMapStyleChange && (
-                <div className="ml-4 relative hidden xl:flex items-center z-10">
-                    <button
-                        onClick={() => setShowMapStyleMenu(v => !v)}
-                        className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold tracking-widest text-white/40 hover:text-white/80 border border-white/10 hover:border-white/25 rounded-full transition-all"
-                        title="Map Style"
-                    >
-                        <Layers size={11} />
-                        <span>{MAP_STYLE_LABELS[intelMapStyle]}</span>
-                    </button>
-                    {showMapStyleMenu && (
-                        <div className="absolute top-full left-0 mt-1 bg-black/90 border border-white/15 rounded-md shadow-xl backdrop-blur-md overflow-hidden z-50">
-                            {(Object.keys(MAP_STYLE_LABELS) as MapStyleKey[]).map(key => (
-                                <button
-                                    key={key}
-                                    onClick={() => {
-                                        onIntelMapStyleChange(key);
-                                        setShowMapStyleMenu(false);
-                                    }}
-                                    className={`block w-full text-left px-4 py-1.5 text-[9px] font-bold tracking-widest transition-colors ${
-                                        key === intelMapStyle
-                                            ? 'text-hud-green bg-hud-green/10'
-                                            : 'text-white/50 hover:text-white/90 hover:bg-white/5'
-                                    }`}
-                                >
-                                    {MAP_STYLE_LABELS[key]}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Centered Kp Index Space Weather Monitor */}
             <div className="flex-1 hidden xl:flex items-center justify-center relative z-10">

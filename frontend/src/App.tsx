@@ -868,8 +868,6 @@ function App() {
             }
             onSystemHealthClose={() => setIsSystemHealthOpen(false)}
             onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
-            intelMapStyle={intelMapStyle}
-            onIntelMapStyleChange={handleIntelMapStyleChange}
           />
         }
         leftSidebar={
@@ -904,6 +902,8 @@ function App() {
           ) : viewMode === "INTEL" ? (
             <IntelSidebar
               onFlyTo={(lat, lon) => mapActions?.flyTo(lat, lon)}
+              mapStyle={intelMapStyle}
+              onMapStyleChange={handleIntelMapStyleChange}
             />
           ) : null
         }
