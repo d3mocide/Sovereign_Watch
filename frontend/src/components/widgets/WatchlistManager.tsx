@@ -100,6 +100,7 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
               <button
                 onClick={() => removeEntry(entry.icao24)}
                 className="p-1.5 text-alert-red/40 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
+                aria-label={`Remove ${entry.icao24} from watchlist`}
                 title="Remove from watchlist"
               >
                 <Trash2 size={11} />

@@ -357,6 +357,7 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
                 <button
                   onClick={(e) => deleteCustomPreset(name, e)}
                   className="p-1.5 text-alert-red/50 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
+                  aria-label={`Delete preset ${name}`}
                   title="Delete Preset"
                 >
                   <Trash2 size={12} />

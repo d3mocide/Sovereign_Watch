@@ -49,3 +49,6 @@
 ## 2024-03-20 - Clear Search Button Accessibility
 **Learning:** Icon-only or symbolic clear buttons (`×`) inside search inputs often lack descriptive labels and focus states because they are visually perceived as part of the input.
 **Action:** Always add `aria-label`, `title`, and distinct keyboard focus indicators (`focus-visible:ring-1`) to input clear buttons to ensure they are discoverable and actionable by all users.
+## 2024-05-19 - Added ARIA Labels to Icon-Only Action Buttons
+**Learning:** While major map control buttons (like zoom or rotate) often have `aria-label`s, small utility buttons in transient widgets (like the close "X" in `SystemSettingsWidget` or "Trash" in `FilterPresets`) are frequently overlooked. These buttons rely solely on `<X>` or `<Trash2>` icons, rendering them inaccessible to screen readers without descriptive text.
+**Action:** Always ensure that every icon-only button inside floating panels, modals, and list items (e.g., delete buttons) explicitly declares an `aria-label` attribute in addition to a visible `title` tooltip for comprehensive accessibility.
