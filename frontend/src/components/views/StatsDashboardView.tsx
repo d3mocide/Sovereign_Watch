@@ -4,7 +4,6 @@ import {
   Activity, 
   Download, 
   Server, 
-  LayoutGrid, 
   Network, 
   ShieldAlert, 
   BarChart3, 
@@ -54,7 +53,7 @@ export default function StatsDashboardView() {
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ingression' | 'protocol' | 'analysis'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis'>('ingression');
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
 
@@ -268,18 +267,13 @@ export default function StatsDashboardView() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
       case 'ingression':
         return (
           <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-primary/10 mb-6 font-headline">
               <div>
-                <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">
-                  {activeTab === 'dashboard' ? 'TACTICAL OVERVIEW' : 'TAK PROTO INGRESSION'}
-                </h1>
-                <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">
-                  {activeTab === 'dashboard' ? 'GLOBAL SYSTEM STATUS & ACTIVITY TRENDS' : 'REAL-TIME NETWORK SYNCHRONIZATION STATUS'}
-                </p>
+                <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">TAK PROTO INGRESSION</h1>
+                <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">REAL-TIME NETWORK SYNCHRONIZATION STATUS</p>
               </div>
               <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
                 <div className="text-right">
@@ -294,30 +288,72 @@ export default function StatsDashboardView() {
               </div>
             </div>
 
-            <div className="bg-surface-container p-6 flex flex-col h-full min-h-[400px] border border-primary/10 relative overflow-hidden group">
-              <div className="flex justify-between items-start mb-4 z-10 font-headline">
-                <div>
-                  <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
-                    <Activity size={16} /> Global Signal Activity
-                  </h3>
-                  <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+              {/* Activity Chart Container */}
+              <div className="bg-surface-container p-6 flex flex-col min-h-[400px] border border-primary/10 relative overflow-hidden group">
+                <div className="flex justify-between items-start mb-4 z-10 font-headline">
+                  <div>
+                    <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+                      <Activity size={16} /> Global Signal Activity
+                    </h3>
+                    <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
-                  <span className="px-2 py-0.5 bg-background text-[10px] text-on-surface-variant border border-primary/10">ENCRYPTED</span>
+                <div className="flex-1 relative">
+                   {loading ? (
+                    <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em] font-headline">Synchronizing telemetry...</div>
+                   ) : (
+                    <ReactECharts option={chartOptions} style={{ height: '100%', width: '100%' }} />
+                   )}
                 </div>
               </div>
-              
-              <div className="flex-1 mt-4 relative">
-                 {loading ? (
-                  <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em] font-headline">Synchronizing telemetry...</div>
-                 ) : (
-                  <ReactECharts 
-                    option={chartOptions} 
-                    style={{ height: '100%', width: '100%' }}
-                  />
-                 )}
+
+              {/* Throughput Bar Chart */}
+              <div className="bg-surface-container p-6 border border-primary/10 font-headline">
+                <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
+                  <Download size={16} /> Data Throughput (KB/S)
+                </h3>
+                <div className="space-y-6">
+                  {healthData.map((p) => (
+                    <div key={p.id} className="space-y-1">
+                      <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
+                        <span>{p.name}</span>
+                        <span className="text-primary">{(Math.random() * 50 + 10).toFixed(1)} KB/S</span>
+                      </div>
+                      <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
+                        <div 
+                          className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-1000" 
+                          style={{ width: `${Math.max(10, Math.random() * 90)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Success Rate Gauges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {healthData.map(p => (
+                <div key={p.id} className="bg-surface-container p-4 border border-primary/10 flex flex-col items-center gap-2 group hover:border-primary/40 transition-all font-headline text-center">
+                  <div className="text-[10px] text-on-surface-variant uppercase tracking-tighter truncate w-full">{p.name}</div>
+                  <div className="relative w-16 h-16 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-primary/10" />
+                      <circle 
+                        cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="2" fill="transparent" 
+                        strokeDasharray={175.9} strokeDashoffset={175.9 * (1 - (p.status === 'healthy' ? 0.99 : 0.7))}
+                        className="text-primary transition-all duration-1000"
+                      />
+                    </svg>
+                    <span className="absolute text-[10px] font-bold text-primary">{p.status === 'healthy' ? '99%' : '72%'}</span>
+                  </div>
+                  <div className="text-[8px] text-on-surface-variant uppercase">Reliability</div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -329,8 +365,8 @@ export default function StatsDashboardView() {
               <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">TAK/COT SCHEMA & SIGNAL CLASSIFICATION HIERARCHY</p>
             </div>
             
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <div className="bg-surface-container p-6 border border-primary/10">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="bg-surface-container p-6 border border-primary/10 xl:col-span-2">
                 <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
                   <ShieldAlert size={16} /> Load Distribution
                 </h3>
@@ -347,19 +383,13 @@ export default function StatsDashboardView() {
 
               <div className="bg-surface-container p-6 border border-primary/10">
                 <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6">Classification Reference</h3>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {takBreakdown.map(tak => (
-                    <div key={tak.type} className="flex items-center gap-4 p-3 bg-surface-container-high border border-primary/5 hover:border-primary/20 transition-all">
-                      <div className="w-2 h-8 rounded-full" style={{ backgroundColor: tak.color }}></div>
-                      <div className="flex-1 flex flex-col min-w-0">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-bold text-on-surface uppercase truncate">{tak.label}</span>
-                          <span className="text-xs font-mono text-primary/70">{tak.count.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-on-surface-variant uppercase tracking-tighter">
-                          <span>{tak.type}</span>
-                          <span className="bg-background px-1.5 opacity-60">{tak.category}</span>
-                        </div>
+                    <div key={tak.type} className="flex items-center gap-4 p-2 bg-surface-container-high border border-primary/5 hover:border-primary/20 transition-all">
+                      <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: tak.color }}></div>
+                      <div className="flex-1 flex flex-col min-w-0 text-[10px]">
+                        <span className="font-bold text-on-surface uppercase truncate">{tak.label}</span>
+                        <span className="text-on-surface-variant uppercase tracking-tighter opacity-70">{tak.type}</span>
                       </div>
                     </div>
                   ))}
@@ -370,20 +400,36 @@ export default function StatsDashboardView() {
         );
       case 'analysis':
         return (
-          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline text-center items-center justify-center space-y-4">
-             <div className="p-8 bg-surface-container border border-primary/20 max-w-md">
-                <BarChart3 size={48} className="text-primary mx-auto mb-4 opacity-50" />
-                <h2 className="text-2xl font-black text-primary uppercase tracking-tighter">ANALYSIS ENGINE</h2>
-                <p className="text-on-surface-variant text-xs mt-2 uppercase tracking-widest">Advanced deep-packet trending & anomaly detection modules are currently in initialization phase.</p>
-                <div className="mt-8 flex flex-col gap-3">
-                   <button onClick={handleExportCSV} className="bg-primary/10 border border-primary/40 text-primary py-3 font-bold text-[10px] tracking-widest uppercase hover:bg-primary/20 transition-all">
-                      DOWNLOAD RAW TELEMETRY.CSV
-                   </button>
-                   <button className="bg-surface-container-highest/20 border border-primary/10 text-on-surface-variant py-3 font-bold text-[10px] tracking-widest uppercase cursor-not-allowed">
-                      GENERATE MONTHLY PDF REPORT [LOCKED]
-                   </button>
-                </div>
-             </div>
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline">
+             <div className="pb-4 border-b border-primary/10 mb-6">
+              <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">ANALYTIC DEEP DIVE</h1>
+              <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">STATISTICAL ANOMALY DETECTION & THROUGHPUT HISTOGRAMS</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div className="lg:col-span-2 bg-surface-container p-8 border border-primary/20 flex flex-col items-center justify-center text-center">
+                  <BarChart3 size={48} className="text-primary/30 mb-4" />
+                  <h2 className="text-2xl font-black text-primary uppercase tracking-tighter">DATASET HISTOGRAM</h2>
+                  <p className="text-on-surface-variant text-xs mt-2 uppercase tracking-widest max-w-sm">Packet size distribution modules are calculating the tactical weight... [PENDING]</p>
+                  <div className="mt-8 flex gap-4">
+                    <button onClick={handleExportCSV} className="bg-primary/10 border border-primary/40 text-primary px-6 py-3 font-bold text-[10px] tracking-widest uppercase hover:bg-primary/20 transition-all flex items-center gap-2">
+                      <Download size={14} /> EXPORT CSV
+                    </button>
+                  </div>
+               </div>
+               
+               <div className="bg-surface-container p-6 border border-primary/10">
+                  <h3 className="font-bold text-xs tracking-widest text-primary uppercase mb-4">Anomaly Heatmap</h3>
+                  <div className="grid grid-cols-8 gap-1 opacity-40">
+                    {Array.from({ length: 64 }).map((_, idx) => (
+                      <div key={idx} className={`aspect-square border border-primary/5 ${Math.random() > 0.8 ? 'bg-primary/40' : 'bg-primary/5'}`}></div>
+                    ))}
+                  </div>
+                  <div className="mt-4 text-[9px] text-on-surface-variant uppercase tracking-widest">
+                    DETECTION ENGINE: <span className="text-primary">RUNNING</span>
+                  </div>
+               </div>
+            </div>
           </div>
         );
     }
@@ -421,12 +467,6 @@ export default function StatsDashboardView() {
             </div>
           </div>
           <nav className="flex flex-col gap-1 font-headline">
-            <button 
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'dashboard' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
-            >
-              <LayoutGrid size={16} /> DASHBOARD
-            </button>
             <button 
               onClick={() => setActiveTab('ingression')}
               className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'ingression' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
