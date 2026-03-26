@@ -1,8 +1,13 @@
-import { forwardRef, useRef, useEffect } from 'react';
-import { Map, useControl, MapRef, AttributionControl } from 'react-map-gl/maplibre';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import type { CustomLayerInterface } from 'maplibre-gl';
-import type { MapAdapterProps } from './mapAdapterTypes';
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { CustomLayerInterface } from "maplibre-gl";
+import { forwardRef, useEffect, useRef } from "react";
+import {
+  AttributionControl,
+  Map,
+  MapRef,
+  useControl,
+} from "react-map-gl/maplibre";
+import type { MapAdapterProps } from "./mapAdapterTypes";
 
 /**
  * Terminal custom layer that clears MapLibre's stencil buffer immediately
@@ -22,111 +27,151 @@ import type { MapAdapterProps } from './mapAdapterTypes';
  * MapLibre layers have already finished drawing at this point.
  */
 const STENCIL_CLEAR_LAYER: CustomLayerInterface = {
-    id: '__deck_stencil_reset',
-    type: 'custom',
-    renderingMode: '2d',
-    render(gl) {
-        gl.disable(gl.STENCIL_TEST);
-        gl.stencilMask(0xFF);
-        gl.clear(gl.STENCIL_BUFFER_BIT);
-    },
+  id: "__deck_stencil_reset",
+  type: "custom",
+  renderingMode: "2d",
+  render(gl) {
+    gl.disable(gl.STENCIL_TEST);
+    gl.stencilMask(0xff);
+    gl.clear(gl.STENCIL_BUFFER_BIT);
+  },
 };
 
-function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
-    // Strip globeMode — MapboxOverlay detects globe projection automatically
-    // via getDefaultView(map) which returns GlobeView when the map is in globe mode.
-    // Both projection and _full3d are managed internally on every map `render` event.
-    const { globeMode, ...rest } = props;
-    void globeMode;
+function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
+  // Strip globeMode — MapboxOverlay detects globe projection automatically
+  // via getDefaultView(map) which returns GlobeView when the map is in globe mode.
+  // Both projection and _full3d are managed internally on every map `render` event.
+  const { globeMode, ...rest } = props;
+  void globeMode;
 
-    const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({
+  const overlay = useControl<MapboxOverlay>(
+    () =>
+      new MapboxOverlay({
         ...rest,
         // Disable interleaved rendering to bypass MapLibre's depth buffer occlusion
         interleaved: false,
         // _full3d reads the Mapbox depth buffer to occlude globe far-side layers.
         // Globe view (GlobeView vs MapView) is auto-detected via getDefaultView(map).
         // Since Maplibre's globe depth buffer has issues with objects near the surface, keep this false.
-        _full3d: false
-    } as any));
+        _full3d: false,
+      } as any),
+  );
 
-    const isDeadRef = useRef(false);
-    useEffect(() => {
-        isDeadRef.current = false;
-        return () => { isDeadRef.current = true; };
-    }, []);
+  const isDeadRef = useRef(false);
+  useEffect(() => {
+    isDeadRef.current = false;
+    return () => {
+      isDeadRef.current = true;
+    };
+  }, []);
 
-    useEffect(() => {
-        if (overlay && overlay.setProps && !isDeadRef.current) {
-            try {
-                overlay.setProps({ ...rest, interleaved: false, _full3d: false } as any);
-            } catch {
-                console.debug('[DeckGLOverlay] Transitioning props...');
-            }
-        }
-    }, [rest, overlay]);
+  useEffect(() => {
+    if (overlay && overlay.setProps && !isDeadRef.current) {
+      try {
+        overlay.setProps({
+          ...rest,
+          interleaved: false,
+          _full3d: false,
+        } as any);
+      } catch {
+        console.debug("[DeckGLOverlay] Transitioning props...");
+      }
+    }
+  }, [rest, overlay]);
 
-    const { onOverlayLoaded } = props;
-    useEffect(() => {
-        if (onOverlayLoaded && overlay) {
-            onOverlayLoaded(overlay);
-        }
-        return () => {
-            if (onOverlayLoaded) onOverlayLoaded(null);
-        };
-    }, [overlay, onOverlayLoaded]);
+  const { onOverlayLoaded } = props;
+  useEffect(() => {
+    if (onOverlayLoaded && overlay) {
+      onOverlayLoaded(overlay);
+    }
+    return () => {
+      if (onOverlayLoaded) onOverlayLoaded(null);
+    };
+  }, [overlay, onOverlayLoaded]);
 
-    return null;
+  return null;
 }
 
 const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
-    const { viewState, onMove, onLoad, mapStyle, style, onContextMenu, onClick, globeMode, showAttribution, deckProps } = props;
-    return (
-        <Map
-            ref={ref}
-            canvasContextAttributes={{ antialias: true }}
-            onLoad={(e) => {
-                const map = e.target;
+  const {
+    viewState,
+    onMove,
+    onLoad,
+    mapStyle,
+    style,
+    onContextMenu,
+    onClick,
+    globeMode,
+    showAttribution,
+    deckProps,
+  } = props;
+  return (
+    <Map
+      ref={ref}
+      canvasContextAttributes={{ antialias: true }}
+      onLoad={(e) => {
+        const map = e.target;
+        const globeCapableMap = map as typeof map & {
+          setAtmosphere?: (value: unknown) => void;
+          setFog?: (value: unknown) => void;
+          setGlobe?: (value: unknown) => void;
+        };
 
-                if (globeMode) {
-                    try {
-                        // MapLibre Globe features
-                        (map as any).setFog(null);
-                        (map as any).setGlobe({ 'show-atmosphere': false });
-                    } catch (err) {
-                        console.warn('[MapLibreAdapter] Failed to disable atmosphere:', err);
-                    }
-                }
+        if (globeMode) {
+          try {
+            // MapLibre versions differ: prefer setAtmosphere, fallback to setFog.
+            if (typeof globeCapableMap.setAtmosphere === "function") {
+              globeCapableMap.setAtmosphere(null);
+            } else if (typeof globeCapableMap.setFog === "function") {
+              globeCapableMap.setFog(null);
+            }
 
-                // Inject stencil-clearing layer at the top of the stack so it runs
-                // after all MapLibre tile layers and before deck.gl's render pass.
-                try {
-                    if (!map.getLayer(STENCIL_CLEAR_LAYER.id)) {
-                        map.addLayer(STENCIL_CLEAR_LAYER);
-                    }
-                } catch (err) {
-                    console.warn('[MapLibreAdapter] Could not add stencil clear layer:', err);
-                }
+            if (typeof globeCapableMap.setGlobe === "function") {
+              globeCapableMap.setGlobe({ "show-atmosphere": false });
+            }
+          } catch (err) {
+            console.warn(
+              "[MapLibreAdapter] Failed to disable atmosphere:",
+              err,
+            );
+          }
+        }
 
-                if (onLoad) onLoad(e);
-            }}
-            {...viewState}
-            onMove={onMove}
-            mapStyle={mapStyle}
-            style={style}
-            onContextMenu={onContextMenu}
-            onClick={onClick}
-            projection={globeMode ? { type: 'globe' } : { type: 'mercator' }}
-            attributionControl={false}
-        >
-            {showAttribution !== false && <AttributionControl compact={true} position="bottom-right" />}
-            {(() => {
-                const { key: deckKey, ...restDeckProps } = deckProps;
-                return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;
-            })()}
-        </Map>
-    );
+        // Inject stencil-clearing layer at the top of the stack so it runs
+        // after all MapLibre tile layers and before deck.gl's render pass.
+        try {
+          if (!map.getLayer(STENCIL_CLEAR_LAYER.id)) {
+            map.addLayer(STENCIL_CLEAR_LAYER);
+          }
+        } catch (err) {
+          console.warn(
+            "[MapLibreAdapter] Could not add stencil clear layer:",
+            err,
+          );
+        }
+
+        if (onLoad) onLoad(e);
+      }}
+      {...viewState}
+      onMove={onMove}
+      mapStyle={mapStyle}
+      style={style}
+      onContextMenu={onContextMenu}
+      onClick={onClick}
+      projection={globeMode ? { type: "globe" } : { type: "mercator" }}
+      attributionControl={false}
+    >
+      {showAttribution !== false && (
+        <AttributionControl compact={true} position="bottom-right" />
+      )}
+      {(() => {
+        const { key: deckKey, ...restDeckProps } = deckProps;
+        return <DeckGLOverlay key={deckKey as string} {...restDeckProps} />;
+      })()}
+    </Map>
+  );
 });
 
-MapLibreAdapter.displayName = 'MapLibreAdapter';
+MapLibreAdapter.displayName = "MapLibreAdapter";
 export default MapLibreAdapter;
 export type { MapRef };

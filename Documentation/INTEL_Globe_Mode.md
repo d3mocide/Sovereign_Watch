@@ -9,7 +9,7 @@
 |---|---|---|
 | Globe map | `frontend/src/components/map/IntelGlobe.tsx` | Always-3D MapLibre globe with three deck.gl layer groups |
 | Arc projections | `frontend/src/layers/buildGdeltArcLayer.ts` | ArcLayer beams from conflict-class GDELT events |
-| Country heat | `frontend/src/layers/buildCountryHeatLayer.ts` | GeoJsonLayer tinting countries by avg Goldstein score |
+| Country heat | `frontend/src/layers/buildCountryHeatLayer.ts` | GeoJsonLayer tinting countries by threat level derived from actor1-country avg Goldstein |
 | Left sidebar | `frontend/src/components/layouts/IntelSidebar.tsx` | Conflict zones + actors lists, map style selector, fly-to |
 | Headline ticker | `frontend/src/components/widgets/OsintTicker.tsx` | CSS marquee from `/api/news/feed` |
 | Actors API | `backend/api/routers/gdelt.py` | `GET /api/gdelt/actors` — top actors by event count |

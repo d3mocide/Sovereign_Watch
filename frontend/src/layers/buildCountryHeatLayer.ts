@@ -56,20 +56,31 @@ function matchActorToFeature(
   featureProps: Record<string, unknown>,
 ): boolean {
   const norm = actor.toLowerCase().trim();
-  const name = ((featureProps.NAME as string) || "").toLowerCase();
-  const iso2 = ((featureProps.ISO_A2 as string) || "").toLowerCase();
-  const iso3 = ((featureProps.ADM0_A3 as string) || "").toLowerCase();
-  const nameEn = ((featureProps.NAME_EN as string) || "").toLowerCase();
+  const read = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = featureProps[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.toLowerCase().trim();
+      }
+    }
+    return "";
+  };
+
+  // Support both Natural Earth key variants used across our assets.
+  const name = read("NAME", "name", "ADMIN", "admin");
+  const iso2 = read("ISO_A2", "ISO3166-1-Alpha-2", "iso_a2", "iso2");
+  const iso3 = read("ADM0_A3", "ISO3166-1-Alpha-3", "iso_a3", "iso3");
+  const nameEn = read("NAME_EN", "name_en");
 
   if (name === norm || iso2 === norm || iso3 === norm || nameEn === norm)
     return true;
 
-  // Check aliases
-  for (const [, aliases] of Object.entries(COUNTRY_ALIAS)) {
-    if (aliases.includes(norm)) {
-      // See if this feature matches any alias
-      return aliases.some(
-        (a) => name === a || nameEn === a || iso2 === a || iso3 === a,
+  // Check aliases/code mapping (e.g., actor "US" maps to feature iso2 "td").
+  for (const [iso2Code, aliases] of Object.entries(COUNTRY_ALIAS)) {
+    const iso2Norm = iso2Code.toLowerCase();
+    if (norm === iso2Norm || aliases.includes(norm)) {
+      return (
+        iso2 === iso2Norm || aliases.includes(name) || aliases.includes(nameEn)
       );
     }
   }
@@ -82,18 +93,16 @@ function matchActorToFeature(
  */
 function threatToFillColor(
   threatLevel: string,
-  pulse: number,
 ): [number, number, number, number] {
-  const alpha = Math.round(55 + 25 * pulse); // 55–80 range
   switch (threatLevel) {
     case "CRITICAL":
-      return [239, 68, 68, alpha + 20];   // red
+      return [239, 68, 68, 95]; // red
     case "ELEVATED":
-      return [245, 158, 11, alpha];        // amber
+      return [245, 158, 11, 72]; // amber
     case "MONITORING":
-      return [234, 179, 8, Math.round(alpha * 0.7)]; // yellow, dimmer
+      return [234, 179, 8, 52]; // yellow, dimmer
     default:
-      return [0, 0, 0, 0];               // transparent for STABLE
+      return [0, 0, 0, 0]; // transparent for STABLE
   }
 }
 
@@ -115,12 +124,11 @@ function threatToLineColor(
 /**
  * Builds a GeoJsonLayer that shades country polygons by GDELT threat level.
  *
- * Countries with CRITICAL or ELEVATED actor records are tinted red/amber.
- * The fill pulses gently using animTick.
+ * Countries with CRITICAL or ELEVATED actor records are tinted with static fills.
  *
  * @param countriesGeoJson  Natural Earth 110m (or world-countries.json) FeatureCollection
  * @param actors            Output from /api/gdelt/actors
- * @param animTick          Normalised animation time (0–1, one cycle per second)
+ * @param animTick          Unused animation tick kept for call-site compatibility
  */
 export function buildCountryHeatLayer(
   countriesGeoJson: { type: string; features: any[] } | null,
@@ -130,6 +138,8 @@ export function buildCountryHeatLayer(
   animTick: number,
   debugMode?: boolean,
 ): Layer[] {
+  void animTick;
+
   if (!visible || !countriesGeoJson?.features?.length || !actors.length)
     return [];
 
@@ -139,15 +149,13 @@ export function buildCountryHeatLayer(
     actorMap.set(a.actor.toLowerCase().trim(), a);
   }
 
-  // OPTIMIZATION: Cache the matched actor for each feature so we don't re-scan 
-  // the actorMap every frame during the animation pulse.
+  // OPTIMIZATION: Cache the matched actor for each feature so we don't re-scan
+  // the actorMap for every accessor invocation.
   const featureMatchedMap = new Map<any, ActorEntry | null>();
-
-  const pulse = 0.5 + 0.5 * Math.sin(animTick * Math.PI * 2);
 
   const getMatchedActor = (feature: any): ActorEntry | null => {
     if (featureMatchedMap.has(feature)) return featureMatchedMap.get(feature)!;
-    
+
     let matched: ActorEntry | null = null;
     const props = feature.properties || {};
     for (const [norm, entry] of actorMap) {
@@ -170,7 +178,7 @@ export function buildCountryHeatLayer(
       getFillColor: (feature: any) => {
         const matched = getMatchedActor(feature);
         if (!matched || matched.threat_level === "STABLE") return [0, 0, 0, 0];
-        return threatToFillColor(matched.threat_level, pulse);
+        return threatToFillColor(matched.threat_level);
       },
       getLineColor: (feature: any) => {
         const matched = getMatchedActor(feature);
@@ -188,12 +196,10 @@ export function buildCountryHeatLayer(
       lineWidthUnits: "pixels",
       lineWidthMinPixels: 0.5,
       wrapLongitude: !globeMode,
-      updateTriggers: {
-        getFillColor: animTick,
-      },
       parameters: {
         depthTest: debugMode ? false : !!globeMode,
-        depthBias: (globeMode && !debugMode) ? -200.0 : 0,
+        // Keep country tint behind GDELT icon/text layers on globe mode.
+        depthBias: globeMode && !debugMode ? 140.0 : 0,
       } as any,
     }),
   ];

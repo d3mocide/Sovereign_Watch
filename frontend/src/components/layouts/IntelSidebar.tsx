@@ -7,16 +7,16 @@
  *  3. ACTIVE ACTORS — actor list with intel score badge
  *  4. SITREP SUMMARY footer — hot zones count + GENERATE SITREP button
  */
-import { useEffect, useState, useCallback } from "react";
 import {
-  AlertTriangle,
   Activity,
-  Globe2,
-  RefreshCw,
-  Layers,
-  RotateCcw,
+  AlertTriangle,
   FileText,
+  Globe2,
+  Layers,
+  RefreshCw,
+  RotateCcw,
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { type MapStyleKey, MAP_STYLE_LABELS } from "../map/intelMapStyles";
 
 export interface ActorEntry {
@@ -37,36 +37,51 @@ interface IntelSidebarProps {
   onFlyTo?: (lat: number, lon: number) => void;
   mapStyle?: MapStyleKey;
   onMapStyleChange?: (style: MapStyleKey) => void;
+  renderMode?: "2D" | "3D";
+  onRenderModeChange?: (mode: "2D" | "3D") => void;
   spin?: boolean;
   onSpinToggle?: () => void;
+  renderer?: "DECKGL" | "MAPLIBRE";
   /** Called with a pre-formatted context string when the user requests a SITREP. */
   onGenerateSitrep?: (context: string) => void;
 }
 
 function threatColor(level: ActorEntry["threat_level"]): string {
   switch (level) {
-    case "CRITICAL":   return "text-red-400";
-    case "ELEVATED":   return "text-amber-400";
-    case "MONITORING": return "text-yellow-400";
-    default:           return "text-hud-green/60";
+    case "CRITICAL":
+      return "text-red-400";
+    case "ELEVATED":
+      return "text-amber-400";
+    case "MONITORING":
+      return "text-yellow-400";
+    default:
+      return "text-hud-green/60";
   }
 }
 
 function threatBorderColor(level: ActorEntry["threat_level"]): string {
   switch (level) {
-    case "CRITICAL":   return "border-red-500/40";
-    case "ELEVATED":   return "border-amber-500/40";
-    case "MONITORING": return "border-yellow-500/40";
-    default:           return "border-white/10";
+    case "CRITICAL":
+      return "border-red-500/40";
+    case "ELEVATED":
+      return "border-amber-500/40";
+    case "MONITORING":
+      return "border-yellow-500/40";
+    default:
+      return "border-white/10";
   }
 }
 
 function threatBadgeBg(level: ActorEntry["threat_level"]): string {
   switch (level) {
-    case "CRITICAL":   return "bg-red-500/20 text-red-300 border border-red-500/40";
-    case "ELEVATED":   return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
-    case "MONITORING": return "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30";
-    default:           return "bg-white/5 text-white/40 border border-white/10";
+    case "CRITICAL":
+      return "bg-red-500/20 text-red-300 border border-red-500/40";
+    case "ELEVATED":
+      return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
+    case "MONITORING":
+      return "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30";
+    default:
+      return "bg-white/5 text-white/40 border border-white/10";
   }
 }
 
@@ -89,13 +104,17 @@ function buildSitrepContext(actors: ActorEntry[], timeWindow: number): string {
     ``,
     `ELEVATED THREAT ACTORS (${elevated.length}):`,
     ...elevated.map(
-      (a) => `  ${a.actor} — ${a.event_count} events, Goldstein avg ${a.avg_goldstein.toFixed(1)}`,
+      (a) =>
+        `  ${a.actor} — ${a.event_count} events, Goldstein avg ${a.avg_goldstein.toFixed(1)}`,
     ),
     ``,
     `TOP ACTORS BY EVENT COUNT:`,
-    ...actors.slice(0, 8).map(
-      (a) => `  ${a.actor} (${a.threat_level}): ${a.event_count} total, ${a.verbal_conflict} verbal conflict, ${a.material_conflict} material conflict`,
-    ),
+    ...actors
+      .slice(0, 8)
+      .map(
+        (a) =>
+          `  ${a.actor} (${a.threat_level}): ${a.event_count} total, ${a.verbal_conflict} verbal conflict, ${a.material_conflict} material conflict`,
+      ),
   ];
 
   return lines.join("\n");
@@ -105,8 +124,11 @@ export function IntelSidebar({
   onFlyTo,
   mapStyle = "dark",
   onMapStyleChange,
+  renderMode = "3D",
+  onRenderModeChange,
   spin = false,
   onSpinToggle,
+  renderer = "MAPLIBRE",
   onGenerateSitrep,
 }: IntelSidebarProps) {
   const [actors, setActors] = useState<ActorEntry[]>([]);
@@ -147,8 +169,7 @@ export function IntelSidebar({
   );
   const allActors = actors.slice(0, 20);
 
-  const formatTime = (d: Date) =>
-    d.toISOString().split("T")[1].split(".")[0];
+  const formatTime = (d: Date) => d.toISOString().split("T")[1].split(".")[0];
 
   const handleSitrep = useCallback(() => {
     if (!onGenerateSitrep || !actors.length) return;
@@ -156,8 +177,7 @@ export function IntelSidebar({
   }, [onGenerateSitrep, actors, timeWindow]);
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-hidden font-mono text-xs select-none">
-
+    <div className="flex h-[95%] max-h-[95dvh] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none">
       {/* Header */}
       <div className="shrink-0 px-3 py-2 bg-black/40 border border-hud-green/20 backdrop-blur-md rounded-sm">
         <div className="flex items-center justify-between mb-1">
@@ -165,6 +185,16 @@ export function IntelSidebar({
             <Globe2 size={12} className="text-hud-green" />
             <span className="text-hud-green font-black tracking-widest text-[10px]">
               INTEL // OSINT GLOBE
+            </span>
+            <span
+              className={`px-1.5 py-0.5 text-[8px] font-black tracking-widest rounded-sm border ${
+                renderer === "MAPLIBRE"
+                  ? "text-sky-300 bg-sky-500/10 border-sky-500/40"
+                  : "text-cyan-300 bg-cyan-500/10 border-cyan-500/40"
+              }`}
+              title="Active globe renderer"
+            >
+              {renderer}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -202,7 +232,9 @@ export function IntelSidebar({
 
         {/* Time window selector */}
         <div className="flex items-center gap-1 mt-2">
-          <span className="text-[9px] text-white/30 tracking-wider">WINDOW:</span>
+          <span className="text-[9px] text-white/30 tracking-wider">
+            WINDOW:
+          </span>
           {([24, 48, 72] as const).map((h) => (
             <button
               key={h}
@@ -222,7 +254,9 @@ export function IntelSidebar({
         {onMapStyleChange && (
           <div className="flex items-center gap-1 mt-1.5">
             <Layers size={9} className="text-white/30 shrink-0" />
-            <span className="text-[9px] text-white/30 tracking-wider shrink-0">STYLE:</span>
+            <span className="text-[9px] text-white/30 tracking-wider shrink-0">
+              STYLE:
+            </span>
             {(Object.keys(MAP_STYLE_LABELS) as MapStyleKey[]).map((key) => (
               <button
                 key={key}
@@ -238,10 +272,32 @@ export function IntelSidebar({
             ))}
           </div>
         )}
+
+        {/* Render mode selector */}
+        {onRenderModeChange && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="text-[9px] text-white/30 tracking-wider shrink-0">
+              MODE:
+            </span>
+            {(["2D", "3D"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => onRenderModeChange(mode)}
+                className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-sm transition-colors ${
+                  renderMode === mode
+                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
+                    : "text-white/30 hover:text-white/60 border border-white/10"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Conflict Zones */}
-      <div className="flex flex-col min-h-0 bg-black/40 border border-hud-green/15 backdrop-blur-md rounded-sm overflow-hidden">
+      <div className="flex flex-col min-h-[25%] bg-black/40 border border-hud-green/15 backdrop-blur-md rounded-sm overflow-hidden">
         <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-white/10">
           <div className="flex items-center gap-2">
             <AlertTriangle size={11} className="text-red-400" />
@@ -278,11 +334,15 @@ export function IntelSidebar({
                     <span className="text-white/20 text-[9px] w-4 text-right shrink-0">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <span className={`font-black tracking-wider text-[10px] ${threatColor(zone.threat_level)} group-hover:brightness-125`}>
+                    <span
+                      className={`font-black tracking-wider text-[10px] ${threatColor(zone.threat_level)} group-hover:brightness-125`}
+                    >
                       {zone.actor}
                     </span>
                   </div>
-                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm tracking-wider ${threatBadgeBg(zone.threat_level)}`}>
+                  <span
+                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm tracking-wider ${threatBadgeBg(zone.threat_level)}`}
+                  >
                     {zone.threat_level}
                   </span>
                 </div>
@@ -328,14 +388,18 @@ export function IntelSidebar({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className={`font-bold tracking-wider text-[10px] ${threatColor(actor.threat_level)} group-hover:brightness-125`}>
+                  <span
+                    className={`font-bold tracking-wider text-[10px] ${threatColor(actor.threat_level)} group-hover:brightness-125`}
+                  >
                     {actor.actor}
                   </span>
                   <span className="text-white/20 text-[9px]">
                     {actor.actor_type}
                   </span>
                 </div>
-                <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm tracking-widest ${threatBadgeBg(actor.threat_level)}`}>
+                <div
+                  className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm tracking-widest ${threatBadgeBg(actor.threat_level)}`}
+                >
                   INTEL: {actor.event_count}
                 </div>
               </div>
@@ -358,13 +422,22 @@ export function IntelSidebar({
           <div className="flex flex-col gap-0.5">
             <span className="text-white/40">HOT ZONES</span>
             <span className="text-red-400 font-bold">
-              {conflictZones.filter((z) => z.threat_level === "CRITICAL").length}
+              {
+                conflictZones.filter((z) => z.threat_level === "CRITICAL")
+                  .length
+              }
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-white/40">MONITORING</span>
             <span className="text-amber-400 font-bold">
-              {actors.filter((a) => a.threat_level === "ELEVATED" || a.threat_level === "MONITORING").length}
+              {
+                actors.filter(
+                  (a) =>
+                    a.threat_level === "ELEVATED" ||
+                    a.threat_level === "MONITORING",
+                ).length
+              }
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
