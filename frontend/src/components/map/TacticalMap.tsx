@@ -1,17 +1,7 @@
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
-import {
-  ChevronDown,
-  ChevronUp,
-  Globe,
-  Minus,
-  Plus,
-  RotateCcw,
-} from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import React, {
-  lazy,
   MutableRefObject,
   Suspense,
   useCallback,
@@ -19,63 +9,19 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { MapRef } from "react-map-gl/maplibre";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
+import { useMapBase } from "../../hooks/useMapBase";
 import { useMapCamera } from "../../hooks/useMapCamera";
-import {
-  parseMissionHash,
-  updateMissionHash,
-} from "../../hooks/useMissionHash";
 import { CoTEntity, JS8Station, RFSite, Tower } from "../../types";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { AltitudeLegend } from "./AltitudeLegend";
 import { MapContextMenu } from "./MapContextMenu";
+import { MapControls } from "./MapControls";
 import { MapTooltip } from "./MapTooltip";
 import { RFLegend } from "./RFLegend";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { SpeedLegend } from "./SpeedLegend";
 import { StarField } from "./StarField";
-
-// Inline MapLibre style for ESRI World Imagery satellite tiles (no API key required)
-const SATELLITE_MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    "esri-satellite": {
-      type: "raster" as const,
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution:
-        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-    },
-  },
-  layers: [
-    {
-      id: "satellite-layer",
-      type: "raster" as const,
-      source: "esri-satellite",
-    },
-  ],
-};
-const DARK_MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-
-// Pre-load both adapters so React doesn't re-suspend when toggling Globe mode.
-// react-map-gl v8 bakes the GL library into the entry point, so we lazy-load
-// the correct adapter rather than using the removed `mapLib` prop.
-const _mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
-const _enableMapbox = import.meta.env.VITE_ENABLE_MAPBOX !== "false";
-const _isValidToken = !!_mapboxToken && _mapboxToken.startsWith("pk.");
-
-const MapboxAdapterLazy: React.ComponentType<any> = lazy(
-  () => import("./MapboxAdapter"),
-);
-
-const MapLibreAdapterLazy: React.ComponentType<any> = lazy(
-  () => import("./MapLibreAdapter"),
-);
 
 // DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
 // so that useControl is always called within the correct react-map-gl endpoint context.
@@ -337,32 +283,26 @@ export function TacticalMap({
   // GDELT geolocated news events
   const gdeltData = propGdeltData;
 
-  // Map & Style States
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [enable3d, setEnable3d] = useState(false);
-  const [mapStyleMode, setMapStyleMode] = useState<"dark" | "satellite">(
-    "dark",
-  );
-  const mapToken = _enableMapbox && _isValidToken ? _mapboxToken : undefined;
-
-  // Globe mode always uses MapLibre — Mapbox Globe blocks CustomLayerInterface
-  // which is required by MapboxOverlay for interleaved rendering. MapLibre globe
-  // is fully supported by deck.gl (confirmed in @deck.gl/mapbox limitations docs).
-  // Mercator uses Mapbox when a valid token is present for premium basemap quality.
-  const MapComponent =
-    globeMode || !mapToken ? MapLibreAdapterLazy : MapboxAdapterLazy;
-
-  const mapStyle =
-    mapToken && !globeMode
-      ? "mapbox://styles/mapbox/standard"
-      : mapStyleMode === "satellite"
-        ? SATELLITE_MAP_STYLE
-        : DARK_MAP_STYLE;
-
-  const mapRef = useRef<MapRef>(null);
-  const overlayRef = useRef<MapboxOverlay | null>(null);
-  // Stores raw MapLibre GL map from onLoad event.target (bypasses react-map-gl wrapping)
-  const mapInstanceRef = useRef<unknown>(null);
+  // ---------------------------------------------------------------------------
+  // Map base: adapter, style, refs, view state, hash sync (shared via useMapBase)
+  // ---------------------------------------------------------------------------
+  const {
+    mapRef,
+    overlayRef,
+    mapInstanceRef,
+    mapLoaded,
+    enable3d,
+    setEnable3d,
+    mapStyleMode,
+    setMapStyleMode,
+    mapToken,
+    MapComponent,
+    mapStyle,
+    viewState,
+    setViewState,
+    handleMapLoad,
+    handleOverlayLoaded,
+  } = useMapBase({ globeMode, defaultZoom: 9.5 });
 
   // History track segments ref — updated synchronously so the RAF loop picks it up
   const historySegmentsRef = useRef<import("../../types").HistorySegment[]>(
@@ -371,42 +311,6 @@ export function TacticalMap({
   useEffect(() => {
     historySegmentsRef.current = historySegments ?? [];
   }, [historySegments]);
-
-  // Environment Fallbacks
-  const envLat = import.meta.env.VITE_CENTER_LAT;
-  const envLon = import.meta.env.VITE_CENTER_LON;
-  const hashState = parseMissionHash();
-  const initialLat =
-    hashState.lat !== null
-      ? hashState.lat
-      : envLat
-        ? parseFloat(envLat)
-        : 45.5152;
-  const initialLon =
-    hashState.lon !== null
-      ? hashState.lon
-      : envLon
-        ? parseFloat(envLon)
-        : -122.6784;
-  const initialZoom = hashState.zoom !== null ? hashState.zoom : 9.5;
-
-  // View State (Controlled for bearing tracking)
-  const [viewState, setViewState] = useState({
-    latitude: initialLat,
-    longitude: initialLon,
-    zoom: initialZoom,
-    pitch: enable3d ? 50 : 0,
-    bearing: 0,
-  });
-
-  // Sync to hash on move
-  useEffect(() => {
-    updateMissionHash({
-      lat: viewState.latitude,
-      lon: viewState.longitude,
-      zoom: viewState.zoom,
-    });
-  }, [viewState.latitude, viewState.longitude, viewState.zoom]);
 
   // Refs for transient state
   // Store previously active filters and notification states for Detecting transitions
@@ -552,25 +456,15 @@ export function TacticalMap({
     }
   }, [replayEntities]);
 
+  // Reset satellite style when exiting globe (satellite tiles only make sense on the globe).
+  // mapLoaded reset and ref cleanup are handled by useMapBase.
   const [prevGlobeMode, setPrevGlobeMode] = useState(globeMode);
   if (globeMode !== prevGlobeMode) {
     setPrevGlobeMode(globeMode);
-    setMapLoaded(false);
     if (!globeMode) {
       setMapStyleMode("dark");
     }
   }
-
-  // Initialization Sync: Reset map state on projection toggle
-  // This ensures that when the "Nuclear Remount" happens, all effects re-synchronize
-  // correctly with the fresh map instance.
-  useEffect(() => {
-    // Null out refs so stale instances aren't used after the adapter unmounts.
-    // react-map-gl handles GL context destruction internally on unmount — do not
-    // call map.remove() here as it races with react-map-gl's own cleanup.
-    mapInstanceRef.current = null;
-    overlayRef.current = null;
-  }, [globeMode]);
 
   // Update ref when prop changes
   useEffect(() => {
@@ -717,20 +611,6 @@ export function TacticalMap({
     [setSaveFormCoords, setShowSaveForm],
   );
 
-  const handleOverlayLoaded = useCallback((overlay: MapboxOverlay) => {
-    overlayRef.current = overlay;
-  }, []);
-
-  const handleMapLoad = useCallback((evt?: unknown) => {
-    // evt.target = react-map-gl Map WRAPPER — must call .getMap() for the raw MapLibre GL instance
-    const target = (evt as { target?: unknown } | undefined)?.target;
-    if (target && typeof target === "object") {
-      const mapTarget = target as { getMap?: () => unknown };
-      mapInstanceRef.current =
-        typeof mapTarget.getMap === "function" ? mapTarget.getMap() : target;
-    }
-    setMapLoaded(true);
-  }, []);
 
   // Expose mission management to parent via onMissionPropsReady (handled inside useMissionArea)
 
@@ -873,9 +753,7 @@ export function TacticalMap({
               setViewState(nextViewState);
             }}
             mapStyle={mapStyle}
-            {...(_enableMapbox && _isValidToken
-              ? { mapboxAccessToken: mapToken }
-              : {})}
+            {...(mapToken ? { mapboxAccessToken: mapToken } : {})}
             globeMode={globeMode}
             style={{
               width: "100vw",
@@ -911,151 +789,26 @@ export function TacticalMap({
         </Suspense>
       </div>
 
-      {/* View Controls & Zoom HUD - Centered at the bottom */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto">
-        {/* Manual Orientation Controls - Only in 3D mode, Hidden in Globe */}
-        {enable3d && !globeMode && (
-          <div className="flex flex-row gap-2">
-            <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <button
-                onClick={() => handleAdjustCamera("bearing", -45)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                title="Rotate Left"
-                aria-label="Rotate Left"
-              >
-                <RotateCcw size={16} />
-              </button>
-              <button
-                onClick={handleResetCompass}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-hud-green hover:bg-white/5 hover:border-hud-green/30 transition-all active:scale-95 w-8 h-8 flex items-center justify-center font-mono font-bold text-sm focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                title="Reset to North"
-                aria-label="Reset to North"
-              >
-                N
-              </button>
-              <button
-                onClick={() => handleAdjustCamera("bearing", 45)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                title="Rotate Right"
-                aria-label="Rotate Right"
-              >
-                <RotateCcw size={16} className="scale-x-[-1]" />
-              </button>
-            </div>
-
-            <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <button
-                onClick={() => handleAdjustCamera("pitch", 15)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                title="Tilt Down"
-                aria-label="Tilt Down"
-              >
-                <ChevronUp size={16} />
-              </button>
-              <button
-                onClick={() => handleAdjustCamera("pitch", -15)}
-                className="p-1.5 rounded-md bg-transparent border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all active:scale-95 w-8 h-8 flex items-center justify-center focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-                title="Tilt Up"
-                aria-label="Tilt Up"
-              >
-                <ChevronDown size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Top Row: View Modes + Zoom */}
-        <div className="flex flex-row items-center gap-4">
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            {!globeMode && (
-              <>
-                <button
-                  onClick={() => setViewMode("2d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    !enable3d
-                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  2D
-                </button>
-                <button
-                  onClick={() => setViewMode("3d")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    enable3d
-                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  3D
-                </button>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-              </>
-            )}
-
-            <button
-              onClick={() => onToggleGlobe?.()}
-              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                globeMode
-                  ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
-                  : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-              }`}
-              title="Toggle Globe View"
-            >
-              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
-              GLOBE
-            </button>
-
-            {globeMode && (
-              <>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-                <button
-                  onClick={() => setMapStyleMode("dark")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                    mapStyleMode === "dark"
-                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                  title="Dark Tactical View"
-                >
-                  DARK
-                </button>
-                <button
-                  onClick={() => setMapStyleMode("satellite")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                    mapStyleMode === "satellite"
-                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                  title="Satellite Terrain View"
-                >
-                  SAT
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Map Zoom Controls */}
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            <button
-              onClick={() => mapRef.current?.getMap().zoomOut()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom Out"
-              aria-label="Zoom Out"
-            >
-              <Minus size={14} strokeWidth={3} />
-            </button>
-            <button
-              onClick={() => mapRef.current?.getMap().zoomIn()}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom In"
-              aria-label="Zoom In"
-            >
-              <Plus size={14} strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <MapControls
+        globeMode={!!globeMode}
+        onToggleGlobe={() => onToggleGlobe?.()}
+        enable3d={enable3d}
+        onSet2D={() => setViewMode("2d")}
+        onSet3D={() => setViewMode("3d")}
+        mapStyleMode={mapStyleMode}
+        styleOptions={[
+          { key: "dark", label: "DARK" },
+          { key: "satellite", label: "SAT" },
+        ]}
+        onSetStyleMode={(mode) =>
+          setMapStyleMode(mode as "dark" | "satellite")
+        }
+        onZoomIn={() => mapRef.current?.getMap().zoomIn()}
+        onZoomOut={() => mapRef.current?.getMap().zoomOut()}
+        onAdjustBearing={(delta) => handleAdjustCamera("bearing", delta)}
+        onResetNorth={handleResetCompass}
+        onAdjustPitch={(delta) => handleAdjustCamera("pitch", delta)}
+      />
 
       <MapContextMenu
         position={contextMenuPos}

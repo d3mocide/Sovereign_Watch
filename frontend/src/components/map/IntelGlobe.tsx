@@ -15,7 +15,6 @@
  */
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
-import { Globe, Minus, Plus } from "lucide-react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -26,6 +25,7 @@ import { buildGdeltArcLayer } from "../../layers/buildGdeltArcLayer";
 import { buildGdeltLayer, type GdeltPoint } from "../../layers/buildGdeltLayer";
 import type { CoTEntity } from "../../types";
 import { resolveMapStyle, type MapStyleKey } from "./intelMapStyles";
+import { MapControls } from "./MapControls";
 import MapLibreAdapter from "./MapLibreAdapter";
 import { StarField } from "./StarField";
 
@@ -285,98 +285,25 @@ export function IntelGlobe({
         }}
       />
 
-      {/* View Controls & Zoom HUD - Centered at the bottom */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto">
-        <div className="flex flex-row items-center gap-4">
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
-            {!globeMode && (
-              <>
-                <button
-                  onClick={() => onRenderModeChange?.("2D")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    !globeMode
-                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  2D
-                </button>
-                <button
-                  onClick={() => onRenderModeChange?.("3D")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    globeMode
-                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                >
-                  3D
-                </button>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-              </>
-            )}
-
-            <button
-              onClick={() => onRenderModeChange?.(globeMode ? "2D" : "3D")}
-              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                globeMode
-                  ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
-                  : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-              }`}
-              title="Toggle Globe View"
-            >
-              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
-              GLOBE
-            </button>
-
-            {globeMode && onMapStyleChange && (
-              <>
-                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
-                <button
-                  onClick={() => onMapStyleChange("dark")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                    mapStyleProp === "dark"
-                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                  title="Dark Tactical View"
-                >
-                  DARK
-                </button>
-                <button
-                  onClick={() => onMapStyleChange("debug")}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
-                    mapStyleProp === "debug"
-                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
-                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
-                  }`}
-                  title="Debug View"
-                >
-                  DEBUG
-                </button>
-              </>
-            )}
-          </div>
-
-          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <button
-              onClick={() => zoomBy(-0.75)}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom Out"
-              aria-label="Zoom Out"
-            >
-              <Minus size={14} strokeWidth={3} />
-            </button>
-            <button
-              onClick={() => zoomBy(0.75)}
-              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-              title="Zoom In"
-              aria-label="Zoom In"
-            >
-              <Plus size={14} strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <MapControls
+        globeMode={globeMode}
+        onToggleGlobe={() => onRenderModeChange?.(globeMode ? "2D" : "3D")}
+        enable3d={false}
+        onSet2D={() => onRenderModeChange?.("2D")}
+        onSet3D={() => onRenderModeChange?.("3D")}
+        mapStyleMode={mapStyleProp}
+        styleOptions={
+          onMapStyleChange
+            ? [
+                { key: "dark", label: "DARK" },
+                { key: "debug", label: "DEBUG" },
+              ]
+            : undefined
+        }
+        onSetStyleMode={(mode) => onMapStyleChange?.(mode as MapStyleKey)}
+        onZoomIn={() => zoomBy(0.75)}
+        onZoomOut={() => zoomBy(-0.75)}
+      />
     </div>
   );
 }
