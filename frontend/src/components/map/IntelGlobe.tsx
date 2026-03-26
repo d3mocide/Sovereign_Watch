@@ -294,7 +294,7 @@ export function IntelGlobe({
                 <button
                   onClick={() => onRenderModeChange?.("2D")}
                   className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    renderMode === "2D"
+                    !globeMode
                       ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                       : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}
@@ -304,7 +304,7 @@ export function IntelGlobe({
                 <button
                   onClick={() => onRenderModeChange?.("3D")}
                   className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
-                    renderMode === "3D"
+                    globeMode
                       ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
                       : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
                   }`}

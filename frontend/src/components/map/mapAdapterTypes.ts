@@ -1,12 +1,19 @@
 import type { Layer } from "@deck.gl/core";
 import type { MapboxOverlay } from "@deck.gl/mapbox";
+import type { StyleSpecification as MapboxStyleSpecification } from "mapbox-gl";
+import type { StyleSpecification as MapLibreStyleSpecification } from "maplibre-gl";
 import type { CSSProperties } from "react";
+
+export type MapStyleDefinition =
+  | string
+  | MapLibreStyleSpecification
+  | MapboxStyleSpecification;
 
 export interface MapAdapterProps {
   viewState: Record<string, number>;
   onMove?: (evt: unknown) => void;
   onLoad?: (evt: unknown) => void;
-  mapStyle: string | object;
+  mapStyle: MapStyleDefinition;
   style: CSSProperties;
   onContextMenu?: (evt: unknown) => void;
   onClick?: () => void;

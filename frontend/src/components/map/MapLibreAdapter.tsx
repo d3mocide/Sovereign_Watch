@@ -1,5 +1,5 @@
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { CustomLayerInterface } from "maplibre-gl";
+import type { CustomLayerInterface, StyleSpecification } from "maplibre-gl";
 import { forwardRef, useEffect, useRef } from "react";
 import {
   AttributionControl,
@@ -154,7 +154,7 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
       }}
       {...viewState}
       onMove={onMove}
-      mapStyle={mapStyle}
+      mapStyle={mapStyle as string | StyleSpecification}
       style={style}
       onContextMenu={onContextMenu}
       onClick={onClick}
