@@ -180,15 +180,27 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
               SYSTEM HEALTH
             </h3>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-1 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-          >
-            <X size={12} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open('/stats', '_blank');
+              }}
+              className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
+              title="Open Performance Dashboard"
+            >
+              STATS
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-1 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            >
+              <X size={12} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
