@@ -7,7 +7,7 @@ import { OrbitalSidebarLeft } from "./components/layouts/OrbitalSidebarLeft";
 import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
 import { TopBar } from "./components/layouts/TopBar";
-import { IntelGlobe } from "./components/map/IntelGlobe";
+import { CesiumIntelGlobe as IntelGlobe } from "./components/map/CesiumIntelGlobe";
 import type { MapStyleKey } from "./components/map/intelMapStyles";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";

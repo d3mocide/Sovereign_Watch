@@ -11,10 +11,15 @@ export interface GdeltArc {
 }
 
 /** Centroid lookup keyed by ISO 3166-1 alpha-3 / CAMEO country code. */
-type CentroidMap = Record<string, [number, number]>;
+export type CentroidMap = Record<string, [number, number]>;
 
 let centroidsCache: CentroidMap | null = null;
 let centroidsFetchPromise: Promise<CentroidMap> | null = null;
+
+/** Returns cached centroids (empty object if not yet loaded). */
+export function getCentroidsCache(): CentroidMap {
+  return centroidsCache ?? {};
+}
 
 /**
  * Fetch and cache country centroids from the public static asset.
@@ -60,7 +65,7 @@ function resolveCentroid(
  * to geographic centroids.  Falls back to a deterministic fan-spread when
  * actor2_country is missing, so arcs are never completely empty on cold load.
  */
-function buildArcData(
+export function buildArcData(
   gdeltData: {
     type: string;
     features: Array<{
