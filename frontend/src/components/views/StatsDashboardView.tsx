@@ -54,6 +54,10 @@ export default function StatsDashboardView() {
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ingression' | 'protocol' | 'analysis'>('dashboard');
+  const logContainerRef = React.useRef<HTMLDivElement>(null);
+  const [isAutoScroll, setIsAutoScroll] = useState(true);
+
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
     { id: 2, time: new Date().toLocaleTimeString(), msg: "> LOADING ASSETS... [DONE]", type: 'success' },
@@ -103,7 +107,7 @@ export default function StatsDashboardView() {
 
     const iv = setInterval(() => {
       const rand = messages[Math.floor(Math.random() * messages.length)];
-      setLogs(prev => [...prev.slice(-20), { 
+      setLogs(prev => [...prev.slice(-40), { 
         id: Date.now(), 
         time: new Date().toLocaleTimeString(), 
         msg: rand.msg, 
@@ -112,6 +116,20 @@ export default function StatsDashboardView() {
     }, 4000);
     return () => clearInterval(iv);
   }, []);
+
+  // Terminal Auto-scroll Logic
+  useEffect(() => {
+    if (isAutoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, isAutoScroll]);
+
+  const handleScroll = () => {
+    if (!logContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop <= clientHeight + 50;
+    setIsAutoScroll(isAtBottom);
+  };
 
   const totalSignals = useMemo(() => takBreakdown.reduce((acc, b) => acc + b.count, 0), [takBreakdown]);
 
@@ -152,9 +170,7 @@ export default function StatsDashboardView() {
         borderColor: '#39FF14',
         textStyle: { color: '#39FF14', fontFamily: 'monospace', fontSize: 10 }
       },
-      legend: {
-        show: false
-      },
+      legend: { show: false },
       grid: { left: '2%', right: '2%', bottom: '5%', top: '5%', containLabel: true },
       xAxis: {
         type: 'category',
@@ -250,6 +266,129 @@ export default function StatsDashboardView() {
     return <Server size={14} />;
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+      case 'ingression':
+        return (
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-primary/10 mb-6 font-headline">
+              <div>
+                <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">
+                  {activeTab === 'dashboard' ? 'TACTICAL OVERVIEW' : 'TAK PROTO INGRESSION'}
+                </h1>
+                <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">
+                  {activeTab === 'dashboard' ? 'GLOBAL SYSTEM STATUS & ACTIVITY TRENDS' : 'REAL-TIME NETWORK SYNCHRONIZATION STATUS'}
+                </p>
+              </div>
+              <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
+                <div className="text-right">
+                  <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Active Signals</div>
+                  <div className="text-2xl font-bold text-primary">{totalSignals.toLocaleString()}</div>
+                </div>
+                <div className="w-px h-8 bg-on-surface-variant/20"></div>
+                <div className="text-right">
+                  <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
+                  <div className="text-2xl font-bold text-tertiary">0.02%</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container p-6 flex flex-col h-full min-h-[400px] border border-primary/10 relative overflow-hidden group">
+              <div className="flex justify-between items-start mb-4 z-10 font-headline">
+                <div>
+                  <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+                    <Activity size={16} /> Global Signal Activity
+                  </h3>
+                  <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
+                </div>
+                <div className="flex gap-2">
+                  <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
+                  <span className="px-2 py-0.5 bg-background text-[10px] text-on-surface-variant border border-primary/10">ENCRYPTED</span>
+                </div>
+              </div>
+              
+              <div className="flex-1 mt-4 relative">
+                 {loading ? (
+                  <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em] font-headline">Synchronizing telemetry...</div>
+                 ) : (
+                  <ReactECharts 
+                    option={chartOptions} 
+                    style={{ height: '100%', width: '100%' }}
+                  />
+                 )}
+              </div>
+            </div>
+          </div>
+        );
+      case 'protocol':
+        return (
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline">
+            <div className="pb-4 border-b border-primary/10 mb-6">
+              <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">PROTOCOL ARCHITECTURE</h1>
+              <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">TAK/COT SCHEMA & SIGNAL CLASSIFICATION HIERARCHY</p>
+            </div>
+            
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              <div className="bg-surface-container p-6 border border-primary/10">
+                <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
+                  <ShieldAlert size={16} /> Load Distribution
+                </h3>
+                <div className="flex items-center justify-center relative py-6">
+                  <div className="h-64 w-64">
+                    <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-3xl font-black text-primary tracking-tighter">84%</span>
+                    <span className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Efficiency</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-surface-container p-6 border border-primary/10">
+                <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6">Classification Reference</h3>
+                <div className="space-y-3">
+                  {takBreakdown.map(tak => (
+                    <div key={tak.type} className="flex items-center gap-4 p-3 bg-surface-container-high border border-primary/5 hover:border-primary/20 transition-all">
+                      <div className="w-2 h-8 rounded-full" style={{ backgroundColor: tak.color }}></div>
+                      <div className="flex-1 flex flex-col min-w-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-bold text-on-surface uppercase truncate">{tak.label}</span>
+                          <span className="text-xs font-mono text-primary/70">{tak.count.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-on-surface-variant uppercase tracking-tighter">
+                          <span>{tak.type}</span>
+                          <span className="bg-background px-1.5 opacity-60">{tak.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      case 'analysis':
+        return (
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline text-center items-center justify-center space-y-4">
+             <div className="p-8 bg-surface-container border border-primary/20 max-w-md">
+                <BarChart3 size={48} className="text-primary mx-auto mb-4 opacity-50" />
+                <h2 className="text-2xl font-black text-primary uppercase tracking-tighter">ANALYSIS ENGINE</h2>
+                <p className="text-on-surface-variant text-xs mt-2 uppercase tracking-widest">Advanced deep-packet trending & anomaly detection modules are currently in initialization phase.</p>
+                <div className="mt-8 flex flex-col gap-3">
+                   <button onClick={handleExportCSV} className="bg-primary/10 border border-primary/40 text-primary py-3 font-bold text-[10px] tracking-widest uppercase hover:bg-primary/20 transition-all">
+                      DOWNLOAD RAW TELEMETRY.CSV
+                   </button>
+                   <button className="bg-surface-container-highest/20 border border-primary/10 text-on-surface-variant py-3 font-bold text-[10px] tracking-widest uppercase cursor-not-allowed">
+                      GENERATE MONTHLY PDF REPORT [LOCKED]
+                   </button>
+                </div>
+             </div>
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#0e0e0e] text-on-surface font-sans selection:bg-primary selection:text-surface overflow-hidden">
       {/* Header Overlay */}
@@ -282,18 +421,30 @@ export default function StatsDashboardView() {
             </div>
           </div>
           <nav className="flex flex-col gap-1 font-headline">
-            <a className="px-6 py-3 flex items-center gap-4 bg-surface-container-highest text-primary border-l-4 border-primary uppercase tracking-[0.1em] text-[10px] transition-all" href="#">
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'dashboard' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
               <LayoutGrid size={16} /> DASHBOARD
-            </a>
-            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+            </button>
+            <button 
+              onClick={() => setActiveTab('ingression')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'ingression' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
               <Network size={16} /> INGRESSION
-            </a>
-            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+            </button>
+            <button 
+              onClick={() => setActiveTab('protocol')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'protocol' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
               <ShieldAlert size={16} /> PROTOCOL
-            </a>
-            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+            </button>
+            <button 
+              onClick={() => setActiveTab('analysis')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'analysis' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
               <BarChart3 size={16} /> ANALYSIS
-            </a>
+            </button>
           </nav>
           <div className="mt-auto px-6 mb-8 flex flex-col gap-4 font-headline">
              <button 
@@ -309,94 +460,15 @@ export default function StatsDashboardView() {
           </div>
         </aside>
 
-        {/* Main Content */}
+        {/* Main Content Area */}
         <main className="flex-1 flex flex-col overflow-hidden bg-background relative">
           <div className="absolute inset-0 scanline opacity-30 pointer-events-none z-10"></div>
           
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden border-b border-primary/10 relative z-20">
-            {/* Chart Area */}
-            <div className="flex-1 flex flex-col p-6 min-w-0 lg:w-2/3 xl:w-3/4 overflow-y-auto custom-scrollbar">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-primary/10 mb-6 font-headline">
-                <div>
-                  <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">TAK PROTO INGRESSION</h1>
-                  <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">REAL-TIME TACTICAL NETWORK SYNCHRONIZATION STATUS</p>
-                </div>
-                <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
-                  <div className="text-right">
-                    <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Active Signals</div>
-                    <div className="text-2xl font-bold text-primary">{totalSignals.toLocaleString()}</div>
-                  </div>
-                  <div className="w-px h-8 bg-on-surface-variant/20"></div>
-                  <div className="text-right">
-                    <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
-                    <div className="text-2xl font-bold text-tertiary">0.02%</div>
-                  </div>
-                </div>
-              </div>
+             {renderContent()}
 
-              {/* Activity Chart Container */}
-              <div className="bg-surface-container p-6 flex flex-col h-full min-h-[400px] border border-primary/10 relative overflow-hidden group">
-                <div className="flex justify-between items-start mb-4 z-10">
-                  <div className="font-headline">
-                    <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
-                      <Activity size={16} /> Global Signal Activity
-                    </h3>
-                    <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary font-headline border border-primary/20">LIVE</span>
-                    <span className="px-2 py-0.5 bg-background text-[10px] text-on-surface-variant font-headline border border-primary/10">ENCRYPTED</span>
-                  </div>
-                </div>
-                
-                <div className="flex-1 mt-4 relative">
-                   {loading ? (
-                    <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em] font-headline">Synchronizing telemetry...</div>
-                   ) : (
-                    <ReactECharts 
-                      option={chartOptions} 
-                      style={{ height: '100%', width: '100%' }}
-                    />
-                   )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Panel/Breakdown */}
-            <aside className="w-full lg:w-1/3 xl:w-1/4 bg-surface-container-low border-l border-primary/10 overflow-y-auto p-6 space-y-8 custom-scrollbar relative z-20">
-              <div className="flex flex-col font-headline">
-                <div className="mb-4">
-                  <h3 className="font-bold text-[10px] tracking-widest text-primary uppercase">Protocol Breakdown</h3>
-                  <p className="text-[8px] text-on-surface-variant uppercase tracking-tighter">LOAD DISTRIBUTION BY TIER</p>
-                </div>
-                
-                <div className="flex items-center justify-center relative py-6">
-                  <div className="h-40 w-40">
-                    <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
-                  </div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-2xl font-black text-primary tracking-tighter">84%</span>
-                    <span className="text-[8px] text-on-surface-variant uppercase tracking-tighter">Efficiency</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 mt-4 font-headline">
-                  {takBreakdown.map(tak => (
-                    <div key={tak.type} className="flex items-center gap-3 p-2 bg-surface-container-high border border-primary/5 hover:border-primary/20 transition-all">
-                      <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: tak.color }}></div>
-                      <div className="flex-1 flex flex-col min-w-0">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="text-[9px] font-bold text-on-surface uppercase truncate">{tak.label}</span>
-                          <span className="text-[9px] font-mono text-primary/70">{tak.count}</span>
-                        </div>
-                        <div className="text-[8px] text-on-surface-variant uppercase truncate opacity-50">{tak.type}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Health Grid */}
+            {/* Right Panel - Consolidated to Container Health */}
+            <aside className="w-full lg:w-1/3 xl:w-1/5 bg-surface-container-low border-l border-primary/10 overflow-y-auto p-6 space-y-8 custom-scrollbar">
               <div className="space-y-4 font-headline uppercase">
                 <h3 className="font-bold text-[10px] tracking-widest text-primary">Container Health</h3>
                 <div className="grid grid-cols-1 gap-2">
@@ -413,17 +485,6 @@ export default function StatsDashboardView() {
                   ))}
                 </div>
               </div>
-
-              {/* Alert Reference */}
-              <div className="space-y-4 font-headline uppercase">
-                <h3 className="font-bold text-[10px] tracking-widest text-primary">System Alerts</h3>
-                <div className="space-y-2">
-                  <div className="flex items-start gap-3 p-3 bg-error/5 border border-error/20">
-                    <ShieldAlert size={14} className="text-error" />
-                    <div className="text-[9px] text-error/80 leading-relaxed">High latency detected in Sector 7-G. Node Maritime_02 undergoing sync.</div>
-                  </div>
-                </div>
-              </div>
             </aside>
           </div>
 
@@ -438,11 +499,15 @@ export default function StatsDashboardView() {
                 <span className="text-[9px] text-primary/40 font-mono hidden sm:inline uppercase">NODES_WATCH :: {healthData.length} ACTIVE</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[9px] text-on-surface-variant font-mono uppercase">Status:</span>
-                  <span className="text-[9px] text-primary font-mono animate-pulse uppercase">Listening</span>
+                  <span className="text-[10px] text-primary font-mono animate-pulse uppercase">{isAutoScroll ? 'Following' : 'Paused'}</span>
                 </div>
               </div>
             </div>
-            <div className="flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar">
+            <div 
+              ref={logContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar"
+            >
               {logs.map((log) => (
                 <p key={log.id} className={`${
                   log.type === 'warn' ? 'text-error/70' : 
