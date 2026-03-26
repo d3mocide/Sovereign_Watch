@@ -56,6 +56,10 @@ async def get_activity_stats(hours: int = 24):
         # Ensure sorted
         result.sort(key=lambda x: x["time"])
 
+        # Filter out the very last bucket if it's potentially incomplete (current bucket)
+        if len(result) > 1:
+            result = result[:-1]
+
         return {"status": "ok", "data": result}
 
     except Exception as e:

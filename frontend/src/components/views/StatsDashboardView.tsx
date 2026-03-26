@@ -53,7 +53,7 @@ export default function StatsDashboardView() {
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis'>('ingression');
+  const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis' | 'networking'>('ingression');
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
 
@@ -142,7 +142,7 @@ export default function StatsDashboardView() {
     const series = types.map(type => ({
       name: type.toUpperCase(),
       type: 'line',
-      stack: 'total',
+      // stack: 'total', // Removed stacking to improve data fidelity and accuracy per type
       smooth: true,
       showSymbol: false,
       areaStyle: { 
@@ -288,9 +288,9 @@ export default function StatsDashboardView() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-              {/* Activity Chart Container */}
-              <div className="bg-surface-container p-6 flex flex-col min-h-[400px] border border-primary/10 relative overflow-hidden group">
+            <div className="grid grid-cols-1 gap-6 mb-6">
+              {/* Activity Chart Container - Expanded for better fidelity */}
+              <div className="bg-surface-container p-6 flex flex-col min-h-[500px] border border-primary/10 relative overflow-hidden group">
                 <div className="flex justify-between items-start mb-4 z-10 font-headline">
                   <div>
                     <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
@@ -310,33 +310,10 @@ export default function StatsDashboardView() {
                    )}
                 </div>
               </div>
-
-              {/* Throughput Bar Chart */}
-              <div className="bg-surface-container p-6 border border-primary/10 font-headline">
-                <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
-                  <Download size={16} /> Data Throughput (KB/S)
-                </h3>
-                <div className="space-y-6">
-                  {healthData.map((p) => (
-                    <div key={p.id} className="space-y-1">
-                      <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
-                        <span>{p.name}</span>
-                        <span className="text-primary">{(Math.random() * 50 + 10).toFixed(1)} KB/S</span>
-                      </div>
-                      <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
-                        <div 
-                          className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-1000" 
-                          style={{ width: `${Math.max(10, Math.random() * 90)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
-            {/* Success Rate Gauges */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {/* Success Rate Gauges - Optimized for 2 lines (max 8 per row for 13 items) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-8 gap-4">
               {healthData.map(p => (
                 <div key={p.id} className="bg-surface-container p-4 border border-primary/10 flex flex-col items-center gap-2 group hover:border-primary/40 transition-all font-headline text-center">
                   <div className="text-[10px] text-on-surface-variant uppercase tracking-tighter truncate w-full">{p.name}</div>
@@ -394,6 +371,45 @@ export default function StatsDashboardView() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        );
+      case 'networking':
+        return (
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline">
+            <div className="pb-4 border-b border-primary/10 mb-6">
+              <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">NETWORK TELEMETRY</h1>
+              <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">REAL-TIME THROUGHPUT & NODE SYNCHRONIZATION</p>
+            </div>
+            
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="bg-surface-container p-6 border border-primary/10 xl:col-span-2">
+                <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
+                  <Download size={16} /> Data Throughput (KB/S)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                  {healthData.map((p) => (
+                    <div key={p.id} className="space-y-1">
+                      <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
+                        <span>{p.name}</span>
+                        <span className="text-primary">{(Math.random() * 50 + 10).toFixed(1)} KB/S</span>
+                      </div>
+                      <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
+                        <div 
+                          className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-1000" 
+                          style={{ width: `${Math.max(10, Math.random() * 90)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-surface-container p-6 border border-primary/10 flex flex-col justify-center text-center">
+                 <Network size={48} className="text-primary/20 mx-auto mb-4" />
+                 <h4 className="text-xl font-black text-primary uppercase italic">892.4 MB</h4>
+                 <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">TOTAL BANDWIDTH (24H)</p>
               </div>
             </div>
           </div>
@@ -478,6 +494,12 @@ export default function StatsDashboardView() {
               className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'protocol' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
             >
               <ShieldAlert size={16} /> PROTOCOL
+            </button>
+            <button 
+              onClick={() => setActiveTab('networking')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'networking' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
+              <Download size={16} /> NETWORKING
             </button>
             <button 
               onClick={() => setActiveTab('analysis')}
