@@ -6,6 +6,7 @@ import React, {
   Suspense,
   MutableRefObject,
 } from "react";
+import type { MapRef } from "react-map-gl/maplibre";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
 import type { FeatureCollection } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
