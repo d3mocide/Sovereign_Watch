@@ -9,8 +9,6 @@ import {
   Download, 
   Network, 
   BarChart3, 
-  HelpCircle, 
-  Lock,
   ChevronDown,
   ChevronUp,
   Server,
