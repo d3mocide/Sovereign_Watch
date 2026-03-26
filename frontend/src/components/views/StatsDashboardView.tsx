@@ -546,10 +546,6 @@ export default function StatsDashboardView() {
               >
                 <Download size={14} /> EXPORT TELEMETRY
               </button>
-              <div className="space-y-2">
-                <a className="flex items-center gap-3 text-[#8eff71]/40 hover:text-primary uppercase text-[10px]" href="#"><HelpCircle size={14} /> SUPPORT</a>
-                <a className="flex items-center gap-3 text-error/60 hover:text-error uppercase text-[10px]" href="#"><Lock size={14} /> LOCKDOWN</a>
-              </div>
           </div>
         </aside>
 

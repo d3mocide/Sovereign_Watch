@@ -7,15 +7,26 @@
 ### Added
 
 - **Interactive Dashboard MVP**: Introduced a low-latency, high-performance system monitoring interface accessible via the `/stats` route.
+- **Tactical Alert System**: Reactive notification badge in the header that monitors terminal logs for `[WARN]` entries, providing real-time situational awareness.
+- **Collapsible Log Terminal**: Interactive command log bar with state-driven height transitions, default-collapsed startup, and auto-scroll behavior.
+- **Dedicated Networking Tab**: Consolidated all high-bandwidth telemetry and throughput charts into a focused networking view.
 - **Batched Telemetry API**: New `/api/stats` FastAPI router providing moving window aggregations (15-minute buckets) from TimescaleDB to reduce front-end processing load.
 - **ECharts Visualization**: Integrated Apache ECharts for rendering real-time signal activity across Aviation, Maritime, and Orbital domains with interactive legend and tooltip support.
-- **Container Health Monitoring**: Dedicated dashboard section for real-time poller status tracking (healthy, stale, error) integrated with existing Redis health keys.
+- **Container Health Monitoring**: Dedicated sidebar list with status ribbons and uptime pips, providing high-density tactical tracking of all system pollers.
 - **Lazy-Loaded Routing**: Implemented React route split using `React.lazy` and `Suspense` for the Dashboard, ensuring the primary Tactical HUD remains lightweight.
 - **CSV Payload Export**: Added client-side CSV export functionality for all batched telemetry data.
 
 ### Changed
 
-- **Frontend Navigation Architecture**: Refactored `main.tsx` into a lazy-loaded root orchestrator to support zero-cost route entry for the Dashboard.
+- **Frontend Navigation Architecture**: Refactored `main.tsx` into a lazy-loaded root orchestrator and replaced fixed-positioning hacks with native flexbox flow to resolve 'ghost footer' anomalies.
+- **Signal Activity Chart FIDELITY**: Removed cumulative data stacking in Apache ECharts to ensure global activity trends accurately reflect per-domain throughput rather than mirrored sums.
+- **Tactical UI De-cluttering**: Removed inactive 'Support', 'Lockdown', and 'Network Logs' links, and deprecated the legacy floating terminal bubble to maximize screen real estate.
+
+### Fixed
+
+- **Telemetry 'Cliff' Effect**: Added server-side filtering to `/api/stats/activity` to exclude the current, incomplete 15-minute time bucket, ensuring charts no longer crash to zero at the rightmost edge.
+- **Dashboard Layout Drift**: Resolved a 64px offset issue caused by fixed-header padding-top, pinning the tactical terminal perfectly to the bottom of the viewport.
+- **Entity Identity Synchronization**: Updated poller health displays and dashboard node status to accurately reflect user-defined node identifiers (`NODE-01`).
 
 ### Technical Details
 

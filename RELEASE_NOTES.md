@@ -1,68 +1,55 @@
-# Release - v0.50.0 - Interactive Dashboard MVP + Batched Analytics
+# Release - v0.50.0 - Tactical Command Dashboard
 
-This release introduces the first iteration of the **Sovereign Watch Dashboard System**, providing high-performance, batched analytics and container health monitoring. The system leverages 15-minute tumbling windows in TimescaleDB and the new `/stats` route with React lazy loading to keep the platform responsive.
+v0.50.0 introduces the **Tactical Command Dashboard**, a high-fidelity monitoring station for the Sovereign Watch ecosystem. This release transforms the static stats view into a dynamic, reactive, and highly accurate operational station.
 
 ## High-Level Summary
 
-v0.50.0 adds a dedicated analytics view to the Sovereign Watch ecosystem. While the tactical map remains the primary operational HUD, the new dashboard allows operators to track long-term signal trends, export telemetry for external analysis, and verify the health of all containerized pollers. The implementation uses a high-performance aggregation strategy on the backend and Apache ECharts on the frontend, ensuring the system remains responsive even with deep historical datasets.
+This release modernizes the dashboard into a "Tactical Command" interface. We have moved beyond basic metrics to provide real-time situational awareness via a **Tactical Alert System**, an interactive **Log Terminal**, and high-precision **Telemetry Analytics**. By using native flexbox layouts and server-side aggregation filters, we have ensured a pixel-perfect, zero-drift experience optimized for mission-critical monitoring.
 
 ## Key Features
 
-### Interactive System Dashboard (`/stats`)
-- **Activity Visualization**: A new ECharts-powered time-series chart showing signal frequency across Aviation, Maritime, and Satellite domains over the last 24 hours.
-- **Container Health Grid**: Real-time status monitoring for all 12 backend ingestion pollers with color-coded health indicators (Healthy, Stale, Error, Pending).
-- **Data Export**: One-click CSV export of the current 24-hour telemetry aggregation for offline analysis.
-- **Lazy Loading**: The entire dashboard is code-split; it only consumes resources when the user navigates directly to the stats view.
+### 1. Tactical Alert System
+- **Warning-Reactive Badge**: The header navigation now features a dynamic notification badge that increments in real-time whenever a `[WARN]` log entry is detected in the system bus.
+- **Header Shortlink Interaction**: 
+    - **Bell Icon**: View and clear active system alerts.
+    - **Terminal Icon**: Absolute toggle shortcut for the bottom log bar.
 
-### Batched Analytics Pipeline
-- **FastAPI /api/stats Router**: New endpoints for fetching bucketed track counts and consolidated container heartbeats.
-- **TimescaleDB Aggregation**: SQL logic using `time_bucket` to provide efficient 15-minute signal summaries without querying raw track logs in the animation thread.
-- **Redis Health Integration**: Direct integration with poller health keys for millisecond latency on container status reporting.
+### 2. Collapsible Log Terminal
+- **Dynamic Logic**: Fully interactive log bar with state-driven height transitions.
+- **Smart Startup**: Loads in a collapsed state by default to maximize data visibility while maintaining background alerting.
+- **Auto-Scroll & Follow**: Intelligent scrolling behavior that maintains focus on recent commands unless manually overridden.
+
+### 3. High-Density Container Health
+- **Tactical Ribbons & Pips**: Redesigned poller list with status-weighted ribbons and 12-pip uptime indicators.
+- **Node Synchronization**: Fully synchronized with user-defined node identities (`NODE-01`).
+
+### 4. Telemetry Precision (No-More-Cliff)
+- **Time-Bucket Filtering**: Server-side logic now excludes the current, incomplete 15-minute bucket, ensuring charts no longer "crash" at the right edge.
+- **ECharts Refinement**: Removed cumulative data stacking to ensure domain-specific counts are accurate and non-summed.
 
 ## Technical Details
 
-### Dashboard Routing
-- Standard `main.tsx` now supports lazy-loaded entry points via React `Suspense`. 
-- The `/stats` path is detected at the root level to prevent initialization of the WebGL Tactical Map when only stats are needed.
-
-### Aggregation Strategy
-1. **Query**: `SELECT time_bucket('15 minutes', time) AS bucket ... FROM tracks ... GROUP BY bucket`
-2. **Frequency**: Aggregations are calculated on-the-fly via the API, targeting a 24-hour lookback window.
-3. **Frontend Cache**: ECharts component handles state management for the activity series, allowing smooth interaction without re-fetching on every frame.
+- **Layout Engine**: Migrated from `fixed` positioning with manual offsets to a native **Flexbox `flex-col`** flow, eliminating 'ghost footer' anomalies and improving responsiveness.
+- **Telemetry Aggregation**: Uses TimescaleDB `time_bucket` on a 24-hour moving window via the new `/api/stats` router.
+- **Routing**: Implemented React `Suspense` and `lazy` loading for the `/stats` route, ensuring zero overhead for non-dashboard users.
 
 ## Upgrade Instructions
 
-### 1. Update Environment & Pull
+### 1. Update & Build
 ```bash
 git pull origin dev
-```
-
-### 2. Frontend Dependencies
-The dashboard requires `echarts` and `echarts-for-react`.
-```bash
-cd frontend
-pnpm install
-```
-
-### 3. Backend Verification
-Verify the new stats router is active.
-```bash
-cd backend/api
-python -m pytest
-```
-
-### 4. Deployment
-Rebuild the frontend and backend API containers to pick up the new router and route splitting.
-```bash
 docker compose up -d --build sovereign-frontend sovereign-backend
 ```
 
-## Known Limitations
-- **Drill-down**: Currently a UI placeholder; deep-dive into individual tracks from the chart is slated for v0.50.0.
-- **Mobile Grid**: The health status list is optimized for widescreen; mobile stacking is functional but may require horizontal scrolling on very narrow devices.
+### 2. Verification
+Run the verification suite on the host for rapid feedback:
+```bash
+cd frontend && pnpm run lint && pnpm run test
+cd backend/api && pytest
+```
 
 ---
 
 **Release Date**: 2026-03-26  
-**Stability**: Stable (MVP Release)  
-**Components Modified**: Frontend (main, DashboardView), Backend API (stats_router)
+**Stability**: Stable (Dashboard V1)  
+**Lead Contributor**: Sovereign Watch Team  
