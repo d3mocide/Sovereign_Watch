@@ -45,6 +45,7 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
           type="text"
           maxLength={6}
           placeholder="ICAO24 HEX..."
+          aria-label="ICAO24 Hex Code"
           value={newIcao24}
           onChange={(e) =>
             setNewIcao24(

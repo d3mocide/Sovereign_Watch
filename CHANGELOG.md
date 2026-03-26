@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-03-25
+
+### Added
+
+- **Intel Render Mode Switching**: Added persistent Intel 2D/3D render mode controls with MapLibre projection switching and UX parity behavior.
+- **Intel In-Map Control Parity**: Intel now mirrors Tactical/Orbital bottom-center control composition (projection, globe toggle, style segment, zoom cluster).
+- **Intel Arc Visual Clarity Enhancements**: Introduced segmented 3D arc rendering with endpoint emphasis and improved directional readability.
+- **Intel Task Documentation Set**: Added task logs in `agent_docs/tasks/` covering Cesium gating, MapLibre restoration, API compatibility fixes, and Intel UI parity work.
+
+### Changed
+
+- **Intel Globe Architecture**: Standardized Intel on a MapLibre-backed rendering path and removed Cesium-specific map path branching.
+- **Intel Style Set Simplification**: Reduced Intel map style options to focused operational presets (`dark`, `debug`) for more consistent operator workflows.
+- **MapLibre Compatibility Handling**: Updated globe atmosphere/fog handling to support MapLibre API differences across versions.
+- **Country Heat Depth Ordering**: Tuned globe depth bias so heat tint remains behind Intel icon/text overlays.
+
+### Fixed
+
+- **MapLibre Globe API Mismatch**: Fixed runtime compatibility issue where `setFog` was not always available by using guarded fallback logic.
+- **Intel Globe Blank/Degraded Rendering Cases**: Resolved Cesium-path regressions and restore issues by consolidating to MapLibre globe behavior.
+- **Intel Control Divergence**: Removed Intel-only control variance and aligned interaction affordances with Tactical/Orbital for consistent operator muscle memory.
+
+### Removed
+
+- **Cesium Intel Renderer Path**: Deleted `frontend/src/components/map/CesiumIntelGlobe.tsx` and removed associated build/config gating from active frontend flow.
+
+### Technical Details
+
+- Intel globe now uses imperative Deck overlay updates (`MapboxOverlay.setProps`) with MapLibre projection control.
+- Globe-specific style hygiene includes label layer stripping for reduced map clutter in Intel mode.
+- Arc and heat layers received depth/ordering refinements to improve near-surface readability on globe projection.
+
 ## [0.48.0] - 2026-03-25
 
 ### Added

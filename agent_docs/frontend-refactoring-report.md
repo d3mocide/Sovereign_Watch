@@ -327,8 +327,8 @@ Ordered by impact vs risk (lower risk items first):
 | Done | `ListeningPost.tsx` | Extract WaterfallRenderer + KiwiSDRController | Medium — canvas/WS lifecycle |
 | Done | `DashboardView.tsx` | Extract MiniMap + panel widgets | Low — independent panels |
 | Done | `SystemSettingsWidget.tsx` | Extract 3 sub-widgets + useWatchlist hook | Low |
-| 7 | `SystemStatus.tsx` | Extract layer controls + integration status | Low |
-| 8 | `useAnimationLoop.ts` | Extract interpolation and filter engines | High — performance critical |
+| DONE | `SystemStatus.tsx` | Extract layer controls + integration status | Low |
+| Done | `useAnimationLoop.ts` | Extract interpolation and filter engines | High — performance critical |
 | 9 | `TacticalMap.tsx` + `OrbitalMap.tsx` | Extract shared map base | High — core rendering path |
 | 10 | `App.tsx` | Introduce Zustand store, extract view wrappers | High — touches everything |
 
