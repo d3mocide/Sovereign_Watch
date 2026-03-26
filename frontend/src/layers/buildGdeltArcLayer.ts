@@ -77,12 +77,14 @@ function buildArcData(
     }>;
   } | null,
   centroids: CentroidMap,
+  debugMode?: boolean,
 ): GdeltArc[] {
   if (!gdeltData?.features?.length) return [];
 
-  // Only draw arcs for conflict-class events (quad_class 3 = verbal conflict, 4 = material conflict)
+  // Draw arcs for conflict-class events (quad_class 3/4) by default,
+  // but show ALL arcs in debugMode to verify data presence.
   const conflictFeatures = gdeltData.features.filter(
-    (f) => (f.properties.quad_class ?? 0) >= 3,
+    (f) => debugMode || (f.properties.quad_class ?? 0) >= 3,
   );
 
   return conflictFeatures.reduce<GdeltArc[]>((acc, f, i) => {
@@ -117,17 +119,20 @@ function buildArcData(
     // Skip self-loops (source === target within ~1°)
     if (Math.abs(srcLat - tgtLat) < 1 && Math.abs(srcLon - tgtLon) < 1) return acc;
 
-    // Source colour encodes conflict severity
+    // Source colour encodes conflict severity; boosted in debugMode
+    const sourceAlpha = debugMode ? 255 : (goldstein <= -5 ? 210 : 170);
     const sourceColor: [number, number, number, number] =
       goldstein <= -5
-        ? [239, 68, 68, 210]    // red-500 — material conflict
-        : [249, 115, 22, 170];  // orange-500 — verbal conflict
+        ? [255, 50, 50, sourceAlpha]    // vivid red
+        : [255, 140, 0, sourceAlpha];   // vivid orange
 
-    // Target: sovereign cyan
-    const targetColor: [number, number, number, number] = [0, 220, 200, 130];
+    // Target: sovereign cyan; boosted in debugMode
+    const targetColor: [number, number, number, number] = [0, 255, 230, debugMode ? 255 : 130];
 
-    // Arc width scales with media attention
-    const width = Math.min(4, Math.max(1, Math.log2(mentions + 1)));
+    // Arc width scales with media attention; boosted in debugMode
+    const width = debugMode 
+      ? 8 
+      : Math.min(4, Math.max(1, Math.log2(mentions + 1)));
 
     acc.push({
       event_id: f.properties.event_id || f.id || `arc-${i}`,
@@ -156,20 +161,33 @@ function buildArcData(
  *   Width:   1–4 px scaled to num_mentions
  *   Opacity: pulse-animated via animTick
  */
+// OPTIMIZATION: Cache arc data based on gdeltData object reference to prevent
+// re-running buildArcData (a large reduce loop) every frame during animation.
+const arcDataCache = new WeakMap<any, GdeltArc[]>();
+
 export function buildGdeltArcLayer(
   gdeltData: { type: string; features: any[] } | null,
   visible: boolean,
   globeMode: boolean,
   animTick: number,
+  debugMode?: boolean,
 ): Layer[] {
   if (!visible || !gdeltData?.features?.length) return [];
 
-  // Use cached centroids — empty map if not yet loaded (first frame renders fallback arcs)
-  const centroids = centroidsCache ?? {};
-  const data = buildArcData(gdeltData as any, centroids);
-  if (!data.length) return [];
+  // Use cached data if available for this specific data object
+  // Bypassing cache if debugMode is active to ensure the "show all" filter is applied
+  let data = arcDataCache.get(gdeltData);
+  if (!data || debugMode) {
+    const centroids = centroidsCache ?? {};
+    data = buildArcData(gdeltData as any, centroids, debugMode);
+    if (!debugMode) {
+      arcDataCache.set(gdeltData, data);
+    }
+  }
 
-  const pulse = 0.7 + 0.3 * Math.sin(animTick * Math.PI * 2);
+  if (!data || !data.length) return [];
+
+  const pulse = debugMode ? 1.0 : (0.7 + 0.3 * Math.sin(animTick * Math.PI * 2));
 
   return [
     new ArcLayer<GdeltArc>({
@@ -187,7 +205,7 @@ export function buildGdeltArcLayer(
         return [c[0], c[1], c[2], Math.round(c[3] * pulse)];
       },
       getWidth: (d) => d.width,
-      getHeight: 0.3,
+      getHeight: debugMode ? 0.8 : 0.3,
       widthUnits: "pixels",
       wrapLongitude: !globeMode,
       updateTriggers: {
@@ -195,7 +213,8 @@ export function buildGdeltArcLayer(
         getTargetColor: animTick,
       },
       parameters: {
-        depthTest: !!globeMode,
+        depthTest: debugMode ? false : !!globeMode,
+        depthBias: (globeMode && !debugMode) ? -150.0 : 0,
       } as any,
     }),
   ];

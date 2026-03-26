@@ -12,6 +12,8 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
 
     const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({
         ...rest,
+        // Disable interleaved rendering to bypass MapLibre's depth buffer occlusion
+        interleaved: false,
         // _full3d reads the Mapbox depth buffer to occlude globe far-side layers.
         // Globe view (GlobeView vs MapView) is auto-detected via getDefaultView(map).
         // Since Maplibre's globe depth buffer has issues with objects near the surface, keep this false.
@@ -27,7 +29,7 @@ function DeckGLOverlay(props: MapAdapterProps['deckProps']) {
     useEffect(() => {
         if (overlay && overlay.setProps && !isDeadRef.current) {
             try {
-                overlay.setProps({ ...rest, _full3d: false } as any);
+                overlay.setProps({ ...rest, interleaved: false, _full3d: false } as any);
             } catch {
                 console.debug('[DeckGLOverlay] Transitioning props...');
             }
@@ -52,7 +54,19 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
     return (
         <Map
             ref={ref}
-            onLoad={onLoad}
+            onLoad={(e) => {
+                if (globeMode) {
+                    const map = e.target;
+                    try {
+                        // MapLibre Globe features
+                        map.setFog(null);
+                        map.setGlobe({ 'show-atmosphere': false });
+                    } catch (err) {
+                        console.warn('[MapLibreAdapter] Failed to disable atmosphere:', err);
+                    }
+                }
+                if (onLoad) onLoad(e);
+            }}
             {...viewState}
             onMove={onMove}
             mapStyle={mapStyle}

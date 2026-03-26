@@ -11,18 +11,20 @@
  * User interaction (onMove) pauses spin for 3 s before resuming.
  */
 import "maplibre-gl/dist/maplibre-gl.css";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import type { CoTEntity } from "../../types";
 import { buildGdeltLayer, type GdeltPoint } from "../../layers/buildGdeltLayer";
 import { buildGdeltArcLayer } from "../../layers/buildGdeltArcLayer";
 import { buildCountryHeatLayer, type ActorEntry } from "../../layers/buildCountryHeatLayer";
-import { type MapStyleKey, resolveMapStyle } from "./intelMapStyles";
+import { type MapStyleKey, getBaseMapTileUrl } from "./intelMapStyles";
+import DeckGL from "@deck.gl/react";
+import { _GlobeView as GlobeView } from "@deck.gl/core";
+import { TileLayer } from "@deck.gl/geo-layers";
+import { BitmapLayer } from "@deck.gl/layers";
 
 const SPIN_DEG_PER_SEC = 3;
-const SPIN_RESUME_DELAY_MS = 3000;
-
-const MapLibreAdapterLazy = lazy(() => import("./MapLibreAdapter"));
+const SPIN_RESUME_DELAY_MS = 1000;
 
 interface IntelGlobeProps {
   gdeltData: FeatureCollection | null;
@@ -111,10 +113,6 @@ export function IntelGlobe({
     return () => cancelAnimationFrame(raf);
   }, []); // stable — reads spin/viewState via refs
 
-  const handleMove = useCallback((evt: any) => {
-    lastInteractionRef.current = performance.now();
-    setViewState(evt.viewState);
-  }, []);
 
   // IntelGlobe uses the sidebar for GDELT detail; no floating tooltip needed.
   const handleHover = useCallback(() => {}, []);
@@ -139,30 +137,62 @@ export function IntelGlobe({
     [onEntitySelect],
   );
 
-  const layers = [
-    ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, animTick),
-    ...buildGdeltLayer(gdeltData as any, true, true, -Infinity, false, handleHover, handleGdeltClick),
-    ...buildGdeltArcLayer(gdeltData as any, true, true, animTick),
-  ];
+  const debugMode = mapStyleProp === "debug";
+  const baseMapUrl = getBaseMapTileUrl(mapStyleProp);
+
+  const baseMapLayer = useMemo(() => {
+    if (!baseMapUrl) return null;
+    return new TileLayer({
+      id: `base-map-${mapStyleProp}`,
+      data: baseMapUrl,
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      renderSubLayers: (props) => {
+        const bbox = props.tile.bbox as any;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [bbox.west, bbox.south, bbox.east, bbox.north]
+        });
+      }
+    });
+  }, [baseMapUrl, mapStyleProp]);
+
+  // Static layer: GDELT points don't pulse
+  const gdeltLayer = useMemo(
+    () => buildGdeltLayer(gdeltData as any, true, true, -Infinity, false, handleHover, handleGdeltClick, debugMode),
+    [gdeltData, handleHover, handleGdeltClick, debugMode]
+  );
+
+  // Animated layers: use animTick for pulses
+  const layers = useMemo(() => {
+    const dataLayers = [
+      ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, animTick, debugMode),
+      ...gdeltLayer,
+      ...buildGdeltArcLayer(gdeltData as any, true, true, animTick, debugMode),
+    ];
+    return baseMapLayer ? [baseMapLayer, ...dataLayers] : dataLayers;
+  }, [worldCountriesData, actors, animTick, gdeltLayer, gdeltData, debugMode, baseMapLayer]);
 
   return (
-    <div className="absolute inset-0">
-      <Suspense fallback={<div className="absolute inset-0 bg-tactical-bg" />}>
-        <MapLibreAdapterLazy
-          viewState={viewState}
-          onMove={handleMove}
-          mapStyle={resolveMapStyle(mapStyleProp) as string}
-          style={{ width: "100%", height: "100%" }}
-          globeMode={true}
-          showAttribution={false}
-          deckProps={{
-            id: "intel-globe-overlay",
-            key: "intel-globe",
-            globeMode: true,
-            layers,
-          }}
-        />
-      </Suspense>
+    <div className="absolute inset-0 bg-[#0a0a0a]">
+      <DeckGL
+        views={[new GlobeView({ id: "globe", resolution: 10 })]}
+        initialViewState={{
+          globe: {
+            longitude: viewState.longitude,
+            latitude: viewState.latitude,
+            zoom: Math.max(viewState.zoom, 0)
+          }
+        }}
+        controller={true}
+        onViewStateChange={(e) => {
+          lastInteractionRef.current = performance.now();
+          setViewState(e.viewState as any);
+        }}
+        layers={layers}
+      />
     </div>
   );
 }

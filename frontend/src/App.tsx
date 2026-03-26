@@ -182,7 +182,7 @@ function App() {
   }, []);
 
   // Intel Globe spin state (no persistence — always starts off)
-  const [intelSpin, setIntelSpin] = useState(false);
+  const [intelSpin, setIntelSpin] = useState(true);
   const handleIntelSpinToggle = useCallback(() => setIntelSpin((v) => !v), []);
 
   // Background Data Maintenance (Cleanup & Counting)

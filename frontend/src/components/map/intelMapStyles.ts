@@ -4,13 +4,14 @@
  * (required for React Fast Refresh).
  */
 
-export type MapStyleKey = "dark" | "satellite" | "positron" | "toner";
+export type MapStyleKey = "dark" | "satellite" | "positron" | "toner" | "debug";
 
 export const MAP_STYLE_LABELS: Record<MapStyleKey, string> = {
   dark: "DARK MATTER",
   satellite: "SATELLITE",
   positron: "LIGHT",
   toner: "TONER",
+  debug: "DEBUG",
 };
 
 const DARK_MAP_STYLE =
@@ -55,6 +56,18 @@ const TONER_MAP_STYLE = {
   ],
 };
 
+const DEBUG_MAP_STYLE = {
+  version: 8 as const,
+  sources: {},
+  layers: [
+    {
+      id: "background",
+      type: "background" as const,
+      paint: { "background-color": "#0a0a0a" },
+    },
+  ],
+};
+
 export function resolveMapStyle(key: MapStyleKey): string | object {
   switch (key) {
     case "satellite":
@@ -63,7 +76,24 @@ export function resolveMapStyle(key: MapStyleKey): string | object {
       return POSITRON_MAP_STYLE;
     case "toner":
       return TONER_MAP_STYLE;
+    case "debug":
+      return DEBUG_MAP_STYLE;
     default:
       return DARK_MAP_STYLE;
+  }
+}
+
+export function getBaseMapTileUrl(key: MapStyleKey): string | null {
+  switch (key) {
+    case "satellite":
+      return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+    case "positron":
+      return "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
+    case "toner":
+      return "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png";
+    case "debug":
+      return null;
+    default:
+      return "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png";
   }
 }
