@@ -19,6 +19,7 @@
     "@deck.gl/layers": "9.2.11",
     "@deck.gl/mapbox": "9.2.11",
     "@deck.gl/mesh-layers": "9.2.11",
+    "@deck.gl/react": "^9.2.11",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
     "lucide-react": "0.577.0",

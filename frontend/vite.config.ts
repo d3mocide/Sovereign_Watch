@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -10,11 +10,11 @@ export default defineConfig({
     host: true, // Listen on all interfaces (required for Docker)
     watch: {
       usePolling: true, // Required for Docker on Windows/Mac
-      interval: 1000,   // Poll every 1s (reduces CPU usage)
+      interval: 1000, // Poll every 1s (reduces CPU usage)
     },
     hmr: {
       clientPort: 80, // HMR WebSocket connects through nginx on port 80
     },
     allowedHosts: true, // Allow nginx to proxy requests (host header will be 'frontend')
   },
-})
+});

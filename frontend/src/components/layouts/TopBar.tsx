@@ -158,6 +158,20 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </button>
                     <button
                         role="tab"
+                        aria-selected={viewMode === 'INTEL'}
+                        aria-label="Intel Globe View"
+                        title="Intel Globe View"
+                        onClick={() => onViewChange?.('INTEL')}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 focus-visible:ring-1 focus-visible:ring-red-500 outline-none ${viewMode === 'INTEL'
+                            ? 'bg-red-500/20 text-red-300 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.35)] backdrop-blur-md'
+                            : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
+                            }`}
+                    >
+                        <Newspaper size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'INTEL' ? 'drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : ''} />
+                        <span className={viewMode === 'INTEL' ? 'block drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'hidden'}>INTEL</span>
+                    </button>
+                    <button
+                        role="tab"
                         aria-selected={viewMode === 'DASHBOARD'}
                         aria-label="Dashboard View"
                         title="Dashboard View"
@@ -168,7 +182,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                             }`}
                     >
                         <LayoutDashboard size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'DASHBOARD' ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : ''} />
-                        <span className={viewMode === 'DASHBOARD' ? 'block drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'hidden'}>DASHBOARD</span>
+                        <span className={viewMode === 'DASHBOARD' ? 'block drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'hidden'}>DASH</span>
                     </button>
                     <button
                         role="tab"
@@ -183,20 +197,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                     >
                         <Radio size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'RADIO' ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : ''} />
                         <span className={viewMode === 'RADIO' ? 'block drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]' : 'hidden'}>RADIO</span>
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={viewMode === 'INTEL'}
-                        aria-label="Intel Globe View"
-                        title="Intel Globe View"
-                        onClick={() => onViewChange?.('INTEL')}
-                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 focus-visible:ring-1 focus-visible:ring-red-500 outline-none ${viewMode === 'INTEL'
-                            ? 'bg-red-500/20 text-red-300 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.35)] backdrop-blur-md'
-                            : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
-                            }`}
-                    >
-                        <Newspaper size={14} strokeWidth={2.5} aria-hidden="true" className={viewMode === 'INTEL' ? 'drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : ''} />
-                        <span className={viewMode === 'INTEL' ? 'block drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'hidden'}>INTEL</span>
                     </button>
                 </div>
             </div>

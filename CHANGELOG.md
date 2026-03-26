@@ -2,6 +2,60 @@
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-03-26
+
+### Added
+
+- **Interactive Dashboard MVP**: Introduced a low-latency, high-performance system monitoring interface accessible via the `/stats` route.
+- **Batched Telemetry API**: New `/api/stats` FastAPI router providing moving window aggregations (15-minute buckets) from TimescaleDB to reduce front-end processing load.
+- **ECharts Visualization**: Integrated Apache ECharts for rendering real-time signal activity across Aviation, Maritime, and Orbital domains with interactive legend and tooltip support.
+- **Container Health Monitoring**: Dedicated dashboard section for real-time poller status tracking (healthy, stale, error) integrated with existing Redis health keys.
+- **Lazy-Loaded Routing**: Implemented React route split using `React.lazy` and `Suspense` for the Dashboard, ensuring the primary Tactical HUD remains lightweight.
+- **CSV Payload Export**: Added client-side CSV export functionality for all batched telemetry data.
+
+### Changed
+
+- **Frontend Navigation Architecture**: Refactored `main.tsx` into a lazy-loaded root orchestrator to support zero-cost route entry for the Dashboard.
+
+### Technical Details
+
+- Telemetry aggregation uses TimescaleDB `time_bucket` on the `tracks` hypertable via a 24-hour moving window.
+- Dashboard assets are code-split into a separate JavaScript chunk, loaded only when accessing `window.location.pathname === '/stats'`.
+
+---
+
+## [0.49.0] - 2026-03-25
+
+### Added
+
+- **Intel Render Mode Switching**: Added persistent Intel 2D/3D render mode controls with MapLibre projection switching and UX parity behavior.
+- **Intel In-Map Control Parity**: Intel now mirrors Tactical/Orbital bottom-center control composition (projection, globe toggle, style segment, zoom cluster).
+- **Intel Arc Visual Clarity Enhancements**: Introduced segmented 3D arc rendering with endpoint emphasis and improved directional readability.
+- **Intel Task Documentation Set**: Added task logs in `agent_docs/tasks/` covering Cesium gating, MapLibre restoration, API compatibility fixes, and Intel UI parity work.
+
+### Changed
+
+- **Intel Globe Architecture**: Standardized Intel on a MapLibre-backed rendering path and removed Cesium-specific map path branching.
+- **Intel Style Set Simplification**: Reduced Intel map style options to focused operational presets (`dark`, `debug`) for more consistent operator workflows.
+- **MapLibre Compatibility Handling**: Updated globe atmosphere/fog handling to support MapLibre API differences across versions.
+- **Country Heat Depth Ordering**: Tuned globe depth bias so heat tint remains behind Intel icon/text overlays.
+
+### Fixed
+
+- **MapLibre Globe API Mismatch**: Fixed runtime compatibility issue where `setFog` was not always available by using guarded fallback logic.
+- **Intel Globe Blank/Degraded Rendering Cases**: Resolved Cesium-path regressions and restore issues by consolidating to MapLibre globe behavior.
+- **Intel Control Divergence**: Removed Intel-only control variance and aligned interaction affordances with Tactical/Orbital for consistent operator muscle memory.
+
+### Removed
+
+- **Cesium Intel Renderer Path**: Deleted `frontend/src/components/map/CesiumIntelGlobe.tsx` and removed associated build/config gating from active frontend flow.
+
+### Technical Details
+
+- Intel globe now uses imperative Deck overlay updates (`MapboxOverlay.setProps`) with MapLibre projection control.
+- Globe-specific style hygiene includes label layer stripping for reduced map clutter in Intel mode.
+- Arc and heat layers received depth/ordering refinements to improve near-surface readability on globe projection.
+
 ## [0.48.0] - 2026-03-25
 
 ### Added

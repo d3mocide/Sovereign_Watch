@@ -1,35 +1,46 @@
 /**
  * IntelGlobe — OSINT Globe View
  *
- * A dedicated 3D globe map for the INTEL view mode.
- * Layers:
- *   1. Country heat overlay (GeoJsonLayer, threat-tinted country fills)
- *   2. GDELT event dots (ScatterplotLayer, existing buildGdeltLayer)
- *   3. Conflict arc projections (ArcLayer, buildGdeltArcLayer)
+ * Renders identically to SituationGlobe / OrbitalMap:
+ *   - MapLibre GL globe as the base renderer (beautiful tiles, proper depth context)
+ *   - StarField background
+ *   - DeckGL overlay via imperative MapboxOverlay.setProps() — same pattern as
+ *     SituationGlobe, which renders GDELT on a MapLibre globe without any occlusion.
  *
- * Auto-spin: when `spin` is true the globe rotates at ~3°/s.
- * User interaction (onMove) pauses spin for 3 s before resuming.
+ * WHY IMPERATIVE (not deckProps.layers):
+ *   Passing layers reactively through deckProps.layers causes timing races between
+ *   React re-renders and the MapboxOverlay's internal render cycle. The imperative
+ *   setProps() pattern (used by SituationGlobe) bypasses this entirely — layers are
+ *   pushed directly to the overlay each animation frame.
  */
-import "maplibre-gl/dist/maplibre-gl.css";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
-import type { CoTEntity } from "../../types";
-import { buildGdeltLayer, type GdeltPoint } from "../../layers/buildGdeltLayer";
+import { Globe, Minus, Plus } from "lucide-react";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildCountryHeatLayer,
+  type ActorEntry,
+} from "../../layers/buildCountryHeatLayer";
 import { buildGdeltArcLayer } from "../../layers/buildGdeltArcLayer";
-import { buildCountryHeatLayer, type ActorEntry } from "../../layers/buildCountryHeatLayer";
-import { type MapStyleKey, resolveMapStyle } from "./intelMapStyles";
+import { buildGdeltLayer, type GdeltPoint } from "../../layers/buildGdeltLayer";
+import type { CoTEntity } from "../../types";
+import { resolveMapStyle, type MapStyleKey } from "./intelMapStyles";
+import MapLibreAdapter from "./MapLibreAdapter";
+import { StarField } from "./StarField";
 
 const SPIN_DEG_PER_SEC = 3;
-const SPIN_RESUME_DELAY_MS = 3000;
-
-const MapLibreAdapterLazy = lazy(() => import("./MapLibreAdapter"));
+const SPIN_RESUME_DELAY_MS = 1000;
 
 interface IntelGlobeProps {
   gdeltData: FeatureCollection | null;
   worldCountriesData: FeatureCollection | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
   mapStyle?: MapStyleKey;
-  /** When true the globe auto-rotates; pauses 3 s after any user interaction. */
+  onMapStyleChange?: (style: MapStyleKey) => void;
+  renderMode?: "2D" | "3D";
+  onRenderModeChange?: (mode: "2D" | "3D") => void;
+  /** When true the globe auto-rotates; pauses after any user interaction. */
   spin?: boolean;
 }
 
@@ -38,27 +49,35 @@ export function IntelGlobe({
   worldCountriesData,
   onEntitySelect,
   mapStyle: mapStyleProp = "dark",
+  onMapStyleChange,
+  renderMode = "3D",
+  onRenderModeChange,
   spin = false,
 }: IntelGlobeProps) {
+  const globeMode = renderMode === "3D";
+  const defaultZoom = 2.2; // ~2 clicks tighter than prior 1.8
+
   const [viewState, setViewState] = useState({
     latitude: 20,
     longitude: 15,
-    zoom: 1.8,
+    zoom: defaultZoom,
     pitch: 0,
     bearing: 0,
   });
 
   // Mutable refs for rAF loop — avoids stale closures
-  const viewStateRef = useRef(viewState);
-  viewStateRef.current = viewState;
   const spinRef = useRef(spin);
   spinRef.current = spin;
-  const lastInteractionRef = useRef<number>(0); // timestamp of last onMove
+  const lastInteractionRef = useRef<number>(0);
+
+  // Imperative overlay reference — same pattern as SituationGlobe
+  const overlayRef = useRef<MapboxOverlay | null>(null);
 
   // Actors for country heat layer
   const [actors, setActors] = useState<ActorEntry[]>([]);
 
-  // animTick drives arc opacity pulse (0→1 per second)
+  // animTick drives arc opacity pulse (0->1 per second)
+  // Also acts as the heartbeat that triggers imperative layer updates
   const animTickRef = useRef(0);
   const [animTick, setAnimTick] = useState(0);
 
@@ -86,14 +105,12 @@ export function IntelGlobe({
     let raf: number;
 
     const loop = (now: number) => {
-      const dt = (now - last) / 1000; // seconds elapsed
+      const dt = (now - last) / 1000;
       last = now;
 
-      // Arc pulse
       animTickRef.current = (animTickRef.current + dt) % 1;
       setAnimTick(animTickRef.current);
 
-      // Globe spin — only when enabled and user has been idle ≥ SPIN_RESUME_DELAY_MS
       if (spinRef.current) {
         const idleMs = now - lastInteractionRef.current;
         if (idleMs >= SPIN_RESUME_DELAY_MS) {
@@ -110,11 +127,6 @@ export function IntelGlobe({
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []); // stable — reads spin/viewState via refs
-
-  const handleMove = useCallback((evt: any) => {
-    lastInteractionRef.current = performance.now();
-    setViewState(evt.viewState);
-  }, []);
 
   // IntelGlobe uses the sidebar for GDELT detail; no floating tooltip needed.
   const handleHover = useCallback(() => {}, []);
@@ -139,30 +151,232 @@ export function IntelGlobe({
     [onEntitySelect],
   );
 
-  const layers = [
-    ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, animTick),
-    ...buildGdeltLayer(gdeltData as any, true, true, -Infinity, false, handleHover, handleGdeltClick),
-    ...buildGdeltArcLayer(gdeltData as any, true, true, animTick),
-  ];
+  const debugMode = mapStyleProp === "debug";
+  const mapStyle = useMemo(() => resolveMapStyle(mapStyleProp), [mapStyleProp]);
+
+  // Static layer: GDELT points don't pulse — recomputed only when data/handlers change
+  const gdeltLayer = useMemo(
+    () =>
+      buildGdeltLayer(
+        gdeltData as any,
+        true,
+        globeMode,
+        -Infinity,
+        false,
+        handleHover,
+        handleGdeltClick,
+        debugMode,
+      ),
+    [gdeltData, globeMode, handleHover, handleGdeltClick, debugMode],
+  );
+
+  // Imperative overlay update — same pattern as SituationGlobe.
+  // animTick fires every frame, so layers are pushed as soon as the overlay
+  // is ready (overlayRef is set by onOverlayLoaded below).
+  useEffect(() => {
+    if (!overlayRef.current) return;
+    overlayRef.current.setProps({
+      layers: [
+        ...buildCountryHeatLayer(
+          worldCountriesData as any,
+          actors,
+          true,
+          globeMode,
+          animTick,
+          debugMode,
+        ),
+        ...gdeltLayer,
+        ...buildGdeltArcLayer(
+          gdeltData as any,
+          true,
+          globeMode,
+          animTick,
+          debugMode,
+        ),
+      ],
+    });
+  }, [
+    worldCountriesData,
+    actors,
+    animTick,
+    gdeltLayer,
+    gdeltData,
+    globeMode,
+    debugMode,
+  ]);
+
+  const zoomBy = useCallback((delta: number) => {
+    setViewState((prev) => ({
+      ...prev,
+      zoom: Math.max(1, Math.min(8, prev.zoom + delta)),
+    }));
+  }, []);
 
   return (
-    <div className="absolute inset-0">
-      <Suspense fallback={<div className="absolute inset-0 bg-tactical-bg" />}>
-        <MapLibreAdapterLazy
-          viewState={viewState}
-          onMove={handleMove}
-          mapStyle={resolveMapStyle(mapStyleProp) as string}
-          style={{ width: "100%", height: "100%" }}
-          globeMode={true}
-          showAttribution={false}
-          deckProps={{
-            id: "intel-globe-overlay",
-            key: "intel-globe",
-            globeMode: true,
-            layers,
-          }}
-        />
-      </Suspense>
+    <div
+      className="absolute inset-0 bg-[#0a0a0a]"
+      style={{ userSelect: "none" }}
+    >
+      <StarField active={true} />
+      <MapLibreAdapter
+        key={`intel-maplibre-${renderMode}-${mapStyleProp}`}
+        showAttribution={false}
+        globeMode={globeMode}
+        onLoad={(evt: unknown) => {
+          const map = (evt as { target?: any })?.target;
+          if (!map?.getStyle) return;
+
+          const style = map.getStyle();
+          const layers = style?.layers ?? [];
+
+          for (const layer of layers) {
+            const id = String(layer?.id ?? "").toLowerCase();
+            const type = String(layer?.type ?? "").toLowerCase();
+
+            const isLabelLayer =
+              type === "symbol" ||
+              id.includes("label") ||
+              id.includes("place") ||
+              id.includes("country-name") ||
+              id.includes("settlement");
+
+            if (!isLabelLayer) continue;
+            if (!map.getLayer(layer.id)) continue;
+
+            try {
+              map.removeLayer(layer.id);
+            } catch {
+              // Ignore style-internal ordering errors during hot reload/style swaps.
+            }
+          }
+        }}
+        viewState={viewState}
+        onMove={(evt: unknown) => {
+          const moveEvt = evt as {
+            originalEvent?: unknown;
+            viewState?: Partial<typeof viewState>;
+          };
+          if (moveEvt.originalEvent) {
+            lastInteractionRef.current = performance.now();
+          }
+          setViewState((prev) => ({
+            latitude: moveEvt.viewState?.latitude ?? prev.latitude,
+            longitude: moveEvt.viewState?.longitude ?? prev.longitude,
+            zoom: moveEvt.viewState?.zoom ?? prev.zoom,
+            pitch: globeMode ? 0 : (moveEvt.viewState?.pitch ?? prev.pitch),
+            bearing: globeMode
+              ? 0
+              : (moveEvt.viewState?.bearing ?? prev.bearing),
+          }));
+        }}
+        mapStyle={mapStyle}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
+        deckProps={{
+          key: `intel-overlay-${mapStyleProp}`,
+          id: "intel-overlay",
+          onOverlayLoaded: (ov) => {
+            overlayRef.current = ov;
+          },
+        }}
+      />
+
+      {/* View Controls & Zoom HUD - Centered at the bottom */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto">
+        <div className="flex flex-row items-center gap-4">
+          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
+            {!globeMode && (
+              <>
+                <button
+                  onClick={() => onRenderModeChange?.("2D")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
+                    !globeMode
+                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                  }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => onRenderModeChange?.("3D")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
+                    globeMode
+                      ? "bg-hud-green/20 text-hud-green shadow-[0_0_8px_rgba(0,255,65,0.3)] border border-hud-green/40"
+                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                  }`}
+                >
+                  3D
+                </button>
+                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+              </>
+            )}
+
+            <button
+              onClick={() => onRenderModeChange?.(globeMode ? "2D" : "3D")}
+              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-2 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
+                globeMode
+                  ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.4)] border border-indigo-500/50"
+                  : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+              }`}
+              title="Toggle Globe View"
+            >
+              <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
+              GLOBE
+            </button>
+
+            {globeMode && onMapStyleChange && (
+              <>
+                <div className="w-[1px] h-4 bg-white/10 my-auto mx-1" />
+                <button
+                  onClick={() => onMapStyleChange("dark")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
+                    mapStyleProp === "dark"
+                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
+                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                  }`}
+                  title="Dark Tactical View"
+                >
+                  DARK
+                </button>
+                <button
+                  onClick={() => onMapStyleChange("debug")}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
+                    mapStyleProp === "debug"
+                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
+                      : "text-white/40 hover:text-white/80 hover:bg-white/10 border border-transparent"
+                  }`}
+                  title="Debug View"
+                >
+                  DEBUG
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <button
+              onClick={() => zoomBy(-0.75)}
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              title="Zoom Out"
+              aria-label="Zoom Out"
+            >
+              <Minus size={14} strokeWidth={3} />
+            </button>
+            <button
+              onClick={() => zoomBy(0.75)}
+              className="p-1 text-white/40 hover:text-hud-green hover:bg-white/10 rounded-md transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              title="Zoom In"
+              aria-label="Zoom In"
+            >
+              <Plus size={14} strokeWidth={3} />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

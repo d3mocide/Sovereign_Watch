@@ -1,8 +1,8 @@
 import type { FeatureCollection } from "geojson";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RadioTerminal from "./components/js8call/RadioTerminal";
-import { MainHud } from "./components/layouts/MainHud";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
+import { MainHud } from "./components/layouts/MainHud";
 import { OrbitalSidebarLeft } from "./components/layouts/OrbitalSidebarLeft";
 import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
@@ -11,10 +11,10 @@ import { IntelGlobe } from "./components/map/IntelGlobe";
 import type { MapStyleKey } from "./components/map/intelMapStyles";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
-import { OsintTicker } from "./components/widgets/OsintTicker";
 import { DashboardView } from "./components/views/DashboardView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
+import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useEntityWorker } from "./hooks/useEntityWorker";
 import { useInfraData } from "./hooks/useInfraData";
@@ -173,12 +173,22 @@ function App() {
 
   // Intel Globe map style
   const [intelMapStyle, setIntelMapStyle] = useState<MapStyleKey>(() => {
-    return (localStorage.getItem("intelMapStyle") as MapStyleKey) || "dark";
+    const saved = localStorage.getItem("intelMapStyle");
+    return saved === "debug" ? "debug" : "dark";
   });
 
   const handleIntelMapStyleChange = useCallback((style: MapStyleKey) => {
     setIntelMapStyle(style);
     localStorage.setItem("intelMapStyle", style);
+  }, []);
+
+  const [intelRenderMode, setIntelRenderMode] = useState<"2D" | "3D">(() => {
+    return localStorage.getItem("intelRenderMode") === "2D" ? "2D" : "3D";
+  });
+
+  const handleIntelRenderModeChange = useCallback((mode: "2D" | "3D") => {
+    setIntelRenderMode(mode);
+    localStorage.setItem("intelRenderMode", mode);
   }, []);
 
   // Intel Globe spin state (no persistence — always starts off)
@@ -230,7 +240,11 @@ function App() {
       // 4. Update trackCounts state ONLY if we are in a non-map view.
       // In TACTICAL and ORBITAL modes, useAnimationLoop handles high-frequency,
       // filter-aware counts that provide a much better UX.
-      if (viewMode === "DASHBOARD" || viewMode === "RADIO" || viewMode === "INTEL") {
+      if (
+        viewMode === "DASHBOARD" ||
+        viewMode === "RADIO" ||
+        viewMode === "INTEL"
+      ) {
         if (
           air !== countsRef.current.air ||
           sea !== countsRef.current.sea ||
@@ -910,8 +924,11 @@ function App() {
               onFlyTo={(lat, lon) => mapActions?.flyTo(lat, lon)}
               mapStyle={intelMapStyle}
               onMapStyleChange={handleIntelMapStyleChange}
+              renderMode={intelRenderMode}
+              onRenderModeChange={handleIntelRenderModeChange}
               spin={intelSpin}
               onSpinToggle={handleIntelSpinToggle}
+              renderer="MAPLIBRE"
               onGenerateSitrep={(context) => {
                 setSelectedEntity({
                   uid: "sitrep-intel",
@@ -933,7 +950,9 @@ function App() {
           ) : null
         }
         rightSidebar={
-          viewMode === "TACTICAL" || viewMode === "ORBITAL" || viewMode === "INTEL" ? (
+          viewMode === "TACTICAL" ||
+          viewMode === "ORBITAL" ||
+          viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
               {/* Entity Details Sidebar */}
               {selectedEntity && (
@@ -1090,15 +1109,20 @@ function App() {
         ) : viewMode === "INTEL" ? (
           <div className="absolute inset-0 flex flex-col">
             <IntelGlobe
-              gdeltData={gdeltData as import("geojson").FeatureCollection | null}
+              gdeltData={
+                gdeltData as import("geojson").FeatureCollection | null
+              }
               worldCountriesData={worldCountriesData}
               onEntitySelect={handleEntitySelect}
               mapStyle={intelMapStyle}
+              onMapStyleChange={handleIntelMapStyleChange}
+              renderMode={intelRenderMode}
+              onRenderModeChange={handleIntelRenderModeChange}
               spin={intelSpin}
             />
             {/* OSINT ticker pinned to bottom of the globe area */}
             <div className="absolute bottom-0 left-0 right-0 z-10">
-              <OsintTicker />
+              <OsintTicker speed={110} />
             </div>
           </div>
         ) : viewMode === "DASHBOARD" ? (

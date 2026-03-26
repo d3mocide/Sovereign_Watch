@@ -1,10 +1,10 @@
-# Release - v0.49.0 - Interactive Dashboard MVP + Batched Analytics
+# Release - v0.50.0 - Interactive Dashboard MVP + Batched Analytics
 
 This release introduces the first iteration of the **Sovereign Watch Dashboard System**, providing high-performance, batched analytics and container health monitoring. The system leverages 15-minute tumbling windows in TimescaleDB and the new `/stats` route with React lazy loading to keep the platform responsive.
 
 ## High-Level Summary
 
-v0.49.0 adds a dedicated analytics view to the Sovereign Watch ecosystem. While the tactical map remains the primary operational HUD, the new dashboard allows operators to track long-term signal trends, export telemetry for external analysis, and verify the health of all containerized pollers. The implementation uses a high-performance aggregation strategy on the backend and Apache ECharts on the frontend, ensuring the system remains responsive even with deep historical datasets.
+v0.50.0 adds a dedicated analytics view to the Sovereign Watch ecosystem. While the tactical map remains the primary operational HUD, the new dashboard allows operators to track long-term signal trends, export telemetry for external analysis, and verify the health of all containerized pollers. The implementation uses a high-performance aggregation strategy on the backend and Apache ECharts on the frontend, ensuring the system remains responsive even with deep historical datasets.
 
 ## Key Features
 
