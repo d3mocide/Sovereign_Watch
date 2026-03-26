@@ -58,7 +58,8 @@ export default function StatsDashboardView() {
   const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis' | 'networking'>('ingression');
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
-  const [isLogsExpanded, setIsLogsExpanded] = useState(true);
+  const [isLogsExpanded, setIsLogsExpanded] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
 
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
@@ -109,12 +110,19 @@ export default function StatsDashboardView() {
 
     const iv = setInterval(() => {
       const rand = messages[Math.floor(Math.random() * messages.length)];
-      setLogs(prev => [...prev.slice(-40), { 
+      const newLog = { 
         id: Date.now(), 
         time: new Date().toLocaleTimeString(), 
         msg: rand.msg, 
         type: rand.type as any 
-      }]);
+      };
+      setLogs(prev => {
+        const newLogs = [...prev.slice(-99), newLog]; // Keep last 100 logs
+        return newLogs;
+      });
+      if (newLog.type === 'warn') {
+        setAlertCount(c => c + 1);
+      }
     }, 4000);
     return () => clearInterval(iv);
   }, []);
@@ -466,8 +474,29 @@ export default function StatsDashboardView() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Bell size={18} /></button>
-          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Terminal size={18} /></button>
+          <button 
+            onClick={() => setAlertCount(0)}
+            className="p-2 text-primary hover:bg-surface-container-highest transition-all relative group"
+          >
+            <Bell size={18} />
+            {alertCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-error text-surface text-[8px] font-black flex items-center justify-center rounded-full border border-[#0e0e0e] animate-pulse">
+                {alertCount}
+              </span>
+            )}
+            <div className="absolute -bottom-8 right-0 bg-[#0e0e0e] border border-primary/20 p-1.5 hidden group-hover:block whitespace-nowrap z-50">
+              <p className="text-[8px] text-primary uppercase font-bold tracking-tighter">System Alerts: {alertCount}</p>
+            </div>
+          </button>
+          <button 
+            onClick={() => setIsLogsExpanded(!isLogsExpanded)}
+            className={`p-2 transition-all group relative ${isLogsExpanded ? 'text-primary bg-primary/10' : 'text-primary hover:bg-surface-container-highest'}`}
+          >
+            <Terminal size={18} />
+            <div className="absolute -bottom-8 right-0 bg-[#0e0e0e] border border-primary/20 p-1.5 hidden group-hover:block whitespace-nowrap z-50">
+              <p className="text-[8px] text-primary uppercase font-bold tracking-tighter">Toggle Logs [CTRL+L]</p>
+            </div>
+          </button>
           <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Settings size={18} /></button>
         </div>
       </header>
