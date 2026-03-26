@@ -28,6 +28,7 @@ export function processSatelliteFrame(
       visual,
       now,
       dt,
+      0.45,
     );
     visualState.set(uid, newVisual);
     filteredSatellites.push(interpolatedEntity);

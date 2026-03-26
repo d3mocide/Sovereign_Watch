@@ -77,9 +77,24 @@ export function IntelGlobe({
   const [actors, setActors] = useState<ActorEntry[]>([]);
 
   // animTick drives arc opacity pulse (0->1 per second)
-  // Also acts as the heartbeat that triggers imperative layer updates
   const animTickRef = useRef(0);
-  const [animTick, setAnimTick] = useState(0);
+
+  // ── Inline ref-sync: let the stable rAF loop read latest prop/state values ──
+  const worldCountriesDataRef = useRef(worldCountriesData);
+  worldCountriesDataRef.current = worldCountriesData;
+
+  const actorsRef = useRef(actors);
+  actorsRef.current = actors;
+
+  const gdeltDataRef = useRef(gdeltData);
+  gdeltDataRef.current = gdeltData;
+
+  const globeModeRef = useRef(globeMode);
+  globeModeRef.current = globeMode;
+
+  const debugMode = mapStyleProp === "debug";
+  const debugModeRef = useRef(debugMode);
+  debugModeRef.current = debugMode;
 
   // Fetch actors on mount and every 5 minutes
   useEffect(() => {
@@ -98,35 +113,6 @@ export function IntelGlobe({
     const interval = setInterval(fetchActors, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Combined rAF loop: arc pulse tick + globe spin
-  useEffect(() => {
-    let last = performance.now();
-    let raf: number;
-
-    const loop = (now: number) => {
-      const dt = (now - last) / 1000;
-      last = now;
-
-      animTickRef.current = (animTickRef.current + dt) % 1;
-      setAnimTick(animTickRef.current);
-
-      if (spinRef.current) {
-        const idleMs = now - lastInteractionRef.current;
-        if (idleMs >= SPIN_RESUME_DELAY_MS) {
-          setViewState((prev) => ({
-            ...prev,
-            longitude: prev.longitude + SPIN_DEG_PER_SEC * dt,
-          }));
-        }
-      }
-
-      raf = requestAnimationFrame(loop);
-    };
-
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []); // stable — reads spin/viewState via refs
 
   // IntelGlobe uses the sidebar for GDELT detail; no floating tooltip needed.
   const handleHover = useCallback(() => {}, []);
@@ -151,7 +137,6 @@ export function IntelGlobe({
     [onEntitySelect],
   );
 
-  const debugMode = mapStyleProp === "debug";
   const mapStyle = useMemo(() => resolveMapStyle(mapStyleProp), [mapStyleProp]);
 
   // Static layer: GDELT points don't pulse — recomputed only when data/handlers change
@@ -170,40 +155,63 @@ export function IntelGlobe({
     [gdeltData, globeMode, handleHover, handleGdeltClick, debugMode],
   );
 
-  // Imperative overlay update — same pattern as SituationGlobe.
-  // animTick fires every frame, so layers are pushed as soon as the overlay
-  // is ready (overlayRef is set by onOverlayLoaded below).
+  // Sync gdeltLayer memo result to a ref so the rAF loop picks up changes
+  // without needing to be in the effect deps.
+  const gdeltLayerRef = useRef(gdeltLayer);
+  gdeltLayerRef.current = gdeltLayer;
+
+  // Combined rAF loop: arc pulse tick + globe spin + direct setProps
+  // Calling setProps here (instead of from a reactive useEffect triggered by
+  // animTick state) eliminates 60 React setState calls per second.
   useEffect(() => {
-    if (!overlayRef.current) return;
-    overlayRef.current.setProps({
-      layers: [
-        ...buildCountryHeatLayer(
-          worldCountriesData as any,
-          actors,
-          true,
-          globeMode,
-          animTick,
-          debugMode,
-        ),
-        ...gdeltLayer,
-        ...buildGdeltArcLayer(
-          gdeltData as any,
-          true,
-          globeMode,
-          animTick,
-          debugMode,
-        ),
-      ],
-    });
-  }, [
-    worldCountriesData,
-    actors,
-    animTick,
-    gdeltLayer,
-    gdeltData,
-    globeMode,
-    debugMode,
-  ]);
+    let last = performance.now();
+    let raf: number;
+
+    const loop = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+
+      animTickRef.current = (animTickRef.current + dt) % 1;
+
+      if (spinRef.current) {
+        const idleMs = now - lastInteractionRef.current;
+        if (idleMs >= SPIN_RESUME_DELAY_MS) {
+          setViewState((prev) => ({
+            ...prev,
+            longitude: prev.longitude + SPIN_DEG_PER_SEC * dt,
+          }));
+        }
+      }
+
+      if (overlayRef.current) {
+        overlayRef.current.setProps({
+          layers: [
+            ...buildCountryHeatLayer(
+              worldCountriesDataRef.current as any,
+              actorsRef.current,
+              true,
+              globeModeRef.current,
+              animTickRef.current,
+              debugModeRef.current,
+            ),
+            ...gdeltLayerRef.current,
+            ...buildGdeltArcLayer(
+              gdeltDataRef.current as any,
+              true,
+              globeModeRef.current,
+              animTickRef.current,
+              debugModeRef.current,
+            ),
+          ],
+        });
+      }
+
+      raf = requestAnimationFrame(loop);
+    };
+
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []); // stable — all volatile values accessed via inline-synced refs
 
   const zoomBy = useCallback((delta: number) => {
     setViewState((prev) => ({
