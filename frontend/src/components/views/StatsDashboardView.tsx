@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { 
+  Bell, 
+  Terminal, 
+  Settings, 
   Activity, 
-  Download, 
-  Server, 
-  Network, 
   ShieldAlert, 
+  Download, 
+  Network, 
   BarChart3, 
-  Terminal,
-  HelpCircle,
+  HelpCircle, 
   Lock,
-  Bell,
-  Settings,
+  ChevronDown,
+  ChevronUp,
+  Server,
   Plane,
   Ship,
   Rocket,
@@ -56,6 +58,7 @@ export default function StatsDashboardView() {
   const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis' | 'networking'>('ingression');
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [isLogsExpanded, setIsLogsExpanded] = useState(true);
 
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
@@ -529,20 +532,38 @@ export default function StatsDashboardView() {
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden border-b border-primary/10 relative z-20">
              {renderContent()}
 
-            {/* Right Panel - Consolidated to Container Health */}
-            <aside className="w-full lg:w-1/3 xl:w-1/5 bg-surface-container-low border-l border-primary/10 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            {/* Right Panel - Optimized tactical container health */}
+            <aside className="w-full lg:w-1/3 xl:w-1/5 bg-surface-container-low border-l border-primary/10 overflow-y-auto p-4 space-y-6 custom-scrollbar">
               <div className="space-y-4 font-headline uppercase">
-                <h3 className="font-bold text-[10px] tracking-widest text-primary">Container Health</h3>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="flex justify-between items-center border-b border-primary/10 pb-2">
+                  <h3 className="font-bold text-[10px] tracking-[0.2em] text-primary">CONTAINER_HEALTH</h3>
+                  <span className="text-[8px] text-primary/40">v2.4.0</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
                   {healthData.map(p => (
-                    <div key={p.id} className="bg-surface-container-high p-3 flex items-center justify-between border border-primary/5 hover:border-primary/20 transition-all cursor-default group">
-                      <div className="flex items-center gap-2">
-                        <span className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">
-                          {getPollerIcon(p)}
-                        </span>
-                        <div className="text-[9px] font-bold text-on-surface">{p.name}</div>
+                    <div key={p.id} className="bg-surface-container-high/40 p-2 flex flex-col gap-2 border border-primary/5 hover:border-primary/30 transition-all cursor-default group relative overflow-hidden">
+                      {/* Status Ribbon */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${statusColors[p.status] || 'bg-on-surface-variant'}`}></div>
+                      
+                      <div className="flex justify-between items-center pl-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-primary opacity-40 group-hover:opacity-100 transition-opacity">
+                            {getPollerIcon(p)}
+                          </span>
+                          <div className="text-[9px] font-black text-on-surface truncate">{p.name}</div>
+                        </div>
+                        <div className={`w-1 h-1 rounded-full ${statusColors[p.status] || 'bg-on-surface-variant'} shadow-[0_0_5px_rgba(57,255,20,0.5)]`}></div>
                       </div>
-                      <div className={`w-1.5 h-1.5 ${statusColors[p.status] || 'bg-on-surface-variant'} shadow-[0_0_8px_rgba(57,255,20,0.4)]`}></div>
+
+                      {/* Tactical Detail Row (Status Pips) */}
+                      <div className="flex items-center justify-between pl-1">
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 12 }).map((_, i) => (
+                            <div key={i} className={`w-1 h-1 ${i > 10 && p.status === 'error' ? 'bg-error/40' : 'bg-primary/20'} rounded-[1px]`}></div>
+                          ))}
+                        </div>
+                        <span className="text-[7px] text-on-surface-variant tracking-tighter">100% UP</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -551,11 +572,15 @@ export default function StatsDashboardView() {
           </div>
 
           {/* Bottom Log Bar */}
-          <div className="bg-black border-t border-primary/20 h-48 flex flex-col relative z-20">
-            <div className="flex items-center justify-between px-6 h-10 border-b border-primary/5 bg-surface-container-low/50">
+          <div className={`bg-black border-t border-primary/20 transition-all duration-300 ease-in-out flex flex-col relative z-20 ${isLogsExpanded ? 'h-48' : 'h-10'}`}>
+            <div 
+              onClick={() => setIsLogsExpanded(!isLogsExpanded)}
+              className="flex items-center justify-between px-6 h-10 border-b border-primary/5 bg-surface-container-low/50 cursor-pointer hover:bg-surface-container-high/50 transition-all select-none group"
+            >
               <div className="flex items-center gap-2 font-headline uppercase">
-                <span className="w-1.5 h-1.5 bg-primary animate-pulse"></span>
+                <span className={`w-1.5 h-1.5 bg-primary ${isLogsExpanded ? 'animate-pulse' : ''}`}></span>
                 <h3 className="text-[10px] font-bold text-primary tracking-[0.2em]">Live Command Logs</h3>
+                {isLogsExpanded ? <ChevronDown size={14} className="text-primary/40 group-hover:text-primary transition-colors" /> : <ChevronUp size={14} className="text-primary/40 group-hover:text-primary transition-colors" />}
               </div>
               <div className="flex gap-6 items-center">
                 <span className="text-[9px] text-primary/40 font-mono hidden sm:inline uppercase">NODES_WATCH :: {healthData.length} ACTIVE</span>
@@ -568,7 +593,7 @@ export default function StatsDashboardView() {
             <div 
               ref={logContainerRef}
               onScroll={handleScroll}
-              className="flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar"
+              className={`flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar transition-opacity duration-300 ${isLogsExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             >
               {logs.map((log) => (
                 <p key={log.id} className={`${
