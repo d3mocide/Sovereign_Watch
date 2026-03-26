@@ -1,6 +1,23 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Activity, Download, Server, Database, Info } from 'lucide-react';
+import { 
+  Activity, 
+  Download, 
+  Server, 
+  LayoutGrid, 
+  Network, 
+  ShieldAlert, 
+  BarChart3, 
+  Terminal,
+  HelpCircle,
+  Lock,
+  Bell,
+  Settings,
+  Plane,
+  Ship,
+  Rocket,
+  Satellite
+} from 'lucide-react';
 
 interface PollerHealth {
   id: string;
@@ -25,11 +42,23 @@ interface TakBreakdown {
   count: number;
 }
 
+interface LogEntry {
+  id: number;
+  time: string;
+  msg: string;
+  type: 'info' | 'warn' | 'success' | 'cmd';
+}
+
 export default function StatsDashboardView() {
   const [healthData, setHealthData] = useState<PollerHealth[]>([]);
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
+    { id: 2, time: new Date().toLocaleTimeString(), msg: "> LOADING ASSETS... [DONE]", type: 'success' },
+    { id: 3, time: new Date().toLocaleTimeString(), msg: "> ESTABLISHING SECURE TUNNEL 128.0.0.1:443 -> 10.0.0.5:2026", type: 'info' }
+  ]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,16 +90,37 @@ export default function StatsDashboardView() {
     return () => clearInterval(t);
   }, []);
 
+  // Log Simulator
+  useEffect(() => {
+    const messages = [
+      { msg: "> PKT_RX_SUCCESS :: 12.4KB FROM ADSBX_POLLER", type: 'success' },
+      { msg: "> MAPPING COT_TYPE: a-f-A-C-M -> CIVILIAN FIXED WING", type: 'info' },
+      { msg: "> HEARTBEAT DETECTED ON NODE MARITIME_01", type: 'info' },
+      { msg: "> [WARN] LATENCY SPIKE DETECTED IN ORBITAL INGRESION", type: 'warn' },
+      { msg: "> RECALIBRATING GLOBAL SIGNAL ACTIVITY LINE...", type: 'cmd' },
+      { msg: "> SYNCING TIMESCALEDB HYPERTABLES...", type: 'cmd' }
+    ];
+
+    const iv = setInterval(() => {
+      const rand = messages[Math.floor(Math.random() * messages.length)];
+      setLogs(prev => [...prev.slice(-20), { 
+        id: Date.now(), 
+        time: new Date().toLocaleTimeString(), 
+        msg: rand.msg, 
+        type: rand.type as any 
+      }]);
+    }, 4000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const totalSignals = useMemo(() => takBreakdown.reduce((acc, b) => acc + b.count, 0), [takBreakdown]);
+
   const chartOptions = useMemo(() => {
     const times = activityData.map(d => new Date(d.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    
-    // Extract unique types across all buckets
     const typesSet = new Set<string>();
     activityData.forEach(d => Object.keys(d.counts).forEach(k => typesSet.add(k)));
     const types = Array.from(typesSet);
-
-    // Map colors from breakdown if available
-    const getColor = (t: string) => takBreakdown.find(b => b.type === t)?.color || '#888';
+    const getColor = (t: string) => takBreakdown.find(b => b.type === t)?.color || '#39FF14';
 
     const series = types.map(type => ({
       name: type.toUpperCase(),
@@ -78,37 +128,47 @@ export default function StatsDashboardView() {
       stack: 'total',
       smooth: true,
       showSymbol: false,
-      areaStyle: { opacity: 0.2 },
-      lineStyle: { color: getColor(type) },
+      areaStyle: { 
+        opacity: 0.3,
+        color: {
+          type: 'linear',
+          x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: getColor(type) },
+            { offset: 1, color: 'rgba(57, 255, 20, 0)' }
+          ]
+        }
+      },
+      lineStyle: { color: getColor(type), width: 2 },
       itemStyle: { color: getColor(type) },
       data: activityData.map(d => d.counts[type] || 0)
     }));
 
     return {
+      backgroundColor: 'transparent',
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        borderColor: '#0f0',
-        textStyle: { color: '#0f0', fontFamily: 'monospace', fontSize: 10 }
+        borderColor: '#39FF14',
+        textStyle: { color: '#39FF14', fontFamily: 'monospace', fontSize: 10 }
       },
       legend: {
-        data: types.map(t => t.toUpperCase()),
-        textStyle: { color: '#888', fontSize: 10 },
-        bottom: 0,
-        type: 'scroll'
+        show: false
       },
-      grid: { left: '3%', right: '4%', bottom: '20%', top: '5%', containLabel: true },
+      grid: { left: '2%', right: '2%', bottom: '5%', top: '5%', containLabel: true },
       xAxis: {
         type: 'category',
         boundaryGap: false,
         data: times,
-        axisLine: { lineStyle: { color: '#333' } },
-        axisLabel: { color: '#888', fontSize: 10 }
+        axisLine: { lineStyle: { color: 'rgba(57, 255, 20, 0.2)' } },
+        axisLabel: { color: '#8eff71', opacity: 0.4, fontSize: 9 },
+        splitLine: { show: false }
       },
       yAxis: {
         type: 'value',
-        splitLine: { lineStyle: { color: '#111' } },
-        axisLabel: { color: '#888', fontSize: 10 }
+        splitLine: { lineStyle: { color: 'rgba(57, 255, 20, 0.05)', type: 'dashed' } },
+        axisLabel: { color: '#8eff71', opacity: 0.4, fontSize: 9 },
+        axisLine: { show: false }
       },
       series
     };
@@ -116,22 +176,23 @@ export default function StatsDashboardView() {
 
   const takChartOptions = useMemo(() => {
     return {
+      backgroundColor: 'transparent',
       tooltip: {
         trigger: 'item',
         formatter: '{b}: {c} ({d}%)',
         backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        borderColor: '#0f0',
-        textStyle: { color: '#0f0', fontFamily: 'monospace' }
+        borderColor: '#39FF14',
+        textStyle: { color: '#39FF14', fontFamily: 'monospace' }
       },
       series: [
         {
           name: 'TAK TYPE',
           type: 'pie',
-          radius: ['40%', '70%'],
+          radius: ['55%', '85%'],
           avoidLabelOverlap: false,
           itemStyle: {
-            borderRadius: 4,
-            borderColor: '#111',
+            borderRadius: 0,
+            borderColor: '#0e0e0e',
             borderWidth: 2
           },
           label: { show: false },
@@ -140,10 +201,9 @@ export default function StatsDashboardView() {
               show: true,
               fontSize: 12,
               fontWeight: 'bold',
-              color: '#0f0'
+              color: '#39FF14'
             }
           },
-          labelLine: { show: false },
           data: takBreakdown.map(b => ({
             value: b.count,
             name: b.label.toUpperCase(),
@@ -156,17 +216,13 @@ export default function StatsDashboardView() {
 
   const handleExportCSV = () => {
     if (!activityData.length) return;
-    
-    // Header
     const typesSet = new Set<string>();
     activityData.forEach(d => Object.keys(d.counts).forEach(k => typesSet.add(k)));
     const types = Array.from(typesSet);
-    
     const rows = [
       ['Timestamp', ...types].join(','),
       ...activityData.map(d => [d.time, ...types.map(t => d.counts[t] || 0)].join(','))
     ];
-    
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -177,131 +233,236 @@ export default function StatsDashboardView() {
   };
 
   const statusColors = {
-    healthy: 'text-green-400 bg-green-400/10 border-green-400/30',
-    active: 'text-green-400 bg-green-400/10 border-green-400/30',
-    stale: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
-    error: 'text-red-400 bg-red-400/10 border-red-400/30',
-    pending: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
-    no_credentials: 'text-gray-500 bg-gray-500/10 border-gray-500/30',
-    unknown: 'text-gray-500 bg-gray-500/10 border-gray-500/30'
+    healthy: 'bg-primary',
+    active: 'bg-primary',
+    stale: 'bg-alert-amber',
+    error: 'bg-error',
+    pending: 'bg-tertiary',
+    no_credentials: 'bg-on-surface-variant',
+    unknown: 'bg-on-surface-variant'
+  };
+
+  const getPollerIcon = (p: PollerHealth) => {
+    if (p.group.toLowerCase().includes('aviation')) return <Plane size={14} />;
+    if (p.group.toLowerCase().includes('maritime')) return <Ship size={14} />;
+    if (p.group.toLowerCase().includes('space')) return <Rocket size={14} />;
+    if (p.group.toLowerCase().includes('infra')) return <Satellite size={14} />;
+    return <Server size={14} />;
   };
 
   return (
-    <div className="flex flex-col h-screen bg-black text-[#0f0] font-mono overflow-hidden">
-      <header className="flex justify-between items-center p-6 border-b border-[#0f0]/20 bg-black z-10">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Activity className="text-[#0f0]" /> 
-            SOVEREIGN WATCH // SYSTEM STATS
-          </h1>
-          <p className="text-sm text-[#0f0]/50 mt-1">15-MINUTE BATCHED TELEMETRY & SYSTEM HEALTH</p>
+    <div className="flex flex-col h-screen bg-[#0e0e0e] text-on-surface font-sans selection:bg-primary selection:text-surface overflow-hidden">
+      {/* Header Overlay */}
+      <header className="bg-[#0e0e0e] shadow-[0_1px_0_0_rgba(57,255,20,0.1)] flex justify-between items-center w-full px-6 h-16 fixed top-0 z-50">
+        <div className="flex items-center gap-8 font-headline">
+          <span className="text-2xl font-black text-primary tracking-tighter uppercase">SOVEREIGN WATCH</span>
+          <nav className="hidden md:flex gap-6 items-center">
+            <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="/">TACTICAL MAP</a>
+            <a className="font-headline uppercase tracking-wider text-xs text-primary border-b border-primary/50 pb-1" href="/stats">SYSTEM STATS</a>
+            <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="#">NETWORK LOGS</a>
+          </nav>
         </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 border border-[#0f0]/50 hover:bg-[#0f0]/10 px-4 py-2 rounded text-sm transition-colors"
-          >
-            <Download size={16} /> EXPORT CSV
-          </button>
-          <a 
-            href="/"
-            className="flex items-center gap-2 border border-[#0f0]/50 hover:bg-[#0f0]/10 px-4 py-2 rounded text-sm transition-colors"
-          >
-            RETURN TO TACTICAL
-          </a>
+        <div className="flex items-center gap-2">
+          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Bell size={18} /></button>
+          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Terminal size={18} /></button>
+          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Settings size={18} /></button>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-[#0f0]/20">
-        {loading ? (
-          <div className="flex items-center justify-center p-20 animate-pulse text-[#0f0]/50">
-            INITIALIZING TELEMETRY...
+      <div className="flex pt-16 flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="hidden md:flex flex-col h-full py-8 gap-4 bg-[#0e0e0e] w-64 border-r border-primary/10">
+          <div className="px-6 mb-4">
+            <div className="flex items-center gap-3 p-3 bg-surface-container-low border border-primary/5">
+              <div className="w-2 h-2 bg-primary animate-pulse"></div>
+              <div>
+                <div className="text-primary font-headline font-bold text-xs tracking-widest uppercase">ALPHA-1</div>
+                <div className="text-[#8eff71]/40 text-[10px] tracking-tight uppercase">OPERATIONAL</div>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-6 max-w-[1600px] mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <div className="bg-[#111] border border-[#0f0]/20 rounded p-4 h-full">
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-tighter">
-                    <Activity size={18} /> Global Signal Activity (24H)
-                  </h2>
-                  <div className="h-[400px]">
-                    {activityData.length > 0 ? (
-                      <ReactECharts 
-                        option={chartOptions} 
-                        style={{ height: '100%', width: '100%' }}
-                        onEvents={{
-                          click: (params: any) => {
-                            console.log("Drill-down triggered for:", params.name, params.seriesName);
-                            alert(`Drill-down feature placeholder.\nTime: ${params.name}\nType: ${params.seriesName}\nValue: ${params.value}`);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[#0f0]/30 border border-dashed border-[#0f0]/20">
-                        NO ACTIVITY DATA
-                      </div>
-                    )}
+          <nav className="flex flex-col gap-1 font-headline">
+            <a className="px-6 py-3 flex items-center gap-4 bg-surface-container-highest text-primary border-l-4 border-primary uppercase tracking-[0.1em] text-[10px] transition-all" href="#">
+              <LayoutGrid size={16} /> DASHBOARD
+            </a>
+            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+              <Network size={16} /> INGRESSION
+            </a>
+            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+              <ShieldAlert size={16} /> PROTOCOL
+            </a>
+            <a className="px-6 py-3 flex items-center gap-4 text-[#8eff71]/40 hover:text-primary uppercase tracking-[0.1em] text-[10px] transition-all hover:bg-surface-container" href="#">
+              <BarChart3 size={16} /> ANALYSIS
+            </a>
+          </nav>
+          <div className="mt-auto px-6 mb-8 flex flex-col gap-4 font-headline">
+             <button 
+                onClick={handleExportCSV}
+                className="w-full bg-primary text-[#0e0e0e] py-3 font-bold text-[10px] tracking-[0.2em] uppercase hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Download size={14} /> EXPORT TELEMETRY
+              </button>
+              <div className="space-y-2">
+                <a className="flex items-center gap-3 text-[#8eff71]/40 hover:text-primary uppercase text-[10px]" href="#"><HelpCircle size={14} /> SUPPORT</a>
+                <a className="flex items-center gap-3 text-error/60 hover:text-error uppercase text-[10px]" href="#"><Lock size={14} /> LOCKDOWN</a>
+              </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-background relative">
+          <div className="absolute inset-0 scanline opacity-30 pointer-events-none z-10"></div>
+          
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden border-b border-primary/10 relative z-20">
+            {/* Chart Area */}
+            <div className="flex-1 flex flex-col p-6 min-w-0 lg:w-2/3 xl:w-3/4 overflow-y-auto custom-scrollbar">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-primary/10 mb-6 font-headline">
+                <div>
+                  <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">TAK PROTO INGRESSION</h1>
+                  <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">REAL-TIME TACTICAL NETWORK SYNCHRONIZATION STATUS</p>
+                </div>
+                <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
+                  <div className="text-right">
+                    <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Active Signals</div>
+                    <div className="text-2xl font-bold text-primary">{totalSignals.toLocaleString()}</div>
+                  </div>
+                  <div className="w-px h-8 bg-on-surface-variant/20"></div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
+                    <div className="text-2xl font-bold text-tertiary">0.02%</div>
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-[#111] border border-[#0f0]/20 rounded p-4">
-                <h2 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-tighter">
-                  <Server size={18} /> Container Health
-                </h2>
-                <div className="flex flex-col gap-3">
-                  {healthData.map(p => (
-                    <div key={p.id} className="flex items-center justify-between border-b border-[#0f0]/10 pb-3 last:border-0 last:pb-0">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white uppercase">{p.name}</span>
-                        <span className="text-[10px] text-[#0f0]/50 uppercase">{p.group}</span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${statusColors[p.status] || statusColors.unknown}`}>
-                        {p.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                  ))}
+
+              {/* Activity Chart Container */}
+              <div className="bg-surface-container p-6 flex flex-col h-full min-h-[400px] border border-primary/10 relative overflow-hidden group">
+                <div className="flex justify-between items-start mb-4 z-10">
+                  <div className="font-headline">
+                    <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+                      <Activity size={16} /> Global Signal Activity
+                    </h3>
+                    <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary font-headline border border-primary/20">LIVE</span>
+                    <span className="px-2 py-0.5 bg-background text-[10px] text-on-surface-variant font-headline border border-primary/10">ENCRYPTED</span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 mt-4 relative">
+                   {loading ? (
+                    <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em] font-headline">Synchronizing telemetry...</div>
+                   ) : (
+                    <ReactECharts 
+                      option={chartOptions} 
+                      style={{ height: '100%', width: '100%' }}
+                    />
+                   )}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-[#111] border border-[#0f0]/20 rounded p-4">
-                <h2 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-tighter">
-                  <Database size={18} /> TAK Protocol Breakdown
-                </h2>
-                <div className="h-[250px]">
-                  <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
+            {/* Right Panel/Breakdown */}
+            <aside className="w-full lg:w-1/3 xl:w-1/4 bg-surface-container-low border-l border-primary/10 overflow-y-auto p-6 space-y-8 custom-scrollbar relative z-20">
+              <div className="flex flex-col font-headline">
+                <div className="mb-4">
+                  <h3 className="font-bold text-[10px] tracking-widest text-primary uppercase">Protocol Breakdown</h3>
+                  <p className="text-[8px] text-on-surface-variant uppercase tracking-tighter">LOAD DISTRIBUTION BY TIER</p>
                 </div>
-              </div>
+                
+                <div className="flex items-center justify-center relative py-6">
+                  <div className="h-40 w-40">
+                    <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-2xl font-black text-primary tracking-tighter">84%</span>
+                    <span className="text-[8px] text-on-surface-variant uppercase tracking-tighter">Efficiency</span>
+                  </div>
+                </div>
 
-              <div className="lg:col-span-2 bg-[#111] border border-[#0f0]/20 rounded p-4">
-                <h2 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-tighter">
-                  <Info size={18} /> CoT Hierarchical Reference Guide
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 mt-4 font-headline">
                   {takBreakdown.map(tak => (
-                    <div key={tak.type} className="flex items-center gap-3 p-2 rounded bg-white/5 border border-white/5 hover:border-[#0f0]/30 transition-all group">
-                      <div className="w-1.5 h-10 rounded-full" style={{ backgroundColor: tak.color }}></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-bold text-white uppercase">{tak.label}</span>
-                          <span className="text-[10px] font-mono text-[#0f0]/70">{tak.count.toLocaleString()}</span>
+                    <div key={tak.type} className="flex items-center gap-3 p-2 bg-surface-container-high border border-primary/5 hover:border-primary/20 transition-all">
+                      <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: tak.color }}></div>
+                      <div className="flex-1 flex flex-col min-w-0">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <span className="text-[9px] font-bold text-on-surface uppercase truncate">{tak.label}</span>
+                          <span className="text-[9px] font-mono text-primary/70">{tak.count}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[10px] uppercase opacity-50 font-mono">
-                          <span>{tak.type}</span>
-                          <span className="bg-white/10 px-1 rounded">{tak.category}</span>
-                        </div>
+                        <div className="text-[8px] text-on-surface-variant uppercase truncate opacity-50">{tak.type}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Health Grid */}
+              <div className="space-y-4 font-headline uppercase">
+                <h3 className="font-bold text-[10px] tracking-widest text-primary">Container Health</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {healthData.map(p => (
+                    <div key={p.id} className="bg-surface-container-high p-3 flex items-center justify-between border border-primary/5 hover:border-primary/20 transition-all cursor-default group">
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">
+                          {getPollerIcon(p)}
+                        </span>
+                        <div className="text-[9px] font-bold text-on-surface">{p.name}</div>
+                      </div>
+                      <div className={`w-1.5 h-1.5 ${statusColors[p.status] || 'bg-on-surface-variant'} shadow-[0_0_8px_rgba(57,255,20,0.4)]`}></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Alert Reference */}
+              <div className="space-y-4 font-headline uppercase">
+                <h3 className="font-bold text-[10px] tracking-widest text-primary">System Alerts</h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 p-3 bg-error/5 border border-error/20">
+                    <ShieldAlert size={14} className="text-error" />
+                    <div className="text-[9px] text-error/80 leading-relaxed">High latency detected in Sector 7-G. Node Maritime_02 undergoing sync.</div>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          {/* Bottom Log Bar */}
+          <div className="bg-black border-t border-primary/20 h-48 flex flex-col relative z-20">
+            <div className="flex items-center justify-between px-6 h-10 border-b border-primary/5 bg-surface-container-low/50">
+              <div className="flex items-center gap-2 font-headline uppercase">
+                <span className="w-1.5 h-1.5 bg-primary animate-pulse"></span>
+                <h3 className="text-[10px] font-bold text-primary tracking-[0.2em]">Live Command Logs</h3>
+              </div>
+              <div className="flex gap-6 items-center">
+                <span className="text-[9px] text-primary/40 font-mono hidden sm:inline uppercase">NODES_WATCH :: {healthData.length} ACTIVE</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-on-surface-variant font-mono uppercase">Status:</span>
+                  <span className="text-[9px] text-primary font-mono animate-pulse uppercase">Listening</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar">
+              {logs.map((log) => (
+                <p key={log.id} className={`${
+                  log.type === 'warn' ? 'text-error/70' : 
+                  log.type === 'success' ? 'text-primary' : 
+                  log.type === 'cmd' ? 'text-primary/90' : 'text-primary/50'
+                } hover:brightness-125 transition-all cursor-default`}>
+                  <span className="opacity-30 mr-4">[{log.time}]</span>
+                  {log.msg}
+                </p>
+              ))}
+              <p className="animate-pulse text-primary/30">_</p>
             </div>
           </div>
-        )}
-      </main>
+        </main>
+      </div>
+
+      {/* Floating Action */}
+      <button className="fixed bottom-8 right-8 w-12 h-12 bg-primary text-[#0e0e0e] shadow-[0_0_20px_rgba(57,255,20,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50">
+        <Terminal size={24} />
+      </button>
     </div>
   );
 }

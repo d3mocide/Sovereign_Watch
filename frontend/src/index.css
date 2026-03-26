@@ -1,5 +1,6 @@
-/* Tailwind CSS 4.x: single @import replaces the three @tailwind directives */
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
 /* Load the JS theme config (colors, fonts, etc.) */
 @config "../tailwind.config.js";
 
@@ -126,4 +127,22 @@
   100% {
     transform: translateX(-50%);
   }
+}
+
+.scanline {
+  background: linear-gradient(to bottom, rgba(57, 255, 20, 0) 0%, rgba(57, 255, 20, 0.05) 50%, rgba(57, 255, 20, 0) 100%);
+  background-size: 100% 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(57, 255, 20, 0.2);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(57, 255, 20, 0.5);
 }

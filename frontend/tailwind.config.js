@@ -12,6 +12,18 @@ export default {
         "sea-accent": "#00ffff",
         "alert-red": "#ff3333",
         "alert-amber": "#ffb000",
+        // Stitch Premium Theme Colors
+        "primary": "#39FF14",
+        "secondary": "#90f9a3",
+        "tertiary": "#88f6ff",
+        "background": "#0e0e0e",
+        "surface": "#0e0e0e",
+        "surface-container": "#1a1919",
+        "surface-container-low": "#131313",
+        "surface-container-high": "#201f1f",
+        "surface-container-highest": "#262626",
+        "on-surface-variant": "#adaaaa",
+        "error": "#ff7351",
       },
       fontFamily: {
         mono: ['"JetBrains Mono"', "monospace"],
