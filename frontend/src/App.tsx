@@ -7,7 +7,12 @@ import { OrbitalSidebarLeft } from "./components/layouts/OrbitalSidebarLeft";
 import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
 import { TopBar } from "./components/layouts/TopBar";
-import { CesiumIntelGlobe as IntelGlobe } from "./components/map/CesiumIntelGlobe";
+import { CesiumIntelGlobe } from "./components/map/CesiumIntelGlobe";
+import { IntelGlobe } from "./components/map/IntelGlobe";
+
+// Set VITE_CESIUM_GLOBE=true in frontend/.env.local to test the Cesium renderer.
+// Default is the deck.gl _GlobeView implementation.
+const USE_CESIUM_GLOBE = import.meta.env.VITE_CESIUM_GLOBE === "true";
 import type { MapStyleKey } from "./components/map/intelMapStyles";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
@@ -1089,13 +1094,23 @@ function App() {
           />
         ) : viewMode === "INTEL" ? (
           <div className="absolute inset-0 flex flex-col">
-            <IntelGlobe
-              gdeltData={gdeltData as import("geojson").FeatureCollection | null}
-              worldCountriesData={worldCountriesData}
-              onEntitySelect={handleEntitySelect}
-              mapStyle={intelMapStyle}
-              spin={intelSpin}
-            />
+            {USE_CESIUM_GLOBE ? (
+              <CesiumIntelGlobe
+                gdeltData={gdeltData as import("geojson").FeatureCollection | null}
+                worldCountriesData={worldCountriesData}
+                onEntitySelect={handleEntitySelect}
+                mapStyle={intelMapStyle}
+                spin={intelSpin}
+              />
+            ) : (
+              <IntelGlobe
+                gdeltData={gdeltData as import("geojson").FeatureCollection | null}
+                worldCountriesData={worldCountriesData}
+                onEntitySelect={handleEntitySelect}
+                mapStyle={intelMapStyle}
+                spin={intelSpin}
+              />
+            )}
             {/* OSINT ticker pinned to bottom of the globe area */}
             <div className="absolute bottom-0 left-0 right-0 z-10">
               <OsintTicker />

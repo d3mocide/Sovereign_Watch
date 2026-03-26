@@ -12,6 +12,9 @@ const BASEMAP_CONFIG: Record<string, boolean | string> = {
     showPedestrianRoads: false,
     showPlaceLabels: true,
     showTransitLabels: true,
+    // Strip 3D building fill-extrusions — they z-fight with deck.gl layers even in
+    // overlaid (interleaved: false) mode and degrade arc line rendering quality.
+    showBuildings: false,
 };
 
 function DeckGLOverlay(props: MapAdapterProps['deckProps']) {

@@ -54,6 +54,7 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
     return (
         <Map
             ref={ref}
+            canvasContextAttributes={{ antialias: true }}
             onLoad={(e) => {
                 if (globeMode) {
                     const map = e.target;
