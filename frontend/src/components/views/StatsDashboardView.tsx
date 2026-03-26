@@ -457,13 +457,12 @@ export default function StatsDashboardView() {
   return (
     <div className="flex flex-col h-screen bg-[#0e0e0e] text-on-surface font-sans selection:bg-primary selection:text-surface overflow-hidden">
       {/* Header Overlay */}
-      <header className="bg-[#0e0e0e] shadow-[0_1px_0_0_rgba(57,255,20,0.1)] flex justify-between items-center w-full px-6 h-16 fixed top-0 z-50">
+      <header className="bg-[#0e0e0e] shadow-[0_1px_0_0_rgba(57,255,20,0.1)] flex justify-between items-center w-full px-6 h-16 z-50 shrink-0">
         <div className="flex items-center gap-8 font-headline">
           <span className="text-2xl font-black text-primary tracking-tighter uppercase">SOVEREIGN WATCH</span>
           <nav className="hidden md:flex gap-6 items-center">
             <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="/">TACTICAL MAP</a>
             <a className="font-headline uppercase tracking-wider text-xs text-primary border-b border-primary/50 pb-1" href="/stats">SYSTEM STATS</a>
-            <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="#">NETWORK LOGS</a>
           </nav>
         </div>
         <div className="flex items-center gap-2">
@@ -473,14 +472,14 @@ export default function StatsDashboardView() {
         </div>
       </header>
 
-      <div className="flex pt-16 flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="hidden md:flex flex-col h-full py-8 gap-4 bg-[#0e0e0e] w-64 border-r border-primary/10">
           <div className="px-6 mb-4">
             <div className="flex items-center gap-3 p-3 bg-surface-container-low border border-primary/5">
               <div className="w-2 h-2 bg-primary animate-pulse"></div>
               <div>
-                <div className="text-primary font-headline font-bold text-xs tracking-widest uppercase">ALPHA-1</div>
+                <div className="text-primary font-headline font-bold text-xs tracking-widest uppercase">NODE-01</div>
                 <div className="text-[#8eff71]/40 text-[10px] tracking-tight uppercase">OPERATIONAL</div>
               </div>
             </div>
@@ -611,10 +610,6 @@ export default function StatsDashboardView() {
         </main>
       </div>
 
-      {/* Floating Action */}
-      <button className="fixed bottom-8 right-8 w-12 h-12 bg-primary text-[#0e0e0e] shadow-[0_0_20px_rgba(57,255,20,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50">
-        <Terminal size={24} />
-      </button>
     </div>
   );
 }
