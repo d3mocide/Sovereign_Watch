@@ -182,6 +182,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
               onChange={e => setEditCallVal(e.target.value)}
               onBlur={submitCall}
               onKeyDown={e => e.key === 'Enter' && submitCall()}
+              aria-label="Edit Callsign"
               className="bg-black/50 border border-indigo-500/30 text-indigo-300 font-bold px-1 py-0.5 rounded w-16 outline-none"
             />
           ) : (
@@ -201,6 +202,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
               onChange={e => setEditGridVal(e.target.value)}
               onBlur={submitGrid}
               onKeyDown={e => e.key === 'Enter' && submitGrid()}
+              aria-label="Edit Grid Square"
               className="bg-black/50 border border-slate-500/30 text-slate-300 px-1 py-0.5 rounded w-12 outline-none uppercase"
               maxLength={6}
             />
