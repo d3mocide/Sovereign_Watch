@@ -10,6 +10,7 @@ from aiokafka import AIOKafkaProducer
 from arbitration import Arbitrator
 from classification import classify_aircraft
 from h3_sharding import H3PriorityManager
+from holding_pattern import HoldingPatternDetector
 from jamming import JammingAnalyzer
 from multi_source_poller import MultiSourcePoller
 from opensky_client import OpenSkyClient, nm_radius_to_bbox
@@ -120,6 +121,11 @@ class PollerService:
         self._last_jamming_analysis = 0.0
         self._jamming_analysis_interval = 30.0  # Analyze every 30 seconds
 
+        # Holding pattern detector (Ingest-05)
+        self.holding_pattern_detector = HoldingPatternDetector(REDIS_URL)
+        self._last_holding_pattern_analysis = 0.0
+        self._holding_pattern_analysis_interval = 30.0  # Analyze every 30 seconds
+
     async def setup(self):
         await self.poller.start()
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
@@ -161,6 +167,9 @@ class PollerService:
         # Start jamming analyzer
         await self.jamming_analyzer.start()
 
+        # Start holding pattern detector
+        await self.holding_pattern_detector.start()
+
         logger.info("Poller service ready")
 
     async def load_active_mission(self):
@@ -189,6 +198,7 @@ class PollerService:
             await self.watchlist.close()
         await self.h3_manager.close()
         await self.jamming_analyzer.close()
+        await self.holding_pattern_detector.close()
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
@@ -540,6 +550,22 @@ class PollerService:
                     nacp=nacp,
                 )
 
+            # Feed heading data into holding pattern detector
+            heading = ac.get("track")
+            speed = safe_float(ac.get("gs")) or 0
+            altitude = parse_altitude(ac)
+            callsign = (ac.get("flight", "") or ac.get("hex", "")).strip()
+            if heading is not None:
+                self.holding_pattern_detector.ingest(
+                    hex_id=hex_id,
+                    heading=heading,
+                    speed=speed,
+                    lat=msg_lat,
+                    lon=msg_lon,
+                    altitude=altitude,
+                    callsign=callsign,
+                )
+
             # Auto-seed watchlist for high-interest aircraft spotted in any source
             await self._maybe_seed_watchlist(tak_msg)
 
@@ -561,6 +587,14 @@ class PollerService:
             except Exception as e:
                 logger.error("Jamming analysis error: %s", e)
             self._last_jamming_analysis = now
+
+        # Run holding pattern analysis periodically (every 30 s), not per-batch
+        if now - self._last_holding_pattern_analysis >= self._holding_pattern_analysis_interval:
+            try:
+                await self.holding_pattern_detector.analyze_and_publish()
+            except Exception as e:
+                logger.error("Holding pattern analysis error: %s", e)
+            self._last_holding_pattern_analysis = now
 
     def normalize_to_tak(self, ac: Dict) -> Optional[Dict]:
         """Convert ADSBx format to SovereignWatch TAK-ish JSON format."""
@@ -648,6 +682,9 @@ class PollerService:
                     # Missing (None) means the source did not provide the field.
                     "nic": int(ac["nic"]) if ac.get("nic") is not None else None,
                     "nacP": int(ac["nac_p"]) if ac.get("nac_p") is not None else None,
+                    # Holding pattern detection (Ingest-05)
+                    "holding_pattern": self.holding_pattern_detector.is_holding_pattern(ac.get("hex", "").lower()),
+                    "holding_pattern_turns": round(self.holding_pattern_detector.get_total_turns(ac.get("hex", "").lower()), 1),
                 },
             },
         }
