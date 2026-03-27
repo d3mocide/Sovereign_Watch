@@ -21,7 +21,6 @@ import {
   processReplayFrame,
 } from "../engine/EntityFilterEngine";
 import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
-import { filterSatellite } from "../utils/filters";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 
 interface UseAnimationLoopOptions {
@@ -105,8 +104,6 @@ interface UseAnimationLoopOptions {
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
 }
 
-/** Returns true if the satellite should be visible given the current filters. */
-
 export function useAnimationLoop({
   entitiesRef,
   satellitesRef,
@@ -153,7 +150,6 @@ export function useAnimationLoop({
   ownGridRef,
   rfSitesRef,
   kiwiNodeRef,
-  showRepeaters,
   predictedGroundTrackRef,
   observerRef,
   currentMissionRef,
@@ -167,6 +163,87 @@ export function useAnimationLoop({
   }, []);
 
   const rafRef = useRef<number | null>(null);
+
+  // ── Inline ref-sync ───────────────────────────────────────────────────────
+  // Assigned at render time (no useEffect) so the stable rAF loop (deps:[])
+  // always reads the latest prop/state values without triggering restarts.
+  const hoveredEntityRef = useRef(hoveredEntity);
+  hoveredEntityRef.current = hoveredEntity;
+
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const selectedEntityStateRef = useRef(selectedEntity);
+  selectedEntityStateRef.current = selectedEntity;
+
+  const globeModeRef = useRef(globeMode);
+  globeModeRef.current = globeMode;
+
+  const enable3dRef = useRef(enable3d);
+  enable3dRef.current = enable3d;
+
+  const mapLoadedRef = useRef(mapLoaded);
+  mapLoadedRef.current = mapLoaded;
+
+  const replayModeRef = useRef(replayMode);
+  replayModeRef.current = replayMode;
+
+  const aotShapesRef = useRef(aotShapes);
+  aotShapesRef.current = aotShapes;
+
+  const cablesDataRef = useRef(cablesData);
+  cablesDataRef.current = cablesData;
+
+  const stationsDataRef = useRef(stationsData);
+  stationsDataRef.current = stationsData;
+
+  const outagesDataRef = useRef(outagesData);
+  outagesDataRef.current = outagesData;
+
+  const towersDataRef = useRef(towersData);
+  towersDataRef.current = towersData;
+
+  const auroraDataRef = useRef(auroraData);
+  auroraDataRef.current = auroraData;
+
+  const jammingDataRef = useRef(jammingData);
+  jammingDataRef.current = jammingData;
+
+  const gdeltDataRef = useRef(gdeltData);
+  gdeltDataRef.current = gdeltData;
+
+  const gdeltToneThresholdRef = useRef(gdeltToneThreshold);
+  gdeltToneThresholdRef.current = gdeltToneThreshold;
+
+  const worldCountriesDataRef = useRef(worldCountriesData);
+  worldCountriesDataRef.current = worldCountriesData;
+
+  const onCountsUpdateRef = useRef(onCountsUpdate);
+  onCountsUpdateRef.current = onCountsUpdate;
+
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+
+  const onEntitySelectRef = useRef(onEntitySelect);
+  onEntitySelectRef.current = onEntitySelect;
+
+  const onEntityLiveUpdateRef = useRef(onEntityLiveUpdate);
+  onEntityLiveUpdateRef.current = onEntityLiveUpdate;
+
+  const onFollowModeChangeRef = useRef(onFollowModeChange);
+  onFollowModeChangeRef.current = onFollowModeChange;
+
+  const setHoveredEntityRef = useRef(setHoveredEntity);
+  setHoveredEntityRef.current = setHoveredEntity;
+
+  const setHoverPositionRef = useRef(setHoverPosition);
+  setHoverPositionRef.current = setHoverPosition;
+
+  const setHoveredInfraRef = useRef(setHoveredInfra);
+  setHoveredInfraRef.current = setHoveredInfra;
+
+  const setSelectedInfraRef = useRef(setSelectedInfra);
+  setSelectedInfraRef.current = setSelectedInfra;
 
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
@@ -188,8 +265,12 @@ export function useAnimationLoop({
     return map;
   }, [outagesData]);
 
-  // Optional: Add H3 Coverage State in the hook
+  const countryOutageMapRef = useRef(countryOutageMap);
+  countryOutageMapRef.current = countryOutageMap;
+
   const [h3Cells, setH3Cells] = React.useState<H3CellData[]>([]);
+  const h3CellsRef = useRef(h3Cells);
+  h3CellsRef.current = h3Cells;
 
   useEffect(() => {
     // Only fetch if enabled
@@ -220,14 +301,18 @@ export function useAnimationLoop({
       const dt = Math.min(now - lastFrameTimeRef.current, 100);
       lastFrameTimeRef.current = now;
 
+      const _filters = filtersRef.current;
+      const _replayMode = replayModeRef.current;
+      const _onEntityLiveUpdate = onEntityLiveUpdateRef.current;
+
       // ── Entity pass (filter + interpolate) ───────────────────────────────
       let airCount: number;
       let seaCount: number;
       let interpolated: CoTEntity[];
       let staleUids: string[] = [];
 
-      if (replayMode) {
-        const result = processReplayFrame(replayEntitiesRef.current, filters);
+      if (_replayMode) {
+        const result = processReplayFrame(replayEntitiesRef.current, _filters);
         airCount = result.airCount;
         seaCount = result.seaCount;
         interpolated = result.interpolated;
@@ -236,7 +321,7 @@ export function useAnimationLoop({
           entities,
           drStateRef.current,
           visualStateRef.current,
-          filters,
+          _filters,
           now,
           dt,
         );
@@ -247,11 +332,11 @@ export function useAnimationLoop({
 
         // Live sidebar update for selected entity (throttled to ~30 fps)
         const currentSelected = selectedEntityRef.current;
-        if (currentSelected && onEntityLiveUpdate && Math.floor(now / 33) % 2 === 0) {
+        if (currentSelected && _onEntityLiveUpdate && Math.floor(now / 33) % 2 === 0) {
           const updatedSelected = interpolated.find(
             (e) => e.uid === currentSelected.uid,
           );
-          if (updatedSelected) onEntityLiveUpdate(updatedSelected);
+          if (updatedSelected) _onEntityLiveUpdate(updatedSelected);
         }
       }
 
@@ -272,7 +357,7 @@ export function useAnimationLoop({
 
         if (isUserInteracting && followModeRef.current && !gracePeriodActive) {
           followModeRef.current = false;
-          onFollowModeChange?.(false);
+          onFollowModeChangeRef.current?.(false);
         }
 
         if (followModeRef.current) {
@@ -358,7 +443,7 @@ export function useAnimationLoop({
             }
           }
 
-          onEvent?.({
+          onEventRef.current?.({
             type: "lost",
             message: `${prefix} ${tags}${entity.callsign || uid}${dims}`,
             entityType: isShip ? "sea" : "air",
@@ -372,11 +457,19 @@ export function useAnimationLoop({
         alertedEmergencyRef?.current.delete(uid);
       }
 
-      // ── Count orbitals ────────────────────────────────────────────────────
-      let orbitalCount = 0;
-      for (const [, sat] of satellitesRef.current) {
-        if (filterSatellite(sat, filters)) orbitalCount++;
-      }
+      // ── Satellite pass (filter + interpolate) ─────────────────────────────
+      // processSatelliteFrame filters internally; derive orbitalCount from the
+      // result to avoid a second O(n) walk through satellitesRef.
+      const filteredSatellites = processSatelliteFrame(
+        satellitesRef.current,
+        drStateRef.current,
+        visualStateRef.current,
+        _filters,
+        now,
+        dt,
+      );
+
+      const orbitalCount = filteredSatellites.length;
 
       if (
         (airCount > 0 ||
@@ -394,29 +487,20 @@ export function useAnimationLoop({
           sea: seaCount,
           orbital: orbitalCount,
         };
-        onCountsUpdate?.({
+        onCountsUpdateRef.current?.({
           air: airCount,
           sea: seaCount,
           orbital: orbitalCount,
         });
       }
 
-      // ── Satellite pass (filter + interpolate) ─────────────────────────────
-      const filteredSatellites = processSatelliteFrame(
-        satellitesRef.current,
-        drStateRef.current,
-        visualStateRef.current,
-        filters,
-        now,
-        dt,
-      );
-
       // Live sidebar update for selected satellite
-      if (selectedEntity) {
+      const _selectedEntityState = selectedEntityStateRef.current;
+      if (_selectedEntityState) {
         const updatedSat = filteredSatellites.find(
-          (s) => s.uid === selectedEntity.uid,
+          (s) => s.uid === _selectedEntityState.uid,
         );
-        if (updatedSat) onEntityLiveUpdate?.(updatedSat);
+        if (updatedSat) _onEntityLiveUpdate?.(updatedSat);
       }
 
       // ── Layer composition + overlay update ───────────────────────────────
@@ -429,18 +513,18 @@ export function useAnimationLoop({
           ? Array.from(js8StationsRef.current.values())
           : [],
         rfSites: rfSitesRef?.current || [],
-        h3Cells,
-        cablesData: cablesData ?? null,
-        stationsData: stationsData ?? null,
-        outagesData: outagesData ?? null,
-        towersData: towersData ?? [],
-        worldCountriesData: worldCountriesData ?? null,
-        countryOutageMap,
+        h3Cells: h3CellsRef.current,
+        cablesData: cablesDataRef.current ?? null,
+        stationsData: stationsDataRef.current ?? null,
+        outagesData: outagesDataRef.current ?? null,
+        towersData: towersDataRef.current ?? [],
+        worldCountriesData: worldCountriesDataRef.current ?? null,
+        countryOutageMap: countryOutageMapRef.current,
         currentSelected,
-        hoveredEntity,
-        filters,
-        globeMode: !!globeMode,
-        enable3d,
+        hoveredEntity: hoveredEntityRef.current,
+        filters: _filters,
+        globeMode: !!globeModeRef.current,
+        enable3d: enable3dRef.current,
         zoom,
         now,
         ownGrid: ownGridRef?.current || null,
@@ -450,27 +534,27 @@ export function useAnimationLoop({
         predictedGroundTrack: predictedGroundTrackRef?.current,
         observer: observerRef?.current,
         currentMission: currentMissionRef.current,
-        aotShapes,
-        auroraData,
-        jammingData,
-        gdeltData,
-        gdeltToneThreshold,
-        onEntitySelect,
-        setHoveredEntity,
-        setHoverPosition,
-        setHoveredInfra: setHoveredInfra || (() => {}),
-        setSelectedInfra: setSelectedInfra || (() => {}),
+        aotShapes: aotShapesRef.current,
+        auroraData: auroraDataRef.current,
+        jammingData: jammingDataRef.current,
+        gdeltData: gdeltDataRef.current,
+        gdeltToneThreshold: gdeltToneThresholdRef.current,
+        onEntitySelect: onEntitySelectRef.current,
+        setHoveredEntity: setHoveredEntityRef.current,
+        setHoverPosition: setHoverPositionRef.current,
+        setHoveredInfra: setHoveredInfraRef.current || (() => {}),
+        setSelectedInfra: setSelectedInfraRef.current || (() => {}),
         historySegments: historySegmentsRef?.current,
         satnogsStations: satnogsStationsRef?.current || [],
       });
 
-      if (mapLoaded && overlayRef.current?.setProps) {
+      if (mapLoadedRef.current && overlayRef.current?.setProps) {
         overlayRef.current.setProps({
           layers,
           onHover: (info: PickingInfo) => {
             if (!info.object) {
-              setHoveredEntity(null);
-              setHoverPosition(null);
+              setHoveredEntityRef.current(null);
+              setHoverPositionRef.current(null);
             }
           },
         });
@@ -487,28 +571,5 @@ export function useAnimationLoop({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [
-    onCountsUpdate,
-    filters,
-    onEvent,
-    onEntitySelect,
-    mapLoaded,
-    enable3d,
-    replayMode,
-    onEntityLiveUpdate,
-    globeMode,
-    aotShapes,
-    hoveredEntity,
-    selectedEntity,
-    onFollowModeChange,
-    showRepeaters,
-    cablesData,
-    stationsData,
-    outagesData,
-    towersData,
-    auroraData,
-    jammingData,
-    gdeltData,
-    worldCountriesData,
-  ]);
+  }, []); // stable — all volatile values accessed via inline-synced refs
 }

@@ -9,7 +9,8 @@ export function interpolatePVB(
   dr: DRState | undefined,
   visual: VisualState | undefined,
   now: number,
-  dt: number
+  dt: number,
+  baseAlpha = 0.25,
 ): { visual: VisualState; interpolatedEntity: CoTEntity } {
   let targetLat = entity.lat;
   let targetLon = entity.lon;
@@ -54,9 +55,8 @@ export function interpolatePVB(
     : { lat: targetLat, lon: targetLon, alt: entity.altitude };
 
   if (visual) {
-    const BASE_ALPHA = 0.25;
     const smoothDt = Math.min(dt, 33);
-    const smoothFactor = 1 - Math.pow(1 - BASE_ALPHA, smoothDt / 16.67);
+    const smoothFactor = 1 - Math.pow(1 - baseAlpha, smoothDt / 16.67);
     newVisual.lat = visual.lat + (targetLat - visual.lat) * smoothFactor;
     newVisual.lon = visual.lon + (targetLon - visual.lon) * smoothFactor;
     newVisual.alt = visual.alt + (entity.altitude - visual.alt) * smoothFactor;
