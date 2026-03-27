@@ -42,6 +42,10 @@
 
 ![Sovereign Watch - Dashbaord View](assets/images/SovereignWatch-5.png)
 
+### Intel Map View
+
+![Sovereign Watch - Intel Map](assets/images/SovereignWatch-6.png)
+
 ---
 
 ## Quick Start
