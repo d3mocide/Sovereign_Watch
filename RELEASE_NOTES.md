@@ -1,55 +1,22 @@
-# Release - v0.50.0 - Tactical Command Dashboard
+# Release - v0.51.0 - Map Architecture Refactor
 
-v0.50.0 introduces the **Tactical Command Dashboard**, a high-fidelity monitoring station for the Sovereign Watch ecosystem. This release transforms the static stats view into a dynamic, reactive, and highly accurate operational station.
+This release introduces a significant architectural refactoring of the mapping system, focusing on code reuse, performance optimization, and UI standardization across all mission views.
 
 ## High-Level Summary
-
-This release modernizes the dashboard into a "Tactical Command" interface. We have moved beyond basic metrics to provide real-time situational awareness via a **Tactical Alert System**, an interactive **Log Terminal**, and high-precision **Telemetry Analytics**. By using native flexbox layouts and server-side aggregation filters, we have ensured a pixel-perfect, zero-drift experience optimized for mission-critical monitoring.
+We have consolidated the map initialization and control logic that was previously duplicated across our three main mapping interfaces (Tactical, Orbital, and Intel). By extracting this boilerplate into shared hooks and components, we've improved maintainability and ensured that features like URL synchronization and globe-mode transitions behave identically everywhere. Additionally, a new "ref-sync" pattern in our animation loops eliminates dozens of unnecessary React state updates per second, providing a smoother, more efficient rendering experience.
 
 ## Key Features
-
-### 1. Tactical Alert System
-- **Warning-Reactive Badge**: The header navigation now features a dynamic notification badge that increments in real-time whenever a `[WARN]` log entry is detected in the system bus.
-- **Header Shortlink Interaction**: 
-    - **Bell Icon**: View and clear active system alerts.
-    - **Terminal Icon**: Absolute toggle shortcut for the bottom log bar.
-
-### 2. Collapsible Log Terminal
-- **Dynamic Logic**: Fully interactive log bar with state-driven height transitions.
-- **Smart Startup**: Loads in a collapsed state by default to maximize data visibility while maintaining background alerting.
-- **Auto-Scroll & Follow**: Intelligent scrolling behavior that maintains focus on recent commands unless manually overridden.
-
-### 3. High-Density Container Health
-- **Tactical Ribbons & Pips**: Redesigned poller list with status-weighted ribbons and 12-pip uptime indicators.
-- **Node Synchronization**: Fully synchronized with user-defined node identities (`NODE-01`).
-
-### 4. Telemetry Precision (No-More-Cliff)
-- **Time-Bucket Filtering**: Server-side logic now excludes the current, incomplete 15-minute bucket, ensuring charts no longer "crash" at the right edge.
-- **ECharts Refinement**: Removed cumulative data stacking to ensure domain-specific counts are accurate and non-summed.
+- **Unified Map Foundation**: All maps now use the `useMapBase` hook for consistent initialization and state management.
+- **Shared HUD Controls**: A new `MapControls` component provides a standardized interface for zooming, projection switching, and styling.
+- **Performance Boost**: IntelGlobe rendering is now significantly more efficient thanks to optimized animation loop handling.
+- **Enhanced Visuals**: Improved alpha blending for satellite imagery provides better contrast for tactical overlays.
 
 ## Technical Details
-
-- **Layout Engine**: Migrated from `fixed` positioning with manual offsets to a native **Flexbox `flex-col`** flow, eliminating 'ghost footer' anomalies and improving responsiveness.
-- **Telemetry Aggregation**: Uses TimescaleDB `time_bucket` on a 24-hour moving window via the new `/api/stats` router.
-- **Routing**: Implemented React `Suspense` and `lazy` loading for the `/stats` route, ensuring zero overhead for non-dashboard users.
+- **Boilerplate Reduction**: Removed ~150-200 lines of duplicated code per map component.
+- **Adapter Portability**: Centralized Mapbox vs. MapLibre selection logic ensures reliable fallback behavior.
+- **Ref-Sync Pattern**: High-frequency updates now bypass React's virtual DOM reconciliation for better performance.
 
 ## Upgrade Instructions
-
-### 1. Update & Build
-```bash
-git pull origin dev
-docker compose up -d --build sovereign-frontend sovereign-backend
-```
-
-### 2. Verification
-Run the verification suite on the host for rapid feedback:
-```bash
-cd frontend && pnpm run lint && pnpm run test
-cd backend/api && pytest
-```
-
----
-
-**Release Date**: 2026-03-26  
-**Stability**: Stable (Dashboard V1)  
-**Lead Contributor**: Sovereign Watch Team  
+1. Pull the latest changes from the `dev` branch.
+2. Reinstall dependencies in the frontend: `cd frontend && pnpm install`.
+3. Rebuild the frontend container: `docker compose up -d --build sovereign-frontend`.

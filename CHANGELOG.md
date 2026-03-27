@@ -1,6 +1,25 @@
 # Changelog
 
-## [Unreleased]
+## [0.51.0] - 2026-03-26
+
+### Added
+
+- **`useMapBase` Shared Hook**: Centralized map initialization and state management across Tactical, Orbital, and Intel views. Supports dynamic adapter selection (MapLibre/Mapbox), style resolution, and URL hash synchronization.
+- **`MapControls` Shared Component**: A unified, stateless bottom-center HUD for map interactions (zoom, projection, globe toggle, style picker).
+- **Centralized Map Styles**: Extracted map style constants and lazy-loaded adapters into `mapStyles.ts` for improved consistency and reduced bundle bloat.
+
+### Changed
+
+- **Map Component Refactoring**: TacticalMap and OrbitalMap now consume `useMapBase` and `MapControls`, eliminating ~220 lines of duplicated boilerplate per component.
+- **IntelGlobe Performance Optimization**: Refactored the animation loop to use an inline ref-sync pattern, eliminating 60 React `setState` calls per second and improving rendering stability.
+- **Animation Loop Robustness**: Updated `useAnimationLoop` with ref-sync for all volatile props, ensuring the stable rAF loop always reads the latest values without effect restarts.
+- **Interpolation Refinement**: Added `baseAlpha` support to `interpolation.ts` and `EntityPositionInterpolator.ts` for improved satellite alpha blending on satellite imagery.
+
+### Technical Details
+
+- Map adapter selection is now reactive to the presence of a valid Mapbox token.
+- URL hash synchronization is standardized across all mapping views for consistent sharing of coordinates and zoom levels.
+- Ref-sync pattern in `useAnimationLoop` decouples React render cycles from high-frequency WebGL updates.
 
 ## [0.50.0] - 2026-03-26
 
