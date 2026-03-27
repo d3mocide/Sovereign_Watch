@@ -102,6 +102,8 @@ interface UseAnimationLoopOptions {
   /** Historical track segments loaded by TrackHistoryPanel — rendered as a PathLayer */
   historySegmentsRef?: MutableRefObject<HistorySegment[]>;
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
+  /** Aviation holding pattern GeoJSON (from /api/holding-patterns/active) */
+  holdingPatternData?: FeatureCollection | null;
 }
 
 export function useAnimationLoop({
@@ -156,6 +158,7 @@ export function useAnimationLoop({
   worldCountriesData,
   historySegmentsRef,
   satnogsStationsRef,
+  holdingPatternData,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -217,6 +220,9 @@ export function useAnimationLoop({
 
   const worldCountriesDataRef = useRef(worldCountriesData);
   worldCountriesDataRef.current = worldCountriesData;
+
+  const holdingPatternDataRef = useRef(holdingPatternData);
+  holdingPatternDataRef.current = holdingPatternData;
 
   const onCountsUpdateRef = useRef(onCountsUpdate);
   onCountsUpdateRef.current = onCountsUpdate;
@@ -546,6 +552,7 @@ export function useAnimationLoop({
         setSelectedInfra: setSelectedInfraRef.current || (() => {}),
         historySegments: historySegmentsRef?.current,
         satnogsStations: satnogsStationsRef?.current || [],
+        holdingPatternData: holdingPatternDataRef.current,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {

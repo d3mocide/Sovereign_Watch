@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from core.database import db
 
@@ -115,4 +114,61 @@ async def get_tak_breakdown():
 
     except Exception as e:
         logger.error(f"Failed to fetch TAK breakdown: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/api/stats/throughput")
+async def get_throughput_stats():
+    """
+    Fetch real-time throughput metrics (bytes/sec) and daily totals for all data feeds.
+    Data is aggregated by the Historian service and stored in Redis.
+    """
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    TOPICS = [
+        "adsb_raw", "ais_raw", "orbital_raw", "rf_raw", 
+        "satnogs_transmitters", "satnogs_observations", "gdelt_raw"
+    ]
+    
+    # Map topics to the IDs used in the Dashboard UI (canonical IDs)
+    TOPIC_TO_ID = {
+        "adsb_raw": "adsb",
+        "ais_raw": "maritime",
+        "orbital_raw": "orbital",
+        "rf_raw": "rf_ard",
+        "satnogs_transmitters": "satnogs_net",
+        "satnogs_observations": "satnogs_db",
+        "gdelt_raw": "gdelt"
+    }
+
+    try:
+        throughput = {}
+        total_bandwidth = 0
+        
+        # Fetch current sec/rate (KB/S) and total daily bytes
+        for topic in TOPICS:
+            id_key = TOPIC_TO_ID.get(topic, topic)
+            
+            # Current Rate
+            rate_bytes = await db.redis_client.get(f"metrics:throughput:{topic}")
+            rate_kb = (float(rate_bytes) / 1024.0) if rate_bytes else 0.0
+            
+            # Total Daily
+            total_bytes = await db.redis_client.get(f"metrics:total_bytes:{topic}")
+            total_val = int(total_bytes) if total_bytes else 0
+            
+            throughput[id_key] = {
+                "kb_per_sec": round(rate_kb, 1),
+                "total_bytes": total_val
+            }
+            total_bandwidth += total_val
+
+        return {
+            "status": "ok",
+            "throughput": throughput,
+            "total_bandwidth_mb": round(total_bandwidth / (1024 * 1024), 1)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to fetch throughput stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -20,21 +20,22 @@ Confidence scoring (0.0–1.0):
 
 import json
 import logging
+import os
 import time
-from collections import defaultdict, deque
-from typing import Dict, Optional, Tuple
+from collections import deque
+from typing import Dict, Optional
 
 import h3
 import redis.asyncio as aioredis
 
 logger = logging.getLogger("holding_pattern_detector")
 
-# Thresholds & Configuration
-HOLDING_WINDOW_S = 300  # 5-minute rolling observation window
-HOLDING_PATTERN_THRESHOLD = 300  # Degrees of total turn to trigger
-MIN_VELOCITY_KNOTS = 0  # No minimum velocity (detect all circling)
-HEADING_CHANGE_THRESHOLD = 2  # Only process heading changes ≥2° (noise filter)
-MIN_CIRCLE_DURATION = 60  # Must be turning for ≥60s to flag (seconds)
+# Thresholds & Configuration (Set via ENV in docker-compose.yml)
+HOLDING_WINDOW_S = int(os.getenv("HOLDING_WINDOW_S", "300"))  # Rolling observation window
+HOLDING_PATTERN_THRESHOLD = int(os.getenv("HOLDING_PATTERN_THRESHOLD", "300"))  # Degrees to trigger
+MIN_VELOCITY_KNOTS = float(os.getenv("MIN_VELOCITY_KNOTS", "0"))  # Minimum velocity
+HEADING_CHANGE_THRESHOLD = float(os.getenv("HEADING_CHANGE_THRESHOLD", "2"))  # Noise filter
+MIN_CIRCLE_DURATION = int(os.getenv("MIN_CIRCLE_DURATION", "60"))  # Sustained pattern (seconds)
 
 # H3 resolution for zone grouping (same as jamming for consistency)
 H3_RESOLUTION = 6

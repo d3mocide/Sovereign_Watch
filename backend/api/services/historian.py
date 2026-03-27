@@ -186,7 +186,34 @@ async def historian_task():
         satnogs_tx_batch: dict[str, dict] = {}
         satnogs_tx_last_flush = time.time()
 
+        # Throughput tracking
+        throughput_batch: dict[str, int] = {}
+        throughput_last_flush = time.time()
+
         async for msg in consumer:
+            # Track throughput (raw bytes)
+            throughput_batch[msg.topic] = throughput_batch.get(msg.topic, 0) + len(msg.value)
+            
+            now = time.time()
+            if now - throughput_last_flush >= 1.0:
+                # Every second, flush throughput metrics to Redis
+                if db.redis_client:
+                    try:
+                        pipe = db.redis_client.pipeline()
+                        for topic, byte_count in throughput_batch.items():
+                            # We store the latest per-second rate in Redis for immediate HUD feedback.
+                            # We also maintain a rolling 24h counter for total bandwidth.
+                            # Standard Redis key for current KB/S (stored as raw bytes, divided by 1024 in API)
+                            pipe.set(f"metrics:throughput:{topic}", str(byte_count), ex=5)
+                            pipe.incrby(f"metrics:total_bytes:{topic}", byte_count)
+                            # Expire total counter after 25h to keep it a rolling-ish daily total
+                            pipe.expire(f"metrics:total_bytes:{topic}", 90000)
+                        await pipe.execute()
+                        throughput_batch.clear()
+                        throughput_last_flush = now
+                    except Exception as redis_err:
+                        logger.warning("Historian throughput metrics error: %s", redis_err)
+
             try:
                 data = json.loads(msg.value.decode("utf-8"))
 

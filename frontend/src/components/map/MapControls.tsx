@@ -55,6 +55,10 @@ export interface MapControlsProps {
   onAdjustBearing?: (delta: number) => void;
   onResetNorth?: () => void;
   onAdjustPitch?: (delta: number) => void;
+
+  // ---- Optional Auto-spin --------------------------------------------------
+  spin?: boolean;
+  onToggleSpin?: () => void;
 }
 
 /** Tailwind class sets shared across every mode button. */
@@ -104,6 +108,8 @@ export function MapControls({
   onAdjustBearing,
   onResetNorth,
   onAdjustPitch,
+  spin,
+  onToggleSpin,
 }: MapControlsProps) {
   const showCameraControls =
     enable3d &&
@@ -197,6 +203,24 @@ export function MapControls({
             <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
             GLOBE
           </button>
+
+          {/* Optional Spin Switcher */}
+          {onToggleSpin && (
+            <>
+              {divider}
+              <button
+                onClick={onToggleSpin}
+                className={globeBtn(!!spin)}
+                title="Toggle Auto-Spin"
+              >
+                <RotateCcw
+                  size={12}
+                  className={spin ? "animate-spin-slow" : ""}
+                />
+              </button>
+              {!(globeMode && styleOptions && styleOptions.length > 0) && divider}
+            </>
+          )}
 
           {/* Style picker — only shown when in globe mode and options provided */}
           {globeMode && styleOptions && styleOptions.length > 0 && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, ChevronDown, Copy, Check, Loader2, AlertTriangle, X, Settings } from 'lucide-react';
+import { BrainCircuit, Copy, Check, Loader2, AlertTriangle, X, Settings, Activity } from 'lucide-react';
 import { useAnalysis } from '../../hooks/useAnalysis';
 import { useAIConfig } from '../../hooks/useAIConfig';
 import { CoTEntity } from '../../types';
@@ -10,6 +10,7 @@ interface AIAnalystPanelProps {
   isOpen: boolean;
   // allow injecting an initial trigger to run the analysis immediately when opened
   autoRunTrigger?: number;
+  isSidebarClosed?: boolean;
 }
 
 const LOOKBACK_OPTIONS = [
@@ -126,7 +127,13 @@ const renderInline = (text: string, accentColor: string) => {
   });
 };
 
-export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose, isOpen, autoRunTrigger }) => {
+export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ 
+  entity, 
+  onClose, 
+  isOpen, 
+  autoRunTrigger,
+  isSidebarClosed = false
+}) => {
   const { text, isStreaming, error, generatedAt, run, reset } = useAnalysis();
   const { config: aiConfig, isSaving, selectModel } = useAIConfig();
   const entityUid = entity?.uid;
@@ -158,20 +165,33 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
     setIsSettingsOpen(false);
   }
 
+  const isSitrep = entityUid?.startsWith('sitrep-');
+
   // Handle auto-run when triggered from the sidebar
   const lastStateRef = useRef({ entityUid, autoRunTrigger, isOpen });
 
   useEffect(() => {
+    // Sync default mode based on entity type
+    if (isSitrep) {
+      setMode('osint');
+    } else {
+      setMode('tactical');
+    }
+  }, [entityUid, isSitrep]);
+
+  useEffect(() => {
     // If the panel just opened and we have a trigger, or the trigger changed while open
     if (isOpen && entityUid && autoRunTrigger && (autoRunTrigger !== lastStateRef.current.autoRunTrigger || !lastStateRef.current.isOpen)) {
-      run(entityUid, lookback, mode);
+      const sitrepContext = isSitrep ? entity?.detail?.sitrep_context : undefined;
+      run(entityUid, lookback, mode, sitrepContext);
     }
     lastStateRef.current = { entityUid, autoRunTrigger, isOpen };
-  }, [autoRunTrigger, isOpen, entityUid, lookback, mode, run]);
+  }, [autoRunTrigger, isOpen, entityUid, lookback, mode, run, entity, isSitrep]);
 
   const handleRun = () => {
     if (!entity) return;
-    run(entity.uid, lookback, mode);
+    const sitrepContext = isSitrep ? entity.detail?.sitrep_context : undefined;
+    run(entity.uid, lookback, mode, sitrepContext);
   };
 
   const handleCopy = () => {
@@ -186,106 +206,127 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
 
   if (!isOpen) return null;
 
-  // Determine accent color based on entity type (similar to SidebarRight logic)
+  // Determine accent color based on entity type
   let accentColor = 'text-white/50';
   let accentBorder = 'border-white/20';
   let accentBg = 'bg-black/80';
 
   if (entity) {
-    const isShip = entity.type.includes('S');
-    const isSat = entity.type === 'a-s-K' || entity.type.indexOf('K') === 4;
-    const isTower = entity.type === 'tower';
-    const isRepeater = entity.type === 'repeater';
-    const isJS8 = entity.type === 'js8';
-    const isInfra = entity.type === 'infra';
+    if (isSitrep) {
+      accentColor = 'text-hud-green';
+      accentBorder = 'border-hud-green/30';
+      accentBg = 'bg-gradient-to-br from-black/90 to-hud-green/5';
+    } else {
+      const isShip = entity.type.includes('S');
+// ... [keeping existing logic for colors] ...
+      const isSat = entity.type === 'a-s-K' || entity.type.indexOf('K') === 4;
+      const isTower = entity.type === 'tower';
+      const isRepeater = entity.type === 'repeater';
+      const isJS8 = entity.type === 'js8';
+      const isInfra = entity.type === 'infra';
 
-    let isOutage = false;
-    let severity = 0;
-    if (isInfra && entity.detail?.properties) {
-       const props = entity.detail.properties as Record<string, unknown>;
-       isOutage = props.entity_type === 'outage' || (typeof props.id === 'string' && props.id.includes('outage')) || props.severity !== undefined;
-       severity = Number(props.severity || 0);
-    }
+      let isOutage = false;
+      let severity = 0;
+      if (isInfra && entity.detail?.properties) {
+         const props = entity.detail.properties as Record<string, unknown>;
+         isOutage = props.entity_type === 'outage' || (typeof props.id === 'string' && props.id.includes('outage')) || props.severity !== undefined;
+         severity = Number(props.severity || 0);
+      }
 
-    if (isSat) {
-      accentColor = 'text-purple-400';
-      accentBorder = 'border-purple-400/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-purple-400/5';
-    } else if (isShip) {
-      accentColor = 'text-sea-accent';
-      accentBorder = 'border-sea-accent/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-sea-accent/5';
-    } else if (isTower) {
-      accentColor = 'text-orange-400';
-      accentBorder = 'border-orange-400/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-orange-400/5';
-    } else if (isRepeater) {
-      accentColor = 'text-teal-400';
-      accentBorder = 'border-teal-400/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-teal-400/5';
-    } else if (isJS8) {
-      accentColor = 'text-indigo-400';
-      accentBorder = 'border-indigo-400/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-indigo-400/5';
-    } else if (isInfra) {
-      if (isOutage) {
-        if (severity > 50) {
-          accentColor = 'text-red-400';
-          accentBorder = 'border-red-400/30';
-          accentBg = 'bg-gradient-to-br from-black/90 to-red-400/5';
+      if (isSat) {
+        accentColor = 'text-purple-400';
+        accentBorder = 'border-purple-400/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-purple-400/5';
+      } else if (isShip) {
+        accentColor = 'text-sea-accent';
+        accentBorder = 'border-sea-accent/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-sea-accent/5';
+      } else if (isTower) {
+        accentColor = 'text-orange-400';
+        accentBorder = 'border-orange-400/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-orange-400/5';
+      } else if (isRepeater) {
+        accentColor = 'text-teal-400';
+        accentBorder = 'border-teal-400/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-teal-400/5';
+      } else if (isJS8) {
+        accentColor = 'text-indigo-400';
+        accentBorder = 'border-indigo-400/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-indigo-400/5';
+      } else if (isInfra) {
+        if (isOutage) {
+          if (severity > 50) {
+            accentColor = 'text-red-400';
+            accentBorder = 'border-red-400/30';
+            accentBg = 'bg-gradient-to-br from-black/90 to-red-400/5';
+          } else {
+            accentColor = 'text-amber-400';
+            accentBorder = 'border-amber-400/30';
+            accentBg = 'bg-gradient-to-br from-black/90 to-amber-400/5';
+          }
         } else {
-          accentColor = 'text-amber-400';
-          accentBorder = 'border-amber-400/30';
-          accentBg = 'bg-gradient-to-br from-black/90 to-amber-400/5';
+          accentColor = 'text-cyan-400';
+          accentBorder = 'border-cyan-400/30';
+          accentBg = 'bg-gradient-to-br from-black/90 to-cyan-400/5';
         }
       } else {
-        accentColor = 'text-cyan-400';
-        accentBorder = 'border-cyan-400/30';
-        accentBg = 'bg-gradient-to-br from-black/90 to-cyan-400/5';
+        accentColor = 'text-air-accent';
+        accentBorder = 'border-air-accent/30';
+        accentBg = 'bg-gradient-to-br from-black/90 to-air-accent/5';
       }
-    } else {
-      accentColor = 'text-air-accent';
-      accentBorder = 'border-air-accent/30';
-      accentBg = 'bg-gradient-to-br from-black/90 to-air-accent/5';
     }
   }
 
   const activeModelLabel = aiConfig?.available_models.find(m => m.id === aiConfig.active_model)?.label ?? aiConfig?.active_model ?? "AI ENGINE";
 
   return (
-    <div className="absolute top-[80px] right-[400px] z-[200] w-[450px] animate-in slide-in-from-right fade-in duration-300">
+    <div className={`absolute top-[80px] z-[2000] w-[450px] animate-in slide-in-from-right fade-in duration-300 ${
+      isSidebarClosed ? 'right-4' : 'right-[420px]'
+    }`}>
       <div className={`flex flex-col border ${accentBorder} ${accentBg} backdrop-blur-xl rounded shadow-2xl overflow-hidden shadow-black/50`}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-black/40">
-          <div className="flex items-center gap-2">
-            <BrainCircuit size={16} className={accentColor} />
-            <span className="text-xs font-bold tracking-[.3em] text-white/70">AI_ANALYST_PANEL</span>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-black/80 relative overflow-hidden">
+          {/* Subtle top gloss */}
+          <div className={`absolute top-0 left-0 w-full h-[1px] ${accentColor.replace('text-', 'bg-')} opacity-30`} />
+          
+          <div className="flex items-center gap-2 relative z-10">
+            <div className={`p-1 rounded-sm ${accentColor.replace('text-', 'bg-')}/10`}>
+               <BrainCircuit size={14} className={accentColor} />
+            </div>
+            <span className="text-[10px] font-black tracking-[.4em] text-white/90 uppercase">
+               {isSitrep ? 'Strategic Intelligence Report' : 'AI Analyst Panel'}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 relative z-10">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-1.5 rounded transition-colors ${isSettingsOpen ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/50 hover:text-white/80'}`}
+              className={`p-1.5 rounded-sm transition-all ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
               title="AI Engine Settings"
             >
-              <Settings size={14} />
+              <Settings size={13} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white/80 transition-colors"
+              className="p-1.5 hover:bg-red-500/10 rounded-sm text-white/30 hover:text-red-400 transition-all group"
               title="Close Panel"
             >
-              <X size={16} />
+              <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
           </div>
         </div>
 
+        {/* Scanline Overlay Effect */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-[3000] overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+        </div>
+
         {/* Model Selection Drawer (Conditionally rendered) */}
         {isSettingsOpen && (
-          <div className="border-b border-white/5 bg-black/60 p-3 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase">Active Engine</span>
-              {!aiConfig && <Loader2 size={12} className="animate-spin text-white/30" />}
+          <div className="border-b border-white/5 bg-black/90 p-3 space-y-2 animate-in slide-in-from-top-1 fade-in duration-300 relative z-20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-black tracking-[.3em] text-white/40 uppercase">Select Processing Engine</span>
+              {!aiConfig && <Loader2 size={10} className="animate-spin text-white/30" />}
             </div>
             <div className="grid grid-cols-1 gap-1">
               {aiConfig?.available_models.map(model => {
@@ -298,20 +339,25 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
                       selectModel(model.id);
                       setIsSettingsOpen(false);
                     }}
-                    className={`flex items-center justify-between p-2 rounded border transition-all text-left group ${isActive
-                      ? 'bg-violet-500/20 border-violet-400/50'
-                      : 'bg-black/40 border-white/5 hover:bg-white/5 hover:border-white/20'
+                    className={`flex items-center justify-between px-3 py-2 rounded-sm border transition-all text-left group ${isActive
+                      ? 'bg-hud-green/10 border-hud-green/40 shadow-[0_0_15px_rgba(0,255,65,0.05)]'
+                      : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/20'
                     }`}
                   >
                     <div className="flex flex-col">
-                      <span className={`text-[10px] font-bold tracking-wider ${isActive ? 'text-violet-300' : 'text-white/70 group-hover:text-white/90'}`}>
+                      <span className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-hud-green' : 'text-white/60 group-hover:text-white/90'}`}>
                         {model.label}
                       </span>
-                      <span className={`text-[8px] font-mono ${model.local ? 'text-emerald-400/80' : 'text-white/40 group-hover:text-white/60'}`}>
-                        {model.local ? 'LOCAL · ' : ''}{model.provider.toUpperCase()}
+                      <span className={`text-[8px] font-mono mt-0.5 ${model.local ? 'text-blue-400/80' : 'text-white/30 group-hover:text-white/50'}`}>
+                        {model.local ? 'LOCAL INSTANCE · ' : ''}{model.provider.toUpperCase()}
                       </span>
                     </div>
-                    {isActive && <div className="h-1.5 w-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.9)]" />}
+                    {isActive && (
+                        <div className="flex items-center gap-2">
+                             <div className="h-1 w-1 rounded-full bg-hud-green animate-pulse shadow-[0_0_8px_#00ff41]" />
+                             <span className="text-[8px] font-black text-hud-green tracking-tighter">ACTIVE</span>
+                        </div>
+                    )}
                   </button>
                 );
               })}
@@ -320,93 +366,108 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
         )}
 
         {/* Target Info & Controls */}
-        <div className="px-4 py-3 border-b border-white/5 bg-white/5 flex flex-col gap-3">
-          <div className="flex justify-between items-center">
+        <div className="px-5 py-4 border-b border-white/5 bg-white/[0.03] space-y-4">
+          <div className="flex justify-between items-end">
             <div className="flex flex-col min-w-0">
-              <span className="text-[9px] font-bold tracking-[.2em] text-white/40 uppercase mb-0.5">Target Entity</span>
-              <span className={`text-sm font-bold truncate ${accentColor} drop-shadow-[0_0_5px_currentColor]`}>
+              <span className="text-[8px] font-black tracking-[.4em] text-white/30 uppercase mb-1.5 flex items-center gap-1.5">
+                 <div className="w-1.5 h-[1px] bg-white/20" />
+                 {isSitrep ? 'Mission Intelligence' : 'Target Entity'}
+              </span>
+              <span className={`text-lg font-black tracking-tighter truncate ${accentColor} drop-shadow-[0_0_12px_currentColor] uppercase`}>
                 {entity?.callsign || entity?.uid || 'NONE SELECTED'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="relative flex items-center">
-                <select
-                  value={mode}
-                  onChange={e => setMode(e.target.value)}
-                  disabled={isStreaming || !entity}
-                  className="appearance-none bg-black/60 border border-white/10 rounded px-2 py-1 pr-6 text-[10px] text-white/70 font-mono focus:outline-none focus:border-white/30 disabled:opacity-40 cursor-pointer"
-                >
-                  {MODE_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-2 text-white/30 pointer-events-none" />
-              </div>
-
-              <div className="relative flex items-center">
-                <select
-                  value={lookback}
-                  onChange={e => setLookback(Number(e.target.value))}
-                  disabled={isStreaming || !entity}
-                  className="appearance-none bg-black/60 border border-white/10 rounded px-2 py-1 pr-6 text-[10px] text-white/70 font-mono focus:outline-none focus:border-white/30 disabled:opacity-40 cursor-pointer"
-                >
-                  {LOOKBACK_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-2 text-white/30 pointer-events-none" />
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-1 items-end">
+                  <span className="text-[7px] font-black text-white/20 tracking-widest uppercase mb-0.5 mr-1 text-right">Scan_Window</span>
+                  <div className="flex items-center bg-black/60 border border-white/5 rounded-sm p-0.5">
+                    {LOOKBACK_OPTIONS.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => setLookback(opt.value)}
+                            disabled={isStreaming}
+                            className={`px-2 py-0.5 text-[8px] font-black tracking-tighter rounded-sm transition-all ${lookback === opt.value 
+                                ? `${accentColor} ${accentColor.replace('text-', 'bg-')}/20 shadow-[0_0_10px_currentColor]/10` 
+                                : 'text-white/20 hover:text-white/40'}`}
+                        >
+                            {opt.label.toUpperCase()}
+                        </button>
+                    ))}
+                  </div>
               </div>
 
               {isStreaming ? (
                 <button
                   onClick={reset}
-                  title="Cancel analysis"
-                  className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 rounded text-[10px] text-red-400 transition-colors focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
+                  className="group relative flex items-center justify-center h-9 px-4 bg-red-500/10 border border-red-500/40 rounded-sm text-red-500 hover:bg-red-500/20 transition-all shadow-[0_0_20px_rgba(239,68,68,0.1)]"
                 >
-                  <X size={12} />
-                  <span className="font-bold tracking-widest">HALT</span>
+                  <div className="absolute top-0 left-0 w-full h-[1px] bg-red-400 group-hover:animate-pulse" />
+                  <span className="text-[10px] font-black tracking-[.4em] uppercase">Halt</span>
                 </button>
               ) : (
                 <button
                   onClick={handleRun}
                   disabled={!entity}
-                  title="Run AI analysis"
-                  className={`flex items-center gap-1.5 px-4 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] font-bold tracking-widest ${accentColor} hover:brightness-125 disabled:opacity-30 disabled:cursor-not-allowed transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`}
+                  className={`group relative flex items-center justify-center h-9 px-6 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-20 disabled:grayscale`}
                 >
-                  RUN
+                  <div className={`absolute top-0 left-0 w-full h-[1px] ${accentColor.replace('text-', 'bg-')} group-hover:animate-pulse opacity-50`} />
+                  <span className="text-[10px] font-black tracking-[.4em] uppercase">Run</span>
                 </button>
               )}
             </div>
           </div>
-          <div className="flex items-center justify-between text-[9px] font-mono text-white/30">
-             <span>ENGINE: <span className="text-violet-400/80">{activeModelLabel}</span></span>
-             {!entity && <span className="text-amber-400/80">Select an entity to analyze</span>}
+          
+          <div className="flex items-center justify-between h-5">
+             <div className="flex items-center gap-3">
+                <span className="text-[8px] font-black text-white/20 tracking-[.2em] uppercase">Engine</span>
+                <span className={`${accentColor} text-[9px] font-bold tracking-widest opacity-80 uppercase`}>{activeModelLabel}</span>
+             </div>
+             <div className="flex items-center gap-4">
+                <span className="text-[8px] font-black text-white/20 tracking-[.2em] uppercase text-right">Maneuver_Mode</span>
+                <div className={`flex items-center bg-white/[0.04] border border-white/5 rounded-sm p-0.5 ${isSitrep ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                    {MODE_OPTIONS.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => !isSitrep && setMode(opt.value)}
+                            disabled={isStreaming || isSitrep}
+                            className={`px-2 py-0.5 text-[8px] font-black tracking-tighter rounded-sm transition-all ${mode === opt.value 
+                                ? `${accentColor} ${accentColor.replace('text-', 'bg-')}/20 shadow-[0_0_10px_currentColor]/10` 
+                                : 'text-white/20 hover:text-white/40 disabled:hover:text-white/20'}`}
+                        >
+                            {opt.label.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+             </div>
           </div>
         </div>
 
         {/* Output Area */}
-        <div className="flex flex-col bg-black/60 h-[350px]">
+        <div className="flex flex-col bg-black/40 h-[400px] relative">
           {/* Output header */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-black/40">
-            <div className="flex items-center gap-2">
-              {isStreaming && (
-                <Loader2 size={12} className={`${accentColor} animate-spin`} />
-              )}
-              <span className="text-[10px] font-mono text-white/40 tracking-widest">
-                {isStreaming ? 'PROCESSING TELEMETRY...' : generatedAt
-                  ? `ASSESSMENT GENERATED ${generatedAt.toLocaleTimeString()}`
-                  : 'READY FOR INPUT'}
+          <div className="flex items-center justify-between px-5 py-2 border-b border-white/5 bg-black/60 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-0.5">
+                  <div className={`w-1 h-3 rounded-t-[1px] ${isStreaming ? 'bg-hud-green animate-[bounce_1s_infinite_0ms]' : 'bg-white/10'}`} />
+                  <div className={`w-1 h-3 rounded-t-[1px] ${isStreaming ? 'bg-hud-green animate-[bounce_1s_infinite_200ms]' : 'bg-white/10'}`} />
+                  <div className={`w-1 h-3 rounded-t-[1px] ${isStreaming ? 'bg-hud-green animate-[bounce_1s_infinite_400ms]' : 'bg-white/10'}`} />
+              </div>
+              <span className={`text-[9px] font-black tracking-[.3em] uppercase ${isStreaming ? 'text-hud-green animate-pulse' : 'text-white/30'}`}>
+                {isStreaming ? 'Processing Telemetry Stream' : generatedAt
+                  ? `Assessment Generated ${generatedAt.toLocaleTimeString()} UTC`
+                  : 'Ready for Tasking'}
               </span>
             </div>
             {text && !isStreaming && (
               <button
                 onClick={handleCopy}
-                title="Copy assessment"
-                className="flex items-center gap-1.5 px-2 py-0.5 hover:bg-white/10 rounded border border-transparent hover:border-white/10 text-[9px] font-mono text-white/50 hover:text-white/80 transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
+                className="flex items-center gap-2 group"
               >
-                {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
-                {copied ? 'COPIED' : 'COPY'}
+                <div className={`text-[8px] font-black tracking-widest transition-all ${copied ? 'text-hud-green' : 'text-white/30 group-hover:text-white/60 uppercase'}`}>
+                   {copied ? 'SYSTEM_COPIED' : 'EXPORT_DATA'}
+                </div>
+                {copied ? <Check size={10} className="text-hud-green" /> : <Copy size={10} className="text-white/20 group-hover:text-white/40 transition-colors" />}
               </button>
             )}
           </div>
@@ -414,23 +475,37 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({ entity, onClose,
           {/* Scrollable text body */}
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+            className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent selection:bg-hud-green/30 relative z-10"
           >
             {error ? (
-              <div className="flex items-start gap-2 text-xs font-mono text-red-400/80 bg-red-500/10 p-3 rounded border border-red-500/20">
-                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                <span>{error}</span>
+              <div className="flex flex-col gap-3 p-4 bg-red-500/5 border border-red-500/30 rounded-sm">
+                <div className="flex items-center gap-2 text-red-500">
+                    <AlertTriangle size={14} />
+                    <span className="text-[10px] font-black tracking-[.3em] uppercase">Execution Failure</span>
+                </div>
+                <div className="text-[11px] font-mono text-white/70 leading-relaxed border-l border-red-500/20 pl-3">
+                    {error}
+                </div>
               </div>
             ) : !text && !isStreaming ? (
-              <div className="h-full flex flex-col items-center justify-center text-white/10 gap-3">
-                <BrainCircuit size={48} className="opacity-20" />
-                <span className="text-[10px] font-mono tracking-widest uppercase">Awaiting Tasking</span>
+              <div className="h-full flex flex-col items-center justify-center relative opacity-20 group">
+                {/* Tactical Radar Animation */}
+                <div className="relative w-24 h-24 mb-6">
+                    <div className="absolute inset-0 border border-white/20 rounded-full animate-[ping_4s_infinite]" />
+                    <div className="absolute inset-0 border border-white/10 rounded-full animate-[ping_4s_infinite_1s]" />
+                    <div className="absolute inset-4 border border-white/30 rounded-full" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Activity size={24} className="text-white animate-pulse" />
+                    </div>
+                </div>
+                <span className="text-[10px] font-black tracking-[.6em] text-white uppercase ml-1">Awaiting_Tasking</span>
+                <span className="text-[7px] font-medium text-white/40 tracking-[.4em] uppercase mt-2">Standby for operator command</span>
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative pb-8">
                 <AnalysisFormatter text={text} isStreaming={isStreaming} accentColor={accentColor} />
                 {isStreaming && (
-                  <span className={`inline-block w-2 h-4 ml-1 ${accentColor.replace('text-', 'bg-')} animate-pulse align-middle`} />
+                  <span className={`inline-block w-2.5 h-4 ml-1 bg-hud-green animate-pulse align-middle shadow-[0_0_8px_#00ff41]`} />
                 )}
               </div>
             )}

@@ -9,10 +9,8 @@ Tests cover:
 """
 
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 from holding_pattern import (
-    HoldingPatternDetector,
     HoldingPatternDetector as Detector,
 )
 
@@ -263,8 +261,7 @@ class TestHoldingPatternDetector:
     @pytest.mark.asyncio
     async def test_redis_connection(self):
         """Test that detector initializes Redis correctly."""
-        with patch('holding_pattern.aioredis.from_url') as mock_redis:
-            mock_redis.return_value = AsyncMock()
+        with patch('holding_pattern.aioredis.from_url', new_callable=AsyncMock) as mock_redis:
             detector = Detector("redis://test:6379")
 
             await detector.start()
@@ -354,6 +351,6 @@ class TestHoldingPatternIntegration:
                 callsign="SPIRAL1",
             )
 
-        # Should accumulate ~240° of turn
+        # Should accumulate ~345° of turn (23 turns of 15°)
         total_turn = detector.get_total_turns(hex_id)
-        assert 200 <= total_turn <= 280
+        assert 300 <= total_turn <= 360

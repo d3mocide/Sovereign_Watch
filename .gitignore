@@ -10,6 +10,8 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+.editorconfig
+.markdownlint.json  
 
 # Environment variables
 .env
@@ -27,6 +29,7 @@ venv/
 env/
 .env-python/
 .pnpm-store/
+.pytest_cache/
 
 # Logs
 *.log

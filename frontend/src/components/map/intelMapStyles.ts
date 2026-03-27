@@ -5,33 +5,21 @@
  */
 
 import type { StyleSpecification } from "maplibre-gl";
+import { DARK_MAP_STYLE, SATELLITE_MAP_STYLE } from "./mapStyles";
 
-export type MapStyleKey = "dark" | "debug";
+export type MapStyleKey = "dark" | "satellite";
 
 export const MAP_STYLE_LABELS: Record<MapStyleKey, string> = {
-  dark: "DARK MATTER",
-  debug: "DEBUG",
+  dark: "DARK",
+  satellite: "SAT",
 };
 
-const DARK_MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-
-const DEBUG_MAP_STYLE: StyleSpecification = {
-  version: 8 as const,
-  sources: {},
-  layers: [
-    {
-      id: "background",
-      type: "background" as const,
-      paint: { "background-color": "#0a0a0a" },
-    },
-  ],
-};
-
-export function resolveMapStyle(key: MapStyleKey): string | StyleSpecification {
+export function resolveMapStyle(
+  key: MapStyleKey,
+): string | StyleSpecification {
   switch (key) {
-    case "debug":
-      return DEBUG_MAP_STYLE;
+    case "satellite":
+      return SATELLITE_MAP_STYLE;
     default:
       return DARK_MAP_STYLE;
   }
@@ -39,8 +27,8 @@ export function resolveMapStyle(key: MapStyleKey): string | StyleSpecification {
 
 export function getBaseMapTileUrl(key: MapStyleKey): string | null {
   switch (key) {
-    case "debug":
-      return null;
+    case "satellite":
+      return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
     default:
       return "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png";
   }

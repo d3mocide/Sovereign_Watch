@@ -268,6 +268,7 @@ export interface MapFilters {
   showSatNOGS: boolean;
   showGdelt: boolean;
   showGdeltLabels?: boolean;
+  showHoldingPatterns?: boolean;
   geodent?: boolean; // Geodent toggle synonym
   // Infrastructure
   showCables?: boolean;

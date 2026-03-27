@@ -1,6 +1,7 @@
 import React from "react";
 import { CoTEntity, HistorySegment } from "../../types";
 import { AircraftView } from "./sidebar-right/AircraftView";
+import { HoldingPatternView } from "./sidebar-right/HoldingPatternView";
 import { GdeltView } from "./sidebar-right/GdeltView";
 import { InfraView } from "./sidebar-right/InfraView";
 import { JammingView } from "./sidebar-right/JammingView";
@@ -41,6 +42,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const baseProps = { entity, onClose, onCenterMap, onOpenAnalystPanel };
 
   // Domain-specific early-return routes
+  if (entity.type === "sitrep") {
+    return null;
+  }
+  if (entity.type === "hold") {
+    return (
+      <HoldingPatternView
+        key={entity.uid}
+        {...baseProps}
+        onHistoryLoaded={onHistoryLoaded}
+      />
+    );
+  }
   if (entity.type === "js8") {
     return <JS8View key={entity.uid} {...baseProps} />;
   }

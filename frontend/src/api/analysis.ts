@@ -6,6 +6,7 @@ export interface AnalyzeRequest {
   uid: string;
   lookback_hours: number;
   mode: string;
+  sitrep_context?: any;
 }
 
 /**
@@ -16,12 +17,18 @@ export interface AnalyzeRequest {
 export async function streamAnalysis(
   uid: string,
   lookbackHours: number,
-  mode: string = 'tactical'
+  mode: string = 'tactical',
+  sitrepContext?: any
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const response = await fetch(`/api/analyze/${encodeURIComponent(uid)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid, lookback_hours: lookbackHours, mode } satisfies AnalyzeRequest),
+    body: JSON.stringify({ 
+      uid, 
+      lookback_hours: lookbackHours, 
+      mode,
+      sitrep_context: sitrepContext
+    } satisfies AnalyzeRequest),
   });
 
   if (!response.ok) {

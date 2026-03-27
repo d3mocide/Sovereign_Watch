@@ -22,6 +22,7 @@ import { buildJS8Layers } from "./buildJS8Layers";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
+import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
 
@@ -71,7 +72,8 @@ interface LayerCompositionOptions {
   setHoverPosition: (pos: { x: number; y: number } | null) => void;
   setHoveredInfra: (info: unknown) => void;
   setSelectedInfra: (info: unknown) => void;
-  /** Historical flight path segments from TrackHistoryPanel */
+  /** Aviation holding pattern GeoJSON (from /api/holding-patterns/active) */
+  holdingPatternData?: FeatureCollection | null;
   historySegments?: HistorySegment[];
   satnogsStations?: SatNOGSStation[];
 }
@@ -115,6 +117,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     setSelectedInfra,
     historySegments,
     satnogsStations,
+    holdingPatternData,
   } = options;
 
   // JS8 station layers
@@ -367,6 +370,18 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       currentSelected,
       globeMode,
       historyTails,
+    ),
+    // Aviation Holding Patterns - Pulsed Amber tactical zones
+    ...buildHoldingPatternLayer(
+      holdingPatternData || null,
+      filters?.showHoldingPatterns !== false,
+      globeMode,
+      now,
+      (entity, pos) => {
+        setHoveredEntity(entity);
+        setHoverPosition(pos);
+      },
+      onEntitySelect,
     ),
     ...buildEntityLayers(
       interpolatedEntities,

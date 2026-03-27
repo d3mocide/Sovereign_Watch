@@ -419,6 +419,27 @@ async def get_poller_health():
         status, last_success, last_error_ts, last_error_msg = _compute(
             fetch_key, error_key, stale_s, has_creds
         )
+        
+        # Track and retrieve health history (last 12 mins)
+        history = []
+        if db.redis_client:
+            history_key = f"poller:history:{sid}"
+            # Capture current status for history buffer (1 = healthy/active, 0 = stale/error/pending)
+            current_bit = 1 if status in ("healthy", "active") else 0
+            
+            try:
+                # Add to history list, keep last 12
+                await db.redis_client.lpush(history_key, current_bit)
+                await db.redis_client.ltrim(history_key, 0, 11)
+                await db.redis_client.expire(history_key, 3600)
+                
+                # Retrieve full history
+                raw_history = await db.redis_client.lrange(history_key, 0, 11)
+                # Redis returns them in reverse (newest first); we want chronological (oldest to newest)
+                history = [int(b) for b in reversed(raw_history)]
+            except Exception:
+                pass
+
         results.append({
             "id": sid,
             "name": name,
@@ -428,6 +449,7 @@ async def get_poller_health():
             "last_error_ts": last_error_ts,
             "last_error_msg": last_error_msg,
             "stale_after_s": stale_s,
+            "history": history,
         })
 
     return results

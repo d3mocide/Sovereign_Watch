@@ -95,6 +95,10 @@ Chevron markers with heading direction:
 
 **Pulsating ring** = active telemetry (refreshing in real time)
 
+**Circling indicators** = aircraft is currently flying a sustained holding pattern (identified by Ingest-05).
+
+**Emergency squawk alerts** (7700, 7600, 7500) trigger cross-domain HUD notifications.
+
 ### Maritime (AIS)
 
 Chevron markers with heading direction:

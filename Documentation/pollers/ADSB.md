@@ -69,6 +69,9 @@ All configuration is provided via environment variables (set in `docker-compose.
 | `COVERAGE_RADIUS_NM` | `150` | AOR radius in nautical miles |
 | `KAFKA_BROKERS` | `sovereign-redpanda:9092` | Redpanda bootstrap servers |
 | `REDIS_HOST` | `sovereign-redis` | Redis hostname |
+| `HOLDING_PATTERN_THRESHOLD` | `300` | Degrees of total turn within window to flag |
+| `HOLDING_WINDOW_S` | `300` | Rolling observation window (seconds) |
+| `MIN_VELOCITY_KNOTS` | `0` | Minimum velocity for detection |
 | `ARBITRATION_CLEANUP_INTERVAL` | `30` | Stale arbitration entry cleanup interval (seconds) |
 
 ### Dynamic Mission Area
@@ -118,6 +121,27 @@ Each aircraft is classified by the `classify_aircraft()` function, which maps AD
 | Military Helicopter | `a-f-A-M-H` |
 | Drone/RPV | `a-f-A-C-Q` |
 | Ground Vehicle (Emergency/Service) | `a-f-G-E-V-C` |
+
+---
+
+## Holding Pattern Detection (Ingest-05)
+
+The ADS-B poller includes a stateful **Holding Pattern Detector** that tracks the heading history of every aircraft in the AOR. It identifies circular flight paths common in loitering, airspace stacking, or tactical surveillance.
+
+### Detection Logic
+- **Rolling Window**: Tracks heading changes over a `HOLDING_WINDOW_S` period (default: 5 min).
+- **Cumulative Turn**: Accumulates the shortest-turn angle between consecutive updates (e.g., 350° → 10° is counted as 20°). 
+- **Trigger**: An aircraft is flagged when its total turn angle exceeds the `HOLDING_PATTERN_THRESHOLD` (default: 300°).
+- **Noise Filter**: Heading changes smaller than `HEADING_CHANGE_THRESHOLD` (default: 2°) are ignored to filter out GPS drift/noise.
+- **Velocity Gate**: Detection only occurs when aircraft speed is above `MIN_VELOCITY_KNOTS`.
+
+### Confidence Scoring (0.0–1.0)
+The system calculates a "confidence" metric based on:
+1.  **Revolutions**: High base confidence after 1.5 complete circles (540°).
+2.  **Duration**: Bonus if the pattern lasts longer than `MIN_CIRCLE_DURATION` (default: 60s).
+3.  **Consistency**: Bonus if the turn rate is stable (low variance in heading change intervals).
+
+Detected holding patterns are published as a separate GeoJSON collection to the Redis key `holding_pattern:active_zones` and annotated in the individual aircraft telemetry.
 
 ---
 

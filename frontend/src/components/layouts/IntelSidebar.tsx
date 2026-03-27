@@ -12,12 +12,10 @@ import {
   AlertTriangle,
   FileText,
   Globe2,
-  Layers,
   RefreshCw,
-  RotateCcw,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { type MapStyleKey, MAP_STYLE_LABELS } from "../map/intelMapStyles";
+/* intel style imports removed */
 
 export interface ActorEntry {
   actor: string;
@@ -35,13 +33,6 @@ export interface ActorEntry {
 
 interface IntelSidebarProps {
   onFlyTo?: (lat: number, lon: number) => void;
-  mapStyle?: MapStyleKey;
-  onMapStyleChange?: (style: MapStyleKey) => void;
-  renderMode?: "2D" | "3D";
-  onRenderModeChange?: (mode: "2D" | "3D") => void;
-  spin?: boolean;
-  onSpinToggle?: () => void;
-  renderer?: "DECKGL" | "MAPLIBRE";
   /** Called with a pre-formatted context string when the user requests a SITREP. */
   onGenerateSitrep?: (context: string) => void;
 }
@@ -55,7 +46,7 @@ function threatColor(level: ActorEntry["threat_level"]): string {
     case "MONITORING":
       return "text-yellow-400";
     default:
-      return "text-hud-green/60";
+      return "text-hud-green/80";
   }
 }
 
@@ -122,13 +113,6 @@ function buildSitrepContext(actors: ActorEntry[], timeWindow: number): string {
 
 export function IntelSidebar({
   onFlyTo,
-  mapStyle = "dark",
-  onMapStyleChange,
-  renderMode = "3D",
-  onRenderModeChange,
-  spin = false,
-  onSpinToggle,
-  renderer = "MAPLIBRE",
   onGenerateSitrep,
 }: IntelSidebarProps) {
   const [actors, setActors] = useState<ActorEntry[]>([]);
@@ -177,134 +161,71 @@ export function IntelSidebar({
   }, [onGenerateSitrep, actors, timeWindow]);
 
   return (
-    <div className="flex h-[95%] max-h-[95dvh] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none">
+    <div className="flex h-[98%] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none">
       {/* Header */}
-      <div className="shrink-0 px-3 py-2 bg-black/40 border border-hud-green/20 backdrop-blur-md rounded-sm">
-        <div className="flex items-center justify-between mb-1">
+      <div className="shrink-0 px-3 py-3 bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-hud-green/30 to-transparent opacity-50" />
+
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Globe2 size={12} className="text-hud-green" />
-            <span className="text-hud-green font-black tracking-widest text-[10px]">
+            <Globe2 size={13} className="text-hud-green" />
+            <span className="text-white font-bold tracking-[.4em] text-[10px] uppercase">
               INTEL // OSINT GLOBE
             </span>
-            <span
-              className={`px-1.5 py-0.5 text-[8px] font-black tracking-widest rounded-sm border ${
-                renderer === "MAPLIBRE"
-                  ? "text-sky-300 bg-sky-500/10 border-sky-500/40"
-                  : "text-cyan-300 bg-cyan-500/10 border-cyan-500/40"
-              }`}
-              title="Active globe renderer"
-            >
-              {renderer}
-            </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Globe spin toggle */}
-            {onSpinToggle && (
-              <button
-                onClick={onSpinToggle}
-                title={spin ? "Pause globe rotation" : "Start globe rotation"}
-                className={`p-0.5 rounded-sm transition-colors ${
-                  spin
-                    ? "text-hud-green border border-hud-green/40 bg-hud-green/10"
-                    : "text-white/30 hover:text-hud-green border border-transparent"
-                }`}
-              >
-                <RotateCcw
-                  size={10}
-                  className={spin ? "animate-spin-slow" : ""}
-                />
-              </button>
-            )}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => fetchActors(true)}
-              className="p-0.5 text-white/30 hover:text-hud-green transition-colors"
+              className="p-1 text-white/20 hover:text-hud-green hover:bg-white/5 rounded transition-all"
               title="Refresh actor data"
             >
-              <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
+
         {lastUpdated && (
-          <div className="text-[9px] text-white/30 tracking-wider">
+          <div className="text-[9px] text-white/20 tracking-[.2em] font-medium mx-1 mb-3 flex items-center gap-2">
+            <div className="w-1 h-1 rounded-full bg-hud-green/40 animate-pulse" />
             UPDATED // {formatTime(lastUpdated)} UTC
           </div>
         )}
 
-        {/* Time window selector */}
-        <div className="flex items-center gap-1 mt-2">
-          <span className="text-[9px] text-white/30 tracking-wider">
-            WINDOW:
-          </span>
-          {([24, 48, 72] as const).map((h) => (
-            <button
-              key={h}
-              onClick={() => setTimeWindow(h)}
-              className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-sm transition-colors ${
-                timeWindow === h
-                  ? "bg-hud-green/20 text-hud-green border border-hud-green/40"
-                  : "text-white/30 hover:text-white/60 border border-white/10"
-              }`}
-            >
-              {h}H
-            </button>
-          ))}
+        <div className="space-y-2">
+          {/* Time window selector */}
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[8px] text-white/30 tracking-[.2em] uppercase font-bold shrink-0">
+              WINDOW
+            </span>
+            <div className="flex flex-1 gap-1">
+              {([24, 48, 72] as const).map((h) => (
+                <button
+                  key={h}
+                  onClick={() => setTimeWindow(h)}
+                  className={`flex-1 py-1 text-[9px] font-bold tracking-widest rounded-sm transition-all ${
+                    timeWindow === h
+                      ? "bg-hud-green/20 text-hud-green border border-hud-green/40 shadow-[0_0_8px_rgba(0,255,65,0.1)]"
+                      : "text-white/30 hover:text-white/60 bg-white/5 border border-white/5"
+                  }`}
+                >
+                  {h}H
+                </button>
+              ))}
+            </div>
+          </div>
+
         </div>
-
-        {/* Map style selector */}
-        {onMapStyleChange && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <Layers size={9} className="text-white/30 shrink-0" />
-            <span className="text-[9px] text-white/30 tracking-wider shrink-0">
-              STYLE:
-            </span>
-            {(Object.keys(MAP_STYLE_LABELS) as MapStyleKey[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => onMapStyleChange(key)}
-                className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-sm transition-colors ${
-                  key === mapStyle
-                    ? "bg-hud-green/20 text-hud-green border border-hud-green/40"
-                    : "text-white/30 hover:text-white/60 border border-white/10"
-                }`}
-              >
-                {MAP_STYLE_LABELS[key].split(" ")[0]}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Render mode selector */}
-        {onRenderModeChange && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <span className="text-[9px] text-white/30 tracking-wider shrink-0">
-              MODE:
-            </span>
-            {(["2D", "3D"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => onRenderModeChange(mode)}
-                className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded-sm transition-colors ${
-                  renderMode === mode
-                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50"
-                    : "text-white/30 hover:text-white/60 border border-white/10"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Conflict Zones */}
-      <div className="flex flex-col min-h-[25%] bg-black/40 border border-hud-green/15 backdrop-blur-md rounded-sm overflow-hidden">
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-white/10">
+      <div className="flex flex-col min-h-[25%] bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative">
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={11} className="text-red-400" />
-            <span className="text-[10px] font-black tracking-widest text-white/80">
+            <AlertTriangle size={12} className="text-red-400 opacity-80" />
+            <span className="text-[10px] font-bold tracking-[.3em] text-white/80 uppercase">
               ACTIVE CONFLICT ZONES
             </span>
-            <span className="text-[9px] text-red-400 font-bold">
+            <span className="text-[10px] text-red-500 font-black tabular-nums">
               [{conflictZones.length}]
             </span>
           </div>
@@ -330,28 +251,28 @@ export function IntelSidebar({
                 className={`w-full text-left px-3 py-2 border-b ${threatBorderColor(zone.threat_level)} hover:bg-white/5 transition-colors group`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/20 text-[9px] w-4 text-right shrink-0">
+                  <div className="flex items-center gap-3">
+                    <span className="text-white/10 text-[9px] font-black w-4 text-right shrink-0 tabular-nums">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     <span
-                      className={`font-black tracking-wider text-[10px] ${threatColor(zone.threat_level)} group-hover:brightness-125`}
+                      className={`font-black tracking-widest text-xs ${threatColor(zone.threat_level)} group-hover:brightness-125 transition-all`}
                     >
                       {zone.actor}
                     </span>
                   </div>
                   <span
-                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm tracking-wider ${threatBadgeBg(zone.threat_level)}`}
+                    className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm tracking-[.2em] backdrop-blur-md uppercase ${threatBadgeBg(zone.threat_level)}`}
                   >
                     {zone.threat_level}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 mt-0.5 pl-6">
-                  <span className="text-white/30 text-[9px]">
-                    {zone.event_count} REPORTS
+                <div className="flex items-center gap-4 mt-1 pl-7">
+                  <span className="text-white/30 text-[9px] font-bold tracking-widest tabular-nums">
+                    {zone.event_count.toLocaleString()} REPORTS
                   </span>
                   {zone.material_conflict > 0 && (
-                    <span className="text-red-400/70 text-[9px]">
+                    <span className="text-red-400/80 text-[9px] font-bold tracking-widest tabular-nums">
                       ⚡ {zone.material_conflict} MATERIAL
                     </span>
                   )}
@@ -363,14 +284,14 @@ export function IntelSidebar({
       </div>
 
       {/* Active Actors */}
-      <div className="flex flex-col min-h-0 bg-black/40 border border-hud-green/15 backdrop-blur-md rounded-sm overflow-hidden">
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-white/10">
+      <div className="flex-1 flex flex-col min-h-0 bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative transition-all">
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
           <div className="flex items-center gap-2">
-            <Activity size={11} className="text-hud-green/70" />
-            <span className="text-[10px] font-black tracking-widest text-white/80">
+            <Activity size={12} className="text-hud-green/70 animate-pulse" />
+            <span className="text-[10px] font-bold tracking-[.3em] text-white/80 uppercase">
               ACTIVE ACTORS
             </span>
-            <span className="text-[9px] text-hud-green/60 font-bold">
+            <span className="text-[10px] text-hud-green font-black tabular-nums">
               [{allActors.length}]
             </span>
           </div>
@@ -387,20 +308,21 @@ export function IntelSidebar({
               className="w-full text-left px-3 py-1.5 border-b border-white/5 hover:bg-white/5 transition-colors group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span
-                    className={`font-bold tracking-wider text-[10px] ${threatColor(actor.threat_level)} group-hover:brightness-125`}
+                    className={`font-black tracking-widest text-[11px] ${threatColor(actor.threat_level)} group-hover:brightness-125 transition-all`}
                   >
                     {actor.actor}
                   </span>
-                  <span className="text-white/20 text-[9px]">
+                  <span className="text-white/20 text-[9px] font-medium tracking-widest uppercase">
                     {actor.actor_type}
                   </span>
                 </div>
                 <div
-                  className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm tracking-widest ${threatBadgeBg(actor.threat_level)}`}
+                  className={`text-[9px] font-black px-2 py-0.5 rounded-sm tracking-widest backdrop-blur-md ${threatBadgeBg(actor.threat_level)}`}
                 >
-                  INTEL: {actor.event_count}
+                  <span className="opacity-50">INTEL:</span>{" "}
+                  {actor.event_count.toLocaleString()}
                 </div>
               </div>
             </button>
@@ -414,23 +336,31 @@ export function IntelSidebar({
       </div>
 
       {/* SITREP Summary footer */}
-      <div className="shrink-0 px-3 py-2 bg-black/30 border border-white/10 rounded-sm backdrop-blur-md">
-        <div className="text-[9px] text-white/30 tracking-wider mb-1.5">
-          ▶ SITREP SUMMARY
+      <div className="shrink-0 px-4 py-3 bg-black/70 border border-white/10 rounded-sm backdrop-blur-2xl shadow-2xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-hud-green/5 to-transparent pointer-events-none" />
+
+        <div className="text-[9px] text-white/40 font-black tracking-[.3em] uppercase mb-3 flex items-center gap-2">
+          <div className="w-2 h-0.5 bg-hud-green/40" />
+          SITREP SUMMARY
         </div>
-        <div className="flex justify-between text-[9px] mb-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-white/40">HOT ZONES</span>
-            <span className="text-red-400 font-bold">
+
+        <div className="flex justify-between text-[10px] mb-4 relative z-10">
+          <div className="flex flex-col gap-1">
+            <span className="text-white/30 font-bold tracking-widest text-[8px] uppercase">
+              HOT ZONES
+            </span>
+            <span className="text-red-500 font-black text-xs tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.3)]">
               {
                 conflictZones.filter((z) => z.threat_level === "CRITICAL")
                   .length
               }
             </span>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-white/40">MONITORING</span>
-            <span className="text-amber-400 font-bold">
+          <div className="flex flex-col gap-1">
+            <span className="text-white/30 font-bold tracking-widest text-[8px] uppercase">
+              MONITORING
+            </span>
+            <span className="text-amber-500 font-black text-xs tabular-nums drop-shadow-[0_0_8px_rgba(245,158,11,0.3)]">
               {
                 actors.filter(
                   (a) =>
@@ -440,10 +370,12 @@ export function IntelSidebar({
               }
             </span>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-white/40">REPORTS</span>
-            <span className="text-hud-green font-bold">
-              {actors.reduce((s, a) => s + a.event_count, 0)}
+          <div className="flex flex-col gap-1">
+            <span className="text-white/30 font-bold tracking-widest text-[8px] uppercase">
+              REPORTS
+            </span>
+            <span className="text-hud-green font-black text-xs tabular-nums drop-shadow-[0_0_8px_rgba(0,255,65,0.3)]">
+              {actors.reduce((s, a) => s + a.event_count, 0).toLocaleString()}
             </span>
           </div>
         </div>
@@ -453,14 +385,18 @@ export function IntelSidebar({
           <button
             onClick={handleSitrep}
             disabled={!actors.length}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[9px] font-black tracking-widest transition-all ${
+            className={`w-full group relative flex items-center justify-center gap-3 px-4 py-2 rounded-sm text-[10px] font-black tracking-[.4em] transition-all overflow-hidden ${
               actors.length
-                ? "bg-hud-green/10 border border-hud-green/40 text-hud-green hover:bg-hud-green/20 hover:shadow-[0_0_12px_rgba(0,255,65,0.2)]"
+                ? "bg-hud-green/10 border border-hud-green/40 text-hud-green hover:bg-hud-green/20 hover:shadow-[0_0_20px_rgba(0,255,65,0.2)]"
                 : "bg-white/5 border border-white/10 text-white/20 cursor-not-allowed"
             }`}
           >
-            <FileText size={10} />
-            GENERATE AI SITREP
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-hud-green/30 group-hover:bg-hud-green/60 transition-all" />
+            <FileText
+              size={12}
+              className="group-hover:scale-110 transition-transform"
+            />
+            <span className="uppercase">Generate AI Sitrep</span>
           </button>
         )}
       </div>

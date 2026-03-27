@@ -33,7 +33,7 @@ PAGE_SIZE            = 100
 USER_AGENT           = "SovereignWatch/1.0 (SatNOGS spectrum verification; admin@sovereignwatch.local)"
 
 # Fetch observations from the last N hours to bound volume
-OBSERVATION_WINDOW_H = 6
+OBSERVATION_WINDOW_H = 24
 
 
 class SatNOGSNetworkSource:
@@ -99,7 +99,6 @@ class SatNOGSNetworkSource:
             "format":    "json",
             "status":    "good",
             "start":     start_after,
-            "page_size": PAGE_SIZE,
         }
 
         async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
@@ -107,6 +106,8 @@ class SatNOGSNetworkSource:
             page = 1
             while url:
                 try:
+                    # Pass params ONLY on the initial URL. Subsequent cursors from Link headers
+                    # will already include them.
                     resp = await client.get(url, params=params if page == 1 else None)
                     resp.raise_for_status()
                     data = resp.json()
@@ -120,13 +121,10 @@ class SatNOGSNetworkSource:
                     logger.error("SatNOGS Network request error on page %d: %s", page, exc)
                     break
 
-                if isinstance(data, dict):
-                    results = data.get("results", [])
-                    next_url = data.get("next")
-                else:
-                    results = data
-                    next_url = None
-
+                # SatNOGS API observations endpoint returns a raw list (no dict wrapper),
+                # with pagination URLs provided in the RFC 5988 "Link" header.
+                results = data if isinstance(data, list) else data.get("results", [])
+                
                 for obs in results:
                     obs_id = obs.get("id")
                     if obs_id in self._seen_ids:
@@ -139,7 +137,8 @@ class SatNOGSNetworkSource:
                         self._seen_ids.add(obs_id)
                     published += 1
 
-                url = next_url
+                # Traverse pagination via "Link" header (rel="next")
+                url = resp.links.get("next", {}).get("url")
                 page += 1
                 if url:
                     await asyncio.sleep(0.5)  # polite pacing
