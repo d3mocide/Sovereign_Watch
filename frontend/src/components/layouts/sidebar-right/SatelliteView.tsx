@@ -45,16 +45,16 @@ function SatelliteSpectrumVerification({
       </div>
       <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
         <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
-          <div className="text-white/40 mb-1">STATION_COUNT</div>
+          <div className="text-white/40 mb-1">OBS_COUNT</div>
           <div className="text-purple-300 font-bold">
-            {verificationData.station_count || 0}
+            {verificationData.summary?.total_observations ?? 0}
           </div>
         </div>
         <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
           <div className="text-white/40 mb-1">LAST_OBS</div>
           <div className="text-purple-300 font-bold">
-            {verificationData.last_observation
-              ? new Date(verificationData.last_observation).toLocaleTimeString()
+            {verificationData.recent_observations?.[0]?.start_time
+              ? new Date(verificationData.recent_observations[0].start_time).toLocaleTimeString()
               : "---"}
           </div>
         </div>
