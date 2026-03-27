@@ -136,7 +136,6 @@ export function buildCountryHeatLayer(
   visible: boolean,
   globeMode: boolean,
   animTick: number,
-  debugMode?: boolean,
 ): Layer[] {
   void animTick;
 
@@ -197,9 +196,9 @@ export function buildCountryHeatLayer(
       lineWidthMinPixels: 0.5,
       wrapLongitude: !globeMode,
       parameters: {
-        depthTest: debugMode ? false : !!globeMode,
+        depthTest: !!globeMode,
         // Keep country tint behind GDELT icon/text layers on globe mode.
-        depthBias: globeMode && !debugMode ? 140.0 : 0,
+        depthBias: globeMode ? 140.0 : 0,
       } as any,
     }),
   ];

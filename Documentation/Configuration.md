@@ -38,6 +38,16 @@ These three variables define your **monitoring area** and are consumed by the AD
 | `VITE_MAPBOX_TOKEN`  | _(empty)_ | Mapbox GL JS access token. **Required** for 3D terrain and satellite imagery. Get one at [mapbox.com](https://mapbox.com). If empty, falls back to MapLibre + CARTO Dark Matter (no token needed). |
 | `VITE_ENABLE_MAPBOX` | `true`    | Set to `false` to force MapLibre even when a Mapbox token is present.                                                                                                                              |
 
+### Aviation (ADS-B)
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `HOLDING_PATTERN_THRESHOLD` | `300` | Degrees of total turn within the window to trigger a holding pattern flag. |
+| `HOLDING_WINDOW_S` | `300` | Rolling observation window in seconds (default 300s = 5 min). |
+| `HEADING_CHANGE_THRESHOLD` | `2` | Minimum heading change in degrees to process (noise filter). |
+| `MIN_CIRCLE_DURATION` | `60` | Minimum duration in seconds an aircraft must be circling to be flagged. |
+| `MIN_VELOCITY_KNOTS` | `0` | Minimum velocity in knots to consider for pattern detection. |
+
 ---
 
 ## Maritime (AIS)

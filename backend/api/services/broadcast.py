@@ -6,6 +6,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from aiokafka import AIOKafkaConsumer
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from uvicorn.protocols.utils import ClientDisconnected
+import redis.asyncio as aioredis
 
 from core.config import settings
 from services.tak import transform_to_proto
@@ -23,6 +24,9 @@ class BroadcastManager:
         self._clients: Dict[WebSocket, tuple[asyncio.Queue, asyncio.Task]] = {}
         self.consumer: AIOKafkaConsumer | None = None
         self.consumer_task: asyncio.Task | None = None
+        self.redis_client: aioredis.Redis | None = None
+        self.redis_pubsub: aioredis.client.PubSub | None = None
+        self.redis_task: asyncio.Task | None = None
         self.running = False
 
     @property
@@ -53,7 +57,7 @@ class BroadcastManager:
             logger.info(f"Client disconnected. Total clients: {len(self._clients)}")
 
     async def start(self):
-        """Start the Kafka consumer and broadcast loop."""
+        """Start the Kafka consumer, Redis pub/sub, and broadcast loops."""
         if self.running:
             return
 
@@ -72,8 +76,26 @@ class BroadcastManager:
             logger.error(f"Failed to start Broadcast Consumer: {e}")
             self.running = False
 
+        # Start Redis pub/sub for real-time alerts (jamming zones, holding patterns)
+        try:
+            redis_url = f"redis://{settings.REDIS_HOST}:6379"
+            self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
+            self.redis_pubsub = self.redis_client.pubsub()
+            await self.redis_pubsub.subscribe(
+                "jamming:active_zones",
+                "holding_pattern:active_zones"
+            )
+            logger.info("Redis pub/sub subscribed to alert channels")
+            self.redis_task = asyncio.create_task(self._consume_redis_alerts())
+        except Exception as e:
+            logger.error(f"Failed to start Redis pub/sub: {e}")
+            if self.redis_client:
+                await self.redis_client.aclose()
+            self.redis_client = None
+            self.redis_pubsub = None
+
     async def stop(self):
-        """Stop the consumer and close all connections."""
+        """Stop the consumer, Redis pub/sub, and close all connections."""
         self.running = False
 
         if self.consumer_task:
@@ -89,8 +111,85 @@ class BroadcastManager:
             self.consumer = None
             logger.info("Broadcast Kafka Consumer stopped")
 
+        if self.redis_task:
+            self.redis_task.cancel()
+            try:
+                await self.redis_task
+            except asyncio.CancelledError:
+                pass
+            self.redis_task = None
+
+        if self.redis_pubsub:
+            await self.redis_pubsub.unsubscribe(
+                "jamming:active_zones",
+                "holding_pattern:active_zones"
+            )
+            await self.redis_pubsub.aclose()
+            self.redis_pubsub = None
+
+        if self.redis_client:
+            await self.redis_client.aclose()
+            self.redis_client = None
+            logger.info("Redis pub/sub closed")
+
         for ws in list(self._clients.keys()):
             await self.disconnect(ws)
+
+    async def _consume_redis_alerts(self):
+        """Consume from Redis pub/sub and broadcast alerts (jamming zones, holding patterns)."""
+        if not self.redis_pubsub:
+            logger.error("Redis pub/sub not initialized!")
+            return
+
+        try:
+            async for msg in self.redis_pubsub.listen():
+                if not self.running:
+                    break
+
+                # Skip subscription confirmations
+                if msg["type"] == "subscribe":
+                    continue
+
+                if msg["type"] == "message":
+                    try:
+                        data = json.loads(msg["data"])
+                        # Wrap alert data in a message envelope
+                        alert_msg = {
+                            "type": "alert",
+                            "channel": msg["channel"],
+                            "data": data,
+                        }
+                        alert_json = json.dumps(alert_msg).encode("utf-8")
+
+                        if not self._clients:
+                            continue
+
+                        # Broadcast to all clients (alert format, not TAK proto)
+                        for ws, (q, _) in list(self._clients.items()):
+                            if q.full():
+                                try:
+                                    q.get_nowait()  # drop oldest
+                                except asyncio.QueueEmpty:
+                                    pass
+                            try:
+                                # For alerts, we'll send JSON directly instead of TAK proto
+                                q.put_nowait(("alert", alert_json))
+                            except asyncio.QueueFull:
+                                pass
+
+                    except Exception as e:
+                        logger.error(f"Error processing Redis alert: {e}")
+                        continue
+
+        except Exception as e:
+            logger.critical(f"Redis alert loop failed: {e}", exc_info=True)
+            self.running = False
+            for ws in list(self._clients.keys()):
+                try:
+                    await ws.close(code=1011)
+                except Exception:
+                    pass
+            self._clients.clear()
 
     async def _consume(self):
         """Consume from Kafka and enqueue to each client — never blocked by slow clients."""
@@ -140,9 +239,16 @@ class BroadcastManager:
         """Background task per client: dequeue and send, with a generous timeout."""
         try:
             while True:
-                tak_bytes = await q.get()
+                msg = await q.get()
                 try:
-                    await asyncio.wait_for(ws.send_bytes(tak_bytes), timeout=3.0)
+                    # Handle both TAK proto (bytes) and alert JSON (tuple)
+                    if isinstance(msg, tuple):
+                        msg_type, data = msg
+                        if msg_type == "alert":
+                            await asyncio.wait_for(ws.send_text(data.decode("utf-8")), timeout=3.0)
+                    else:
+                        # TAK proto (bytes)
+                        await asyncio.wait_for(ws.send_bytes(msg), timeout=3.0)
                 except asyncio.TimeoutError:
                     logger.warning("Client send timed out — disconnecting")
                     break

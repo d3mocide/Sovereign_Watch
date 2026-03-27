@@ -8,7 +8,7 @@ import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
 import { TopBar } from "./components/layouts/TopBar";
 import { IntelGlobe } from "./components/map/IntelGlobe";
-import type { MapStyleKey } from "./components/map/intelMapStyles";
+/* Unused import MapStyleKey removed */
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
@@ -171,29 +171,7 @@ function App() {
     [],
   );
 
-  // Intel Globe map style
-  const [intelMapStyle, setIntelMapStyle] = useState<MapStyleKey>(() => {
-    const saved = localStorage.getItem("intelMapStyle");
-    return saved === "debug" ? "debug" : "dark";
-  });
-
-  const handleIntelMapStyleChange = useCallback((style: MapStyleKey) => {
-    setIntelMapStyle(style);
-    localStorage.setItem("intelMapStyle", style);
-  }, []);
-
-  const [intelRenderMode, setIntelRenderMode] = useState<"2D" | "3D">(() => {
-    return localStorage.getItem("intelRenderMode") === "2D" ? "2D" : "3D";
-  });
-
-  const handleIntelRenderModeChange = useCallback((mode: "2D" | "3D") => {
-    setIntelRenderMode(mode);
-    localStorage.setItem("intelRenderMode", mode);
-  }, []);
-
-  // Intel Globe spin state (no persistence — always starts off)
-  const [intelSpin, setIntelSpin] = useState(false);
-  const handleIntelSpinToggle = useCallback(() => setIntelSpin((v) => !v), []);
+  /* Intel globe states removed (managed internally by IntelGlobe) */
 
   // Background Data Maintenance (Cleanup & Counting)
   // This runs regardless of viewMode, ensuring Dashboard counts are live.
@@ -922,13 +900,6 @@ function App() {
           ) : viewMode === "INTEL" ? (
             <IntelSidebar
               onFlyTo={(lat, lon) => mapActions?.flyTo(lat, lon)}
-              mapStyle={intelMapStyle}
-              onMapStyleChange={handleIntelMapStyleChange}
-              renderMode={intelRenderMode}
-              onRenderModeChange={handleIntelRenderModeChange}
-              spin={intelSpin}
-              onSpinToggle={handleIntelSpinToggle}
-              renderer="MAPLIBRE"
               onGenerateSitrep={(context) => {
                 setSelectedEntity({
                   uid: "sitrep-intel",
@@ -954,8 +925,8 @@ function App() {
           viewMode === "ORBITAL" ||
           viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
-              {/* Entity Details Sidebar */}
-              {selectedEntity && (
+              {/* Entity Details Sidebar — Suppressed in SITREP mode to avoid 'Ghost Sidebar' bug */}
+              {selectedEntity && (selectedEntity as any).type !== "sitrep" && (
                 <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden">
                   <SidebarRight
                     entity={selectedEntity}
@@ -983,12 +954,6 @@ function App() {
           ) : null
         }
       >
-        <AIAnalystPanel
-          entity={selectedEntity}
-          isOpen={isAIAnalystOpen}
-          onClose={() => setIsAIAnalystOpen(false)}
-          autoRunTrigger={aiAnalystAutoRun}
-        />
         {viewMode === "TACTICAL" ? (
           <>
             <TacticalMap
@@ -1114,11 +1079,6 @@ function App() {
               }
               worldCountriesData={worldCountriesData}
               onEntitySelect={handleEntitySelect}
-              mapStyle={intelMapStyle}
-              onMapStyleChange={handleIntelMapStyleChange}
-              renderMode={intelRenderMode}
-              onRenderModeChange={handleIntelRenderModeChange}
-              spin={intelSpin}
             />
             {/* OSINT ticker pinned to bottom of the globe area */}
             <div className="absolute bottom-0 left-0 right-0 z-10">
@@ -1159,6 +1119,19 @@ function App() {
           </div>
         )}
       </MainHud>
+      <AIAnalystPanel
+        entity={selectedEntity}
+        isOpen={isAIAnalystOpen}
+        onClose={() => {
+          setIsAIAnalystOpen(false);
+          // If this was a sitrep, clear the selection too so we don't leave a 'ghost' state
+          if (selectedEntity?.type === "sitrep") {
+            setSelectedEntity(null);
+          }
+        }}
+        autoRunTrigger={aiAnalystAutoRun}
+        isSidebarClosed={!selectedEntity || selectedEntity.type === "sitrep"}
+      />
     </>
   );
 }

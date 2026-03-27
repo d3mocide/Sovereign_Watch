@@ -252,9 +252,24 @@ export function TacticalMap({
     }
   }, []);
 
-  // Space Weather & Jamming data (polled from API, passed to layer composition)
   const [auroraData, setAuroraData] = useState<any>(null);
   const [jammingData, setJammingData] = useState<any>(null);
+  const [holdingPatternData, setHoldingPatternData] = useState<FeatureCollection | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAviationAlerts = async () => {
+      try {
+        if (filters?.showHoldingPatterns !== false) {
+          const r = await fetch("/api/holding-patterns/active");
+          if (r.ok && !cancelled) setHoldingPatternData(await r.json());
+        }
+      } catch { /* ignore */ }
+    };
+    fetchAviationAlerts();
+    const id = setInterval(fetchAviationAlerts, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [filters?.showHoldingPatterns]);
 
   useEffect(() => {
     let cancelled = false;
@@ -426,6 +441,34 @@ export function TacticalMap({
     repeatersLoading,
   ]);
 
+  // Aviation Holding Pattern Alert Trigger
+  const seenHoldingRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!holdingPatternData?.features || holdingPatternData.features.length === 0) {
+      if (seenHoldingRef.current.size > 0) seenHoldingRef.current.clear();
+      return;
+    }
+
+    holdingPatternData.features.forEach((f: any) => {
+      const p = f.properties;
+      const key = `${p.hex_id}-${p.time}`; // Simple key to prevent duplicate alerts for same event
+      if (!seenHoldingRef.current.has(key)) {
+        onEvent?.({
+          message: `ALERT: Active holding pattern detected — ${p.callsign || p.hex_id} (${p.altitude}ft)`,
+          type: "alert",
+          entityType: "air",
+        });
+        seenHoldingRef.current.add(key);
+      }
+    });
+
+    // Cleanup old keys (approximate)
+    if (seenHoldingRef.current.size > 50) {
+      const arr = Array.from(seenHoldingRef.current);
+      seenHoldingRef.current = new Set(arr.slice(-30));
+    }
+  }, [holdingPatternData, onEvent]);
+
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
   // Velocity Vector Toggle - use ref for reactivity in animation loop
@@ -579,6 +622,7 @@ export function TacticalMap({
         ? filters.gdeltToneThreshold
         : undefined,
     historySegmentsRef,
+    holdingPatternData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

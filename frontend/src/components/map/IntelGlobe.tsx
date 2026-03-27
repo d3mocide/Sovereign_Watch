@@ -36,27 +36,22 @@ interface IntelGlobeProps {
   gdeltData: FeatureCollection | null;
   worldCountriesData: FeatureCollection | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
-  mapStyle?: MapStyleKey;
-  onMapStyleChange?: (style: MapStyleKey) => void;
-  renderMode?: "2D" | "3D";
-  onRenderModeChange?: (mode: "2D" | "3D") => void;
-  /** When true the globe auto-rotates; pauses after any user interaction. */
-  spin?: boolean;
 }
 
 export function IntelGlobe({
   gdeltData,
   worldCountriesData,
   onEntitySelect,
-  mapStyle: mapStyleProp = "dark",
-  onMapStyleChange,
-  renderMode = "3D",
-  onRenderModeChange,
-  spin = false,
 }: IntelGlobeProps) {
-  const globeMode = renderMode === "3D";
-  const defaultZoom = 2.2; // ~2 clicks tighter than prior 1.8
+  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>("dark");
+  const [projection, setProjection] = useState<"globe" | "mercator">("globe");
+  const [spin, setSpin] = useState(true);
+  const [enable3d, setEnable3d] = useState(false);
 
+  const globeMode = projection === "globe";
+  const defaultZoom = 2.2;
+
+  // Viewstate state for interaction only
   const [viewState, setViewState] = useState({
     latitude: 20,
     longitude: 15,
@@ -65,21 +60,23 @@ export function IntelGlobe({
     bearing: 0,
   });
 
-  // Mutable refs for rAF loop — avoids stale closures
+  // Mutable refs for high-performance rAF loop (prevents React re-renders every frame)
+  const mapRef = useRef<any>(null);
+  const lngRef = useRef(15);
   const spinRef = useRef(spin);
   spinRef.current = spin;
   const lastInteractionRef = useRef<number>(0);
 
-  // Imperative overlay reference — same pattern as SituationGlobe
+  // Imperative overlay reference
   const overlayRef = useRef<MapboxOverlay | null>(null);
 
   // Actors for country heat layer
   const [actors, setActors] = useState<ActorEntry[]>([]);
 
-  // animTick drives arc opacity pulse (0->1 per second)
+  // animTick drives pulse animations
   const animTickRef = useRef(0);
 
-  // ── Inline ref-sync: let the stable rAF loop read latest prop/state values ──
+  // Ref syncing for the RAF loop
   const worldCountriesDataRef = useRef(worldCountriesData);
   worldCountriesDataRef.current = worldCountriesData;
 
@@ -92,11 +89,7 @@ export function IntelGlobe({
   const globeModeRef = useRef(globeMode);
   globeModeRef.current = globeMode;
 
-  const debugMode = mapStyleProp === "debug";
-  const debugModeRef = useRef(debugMode);
-  debugModeRef.current = debugMode;
-
-  // Fetch actors on mount and every 5 minutes
+  // Fetch actors every 5 minutes
   useEffect(() => {
     const fetchActors = async () => {
       try {
@@ -106,7 +99,7 @@ export function IntelGlobe({
           if (Array.isArray(data)) setActors(data);
         }
       } catch {
-        // silently ignore
+        /* skip */
       }
     };
     fetchActors();
@@ -114,7 +107,6 @@ export function IntelGlobe({
     return () => clearInterval(interval);
   }, []);
 
-  // IntelGlobe uses the sidebar for GDELT detail; no floating tooltip needed.
   const handleHover = useCallback(() => {}, []);
 
   const handleGdeltClick = useCallback(
@@ -137,9 +129,9 @@ export function IntelGlobe({
     [onEntitySelect],
   );
 
-  const mapStyle = useMemo(() => resolveMapStyle(mapStyleProp), [mapStyleProp]);
+  const mapStyle = useMemo(() => resolveMapStyle(mapStyleKey), [mapStyleKey]);
 
-  // Static layer: GDELT points don't pulse — recomputed only when data/handlers change
+  // Static layer memo
   const gdeltLayer = useMemo(
     () =>
       buildGdeltLayer(
@@ -150,19 +142,14 @@ export function IntelGlobe({
         false,
         handleHover,
         handleGdeltClick,
-        debugMode,
       ),
-    [gdeltData, globeMode, handleHover, handleGdeltClick, debugMode],
+    [gdeltData, globeMode, handleHover, handleGdeltClick],
   );
 
-  // Sync gdeltLayer memo result to a ref so the rAF loop picks up changes
-  // without needing to be in the effect deps.
   const gdeltLayerRef = useRef(gdeltLayer);
   gdeltLayerRef.current = gdeltLayer;
 
-  // Combined rAF loop: arc pulse tick + globe spin + direct setProps
-  // Calling setProps here (instead of from a reactive useEffect triggered by
-  // animTick state) eliminates 60 React setState calls per second.
+  // Animation & Data Layer composition loop
   useEffect(() => {
     let last = performance.now();
     let raf: number;
@@ -173,13 +160,16 @@ export function IntelGlobe({
 
       animTickRef.current = (animTickRef.current + dt) % 1;
 
-      if (spinRef.current) {
+      // PERFORMANCE OPTIMIZATION: Imperative Spin
+      // We update the map instance directly instead of triggering a React render cycle via setViewState.
+      // This eliminates the jitter caused by concurrent state updates in SituationGlobe.
+      if (spinRef.current && mapRef.current) {
         const idleMs = now - lastInteractionRef.current;
         if (idleMs >= SPIN_RESUME_DELAY_MS) {
-          setViewState((prev) => ({
-            ...prev,
-            longitude: prev.longitude + SPIN_DEG_PER_SEC * dt,
-          }));
+          lngRef.current = (lngRef.current + SPIN_DEG_PER_SEC * dt) % 360;
+          mapRef.current.jumpTo({
+            center: [lngRef.current, viewState.latitude],
+          });
         }
       }
 
@@ -192,7 +182,6 @@ export function IntelGlobe({
               true,
               globeModeRef.current,
               animTickRef.current,
-              debugModeRef.current,
             ),
             ...gdeltLayerRef.current,
             ...buildGdeltArcLayer(
@@ -200,7 +189,6 @@ export function IntelGlobe({
               true,
               globeModeRef.current,
               animTickRef.current,
-              debugModeRef.current,
             ),
           ],
         });
@@ -211,13 +199,28 @@ export function IntelGlobe({
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []); // stable — all volatile values accessed via inline-synced refs
+  }, []); // Only run once on mount
 
   const zoomBy = useCallback((delta: number) => {
     setViewState((prev) => ({
       ...prev,
       zoom: Math.max(1, Math.min(8, prev.zoom + delta)),
     }));
+  }, []);
+
+  const handleAdjustBearing = useCallback((delta: number) => {
+    setViewState((prev) => ({ ...prev, bearing: (prev.bearing + delta) % 360 }));
+  }, []);
+
+  const handleAdjustPitch = useCallback((delta: number) => {
+    setViewState((prev) => ({
+      ...prev,
+      pitch: Math.max(0, Math.min(60, prev.pitch + delta)),
+    }));
+  }, []);
+
+  const handleResetNorth = useCallback(() => {
+    setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }));
   }, []);
 
   return (
@@ -227,12 +230,13 @@ export function IntelGlobe({
     >
       <StarField active={true} />
       <MapLibreAdapter
-        key={`intel-maplibre-${renderMode}-${mapStyleProp}`}
+        key={`intel-maplibre-${globeMode ? "globe" : "mercator"}-${mapStyleKey}`}
         showAttribution={false}
         globeMode={globeMode}
-        onLoad={(evt: unknown) => {
-          const map = (evt as { target?: any })?.target;
-          if (!map?.getStyle) return;
+        onLoad={(evt: any) => {
+          const map = evt?.target;
+          if (!map) return;
+          mapRef.current = map;
 
           const style = map.getStyle();
           const layers = style?.layers ?? [];
@@ -254,28 +258,26 @@ export function IntelGlobe({
             try {
               map.removeLayer(layer.id);
             } catch {
-              // Ignore style-internal ordering errors during hot reload/style swaps.
+              /* ignore style swap race */
             }
           }
         }}
         viewState={viewState}
-        onMove={(evt: unknown) => {
-          const moveEvt = evt as {
-            originalEvent?: unknown;
-            viewState?: Partial<typeof viewState>;
-          };
-          if (moveEvt.originalEvent) {
+        onMove={(evt: any) => {
+          if (evt.originalEvent) {
             lastInteractionRef.current = performance.now();
           }
-          setViewState((prev) => ({
-            latitude: moveEvt.viewState?.latitude ?? prev.latitude,
-            longitude: moveEvt.viewState?.longitude ?? prev.longitude,
-            zoom: moveEvt.viewState?.zoom ?? prev.zoom,
-            pitch: globeMode ? 0 : (moveEvt.viewState?.pitch ?? prev.pitch),
-            bearing: globeMode
-              ? 0
-              : (moveEvt.viewState?.bearing ?? prev.bearing),
-          }));
+          const next = evt.viewState;
+          if (next) {
+            lngRef.current = next.longitude;
+            setViewState({
+              latitude: next.latitude,
+              longitude: next.longitude,
+              zoom: next.zoom,
+              pitch: globeMode ? 0 : next.pitch,
+              bearing: globeMode ? 0 : next.bearing,
+            });
+          }
         }}
         mapStyle={mapStyle}
         style={{
@@ -285,7 +287,7 @@ export function IntelGlobe({
           WebkitUserSelect: "none",
         }}
         deckProps={{
-          key: `intel-overlay-${mapStyleProp}`,
+          key: `intel-overlay-${mapStyleKey}-${globeMode}`,
           id: "intel-overlay",
           onOverlayLoaded: (ov) => {
             overlayRef.current = ov;
@@ -295,22 +297,28 @@ export function IntelGlobe({
 
       <MapControls
         globeMode={globeMode}
-        onToggleGlobe={() => onRenderModeChange?.(globeMode ? "2D" : "3D")}
-        enable3d={false}
-        onSet2D={() => onRenderModeChange?.("2D")}
-        onSet3D={() => onRenderModeChange?.("3D")}
-        mapStyleMode={mapStyleProp}
-        styleOptions={
-          onMapStyleChange
-            ? [
-                { key: "dark", label: "DARK" },
-                { key: "debug", label: "DEBUG" },
-              ]
-            : undefined
+        onToggleGlobe={() =>
+          setProjection((p) => (p === "globe" ? "mercator" : "globe"))
         }
-        onSetStyleMode={(mode) => onMapStyleChange?.(mode as MapStyleKey)}
+        enable3d={enable3d}
+        onSet2D={() => {
+          setEnable3d(false);
+          setViewState((prev) => ({ ...prev, pitch: 0, bearing: 0 }));
+        }}
+        onSet3D={() => setEnable3d(true)}
+        onAdjustBearing={handleAdjustBearing}
+        onAdjustPitch={handleAdjustPitch}
+        onResetNorth={handleResetNorth}
+        mapStyleMode={mapStyleKey}
+        styleOptions={[
+          { key: "dark", label: "DARK" },
+          { key: "satellite", label: "SAT" },
+        ]}
+        onSetStyleMode={(mode) => setMapStyleKey(mode as MapStyleKey)}
         onZoomIn={() => zoomBy(0.75)}
         onZoomOut={() => zoomBy(-0.75)}
+        spin={spin}
+        onToggleSpin={() => setSpin((s) => !s)}
       />
     </div>
   );

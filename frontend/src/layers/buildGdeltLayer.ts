@@ -84,7 +84,6 @@ export function buildGdeltLayer(
   showDomainLabels: boolean = true,
   onHover: (entity: any | null, pos: { x: number; y: number } | null) => void,
   onClick?: (event: GdeltPoint) => void,
-  debugMode?: boolean,
 ): Layer[] {
   const isReadableDomain = (value: string): boolean => {
     const domain = (value || "").trim();
@@ -157,8 +156,8 @@ export function buildGdeltLayer(
       lineWidthUnits: "meters",
       wrapLongitude: !globeMode,
       parameters: {
-        depthTest: debugMode ? false : !!globeMode,
-        depthBias: (globeMode && !debugMode) ? -100.0 : 0,
+        depthTest: !!globeMode,
+        depthBias: globeMode ? -100.0 : 0,
       } as any,
     }),
 
@@ -170,18 +169,18 @@ export function buildGdeltLayer(
       stroked: true,
       filled: true,
       getPosition: (d) => [d.lon, d.lat, 0],
-      getRadius: debugMode ? 9000 : 7000,
+      getRadius: 7000,
       radiusUnits: "meters",
-      radiusMinPixels: debugMode ? 5 : 3,
-      radiusMaxPixels: debugMode ? 15 : 10,
+      radiusMinPixels: 3,
+      radiusMaxPixels: 10,
       getFillColor: (d) => d.toneColor as [number, number, number, number],
       getLineColor: [0, 0, 0, 120],
       getLineWidth: 1,
       lineWidthUnits: "pixels",
       wrapLongitude: !globeMode,
       parameters: {
-        depthTest: debugMode ? false : !!globeMode,
-        depthBias: (globeMode && !debugMode) ? -100.0 : 0,
+        depthTest: !!globeMode,
+        depthBias: globeMode ? -100.0 : 0,
       } as any,
       onHover: (info: PickingInfo<GdeltPoint>) => {
         if (info.object) {
@@ -238,8 +237,8 @@ export function buildGdeltLayer(
       sizeScale: 1,
       wrapLongitude: !globeMode,
       parameters: {
-        depthTest: debugMode ? false : !!globeMode,
-        depthBias: (globeMode && !debugMode) ? -99.0 : 0,
+        depthTest: !!globeMode,
+        depthBias: globeMode ? -99.0 : 0,
       } as any,
     }),
   ];

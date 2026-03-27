@@ -41,6 +41,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   onGdeltClick,
   onHover,
 }) => {
+  // Keep a mutable ref for the longitude for smooth, jitter-free spin
+  const lngRef = useRef(0);
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
 
@@ -104,11 +106,21 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     lastFrameTimeRef.current = Date.now();
 
     const rotate = () => {
-      setViewState((prev) => ({
-        ...prev,
-        longitude: (prev.longitude + 0.08) % 360,
-      }));
-      setNow(Date.now());
+      const currentTime = Date.now();
+      const dt = currentTime - lastFrameTimeRef.current;
+      
+      // Update longitude imperatively for 0-jitter rotation
+      const map = mapRef.current?.getMap();
+      if (map) {
+        // 0.08 scale was the previous constant, translating to deg/frame
+        // We'll keep it roughly the same speed but time-delta gated
+        lngRef.current = (lngRef.current + (0.08 * (dt / 16.67))) % 360;
+        map.jumpTo({
+          center: [lngRef.current, viewState.latitude],
+        });
+      }
+
+      setNow(currentTime);
       raf = requestAnimationFrame(rotate);
     };
     raf = requestAnimationFrame(rotate);
@@ -266,10 +278,10 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
           <MapLibreAdapter
             ref={mapRef}
             viewState={viewState}
-            onMove={(evt: unknown) => {
-              const next = (evt as { viewState?: Partial<typeof viewState> })
-                .viewState;
+            onMove={(evt: any) => {
+              const next = evt.viewState;
               if (!next) return;
+              lngRef.current = next.longitude;
               setViewState((prev) => ({
                 latitude: next.latitude ?? prev.latitude,
                 longitude: next.longitude ?? prev.longitude,

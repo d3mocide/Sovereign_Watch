@@ -1,4 +1,4 @@
-import { Radio, Shield, Terminal } from "lucide-react";
+import { Radio, Shield, Terminal, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useMissionLocation } from "../../../hooks/useMissionLocation";
 import { usePassPredictions } from "../../../hooks/usePassPredictions";
@@ -45,16 +45,16 @@ function SatelliteSpectrumVerification({
       </div>
       <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
         <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
-          <div className="text-white/40 mb-1">STATION_COUNT</div>
+          <div className="text-white/40 mb-1">OBS_COUNT</div>
           <div className="text-purple-300 font-bold">
-            {verificationData.station_count || 0}
+            {verificationData.summary?.total_observations ?? 0}
           </div>
         </div>
         <div className="bg-purple-900/20 border border-purple-500/20 p-2 rounded">
           <div className="text-white/40 mb-1">LAST_OBS</div>
           <div className="text-purple-300 font-bold">
-            {verificationData.last_observation
-              ? new Date(verificationData.last_observation).toLocaleTimeString()
+            {verificationData.recent_observations?.[0]?.start_time
+              ? new Date(verificationData.recent_observations[0].start_time).toLocaleTimeString()
               : "---"}
           </div>
         </div>
@@ -306,9 +306,9 @@ export const SatelliteView: React.FC<SatelliteViewProps> = ({
             onClick={onClose}
             aria-label="Close details"
             title="Close details"
-            className="p-1 text-white/30 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
-            x
+            <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
         </div>
 

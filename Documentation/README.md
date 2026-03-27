@@ -41,6 +41,7 @@ Each poller is a standalone microservice that ingests data from external sources
 | Document                                | Description                                                       |
 | :-------------------------------------- | :---------------------------------------------------------------- |
 | [Frontend UI User Guide](./UI_Guide.md) | How to operate the Tactical Map, Orbital Map, and all HUD widgets |
+| [Intel Globe Mode](./INTEL_Globe_Mode.md) | OSINT-centric 3D view for global situational awareness |
 
 ---
 
@@ -51,6 +52,7 @@ Each poller is a standalone microservice that ingests data from external sources
 | ADS-B   | adsb.fi                       | Every **2 seconds**               |
 | ADS-B   | adsb.lol                      | Every **2 seconds**               |
 | ADS-B   | airplanes.live                | Every **30 seconds** (backup)     |
+| ADS-B   | Holding Patterns              | Real-time analysis (**Ingest-05**) |
 | AIS     | AISStream.io                  | **Event-driven** WebSocket stream |
 | Space   | Celestrak TLE fetch           | Every **6 hours**                 |
 | Space   | SGP4 propagation              | Every **5 seconds**               |

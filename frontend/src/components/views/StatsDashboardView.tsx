@@ -26,6 +26,7 @@ interface PollerHealth {
   last_success: number | null;
   last_error_ts: number | null;
   last_error_msg: string | null;
+  history?: number[];
 }
 
 interface ActivityData {
@@ -58,6 +59,10 @@ export default function StatsDashboardView() {
   const [isAutoScroll, setIsAutoScroll] = useState(true);
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
+  const [throughputData, setThroughputData] = useState<{
+    throughput: Record<string, { kb_per_sec: number; total_bytes: number }>;
+    total_bandwidth_mb: number;
+  }>({ throughput: {}, total_bandwidth_mb: 0 });
 
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
@@ -68,10 +73,11 @@ export default function StatsDashboardView() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [healthRes, activityRes, takRes] = await Promise.all([
+        const [healthRes, activityRes, takRes, throughputRes] = await Promise.all([
           fetch('/api/config/poller-health'),
           fetch('/api/stats/activity?hours=24'),
-          fetch('/api/stats/tak-breakdown')
+          fetch('/api/stats/tak-breakdown'),
+          fetch('/api/stats/throughput')
         ]);
         
         if (healthRes.ok) setHealthData(await healthRes.json());
@@ -83,6 +89,9 @@ export default function StatsDashboardView() {
           const takJson = await takRes.json();
           setTakBreakdown(takJson.data || []);
         }
+        if (throughputRes.ok) {
+          setThroughputData(await throughputRes.json());
+        }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
       } finally {
@@ -91,8 +100,17 @@ export default function StatsDashboardView() {
     };
     
     fetchData();
-    const t = setInterval(fetchData, 60000);
-    return () => clearInterval(t);
+    const t = setInterval(fetchData, 30000); // 30s for heavy stats
+    const t2 = setInterval(async () => {
+        // High frequency for throughput
+        const res = await fetch('/api/stats/throughput');
+        if (res.ok) setThroughputData(await res.json());
+    }, 5000);
+
+    return () => {
+        clearInterval(t);
+        clearInterval(t2);
+    };
   }, []);
 
   // Log Simulator
@@ -201,31 +219,40 @@ export default function StatsDashboardView() {
   const takChartOptions = useMemo(() => {
     return {
       backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c} ({d}%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        borderColor: '#39FF14',
-        textStyle: { color: '#39FF14', fontFamily: 'monospace' }
-      },
+      tooltip: { show: false },
       series: [
         {
           name: 'TAK TYPE',
           type: 'pie',
-          radius: ['55%', '85%'],
-          avoidLabelOverlap: false,
+          radius: ['50%', '80%'],
+          avoidLabelOverlap: true,
           itemStyle: {
             borderRadius: 0,
             borderColor: '#0e0e0e',
             borderWidth: 2
           },
-          label: { show: false },
+          label: { 
+            show: false,
+            position: 'outside',
+            color: '#39FF14',
+            fontFamily: 'monospace',
+            formatter: '{b}: {c} ({d}%)'
+          },
+          labelLine: {
+            show: false,
+            lineStyle: { color: 'rgba(57, 255, 20, 0.3)' }
+          },
           emphasis: {
             label: {
               show: true,
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 'bold',
-              color: '#39FF14'
+              color: '#39FF14',
+              // Use position: 'outside' to match the label line
+              position: 'outside'
+            },
+            labelLine: {
+              show: true
             }
           },
           data: takBreakdown.map(b => ({
@@ -357,12 +384,12 @@ export default function StatsDashboardView() {
                   <ShieldAlert size={16} /> Load Distribution
                 </h3>
                 <div className="flex items-center justify-center relative py-6">
-                  <div className="h-64 w-64">
+                  <div className="h-[400px] w-full">
                     <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
                   </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-3xl font-black text-primary tracking-tighter">84%</span>
-                    <span className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Efficiency</span>
+                    <span className="text-5xl font-black text-primary tracking-tighter">84%</span>
+                    <span className="text-xs text-on-surface-variant uppercase tracking-[0.2em] font-bold">Efficiency</span>
                   </div>
                 </div>
               </div>
@@ -398,26 +425,39 @@ export default function StatsDashboardView() {
                   <Download size={16} /> Data Throughput (KB/S)
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                  {healthData.map((p) => (
-                    <div key={p.id} className="space-y-1">
-                      <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
-                        <span>{p.name}</span>
-                        <span className="text-primary">{(Math.random() * 50 + 10).toFixed(1)} KB/S</span>
+                  {healthData.map((p) => {
+                    // IDs from /api/config/poller-health (adsb, maritime, etc) 
+                    // now match the keys in /api/stats/throughput
+                    const metrics = throughputData.throughput[p.id] || { kb_per_sec: 0, total_bytes: 0 };
+                    const rate = metrics.kb_per_sec;
+                    // Visualize width based on rate, scale relative to 512KB/s
+                    const percentage = Math.min(100, (rate / 512) * 100); 
+
+                    return (
+                      <div key={p.id} className="space-y-1">
+                        <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
+                          <span>{p.name}</span>
+                          <span className="text-primary">{rate.toFixed(1)} KB/S</span>
+                        </div>
+                        <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
+                          <div 
+                            className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-500" 
+                            style={{ width: `${Math.max(2, percentage)}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
-                        <div 
-                          className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-1000" 
-                          style={{ width: `${Math.max(10, Math.random() * 90)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-
+ 
               <div className="bg-surface-container p-6 border border-primary/10 flex flex-col justify-center text-center">
                  <Network size={48} className="text-primary/20 mx-auto mb-4" />
-                 <h4 className="text-xl font-black text-primary uppercase italic">892.4 MB</h4>
+                 <h4 className="text-xl font-black text-primary uppercase italic">
+                    {throughputData.total_bandwidth_mb > 1024 
+                        ? `${(throughputData.total_bandwidth_mb / 1024).toFixed(2)} GB` 
+                        : `${throughputData.total_bandwidth_mb.toFixed(1)} MB`}
+                 </h4>
                  <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">TOTAL BANDWIDTH (24H)</p>
               </div>
             </div>
@@ -577,14 +617,25 @@ export default function StatsDashboardView() {
                         <div className={`w-1 h-1 rounded-full ${statusColors[p.status] || 'bg-on-surface-variant'} shadow-[0_0_5px_rgba(57,255,20,0.5)]`}></div>
                       </div>
 
-                      {/* Tactical Detail Row (Status Pips) */}
+                      {/* Tactical Detail Row (Status Pips) - Real history */}
                       <div className="flex items-center justify-between pl-1">
                         <div className="flex gap-0.5">
-                          {Array.from({ length: 12 }).map((_, i) => (
-                            <div key={i} className={`w-1 h-1 ${i > 10 && p.status === 'error' ? 'bg-error/40' : 'bg-primary/20'} rounded-[1px]`}></div>
-                          ))}
+                          {p.history && p.history.length > 0 ? (
+                            p.history.map((bit, i) => (
+                              <div 
+                                key={i} 
+                                className={`w-1 h-1 ${bit === 1 ? 'bg-primary' : (p.status === 'error' ? 'bg-error' : 'bg-primary/20')} rounded-[1px] transition-all duration-500`}
+                              ></div>
+                            ))
+                          ) : (
+                            Array.from({ length: 12 }).map((_, i) => (
+                              <div key={i} className="w-1 h-1 bg-primary/20 rounded-[1px]"></div>
+                            ))
+                          )}
                         </div>
-                        <span className="text-[7px] text-on-surface-variant tracking-tighter">100% UP</span>
+                        <span className="text-[7px] text-on-surface-variant tracking-tighter uppercase">
+                          {p.status === 'healthy' ? '100% UP' : p.status.toUpperCase()}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -594,7 +645,7 @@ export default function StatsDashboardView() {
           </div>
 
           {/* Bottom Log Bar */}
-          <div className={`bg-black border-t border-primary/20 transition-all duration-300 ease-in-out flex flex-col relative z-20 ${isLogsExpanded ? 'h-48' : 'h-10'}`}>
+          <div className={`bg-black border-t border-primary/20 transition-all duration-300 ease-in-out flex flex-col relative z-20 overflow-hidden shrink-0 ${isLogsExpanded ? 'h-48' : 'h-10'}`}>
             <div 
               onClick={() => setIsLogsExpanded(!isLogsExpanded)}
               className="flex items-center justify-between px-6 h-10 border-b border-primary/5 bg-surface-container-low/50 cursor-pointer hover:bg-surface-container-high/50 transition-all select-none group"
@@ -615,7 +666,7 @@ export default function StatsDashboardView() {
             <div 
               ref={logContainerRef}
               onScroll={handleScroll}
-              className={`flex-1 p-6 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar transition-opacity duration-300 ${isLogsExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`p-4 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar transition-opacity duration-300 ${isLogsExpanded ? 'flex-1 opacity-100' : 'hidden opacity-0 pointer-events-none'}`}
             >
               {logs.map((log) => (
                 <p key={log.id} className={`${

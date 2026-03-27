@@ -1,4 +1,4 @@
-import { Crosshair, Map as MapIcon, Shield, Terminal } from "lucide-react";
+import { Crosshair, Map as MapIcon, Shield, Terminal, X } from "lucide-react";
 import React, { useState } from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { Compass } from "../../widgets/Compass";
@@ -97,9 +97,9 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
             onClick={onClose}
             aria-label="Close details"
             title="Close details"
-            className="p-1 text-white/30 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
-            x
+            <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
         </div>
 

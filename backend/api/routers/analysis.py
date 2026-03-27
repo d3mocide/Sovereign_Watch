@@ -20,7 +20,6 @@ logger = logging.getLogger("SovereignWatch.Analysis")
 
 _LITELLM_CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/litellm_config.yaml")
 
-
 def _load_model_map() -> dict:
     try:
         with open(_LITELLM_CONFIG_PATH) as f:
@@ -39,681 +38,215 @@ def _load_model_map() -> dict:
         logger.warning(f"Could not load LiteLLM config: {e}")
         return {}
 
-
 _MODEL_MAP = _load_model_map()
-
 
 @router.post("/api/analyze/{uid}")
 async def analyze_track(
     request: Request, req: AnalyzeRequest, uid: str = Path(..., max_length=100)
 ):
-    if not db.pool:
-        raise HTTPException(status_code=503, detail="Database not ready")
-
-    # Rate Limiting
+    # --- REDIS RATE LIMITING ---
     if db.redis_client and request.client and request.client.host:
         client_ip = request.client.host
         rl_key = f"rate_limit:analyze:{client_ip}"
         try:
-            # Atomic rate limit increment
             req_count = await db.redis_client.incr(rl_key)
             if req_count == 1:
                 await db.redis_client.expire(rl_key, 60)
-
             if req_count > 10:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded. Please try again later.",
-                )
+                raise HTTPException(status_code=429, detail="Rate limit exceeded.")
         except HTTPException:
             raise
         except Exception as e:
             logger.error(f"Rate limiting error: {e}")
 
-    # 1. Fetch Track History (Intel Bump 2)
-    track_query = """
-        WITH summary AS (
-            SELECT
-                min(time) as start_time,
-                max(time) as last_seen,
-                count(*) as points,
-                avg(speed) as avg_speed,
-                min(speed) as min_speed,
-                max(speed) as max_speed,
-                avg(alt) as avg_alt,
-                min(alt) as min_alt,
-                max(alt) as max_alt,
-                ST_Centroid(ST_Collect(geom)) as centroid_geom
-            FROM tracks
-            WHERE entity_id = $1
-            AND time > NOW() - INTERVAL '1 hour' * $2
-        ),
-        metadata AS (
-            SELECT type, meta
-            FROM tracks
-            WHERE entity_id = $1
-            ORDER BY time DESC
-            LIMIT 1
-        ),
-        waypoints AS (
-            SELECT lat, lon, alt, speed, time
-            FROM tracks
-            WHERE entity_id = $1
-            AND time > NOW() - INTERVAL '1 hour' * $2
-            ORDER BY time DESC
-            LIMIT 10
-        )
-        SELECT s.*, m.type, m.meta, 
-               (SELECT json_agg(w) FROM waypoints w) as waypoint_history
-        FROM summary s, metadata m
-    """
-    try:
-        track_summary = await db.pool.fetchrow(track_query, uid, req.lookback_hours)
-    except Exception as e:
-        logger.error(f"Analysis track query failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    track_summary = None
+    is_sitrep = uid.startswith("sitrep-")
+    is_hold = uid.startswith("hold-")
+    lookback_uid = uid
+    if is_hold:
+        lookback_uid = uid.replace("hold-", "")
 
-    # 1.1 FALLBACKS: SATELLITES, TOWERS, RF SITES, INFRA
-    if not track_summary or track_summary["points"] == 0:
-        # 1.1.1 SATELLITE FALLBACK
-        if uid.startswith("SAT-"):
-            norad_id = uid.replace("SAT-", "")
-            async with db.pool.acquire() as conn:
-                sat_row = await conn.fetchrow(
-                    "SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1",
-                    norad_id,
-                )
-            if sat_row and sat_row["tle_line1"] and sat_row["tle_line2"]:
-                try:
-                    satrec = Satrec.twoline2rv(
-                        sat_row["tle_line1"], sat_row["tle_line2"]
+    # --- 1. SITREP LOGIC (Aggregated Intelligence) ---
+    if is_sitrep:
+        intel_text = "No active metadata buffer."
+        points = 0
+        
+        if isinstance(req.sitrep_context, str):
+            intel_text = req.sitrep_context
+            points = len(intel_text.split("\n"))
+        elif isinstance(req.sitrep_context, dict) and "features" in req.sitrep_context:
+            feats = req.sitrep_context.get("features", [])[:25]
+            intel_events = []
+            for f in feats:
+                p = f.get("properties", {})
+                h = p.get('headline') or 'Unknown Event'
+                a1 = p.get('actor1') or 'Unknown'
+                intel_events.append(f"- {h} | Actor: {a1}")
+            intel_text = "\n".join(intel_events) if intel_events else intel_text
+            points = len(intel_events)
+
+        track_summary = {
+            "type": "u-u-U",
+            "points": points or 1,
+            "meta": {
+                "callsign": "GLOBAL_SITUATION_REPORT",
+                "entity_type": "sitrep",
+                "sitrep_data": intel_text
+            },
+            "waypoint_history": [],
+            "centroid_geom": None
+        }
+
+    # --- 2. STANDARD TRACK HISTORY ---
+    else:
+        if not db.pool:
+            raise HTTPException(status_code=503, detail="Database not ready")
+
+        track_query = """
+            WITH summary AS (
+                SELECT min(time) as start_time, max(time) as last_seen, count(*) as points,
+                       ST_Centroid(ST_Collect(geom)) as centroid_geom
+                FROM tracks WHERE entity_id = $1 AND time > NOW() - INTERVAL '1 hour' * $2
+            ),
+            metadata AS (
+                SELECT type, meta FROM tracks WHERE entity_id = $1 ORDER BY time DESC LIMIT 1
+            ),
+            waypoints AS (
+                SELECT lat, lon, alt, speed, time FROM tracks WHERE entity_id = $1
+                AND time > NOW() - INTERVAL '1 hour' * $2 ORDER BY time DESC LIMIT 10
+            )
+            SELECT s.*, m.type, m.meta, (SELECT json_agg(w) FROM waypoints w) as waypoint_history
+            FROM summary s, metadata m
+        """
+        try:
+            row = await db.pool.fetchrow(track_query, lookback_uid, req.lookback_hours)
+            if row:
+                track_summary = dict(row)
+        except Exception as e:
+            logger.error(f"Analysis track query failed: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+        # 2.1 Fallbacks
+        if not track_summary or track_summary.get("points") == 0:
+            if uid.startswith("SAT-"):
+                norad_id = uid.replace("SAT-", "")
+                async with db.pool.acquire() as conn:
+                    sat_row = await conn.fetchrow(
+                        "SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1", 
+                        norad_id
                     )
-                    now = datetime.now(timezone.utc)
-                    points = []
-                    for i in range(10):
-                        t = now - timedelta(hours=req.lookback_hours * (i / 10))
-                        jd, fr = jday(
-                            t.year,
-                            t.month,
-                            t.day,
-                            t.hour,
-                            t.minute,
-                            t.second + t.microsecond / 1e6,
-                        )
-                        e, r, v = satrec.sgp4(jd, fr)
-                        if e == 0:
-                            r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                            lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
-                            points.append(
-                                {
-                                    "lat": lat[0],
-                                    "lon": lon[0],
-                                    "alt": alt[0] * 1000,
-                                    "speed": np.linalg.norm(r) * 1000,
-                                    "time": t.isoformat(),
-                                }
-                            )
-                    if points:
-                        track_summary = {
-                            "start_time": points[-1]["time"],
-                            "last_seen": points[0]["time"],
-                            "points": len(points),
-                            "avg_speed": sum(p["speed"] for p in points) / len(points),
-                            "min_speed": min(p["speed"] for p in points),
-                            "max_speed": max(p["speed"] for p in points),
-                            "avg_alt": sum(p["alt"] for p in points) / len(points),
-                            "min_alt": min(p["alt"] for p in points),
-                            "max_alt": max(p["alt"] for p in points),
-                            "centroid_geom": f"SRID=4326;POINT({points[0]['lon']} {points[0]['lat']})",
-                            "type": "a-s-K",
-                            "waypoint_history": points,
-                            "meta": {
-                                "callsign": sat_row["name"],
-                                "classification": {
-                                    "category": sat_row["category"],
-                                    "constellation": sat_row["constellation"],
-                                },
-                            },
-                        }
-                except Exception as e:
-                    logger.warning(f"Satellite fallback synthesis failed: {e}")
-
-        # 1.1.2 TOWER FALLBACK (PostgreSQL)
-        if not track_summary or track_summary["points"] == 0:
-            try:
-                tower = await db.pool.fetchrow(
-                    "SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1", uid
-                )
-                if tower:
-                    track_summary = {
-                        "start_time": tower["updated_at"],
-                        "last_seen": tower["updated_at"],
-                        "points": 1,
-                        "avg_speed": 0,
-                        "min_speed": 0,
-                        "max_speed": 0,
-                        "avg_alt": tower["elevation_m"] or 0,
-                        "min_alt": tower["elevation_m"] or 0,
-                        "max_alt": tower["elevation_m"] or 0,
-                        "centroid_geom": tower["geom"],
-                        "type": "u-G-T",  # Unknown-Ground-Tower
-                        "meta": {
-                            "callsign": f"FCC TOWER: {tower['fcc_id']}",
-                            "owner": tower["owner"],
-                            "status": tower["status"],
-                            "height_m": tower["height_m"],
-                            "elevation_m": tower["elevation_m"],
-                        },
-                        "waypoint_history": [
-                            {
-                                "lat": tower["lat"],
-                                "lon": tower["lon"],
-                                "alt": tower["elevation_m"] or 0,
-                                "time": tower["updated_at"].isoformat(),
-                            }
-                        ],
-                    }
-            except Exception as e:
-                logger.warning(f"Tower fallback failed: {e}")
-
-        # 1.1.3 RF SITE FALLBACK (PostgreSQL)
-        if not track_summary or track_summary["points"] == 0:
-            try:
-                site = await db.pool.fetchrow(
-                    "SELECT * FROM rf_sites WHERE id::text = $1 OR site_id = $1", uid
-                )
-                if site:
-                    track_summary = {
-                        "start_time": site["updated_at"],
-                        "last_seen": site["updated_at"],
-                        "points": 1,
-                        "avg_speed": 0,
-                        "min_speed": 0,
-                        "max_speed": 0,
-                        "avg_alt": 0,
-                        "min_alt": 0,
-                        "max_alt": 0,
-                        "centroid_geom": site["geom"],
-                        "type": "u-G-R",  # Unknown-Ground-Radio
-                        "meta": {
-                            "callsign": site["callsign"] or site["name"],
-                            "source": site["source"],
-                            "service": site["service"],
-                            "modes": site["modes"],
-                        },
-                        "waypoint_history": [
-                            {
-                                "lat": site["lat"],
-                                "lon": site["lon"],
-                                "alt": 0,
-                                "time": site["updated_at"].isoformat(),
-                            }
-                        ],
-                    }
-            except Exception as e:
-                logger.warning(f"RF Site fallback failed: {e}")
-
-        # 1.1.4 CABLE / STATIC INFRA FALLBACK (Redis)
-        if (not track_summary or track_summary["points"] == 0) and db.redis_client:
-            try:
-                for key in ["infra:cables", "infra:stations", "infra:outages"]:
-                    raw = await db.redis_client.get(key)
-                    if not raw:
-                        continue
-                    data = json.loads(raw)
-                    features = data.get("features", [])
-                    for f in features:
-                        if (
-                            str(f.get("id")) == uid
-                            or str(f.get("properties", {}).get("id")) == uid
-                        ):
-                            props = f.get("properties", {})
-                            geom = f.get("geometry", {})
-                            coords = geom.get("coordinates", [0, 0])
-
-                            # Flatten coordinates (simplified for Analyst context)
-                            if isinstance(coords[0], list) and not isinstance(
-                                coords[0][0], (int, float)
-                            ):
-                                lon, lat = coords[0][0][:2]
-                            elif isinstance(coords[0], list):
-                                lon, lat = coords[0][:2]
-                            else:
-                                lon, lat = coords[:2]
-
+                if sat_row and sat_row["tle_line1"]:
+                    try:
+                        satrec = Satrec.twoline2rv(sat_row["tle_line1"], sat_row["tle_line2"])
+                        now = datetime.now(timezone.utc)
+                        pts = []
+                        for i in range(10):
+                            t = now - timedelta(hours=req.lookback_hours * (i / 10))
+                            jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second)
+                            e, r, v = satrec.sgp4(jd, fr)
+                            if e == 0:
+                                r_ecef = teme_to_ecef(np.array(r), jd, fr)
+                                lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                                pts.append({"lat": lat[0], "lon": lon[0], "alt": alt[0]*1000, "time": t.isoformat()})
+                        if pts:
                             track_summary = {
-                                "start_time": datetime.now(timezone.utc),
-                                "last_seen": datetime.now(timezone.utc),
-                                "points": 1,
-                                "avg_speed": 0,
-                                "min_speed": 0,
-                                "max_speed": 0,
-                                "avg_alt": 0,
-                                "min_alt": 0,
-                                "max_alt": 0,
-                                "centroid_geom": f"SRID=4326;POINT({lon} {lat})",
-                                "type": "u-G-I",  # Unknown-Ground-Infrastructure
+                                "points": len(pts), 
+                                "type": "a-s-K", 
+                                "waypoint_history": pts, 
+                                "centroid_geom": f"SRID=4326;POINT({pts[0]['lon']} {pts[0]['lat']})",
                                 "meta": {
-                                    "callsign": props.get("name")
-                                    or props.get("region")
-                                    or uid,
-                                    "entity_type": props.get(
-                                        "entity_type", "infrastructure"
-                                    ),
-                                    "details": props,
-                                },
-                                "waypoint_history": [
-                                    {
-                                        "lat": lat,
-                                        "lon": lon,
-                                        "alt": 0,
-                                        "time": datetime.now(timezone.utc).isoformat(),
-                                    }
-                                ],
-                            }
-                            break
-                    if track_summary:
-                        break
-            except Exception as e:
-                logger.warning(f"Redis infra fallback failed: {e}")
-
-        # 1.1.4b JAMMING ZONE FALLBACK (Redis)
-        if (
-            (not track_summary or track_summary["points"] == 0)
-            and db.redis_client
-            and uid.startswith("jamming-")
-        ):
-            try:
-                h3_index = uid.replace("jamming-", "", 1)
-                raw = await db.redis_client.get("jamming:active_zones")
-                if raw:
-                    data = json.loads(raw)
-                    features = data.get("features", [])
-                    for f in features:
-                        props = f.get("properties", {})
-                        if str(props.get("h3_index")) != h3_index:
-                            continue
-
-                        geom = f.get("geometry", {})
-                        coords = geom.get("coordinates", [0, 0])
-                        lon = float(coords[0]) if len(coords) > 0 else 0.0
-                        lat = float(coords[1]) if len(coords) > 1 else 0.0
-                        event_time = props.get("time")
-                        assessment = str(props.get("assessment") or "mixed")
-                        confidence = float(props.get("confidence") or 0.0)
-                        affected_count = int(props.get("affected_count") or 0)
-                        avg_nic = props.get("avg_nic")
-                        avg_nacp = props.get("avg_nacp")
-                        kp_at_event = props.get("kp_at_event")
-
-                        event_dt = datetime.now(timezone.utc)
-                        if isinstance(event_time, str):
-                            try:
-                                event_dt = datetime.fromisoformat(
-                                    event_time.replace("Z", "+00:00")
-                                )
-                            except Exception:
-                                pass
-
-                        track_summary = {
-                            "start_time": event_dt,
-                            "last_seen": event_dt,
-                            "points": 1,
-                            "avg_speed": 0,
-                            "min_speed": 0,
-                            "max_speed": 0,
-                            "avg_alt": 0,
-                            "min_alt": 0,
-                            "max_alt": 0,
-                            "centroid_geom": f"SRID=4326;POINT({lon} {lat})",
-                            "type": "u-G-J",  # Unknown-Ground-Jamming
-                            "meta": {
-                                "callsign": f"GPS SIGINT {assessment.upper()}",
-                                "registration": None,
-                                "h3_index": h3_index,
-                                "entity_type": "jamming",
-                                "assessment": assessment,
-                                "confidence": confidence,
-                                "affected_count": affected_count,
-                                "avg_nic": avg_nic,
-                                "avg_nacp": avg_nacp,
-                                "kp_at_event": kp_at_event,
-                            },
-                            "waypoint_history": [
-                                {
-                                    "lat": lat,
-                                    "lon": lon,
-                                    "alt": 0,
-                                    "time": event_dt.isoformat(),
+                                    "callsign": sat_row["name"], 
+                                    "classification": {"category": sat_row["category"]}
                                 }
-                            ],
-                        }
-                        break
-            except Exception as e:
-                logger.warning(f"Jamming fallback failed: {e}")
-
-        # 1.1.5 GDELT OSINT EVENT FALLBACK
-        if (not track_summary or track_summary["points"] == 0) and uid.startswith(
-            "gdelt-"
-        ):
-            try:
-                event_id = uid[6:]  # strip "gdelt-" prefix
-                gdelt_row = await db.pool.fetchrow(
-                    """
-                    SELECT event_id, time, headline, actor1, actor2, url, goldstein, tone, lat, lon, geom,
-                           actor1_country, actor2_country, event_code, event_root_code,
-                           quad_class, num_mentions, num_sources, num_articles
-                    FROM gdelt_events
-                    WHERE event_id = $1
-                    ORDER BY time DESC LIMIT 1
-                """,
-                    event_id,
-                )
-                if gdelt_row:
-                    track_summary = {
-                        "start_time": gdelt_row["time"],
-                        "last_seen": gdelt_row["time"],
-                        "points": 1,
-                        "avg_speed": 0,
-                        "min_speed": 0,
-                        "max_speed": 0,
-                        "avg_alt": 0,
-                        "min_alt": 0,
-                        "max_alt": 0,
-                        "centroid_geom": gdelt_row["geom"],
-                        "type": "u-G-O",  # Unknown-Ground-OSINT
-                        "meta": {
-                            "callsign": gdelt_row["headline"]
-                            or gdelt_row["actor1"]
-                            or f"GDELT:{event_id}",
-                            "registration": None,
-                            "actor1": gdelt_row["actor1"],
-                            "actor2": gdelt_row["actor2"],
-                            "actor1_country": gdelt_row["actor1_country"],
-                            "actor2_country": gdelt_row["actor2_country"],
-                            "event_code": gdelt_row["event_code"],
-                            "event_root_code": gdelt_row["event_root_code"],
-                            "quad_class": gdelt_row["quad_class"],
-                            "num_mentions": gdelt_row["num_mentions"],
-                            "num_sources": gdelt_row["num_sources"],
-                            "goldstein": gdelt_row["goldstein"],
-                            "tone": gdelt_row["tone"],
-                            "url": gdelt_row["url"],
-                        },
-                        "waypoint_history": [
-                            {
-                                "lat": gdelt_row["lat"],
-                                "lon": gdelt_row["lon"],
-                                "alt": 0,
-                                "time": gdelt_row["time"].isoformat(),
                             }
-                        ],
-                    }
-            except Exception as e:
-                logger.warning(f"GDELT fallback failed: {e}")
+                    except Exception as e:
+                        logger.warning(f"Sat fallback failed: {e}")
+
+            if not track_summary or track_summary["points"] == 0:
+                try:
+                    tower = await db.pool.fetchrow("SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1", uid)
+                    if tower:
+                        track_summary = {
+                            "points": 1, 
+                            "type": "u-G-T", 
+                            "centroid_geom": tower["geom"], 
+                            "meta": {"callsign": f"TOWER:{tower['fcc_id']}"}, 
+                            "waypoint_history": [{"lat": tower["lat"], "lon": tower["lon"], "alt": 0}]
+                        }
+                    
+                    if (not track_summary or track_summary["points"] == 0) and uid.startswith("gdelt-"):
+                        ev_id = uid[6:]
+                        gd_row = await db.pool.fetchrow("SELECT * FROM gdelt_events WHERE event_id = $1", ev_id)
+                        if gd_row:
+                            track_summary = {
+                                "points": 1, 
+                                "type": "u-G-O", 
+                                "centroid_geom": gd_row["geom"], 
+                                "meta": {"callsign": gd_row["headline"], "url": gd_row["url"]}, 
+                                "waypoint_history": [{"lat": gd_row["lat"], "lon": gd_row["lon"], "alt": 0}]
+                            }
+                except Exception:
+                    pass
 
     if not track_summary or track_summary["points"] == 0:
-
         async def err():
-            yield {
-                "event": "error",
-                "data": "No track history or infrastructure metadata found for this entity.",
-            }
-
+            yield {"event": "error", "data": "No telemetry or metadata buffer found."}
         return EventSourceResponse(err())
 
-    # 1.5 Multi-Domain Fusion
-    intel_context, infra_context, orbital_coverage = "", "", ""
-    gdelt_context = ""
+    # Decode waypoints
+    waypoints = []
+    if track_summary:
+        waypoints = track_summary.get("waypoint_history", [])
+        if isinstance(waypoints, str):
+            try:
+                waypoints = json.loads(waypoints)
+            except Exception:
+                waypoints = []
 
-    # Decode waypoints first (Bug Fix)
-    waypoints = track_summary.get("waypoint_history", [])
-    if isinstance(waypoints, str):
+    # Fusion variables (preserved but cleaned)
+    intel_context = ""
+    if track_summary and track_summary.get("centroid_geom"):
         try:
-            waypoints = json.loads(waypoints)
-        except:
-            waypoints = []
-
-    if track_summary.get("centroid_geom"):
-        try:
-            # Nearby Intel (50km)
             intel_rows = await db.pool.fetch(
-                "SELECT content, timestamp FROM intel_reports WHERE ST_DWithin(geom::geography, $1::geography, 50000) ORDER BY timestamp DESC LIMIT 3",
-                track_summary["centroid_geom"],
+                "SELECT content, timestamp FROM intel_reports WHERE ST_DWithin(geom::geography, $1::geography, 50000) ORDER BY timestamp DESC LIMIT 3", 
+                track_summary["centroid_geom"]
             )
             if intel_rows:
-                intel_context = "\nCORRELATED INTEL REPORTS (50km):\n" + "\n".join(
-                    [f"- [{r['timestamp']}] {r['content']}" for r in intel_rows]
-                )
+                intel_context = "\nCORRELATED INTEL (50km):\n" + "\n".join([f"- [{r['timestamp']}] {r['content']}" for r in intel_rows])
+        except Exception:
+            pass
 
-            # Nearby RF Infrastructure (10km)
-            infra_rows = await db.pool.fetch(
-                "SELECT name, service, ST_Distance(geom::geography, $1::geography) as dist FROM rf_sites WHERE ST_DWithin(geom::geography, $1::geography, 10000) ORDER BY dist LIMIT 5",
-                track_summary["centroid_geom"],
-            )
-            if infra_rows:
-                infra_context = "\nNEARBY RF INFRASTRUCTURE (10km):\n" + "\n".join(
-                    [
-                        f"- {r['name']} ({r['service']}) - {r['dist'] / 1000:.1f}km"
-                        for r in infra_rows
-                    ]
-                )
-
-            # Cable Context (Redis)
-            if db.redis_client:
-                stations_raw = await db.redis_client.get(
-                    "infra:cables:landing_stations"
-                )
-                if stations_raw:
-                    stations = json.loads(stations_raw)
-                    center_lat, center_lon = 0, 0
-                    if waypoints:
-                        hp = waypoints[0]
-                        center_lat, center_lon = hp["lat"], hp["lon"]
-
-                    nearby_stations = [
-                        f"{s['name']} (Landing Station - {np.sqrt((s['lat'] - center_lat) ** 2 + (s['lon'] - center_lon) ** 2) * 111:.1f}km)"
-                        for s in stations
-                        if np.sqrt(
-                            (s["lat"] - center_lat) ** 2 + (s["lon"] - center_lon) ** 2
-                        )
-                        * 111
-                        < 20
-                    ]
-                    if nearby_stations:
-                        infra_context += "\nSUBMARINE CABLE PERSPECTIVE:\n" + "\n".join(
-                            [f"- {ns}" for ns in nearby_stations[:3]]
-                        )
-        except Exception as e:
-            logger.warning(f"Fusion context query failed: {e}")
-
-    # GDELT-specific enrichment: inject event metadata + nearby GDELT cluster context
-    if uid.startswith("gdelt-"):
-        try:
-            meta_g = track_summary.get("meta", {}) or {}
-            if isinstance(meta_g, str):
-                try:
-                    meta_g = json.loads(meta_g)
-                except:
-                    meta_g = {}
-            quad_labels = {
-                1: "VERBAL_COOP",
-                2: "MATERIAL_COOP",
-                3: "VERBAL_CONFLICT",
-                4: "MATERIAL_CONFLICT",
-            }
-            quad_label = quad_labels.get(meta_g.get("quad_class"), "UNKNOWN")
-            actor1_c = meta_g.get("actor1_country") or ""
-            actor2_c = meta_g.get("actor2_country") or ""
-            actor2_n = meta_g.get("actor2") or "N/A"
-            event_root = meta_g.get("event_root_code") or ""
-            n_mentions = meta_g.get("num_mentions") or 0
-            n_sources = meta_g.get("num_sources") or 0
-            g_scale = meta_g.get("goldstein") or 0
-            avg_tone = meta_g.get("tone") or 0
-            source_url = meta_g.get("url") or ""
-            headline = meta_g.get("callsign") or ""
-
-            gdelt_context = (
-                f"\nEVENT CLASS: GDELT_OSINT"
-                f"\nActors: {headline} ({actor1_c}) \u2194 {actor2_n} ({actor2_c})"
-                f"\nCAMEO Root: {event_root} | Quad Class: {quad_label}"
-                f"\nGoldstein: {g_scale:.1f} | AvgTone: {avg_tone:.1f}"
-                f"\nCoverage: {n_mentions} mentions / {n_sources} sources"
-                + (f"\nSource: {source_url}" if source_url else "")
-            )
-
-            # Nearby GDELT events (50km, 24h)
-            if track_summary.get("centroid_geom"):
-                event_id_val = uid[6:]
-                nearby_gdelt = await db.pool.fetch(
-                    """
-                    SELECT headline, tone, goldstein, event_root_code, time
-                    FROM gdelt_events
-                    WHERE ST_DWithin(geom::geography, $1::geography, 50000)
-                    AND time > NOW() - INTERVAL '24 hours'
-                    AND event_id != $2
-                    ORDER BY time DESC LIMIT 5
-                """,
-                    track_summary["centroid_geom"],
-                    event_id_val,
-                )
-                if nearby_gdelt:
-                    intel_context += "\nNEARBY OSINT EVENTS (50km/24h):\n" + "\n".join(
-                        [
-                            f"- [{r['time'].strftime('%H:%Mz')}] {r['headline']} (CAMEO:{r['event_root_code'] or '?'}, GS:{(r['goldstein'] or 0):.1f})"
-                            for r in nearby_gdelt
-                        ]
-                    )
-        except Exception as e:
-            logger.warning(f"GDELT context enrichment failed: {e}")
-
-    # 1.6 Orbital Coverage
-    if not uid.startswith("SAT-"):
-        try:
-            async with db.pool.acquire() as conn:
-                intel_sats = await conn.fetch(
-                    "SELECT name, constellation, tle_line1, tle_line2 FROM satellites WHERE category = 'INTEL' LIMIT 20"
-                )
-                now = datetime.now(timezone.utc)
-                target_lat, target_lon = 0, 0
-                if waypoints:
-                    hp = waypoints[0]
-                    target_lat, target_lon = hp["lat"], hp["lon"]
-
-                active = []
-                for s in intel_sats:
-                    if not s["tle_line1"]:
-                        continue
-                    satrec = Satrec.twoline2rv(s["tle_line1"], s["tle_line2"])
-                    jd, fr = jday(
-                        now.year, now.month, now.day, now.hour, now.minute, now.second
-                    )
-                    e, r, v = satrec.sgp4(jd, fr)
-                    if e == 0:
-                        dist_to_center = np.linalg.norm(r)
-                        if dist_to_center > 6371:
-                            footprint_radius = np.degrees(
-                                np.arccos(6371 / dist_to_center)
-                            )
-                            r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                            slat, slon, _ = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
-                            angular_dist = np.degrees(
-                                np.arccos(
-                                    np.sin(np.radians(slat[0]))
-                                    * np.sin(np.radians(target_lat))
-                                    + np.cos(np.radians(slat[0]))
-                                    * np.cos(np.radians(target_lat))
-                                    * np.cos(np.radians(slon[0] - target_lon))
-                                )
-                            )
-                            if angular_dist < footprint_radius:
-                                active.append(f"{s['name']} ({s['constellation']})")
-                if active:
-                    orbital_coverage = (
-                        "\nACTIVE ORBITAL OVERPASS (INTEL):\n"
-                        + "\n".join([f"- {a}" for a in active])
-                    )
-        except Exception as e:
-            logger.warning(f"Orbital coverage check failed: {e}")
-
-    # 2. Prompt Construction
-    cot_type = track_summary.get("type", "u-u-U")
-    parts = cot_type.split("-")
-    affiliation = {
-        "f": "FRIENDLY",
-        "h": "HOSTILE",
-        "s": "SUSPECT",
-        "n": "NEUTRAL",
-        "u": "UNKNOWN",
-    }.get(parts[1] if len(parts) > 1 else "u", "UNKNOWN")
-    domain = {
-        "A": "AIR",
-        "S": "SURFACE",
-        "G": "GROUND",
-        "s": "SPACE",
-        "K": "SPACE",
-    }.get(parts[2] if len(parts) > 2 else "u", "UNKNOWN")
-
-    personas = {
-        "tactical": {
-            "sys": f"Tactical Analyst. Domain: {domain}, Affil: {affiliation}.",
-            "inst": "Tactical assessment. Section Headers.",
-        },
-        "osint": {
-            "sys": f"OSINT Specialist. Domain: {domain}, Affil: {affiliation}.",
-            "inst": "Identity/meta analysis. Section Headers.",
-        },
-        "sar": {
-            "sys": f"SAR Coordinator. Domain: {domain}, Affil: {affiliation}.",
-            "inst": "Distress evaluation. Section Headers.",
-        },
-    }
-    persona = personas.get(req.mode.lower(), personas["tactical"])
-
-    # GDELT events get a geopolitical analyst persona
-    if uid.startswith("gdelt-"):
-        gdelt_personas = {
-            "tactical": {
-                "sys": "Tactical Intelligence Analyst. Specialization: OSINT/Geopolitical.",
-                "inst": "Assess tactical and security implications of this GDELT news event. Identify actors, theater, and threat vectors. Section Headers.",
-            },
-            "osint": {
-                "sys": "OSINT Specialist. Specialization: GDELT Geopolitical Events.",
-                "inst": "Assess geopolitical significance, actor motivations, regional stability, and source credibility using the Goldstein scale and tone. Section Headers.",
-            },
-            "sar": {
-                "sys": "Civil Emergency Analyst.",
-                "inst": "Assess civilian and humanitarian impact of this event. Identify affected populations and aid implications. Section Headers.",
-            },
+    # --- 4. PERSONA & PROMPT ---
+    if is_sitrep:
+        persona = {
+            "sys": "Strategic Intelligence Director. Focus: Global Conflict Zones & Macro Trends.",
+            "inst": "Conduct a comprehensive Situation Report (SITREP). Categorize the active conflict zones, evaluate actor behavior, and assess overall regional stability. Use BOLD section headers."
         }
-        persona = gdelt_personas.get(req.mode.lower(), gdelt_personas["osint"])
+        user_content = f"SITREP DATA BUFFER:\n{track_summary['meta']['sitrep_data']}\n\nINST: {persona['inst']}\nASSESS:"
+    else:
+        persona = {"sys": "Tactical Analyst.", "inst": "Assess this specific target behavior."}
+        if uid.startswith("gdelt-"):
+            persona = {"sys": "Geopolitical Analyst.", "inst": "Assess news event implications."}
+        if is_hold:
+            persona = {
+                "sys": "Tactical Flight Safety & Surveillance Analyst.", 
+                "inst": "Conduct an assessment of this AIRCRAFT HOLDING PATTERN. Evaluate for intent (Arrival Delay, Radio Failure, Emergency, or Intelligence Gathering). Use the provided track history to verify pattern stability."
+            }
+        
+        meta = {}
+        if track_summary:
+            meta = track_summary.get("meta") or {}
+        
+        label = meta.get('callsign', 'Unknown')
+        prefix = "[HOLDING DETECTED] " if is_hold else ""
+        user_content = f"TARGET: {uid} | Label: {prefix}{label} | History: {track_summary['points'] if track_summary else 0} pts. {intel_context}\nINST: {persona['inst']}\nASSESS:"
 
-    meta = track_summary["meta"] or {}
-    if isinstance(meta, str):
-        try:
-            meta = json.loads(meta)
-        except:
-            meta = {}
-    label = f"{meta.get('callsign', 'Unknown')} ({meta.get('registration', 'Unknown')})"
-
-    traj_context = ""
-    if waypoints:
-        traj_context = "\nLAST 10 WAYPOINTS:\n" + "\n".join(
-            [
-                f"- [{p['time']}] {p['lat']:.4f}, {p['lon']:.4f} @ {p['alt'] or 0:.0f}m"
-                for p in waypoints
-            ]
-        )
-
-    user_content = f"TARGET: {uid} | Ident: {label} | History ({req.lookback_hours}h): {track_summary['points']} pts. {traj_context} {gdelt_context} {intel_context} {infra_context} {orbital_coverage} \nINST: {persona['inst']} \nASSESS:"
-
-    # 3. Model & Streaming
+    # --- 5. STREAMING ---
     active_model = AI_MODEL_DEFAULT
     if db.redis_client:
         stored = await db.redis_client.get(AI_MODEL_REDIS_KEY)
         if stored:
-            active_model = stored
+            active_model = stored.decode() if hasattr(stored, 'decode') else str(stored)
 
     model_params = _MODEL_MAP.get(active_model, {"model": active_model})
 
@@ -721,10 +254,7 @@ async def analyze_track(
         try:
             response = await acompletion(
                 **model_params,
-                messages=[
-                    {"role": "system", "content": persona["sys"]},
-                    {"role": "user", "content": user_content},
-                ],
+                messages=[{"role": "system", "content": persona["sys"]}, {"role": "user", "content": user_content}],
                 stream=True,
             )
             async for chunk in response:

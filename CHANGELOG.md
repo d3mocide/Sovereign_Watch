@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.52.0] - 2026-03-27
+
+### Added
+
+- **AI Analyst Panel Overhaul**: Implemented "Tactical Premium" UI/UX with glassmorphism, CRT-style scanlines, and a dynamic radar-style "Awaiting Tasking" animation.
+- **Maneuver Mode Integration**: Consolidated "Tactical", "OSINT", and "SAR" selectors into a high-fidelity tabbed interface in the Analyst Panel's footer.
+- **Unified Control Bar**: Merged Scan Window (Lookback) and Execution (Run/Halt) controls into a unified tactical control bar for better visual hierarchy.
+- **Animated View Transitions**: Upgraded all Right Sidebar views (Aircraft, Ship, Satellite, Infra, GDELT, Holding) with an animated rotating close button and refined hover interactions.
+- **Holding Pattern Visualization**: Introduced a new `HoldingPatternLayer` using Deck.gl to render amber-pulsed tactical zones for non-standard flight maneuvers detected by the ADSB poller.
+- **Health history sparklines**: Added a Redis-backed 12-minute bitmask history for system poller health indicators, providing immediate diagnostic context for connectivity issues.
+
+### Changed
+
+- **Intel Globe Unification**: Consolidated Intel Map controls (style, projection, spin) into the shared `MapControls` HUD and refactored `IntelGlobe` for imperative 60FPS rotation via `map.jumpTo()`.
+- **Strategic SITREP Logic**: Refactored situational context transmission to support high-density strategic reporting across disparate OSINT sources (GDELT, Infrastructure, etc.).
+- **Map Interaction Refinement**: Silenced the standard right sidebar for 'sitrep' entities to favor the dedicated Strategic Intelligence Report panel.
+
+### Fixed
+
+- **Analysis Engine Hardening**: Resolved a critical 500 error regression caused by undecoded Redis data (bytes vs string) during model selection.
+- **Telemetry Resolution Reliability**: Added defensive guarding for "orphaned" tracks in the analyst backend, ensuring graceful failures instead of server crashes when metadata is missing.
+- **Rotation Jitter**: Eliminated frame-stutter on global planetary globes by moving to an imperative animation loop that bypasses React re-render overhead.
+
+### Technical Details
+
+- Canonical poller IDs (`adsb`, `maritime`, etc.) unified across Historian, Health, and Throughput APIs.
+- Environment variable support (`HOLDING_RADIUS_NM`, etc.) added to `docker-compose.yml` for runtime threshold adjustment.
+- Deck.gl layer composition updated to support reactive GeoJSON refs for low-latency tactical overlays.
+
 ## [0.51.0] - 2026-03-26
 
 ### Added

@@ -102,14 +102,12 @@ export function buildArcData(
     }>;
   } | null,
   centroids: CentroidMap,
-  debugMode?: boolean,
 ): GdeltArc[] {
   if (!gdeltData?.features?.length) return [];
 
-  // Draw arcs for conflict-class events (quad_class 3/4) by default,
-  // but show ALL arcs in debugMode to verify data presence.
+  // Draw arcs for conflict-class events (quad_class 3/4) by default.
   const conflictFeatures = gdeltData.features.filter(
-    (f) => debugMode || (f.properties.quad_class ?? 0) >= 3,
+    (f) => (f.properties.quad_class ?? 0) >= 3,
   );
 
   return conflictFeatures.reduce<GdeltArc[]>((acc, f, i) => {
@@ -129,7 +127,6 @@ export function buildArcData(
     const srcLon = actor1Centroid ? actor1Centroid[1] : evtLon;
 
     // Target: resolve actor2 country centroid.
-    // Fall back to a deterministic fan position so arcs never silently vanish.
     let tgtLat: number;
     let tgtLon: number;
     const actor2Centroid = resolveCentroid(
@@ -141,7 +138,7 @@ export function buildArcData(
       tgtLon = actor2Centroid[1];
     } else {
       // Deterministic angular fallback — golden-angle fan spread
-      const angle = ((i * 137.508) % 360) * (Math.PI / 180);
+      const angle = ((i * 115.508) % 360) * (Math.PI / 180);
       const dist = 10 + (Math.abs(goldstein) / 10) * 20;
       tgtLon = srcLon + Math.cos(angle) * dist;
       tgtLat = Math.max(
@@ -154,25 +151,18 @@ export function buildArcData(
     if (Math.abs(srcLat - tgtLat) < 1 && Math.abs(srcLon - tgtLon) < 1)
       return acc;
 
-    // Source colour encodes conflict severity; boosted in debugMode
-    const sourceAlpha = debugMode ? 255 : goldstein <= -5 ? 210 : 170;
+    // Source colour encodes conflict severity.
+    const sourceAlpha = goldstein <= -5 ? 210 : 170;
     const sourceColor: [number, number, number, number] =
       goldstein <= -5
         ? [255, 50, 50, sourceAlpha] // vivid red
         : [255, 140, 0, sourceAlpha]; // vivid orange
 
-    // Target: sovereign cyan; boosted in debugMode
-    const targetColor: [number, number, number, number] = [
-      0,
-      255,
-      230,
-      debugMode ? 255 : 130,
-    ];
+    // Target: sovereign cyan.
+    const targetColor: [number, number, number, number] = [0, 255, 230, 130];
 
-    // Arc width scales with media attention; boosted in debugMode
-    const width = debugMode
-      ? 8
-      : Math.min(4, Math.max(1, Math.log2(mentions + 1)));
+    // Arc width scales with media attention — boosted for better 3D 'tube' presence.
+    const width = Math.min(6, Math.max(2.0, Math.log2(mentions + 1) * 1.2));
 
     acc.push({
       event_id: f.properties.event_id || f.id || `arc-${i}`,
@@ -396,77 +386,57 @@ export function buildGdeltArcLayer(
   visible: boolean,
   globeMode: boolean,
   animTick: number,
-  debugMode?: boolean,
 ): Layer[] {
   if (!visible || !gdeltData?.features?.length) return [];
 
-  // Use cached data if available for this specific data object
-  // Bypassing cache if debugMode is active to ensure the "show all" filter is applied
+  // Use cached data if available for this specific data object.
   let data = arcDataCache.get(gdeltData);
-  if (!data || debugMode) {
+  if (!data) {
     const centroids = centroidsCache ?? {};
-    data = buildArcData(gdeltData as any, centroids, debugMode);
-    if (!debugMode) {
-      arcDataCache.set(gdeltData, data);
-    }
+    data = buildArcData(gdeltData as any, centroids);
+    arcDataCache.set(gdeltData, data);
   }
 
   if (!data || !data.length) return [];
 
-  // Softer, slower pulse so the glow reads as a fade instead of flashing.
-  const pulsePhase = 0.5 + 0.5 * Math.sin(animTick * Math.PI * 2 * 0.55);
+  // Pulse amplified for better visual depth
+  const pulsePhase = 0.5 + 0.5 * Math.sin(animTick * Math.PI * 2 * 0.45);
   const pulseEase = pulsePhase * pulsePhase * (3 - 2 * pulsePhase);
-  const pulse = debugMode ? 1.0 : 0.96 + 0.04 * pulseEase;
+  const pulse = 0.72 + 0.28 * pulseEase; // 28% amplitude
 
   if (globeMode) {
     const pathData: GdeltArcPath[] = data.map((d) => {
       // De-stack dense hub fans with deterministic per-arc endpoint jitter.
       const seedA = hash01(d.event_id || "gdelt-arc");
       const seedB = (seedA * 1.61803398875) % 1;
-      const src = jitterLonLat(
-        d.sourcePosition,
-        seedA,
-        debugMode ? 24_000 : 16_000,
-      );
-      const tgt = jitterLonLat(
-        d.targetPosition,
-        seedB,
-        debugMode ? 10_000 : 6_000,
-      );
+      const src = jitterLonLat(d.sourcePosition, seedA, 16_000);
+      const tgt = jitterLonLat(d.targetPosition, seedB, 6_000);
 
       const angle = centralAngleRad(src, tgt);
       const distanceNorm = clamp01(angle / Math.PI);
 
       // Dynamic scaling for long-haul links (e.g., US <-> Middle East).
-      const baseMeters = debugMode
-        ? lerp(240_000, 700_000, Math.pow(distanceNorm, 0.95))
-        : lerp(180_000, 480_000, Math.pow(distanceNorm, 1.0));
-
-      const peakMetersRaw = debugMode
-        ? lerp(900_000, 3_000_000, Math.pow(distanceNorm, 1.2))
-        : lerp(600_000, 2_200_000, Math.pow(distanceNorm, 1.25));
+      // Altitude reduced after user feedback (prev levels were 'toooooo much').
+      const baseMeters = lerp(180_000, 480_000, Math.pow(distanceNorm, 1.0));
+      const peakMetersRaw = lerp(
+        700_000,
+        2_400_000,
+        Math.pow(distanceNorm, 1.25),
+      );
 
       // Clamp medium/long routes to a minimum apex so they don't sag into the globe.
       const mediumLongNorm = clamp01((distanceNorm - 0.3) / 0.7);
-      const minPeakMeters = debugMode
-        ? lerp(800_000, 2_200_000, mediumLongNorm)
-        : lerp(500_000, 1_600_000, mediumLongNorm);
+      const minPeakMeters = lerp(500_000, 1_600_000, mediumLongNorm);
       const peakMeters = Math.max(peakMetersRaw, minPeakMeters);
 
-      // More segments for longer geodesics to avoid visible chord artifacts.
-      const segments = Math.round(
-        debugMode
-          ? lerp(72, 170, Math.pow(distanceNorm, 1.15))
-          : lerp(56, 140, Math.pow(distanceNorm, 1.15)),
-      );
+      // Tighter segment density to optimize performance and reduce beading artifacts.
+      const segments = Math.round(lerp(38, 92, Math.pow(distanceNorm, 1.15)));
 
       // Lower power keeps long-haul arcs high for a larger fraction of the route.
       const liftPower = lerp(1.18, 0.82, distanceNorm);
 
       // Horizontal gain (lateral spherical bend): stronger for longer routes.
-      const sideGainDeg = debugMode
-        ? lerp(2.0, 11.0, Math.pow(distanceNorm, 1.05))
-        : lerp(1.2, 8.0, Math.pow(distanceNorm, 1.1));
+      const sideGainDeg = lerp(1.2, 8.0, Math.pow(distanceNorm, 1.1));
       const sideGainRad = (sideGainDeg * Math.PI) / 180;
       const sideSign = seedA > 0.5 ? 1 : -1;
 
@@ -499,8 +469,7 @@ export function buildGdeltArcLayer(
       };
     });
 
-    // Split each arc into tiny path segments so we can apply a source->target
-    // color gradient and slight width taper, making direction/endpoints readable.
+    // Split each arc into tiny path segments for source->target gradient.
     const segmentData: GdeltArcSegment[] = pathData.flatMap((arc) => {
       const pts = arc.path;
       if (pts.length < 2) return [];
@@ -551,32 +520,52 @@ export function buildGdeltArcLayer(
     });
 
     return [
+      // 1. Ambient Shadow Shell — provides soft volume/halo and depth context
+      new PathLayer<GdeltArcSegment>({
+        id: "gdelt-arcs-3d-globe-shadow",
+        data: segmentData,
+        pickable: false,
+        getPath: (d) => d.path,
+        getColor: (d) => [0, 0, 0, Math.round(d.color[3] * 0.35)],
+        getWidth: (d) => d.width * 2.8,
+        widthUnits: "pixels",
+        widthMinPixels: 4.5,
+        jointRounded: false,
+        capRounded: false,
+        updateTriggers: {
+          getColor: animTick,
+        },
+        parameters: {
+          depthTest: true,
+          depthBias: -20.0, // Furthest back of the tube stack
+        } as any,
+      }),
+      // 2. Structural Shell — provides the dark 'underside' of the tube
       new PathLayer<GdeltArcSegment>({
         id: "gdelt-arcs-3d-globe-shell",
         data: segmentData,
         pickable: false,
         getPath: (d) => d.path,
-        // Outer shell gives arcs cylindrical presence against dark basemap.
         getColor: (d) => [
-          Math.max(0, Math.round(d.color[0] * 0.75)),
-          Math.max(0, Math.round(d.color[1] * 0.75)),
-          Math.max(0, Math.round(d.color[2] * 0.75)),
-          Math.round(d.color[3] * 0.82),
+          Math.max(0, Math.round(d.color[0] * 0.4)),
+          Math.max(0, Math.round(d.color[1] * 0.4)),
+          Math.max(0, Math.round(d.color[2] * 0.4)),
+          Math.round(d.color[3] * 0.85),
         ],
-        getWidth: (d) => d.width * 1.9,
+        getWidth: (d) => d.width * 1.8,
         widthUnits: "pixels",
-        widthMinPixels: debugMode ? 3 : 2.3,
-        jointRounded: true,
-        capRounded: true,
+        widthMinPixels: 3.5,
+        jointRounded: false,
+        capRounded: false,
         updateTriggers: {
           getColor: animTick,
         },
         parameters: {
-          depthTest: debugMode ? false : true,
-          // Keep globe arcs above country heat overlays in deck depth ordering.
-          depthBias: debugMode ? 0 : 26.0,
+          depthTest: true,
+          depthBias: -22.0,
         } as any,
       }),
+      // 3. Main Data Core — the visible surface of the tube
       new PathLayer<GdeltArcSegment>({
         id: "gdelt-arcs-3d-globe-core",
         data: segmentData,
@@ -585,40 +574,60 @@ export function buildGdeltArcLayer(
         getColor: (d) => d.color,
         getWidth: (d) => d.width,
         widthUnits: "pixels",
-        widthMinPixels: debugMode ? 2 : 1.5,
-        jointRounded: true,
-        capRounded: true,
+        widthMinPixels: 2.0,
+        jointRounded: false,
+        capRounded: false,
         updateTriggers: {
           getColor: animTick,
         },
         parameters: {
-          depthTest: debugMode ? false : true,
-          depthBias: debugMode ? 0 : 28.0,
+          depthTest: true,
+          depthBias: -24.0,
         } as any,
       }),
+      // 4. Volumetric Highlight — simulating a specular sheen on a rounded surface
       new PathLayer<GdeltArcSegment>({
         id: "gdelt-arcs-3d-globe-highlight",
         data: segmentData,
         pickable: false,
         getPath: (d) => d.path,
-        // Narrow specular-like band to sell tube depth.
         getColor: (d) => [
-          Math.min(255, Math.round(d.color[0] * 1.15 + 18)),
-          Math.min(255, Math.round(d.color[1] * 1.15 + 18)),
-          Math.min(255, Math.round(d.color[2] * 1.15 + 18)),
-          Math.round(d.color[3] * 0.58),
+          Math.min(255, Math.round(d.color[0] * 1.25 + 24)),
+          Math.min(255, Math.round(d.color[1] * 1.25 + 24)),
+          Math.min(255, Math.round(d.color[2] * 1.25 + 24)),
+          Math.round(d.color[3] * 0.72),
         ],
-        getWidth: (d) => d.width * 0.44,
+        getWidth: (d) => d.width * 0.5,
         widthUnits: "pixels",
-        widthMinPixels: debugMode ? 1.1 : 0.9,
-        jointRounded: true,
-        capRounded: true,
+        widthMinPixels: 1.2,
+        jointRounded: false,
+        capRounded: false,
         updateTriggers: {
           getColor: animTick,
         },
         parameters: {
-          depthTest: debugMode ? false : true,
-          depthBias: debugMode ? 0 : 30.0,
+          depthTest: true,
+          depthBias: -26.0,
+        } as any,
+      }),
+      // 5. Specular Ridge — the sharp vertex highlight to give it 'hard' depth
+      new PathLayer<GdeltArcSegment>({
+        id: "gdelt-arcs-3d-globe-specular",
+        data: segmentData,
+        pickable: false,
+        getPath: (d) => d.path,
+        getColor: (d) => [255, 255, 255, Math.round(d.color[3] * 0.85)],
+        getWidth: (d) => d.width * 0.18,
+        widthUnits: "pixels",
+        widthMinPixels: 0.65,
+        jointRounded: false,
+        capRounded: false,
+        updateTriggers: {
+          getColor: animTick,
+        },
+        parameters: {
+          depthTest: true,
+          depthBias: -28.0, // Topmost highlight
         } as any,
       }),
       new ScatterplotLayer<GdeltArcEndpoint>({
@@ -628,14 +637,7 @@ export function buildGdeltArcLayer(
         stroked: true,
         filled: true,
         getPosition: (d) => d.position,
-        getRadius: (d) =>
-          d.isTarget
-            ? debugMode
-              ? 75_000
-              : 52_000
-            : debugMode
-              ? 45_000
-              : 32_000,
+        getRadius: (d) => (d.isTarget ? 52_000 : 32_000),
         radiusUnits: "meters",
         getFillColor: (d) => d.color,
         getLineColor: (d) =>
@@ -643,8 +645,8 @@ export function buildGdeltArcLayer(
         getLineWidth: (d) => (d.isTarget ? 1.5 : 1),
         lineWidthUnits: "pixels",
         parameters: {
-          depthTest: debugMode ? false : true,
-          depthBias: debugMode ? 0 : 20.0,
+          depthTest: true,
+          depthBias: 20.0,
         } as any,
       }),
     ];
@@ -666,7 +668,7 @@ export function buildGdeltArcLayer(
         return [c[0], c[1], c[2], Math.round(c[3] * pulse)];
       },
       getWidth: (d) => d.width,
-      getHeight: debugMode ? 0.8 : 0.3,
+      getHeight: 0.3,
       widthUnits: "pixels",
       wrapLongitude: !globeMode,
       updateTriggers: {
@@ -674,8 +676,8 @@ export function buildGdeltArcLayer(
         getTargetColor: animTick,
       },
       parameters: {
-        depthTest: debugMode ? false : !!globeMode,
-        depthBias: globeMode && !debugMode ? -150.0 : 0,
+        depthTest: !!globeMode,
+        depthBias: globeMode ? -150.0 : 0,
       } as any,
     }),
   ];

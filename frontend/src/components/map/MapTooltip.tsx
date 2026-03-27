@@ -27,6 +27,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
     (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
   const isInfra = entity.type === "infra";
   const isOutage = entity.type === "outage";
+  const isHold = entity.type === "hold";
   const isGdelt = entity.type === "gdelt";
   const isJamming = entity.type === "jamming";
   const jammingAssessment = String(
@@ -41,7 +42,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         : jammingAssessment === "equipment"
           ? "text-slate-300"
           : "text-amber-400";
-
+ 
   const accentColor = isRepeater
     ? "text-emerald-400"
     : isTower
@@ -54,14 +55,14 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "text-sea-accent"
             : isInfra
               ? "text-cyan-400"
-              : isOutage
+              : isOutage || isHold
                 ? "text-amber-400"
                 : isGdelt
                   ? "text-hud-green"
                   : isJamming
                     ? jammingColor
                     : "text-air-accent";
-
+ 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
     : isTower
@@ -74,14 +75,14 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "border-sea-accent/50"
             : isInfra
               ? "border-cyan-400/50"
-              : isOutage
+              : isOutage || isHold
                 ? "border-amber-400/50"
                 : isGdelt
                   ? "border-hud-green/30"
                   : isJamming
                     ? "border-amber-400/50"
                     : "border-air-accent/50";
-
+ 
   const HeaderIcon = isRepeater
     ? Radio
     : isTower
@@ -100,12 +101,14 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   ? Zap
                   : isJamming
                     ? WifiOff
-                    : Plane;
-
+                    : isHold 
+                       ? Crosshair
+                       : Plane;
+ 
   const detail = (entity.detail ?? {}) as Record<string, unknown>;
   const detailProps = (detail.properties ?? {}) as Record<string, unknown>;
   const detailGeometry = (detail.geometry ?? {}) as Record<string, unknown>;
-
+ 
   return (
     <div
       style={{
@@ -142,17 +145,48 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "UNDERSEA"
                     : isOutage
                       ? "OUTAGE"
-                      : isGdelt
-                        ? "OSINT"
-                        : isJamming
-                          ? "SIGINT"
-                          : "LIVE"}
+                      : isHold 
+                         ? "HOLDING"
+                         : isGdelt
+                           ? "OSINT"
+                           : isJamming
+                             ? "SIGINT"
+                             : "LIVE"}
           </span>
         </div>
       </div>
 
       {/* Tooltip Content */}
-      {isRepeater ? (
+      {isHold ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              TACTICAL STATUS
+            </span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight uppercase">
+              AIRCRAFT ESTABLISHED IN HOLD
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ALTITUDE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {entity.altitude != null
+                ? `${Math.round(entity.altitude).toLocaleString()} ft`
+                : "N/A"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COMPLETED
+            </span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight">
+              {String(entity.detail?.turns_completed ?? "0")} TURNS
+            </span>
+          </div>
+        </div>
+      ) : isRepeater ? (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
           <div>
             <span className="text-[8px] text-white/40 block leading-tight">

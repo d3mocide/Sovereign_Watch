@@ -60,7 +60,7 @@ class OrbitalSource:
         self.fetch_hour = int(
             os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "2"))
         )
-        self.propagate_interval_sec = 5
+        self.propagate_interval_sec = 15
 
         self.groups = [
             ("gp.php", "gps-ops"),
@@ -323,12 +323,11 @@ class OrbitalSource:
                             "classification": meta,
                             "norad_id": meta["norad_id"],
                             "category": meta["category"],
-                            "constellation": meta["constellation"],
-                            "period_min": meta["period_min"],
-                            "inclination_deg": meta["inclination_deg"],
-                            "eccentricity": meta["eccentricity"],
-                            "tle_line1": meta["tle_line1"],
-                            "tle_line2": meta["tle_line2"],
+                            "constellation": meta.get("constellation"),
+                            "period_min": meta.get("period_min"),
+                            "inclination_deg": meta.get("inclination_deg"),
+                            "eccentricity": meta.get("eccentricity"),
+                            # TLE lines removed from periodic updates to save bandwidth
                         },
                     }
                     batch_tasks.append(
@@ -341,13 +340,14 @@ class OrbitalSource:
                     if len(batch_tasks) >= 500:
                         await asyncio.gather(*batch_tasks)
                         batch_tasks.clear()
-                        await asyncio.sleep(0)
+                        await asyncio.sleep(0.1)
 
                 if batch_tasks:
                     await asyncio.gather(*batch_tasks)
 
             elapsed = time.time() - start_time
-            sleep_time = max(0.1, self.propagate_interval_sec - elapsed)
+            # Ensure at least 1 second of recovery sleep between heavy batches
+            sleep_time = max(1.0, self.propagate_interval_sec - elapsed)
             logger.info(
                 "Propagation: %d valid sats. Elapsed %.2fs. Sleeping %.2fs.",
                 len(valid_idx),
