@@ -28,3 +28,7 @@
 **Vulnerability:** The `/api/analyze/{uid}` endpoint performs database aggregations and makes external LLM API calls via `litellm`. It lacked any rate limiting, creating a significant Denial of Service (DoS) and cost exhaustion risk, as malicious or buggy clients could spam the endpoint, driving up LLM provider costs and locking up the event loop with concurrent HTTP requests.
 **Learning:** Endpoints that bridge to third-party LLM or vector database APIs must be strictly rate-limited due to the compute cost and billing implications, even if they appear "internal".
 **Prevention:** Always implement IP-based or token-based rate limiting using Redis (`db.redis_client.incr` with `expire`) or standard FastAPI middleware on any route that invokes external AI models or performs heavy computation. Set safe defaults (e.g., 10 requests per minute).
+## 2024-05-24 - Rate Limiting Missing on Global Watchlist Endpoint
+**Vulnerability:** The `/api/watchlist` POST endpoint lacked rate limiting, allowing unauthenticated attackers to potentially flood the Redis backend (`zadd`) with excessive requests, causing DoS or resource exhaustion.
+**Learning:** Even internal or non-sensitive configuration endpoints that write to the database/cache must be protected with rate limiting to prevent abuse and ensure service availability.
+**Prevention:** Always apply rate limiting to endpoints that perform write operations, especially those accessible without authentication.

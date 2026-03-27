@@ -4,7 +4,7 @@ import logging
 import os
 import time as _time
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from models.schemas import MissionLocation, AIModelRequest, WatchlistAddRequest
 from core.database import db
 
@@ -242,10 +242,28 @@ async def get_watchlist():
 
 
 @router.post("/api/watchlist", status_code=201)
-async def add_to_watchlist(req: WatchlistAddRequest):
+async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
     """Add or refresh an ICAO24 in the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
+
+    # Rate Limiting
+    if request.client and request.client.host:
+        client_ip = request.client.host
+        rl_key = f"rate_limit:watchlist:{client_ip}"
+        try:
+            req_count = await db.redis_client.incr(rl_key)
+            if req_count == 1:
+                await db.redis_client.expire(rl_key, 60)
+            if req_count > 20:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded. Please try again later.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
 
     icao24 = req.icao24.lower().strip()
     if not icao24 or len(icao24) != 6 or not all(c in "0123456789abcdef" for c in icao24):
