@@ -104,27 +104,37 @@ async def analyze_track(
 
         track_query = """
             WITH summary AS (
-                SELECT min(time) as start_time, max(time) as last_seen, count(*) as points,
-                       ST_Centroid(ST_Collect(geom)) as centroid_geom
-                FROM tracks WHERE entity_id = $1 AND time > NOW() - INTERVAL '1 hour' * $2
+                SELECT 
+                    min(time) as start_time, 
+                    max(time) as last_seen, 
+                    count(*) as points,
+                    ST_Centroid(ST_Collect(geom)) as centroid_geom
+                FROM tracks 
+                WHERE entity_id = $1 AND time > NOW() - INTERVAL '1 hour' * $2
             ),
             metadata AS (
                 SELECT type, meta FROM tracks WHERE entity_id = $1 ORDER BY time DESC LIMIT 1
             ),
             waypoints AS (
-                SELECT lat, lon, alt, speed, time FROM tracks WHERE entity_id = $1
-                AND time > NOW() - INTERVAL '1 hour' * $2 ORDER BY time DESC LIMIT 10
+                SELECT lat, lon, alt, speed, time FROM tracks 
+                WHERE entity_id = $1 AND time > NOW() - INTERVAL '1 hour' * $2 
+                ORDER BY time DESC LIMIT 10
             )
-            SELECT s.*, m.type, m.meta, (SELECT json_agg(w) FROM waypoints w) as waypoint_history
-            FROM summary s, metadata m
+            SELECT 
+                s.start_time, s.last_seen, s.points, s.centroid_geom,
+                m.type, m.meta,
+                (SELECT jsonb_agg(w) FROM waypoints w) as waypoint_history
+            FROM summary s
+            LEFT JOIN metadata m ON true
         """
         try:
-            row = await db.pool.fetchrow(track_query, lookback_uid, req.lookback_hours)
+            # Use float for lookback_hours to match tracks.py behavior and ensure interval multiplication stability
+            row = await db.pool.fetchrow(track_query, lookback_uid, float(req.lookback_hours))
             if row:
                 track_summary = dict(row)
         except Exception as e:
-            logger.error(f"Analysis track query failed: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            logger.error(f"Analysis track query failed for {uid}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
         # 2.1 Fallbacks
         if not track_summary or track_summary.get("points") == 0:
@@ -236,8 +246,13 @@ async def analyze_track(
         meta = {}
         if track_summary:
             meta = track_summary.get("meta") or {}
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except Exception:
+                    meta = {}
         
-        label = meta.get('callsign', 'Unknown')
+        label = meta.get('callsign', 'Unknown') if isinstance(meta, dict) else 'Unknown'
         prefix = "[HOLDING DETECTED] " if is_hold else ""
         user_content = f"TARGET: {uid} | Label: {prefix}{label} | History: {track_summary['points'] if track_summary else 0} pts. {intel_context}\nINST: {persona['inst']}\nASSESS:"
 
