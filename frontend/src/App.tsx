@@ -30,6 +30,7 @@ import { useSatNOGS } from "./hooks/useSatNOGS";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useSystemHealth } from "./hooks/useSystemHealth";
 import { useTowers } from "./hooks/useTowers";
+import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
 import { useViewMode } from "./hooks/useViewMode";
 import type { CoTEntity, MapActions, MissionProps } from "./types";
 
@@ -280,6 +281,7 @@ function App() {
   } | null>(null);
 
   const { towers } = useTowers(mapBounds, filters.showTowers);
+  const { buoyData } = useNDBCBuoys(mapBounds, filters.showBuoys === true);
 
   const handleOpenAnalystPanel = useCallback(() => {
     setIsAIAnalystOpen(true);
@@ -457,6 +459,7 @@ function App() {
               towersData={towers}
               onBoundsChange={setMapBounds}
               gdeltData={gdeltData}
+              buoyData={buoyData}
             />
 
             {replayMode && (
