@@ -352,7 +352,7 @@ Ordered by impact vs risk (lower risk items first):
 | Done | `SystemSettingsWidget.tsx` | Extract 3 sub-widgets + useWatchlist hook | Low |
 | DONE | `SystemStatus.tsx` | Extract layer controls + integration status | Low |
 | Done | `useAnimationLoop.ts` | Extract interpolation and filter engines | High — performance critical |
-| 9 | `TacticalMap.tsx` + `OrbitalMap.tsx` | Extract shared map base | High — core rendering path |
+| Done | `TacticalMap.tsx` + `OrbitalMap.tsx` | Extract shared map base (`useMapBase.ts`) | High — core rendering path |
 | Done | `App.tsx` | Extract 6 domain hooks (useViewMode, useSidebarState, useIntelEvents, useAppFilters, useEntitySelection, useReplayController) | High — touches everything |
 
 ---
