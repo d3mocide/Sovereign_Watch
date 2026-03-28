@@ -28,7 +28,7 @@ export const LayerVisibilityControls: React.FC<
   const [showLayers, setShowLayers] = useState(false);
   const [infraExpanded, setInfraExpanded] = useState(false);
   const [rfExpanded, setRfExpanded] = useState(false);
-  const [envExpanded, setEnvExpanded] = useState(false);
+  const [hazardsExpanded, setHazardsExpanded] = useState(false);
 
   const handleSubFilterChange = (key: string, value: boolean) => {
     if (onFilterChange) {
@@ -44,7 +44,7 @@ export const LayerVisibilityControls: React.FC<
       filters.showOutages === true ||
       filters.showTowers === true);
 
-  const envIsOn = !!filters && (!!filters.showAurora || !!filters.showJamming || filters.showHoldingPatterns !== false);
+  const hazardsIsOn = !!filters && (!!filters.showAurora || !!filters.showJamming || filters.showHoldingPatterns !== false);
 
   const toggleInfra = () => {
     if (!onFilterChange || !filters) return;
@@ -64,9 +64,9 @@ export const LayerVisibilityControls: React.FC<
     }
   };
 
-  const toggleEnv = () => {
+  const toggleHazards = () => {
     if (!onFilterChange || !filters) return;
-    if (envIsOn) {
+    if (hazardsIsOn) {
       onFilterChange("showAurora", false);
       onFilterChange("showJamming", false);
       onFilterChange("showHoldingPatterns", false);
@@ -131,16 +131,16 @@ export const LayerVisibilityControls: React.FC<
               <button
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
-                  toggleEnv();
+                  toggleHazards();
                 }}
                 className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-purple-400 outline-none ${
-                  envIsOn
+                  hazardsIsOn
                     ? "bg-purple-400/10 text-purple-400 border border-purple-400/30"
                     : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
                 }`}
-                title="Toggle Environmental Layers"
-                aria-label="Toggle Environmental Layers"
-                aria-pressed={envIsOn}
+                title="Toggle Hazards Layers"
+                aria-label="Toggle Hazards Layers"
+                aria-pressed={hazardsIsOn}
               >
                 <WifiOff size={12} aria-hidden="true" />
               </button>
@@ -647,34 +647,34 @@ export const LayerVisibilityControls: React.FC<
             )}
           </div>
 
-          {/* Environmental */}
+          {/* Hazards */}
           <div className="flex flex-col gap-1">
             <div
-              className={`group flex items-center justify-between rounded border transition-all ${envIsOn ? "border-purple-400/30 bg-purple-400/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
+              className={`group flex items-center justify-between rounded border transition-all ${hazardsIsOn ? "border-purple-400/30 bg-purple-400/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
             >
               <button
                 className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setEnvExpanded(!envExpanded);
+                  setHazardsExpanded(!hazardsExpanded);
                 }}
-                aria-expanded={envExpanded}
+                aria-expanded={hazardsExpanded}
               >
                 <div className="flex items-center gap-3">
                   <Globe
                     size={14}
-                    className={envIsOn ? "text-purple-400" : "text-white/20"}
+                    className={hazardsIsOn ? "text-purple-400" : "text-white/20"}
                     aria-hidden="true"
                   />
                   <div className="flex flex-col">
                     <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">
-                      Environmental
+                      Hazards
                     </span>
                   </div>
                 </div>
                 <div
                   className="w-4 flex justify-center transition-transform duration-200 shrink-0"
-                  style={{ transform: envExpanded ? "rotate(90deg)" : "none" }}
+                  style={{ transform: hazardsExpanded ? "rotate(90deg)" : "none" }}
                 >
                   <ChevronRight
                     size={14}
@@ -688,29 +688,29 @@ export const LayerVisibilityControls: React.FC<
                 className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleEnv();
+                  toggleHazards();
                 }}
-                aria-label="Toggle Environmental Layers"
-                aria-pressed={envIsOn}
+                aria-label="Toggle Hazards Layers"
+                aria-pressed={hazardsIsOn}
               >
                 <input
                   type="checkbox"
                   className="sr-only"
-                  checked={envIsOn}
-                  onChange={() => toggleEnv()}
+                  checked={hazardsIsOn}
+                  onChange={() => toggleHazards()}
                   tabIndex={-1}
                 />
                 <div
-                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${envIsOn ? "bg-purple-400" : "bg-white/10 hover:bg-white/20"}`}
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${hazardsIsOn ? "bg-purple-400" : "bg-white/10 hover:bg-white/20"}`}
                 >
                   <div
-                    className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${envIsOn ? "left-3.5" : "left-0.5"}`}
+                    className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${hazardsIsOn ? "left-3.5" : "left-0.5"}`}
                   />
                 </div>
               </button>
             </div>
 
-            {envExpanded && (
+            {hazardsExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
                 {/* Aurora Forecast */}
                 <label
