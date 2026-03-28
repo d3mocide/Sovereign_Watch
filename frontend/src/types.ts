@@ -276,6 +276,8 @@ export interface MapFilters {
   showOutages?: boolean;
   showTowers?: boolean;
   cableOpacity?: number;
+  // Maritime / Geospatial (Phase 1)
+  showBuoys?: boolean;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 
@@ -298,6 +300,18 @@ export interface Tower {
   heightM: number;
   elevationM: number;
   coordinates: [number, number];
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/buoys/latest */
+export interface NDBCBuoyProperties {
+  buoy_id:  string;
+  wvht_m:   number | null;  // Significant wave height (m)
+  wtmp_c:   number | null;  // Water surface temperature (°C)
+  wspd_ms:  number | null;  // Wind speed (m/s)
+  wdir_deg: number | null;  // Wind direction (degrees true)
+  atmp_c:   number | null;  // Air temperature (°C)
+  pres_hpa: number | null;  // Atmospheric pressure (hPa)
+  time:     string;         // ISO-8601 observation timestamp
 }
 
 export interface DRState {

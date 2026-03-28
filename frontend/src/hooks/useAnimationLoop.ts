@@ -63,6 +63,8 @@ interface UseAnimationLoopOptions {
   gdeltData?: any;
   /** Minimum tone threshold for GDELT; default -Infinity (all events) */
   gdeltToneThreshold?: number;
+  /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
+  buoyData?: FeatureCollection | null;
   setHoveredInfra?: (info: unknown) => void;
   setSelectedInfra?: (info: unknown) => void;
   worldCountriesData?: FeatureCollection | null;
@@ -137,6 +139,7 @@ export function useAnimationLoop({
   jammingData,
   gdeltData,
   gdeltToneThreshold,
+  buoyData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -217,6 +220,9 @@ export function useAnimationLoop({
 
   const gdeltToneThresholdRef = useRef(gdeltToneThreshold);
   gdeltToneThresholdRef.current = gdeltToneThreshold;
+
+  const buoyDataRef = useRef(buoyData);
+  buoyDataRef.current = buoyData;
 
   const worldCountriesDataRef = useRef(worldCountriesData);
   worldCountriesDataRef.current = worldCountriesData;
@@ -566,6 +572,7 @@ export function useAnimationLoop({
         jammingData: jammingDataRef.current,
         gdeltData: gdeltDataRef.current,
         gdeltToneThreshold: gdeltToneThresholdRef.current,
+        buoyData: buoyDataRef.current ?? null,
         onEntitySelect: onEntitySelectRef.current,
         setHoveredEntity: setHoveredEntityRef.current,
         setHoverPosition: setHoverPositionRef.current,

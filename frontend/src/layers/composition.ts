@@ -23,6 +23,7 @@ import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
 import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
+import { buildNDBCLayer } from "./buildNDBCLayer";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
 
@@ -62,6 +63,8 @@ interface LayerCompositionOptions {
   jammingData?: any;
   /** GDELT v2 geolocated news events GeoJSON */
   gdeltData?: any;
+  /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
+  buoyData?: FeatureCollection | null;
   /**
    * Minimum tone threshold for GDELT dots (Goldstein scale).
    * Default -Infinity = show all.  Pass -2 for conflict+tension only.
@@ -110,6 +113,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     jammingData,
     gdeltData,
     gdeltToneThreshold,
+    buoyData,
     onEntitySelect,
     setHoveredEntity,
     setHoverPosition,
@@ -223,6 +227,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
     ...infraLayers,
+    // NDBC Ocean Buoys — Maritime Layer Group (Z-order 8–11)
+    ...buildNDBCLayer(
+      buoyData ?? null,
+      !!filters?.showBuoys,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
+    ),
     getSatNOGSLayer(satnogsStations || [], !!filters?.showSatNOGS),
     // Jamming zones sit above infra but below entity chevrons
     ...buildJammingLayer(
