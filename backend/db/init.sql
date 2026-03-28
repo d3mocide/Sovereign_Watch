@@ -441,3 +441,27 @@ SELECT add_continuous_aggregate_policy('ndbc_hourly_baseline',
     end_offset        => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour',
     if_not_exists     => TRUE);
+
+-- TABLE: asam_incidents (ASAM Maritime Piracy Incidents — Phase 2 Geospatial)
+-- NGA Anti-Shipping Activity Messages: piracy, robbery, and hostile acts against
+-- vessels.  Refreshed weekdays ~15:00 ET from msi.nga.mil JSON API.
+-- threat_score: recency × severity composite (0–10), used by Phase 3 fusion.
+CREATE TABLE IF NOT EXISTS asam_incidents (
+    reference   TEXT PRIMARY KEY,           -- NGA reference (e.g. "2024-123")
+    incident_date DATE NOT NULL,            -- Date of incident
+    lat         DOUBLE PRECISION NOT NULL,
+    lon         DOUBLE PRECISION NOT NULL,
+    hostility   TEXT,                       -- Type of attack (robbery, hijacking…)
+    victim      TEXT,                       -- Type of vessel victim
+    nav_area    TEXT,                       -- NAVAREA region code
+    subreg      TEXT,                       -- NGA sub-region number
+    description TEXT,                       -- Full narrative description
+    threat_score FLOAT NOT NULL DEFAULT 0,  -- Composite 0–10 score
+    geom        GEOMETRY(POINT, 4326),
+    ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_asam_geom        ON asam_incidents USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_asam_date        ON asam_incidents (incident_date DESC);
+CREATE INDEX IF NOT EXISTS ix_asam_threat      ON asam_incidents (threat_score DESC);
+CREATE INDEX IF NOT EXISTS ix_asam_date_threat ON asam_incidents (incident_date DESC, threat_score DESC);

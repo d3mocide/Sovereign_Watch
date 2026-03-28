@@ -9,6 +9,7 @@ import {
   Network,
   Radio,
   RefreshCw,
+  Skull,
   Sparkles,
   TowerControl,
   Waves,
@@ -48,7 +49,7 @@ export const LayerVisibilityControls: React.FC<
       filters.showTowers === true);
 
   const environmentalIsOn =
-    !!filters && (!!filters.showAurora || !!filters.showBuoys);
+    !!filters && (!!filters.showAurora || !!filters.showBuoys || !!filters.showASAM);
 
   const hazardsIsOn =
     !!filters &&
@@ -77,9 +78,11 @@ export const LayerVisibilityControls: React.FC<
     if (environmentalIsOn) {
       onFilterChange("showAurora", false);
       onFilterChange("showBuoys", false);
+      onFilterChange("showASAM", false);
     } else {
       onFilterChange("showAurora", getFilterPref("showAurora", false));
       onFilterChange("showBuoys", getFilterPref("showBuoys", false));
+      onFilterChange("showASAM", getFilterPref("showASAM", false));
     }
   };
 
@@ -816,6 +819,40 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showBuoys ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* ASAM Piracy Incidents */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showASAM ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Skull
+                      size={10}
+                      className={
+                        filters.showASAM ? "text-red-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showASAM ? "text-red-400/80" : "text-red-400/30"}`}
+                    >
+                      PIRACY INCIDENTS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showASAM}
+                    onChange={(e) =>
+                      handleSubFilterChange("showASAM", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showASAM ? "bg-red-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showASAM ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>

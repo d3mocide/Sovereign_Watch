@@ -31,6 +31,7 @@ import { useSidebarState } from "./hooks/useSidebarState";
 import { useSystemHealth } from "./hooks/useSystemHealth";
 import { useTowers } from "./hooks/useTowers";
 import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
+import { useASAMIncidents } from "./hooks/useASAMIncidents";
 import { useViewMode } from "./hooks/useViewMode";
 import type { CoTEntity, MapActions, MissionProps } from "./types";
 
@@ -282,6 +283,7 @@ function App() {
 
   const { towers } = useTowers(mapBounds, filters.showTowers);
   const { buoyData } = useNDBCBuoys(mapBounds, filters.showBuoys === true);
+  const { asamData } = useASAMIncidents(mapBounds, filters.showASAM === true);
 
   const handleOpenAnalystPanel = useCallback(() => {
     setIsAIAnalystOpen(true);
@@ -460,6 +462,7 @@ function App() {
               onBoundsChange={setMapBounds}
               gdeltData={gdeltData}
               buoyData={buoyData}
+              asamData={asamData}
             />
 
             {replayMode && (

@@ -278,6 +278,8 @@ export interface MapFilters {
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
+  // Maritime / Geospatial (Phase 2)
+  showASAM?: boolean;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 
@@ -300,6 +302,18 @@ export interface Tower {
   heightM: number;
   elevationM: number;
   coordinates: [number, number];
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/asam/incidents */
+export interface ASAMIncidentProperties {
+  reference:     string;
+  incident_date: string;          // ISO date string (YYYY-MM-DD)
+  hostility:     string | null;   // Type of attack (Robbery, Hijacking…)
+  victim:        string | null;   // Type of vessel victim
+  nav_area:      string | null;   // NAVAREA region code
+  subreg:        string | null;   // NGA sub-region number
+  description:   string | null;   // Full narrative description
+  threat_score:  number;          // Composite 0–10 threat score
 }
 
 /** Properties on a GeoJSON Feature returned by GET /api/buoys/latest */

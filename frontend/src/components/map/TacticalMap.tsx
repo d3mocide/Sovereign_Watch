@@ -111,6 +111,8 @@ interface TacticalMapProps {
   gdeltData?: FeatureCollection | null;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
+  /** ASAM piracy incidents GeoJSON (Phase 2 Geospatial) */
+  asamData?: FeatureCollection | null;
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
@@ -176,6 +178,7 @@ export function TacticalMap({
   onBoundsChange,
   gdeltData: propGdeltData,
   buoyData,
+  asamData,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -673,6 +676,7 @@ export function TacticalMap({
     jammingData,
     gdeltData,
     buoyData,
+    asamData,
     gdeltToneThreshold:
       typeof filters?.gdeltToneThreshold === "number"
         ? filters.gdeltToneThreshold
