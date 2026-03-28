@@ -21,7 +21,7 @@ services:
       - redpanda
       - start
       - --smp 1
-      - --memory 1G
+      - --memory 2G
       - --reserve-memory 0M
       - --overprovisioned
       - --node-id 0
@@ -36,11 +36,37 @@ services:
       - sovereign-vol-redpanda:/var/lib/redpanda/data
     networks:
       - sovereign-net-backend
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health" ]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # --- Redpanda Topic Init (one-shot: sets per-topic retention configs) ---
+  # orbital_raw is high-volume (~2 200 msg/s for ~11 000 satellites every 5 s).
+  # Positions are never persisted — they are recomputed on demand via SGP4.
+  # 1-hour retention gives ample replay buffer for service restarts while
+  # keeping the volume bounded (~1.5 GB at steady state vs unbounded default).
+  sovereign-redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: sovereign-redpanda-init
+    depends_on:
+      sovereign-redpanda:
+        condition: service_healthy
+    networks:
+      - sovereign-net-backend
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        rpk topic create orbital_raw \
+          --config retention.ms=3600000 \
+          --brokers sovereign-redpanda:9092 2>/dev/null \
+        || rpk topic alter-config orbital_raw \
+          --set retention.ms=3600000 \
+          --brokers sovereign-redpanda:9092
+    restart: "no"
 
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
   sovereign-ais-poller:

@@ -51,6 +51,9 @@ IODA_URL       = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
 CABLES_URL     = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
 STATIONS_URL   = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json"
 NOMINATIM_URL  = "https://nominatim.openstreetmap.org/search"
+NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
+
+POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 
 FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
 FCC_CONNECT_TIMEOUT_S    = 30
@@ -205,6 +208,116 @@ def _ingest_fcc_records_sync(db_url: str, records: list[tuple]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# NDBC helpers — pure + blocking, unit-testable without I/O
+# ---------------------------------------------------------------------------
+
+def _ndbc_field(value: str):
+    """Return float from an NDBC field, or None if the field is 'MM' / empty."""
+    v = value.strip()
+    if not v or v == "MM":
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def parse_ndbc_latest_obs(text: str) -> list[dict]:
+    """Parse NDBC latest_obs.txt into a list of observation dicts.
+
+    Column order (space-separated, two header lines starting with '#'):
+      STN  LAT  LON  YEAR  MM  DD  hh  mm  WDIR  WSPD  GST  WVHT  DPD  APD  MWD  PRES  ATMP  WTMP  DEWP  VIS  TIDE
+    Returns only rows that have a valid lat, lon, and at least one measurement.
+    """
+    records = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 18:
+            continue
+        try:
+            buoy_id = parts[0]
+            lat     = float(parts[1])
+            lon     = float(parts[2])
+            year    = int(parts[3])
+            month   = int(parts[4])
+            day     = int(parts[5])
+            hour    = int(parts[6])
+            minute  = int(parts[7])
+        except (ValueError, IndexError):
+            continue
+
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            continue
+
+        wvht_m   = _ndbc_field(parts[11])
+        wtmp_c   = _ndbc_field(parts[17])
+        wspd_ms  = _ndbc_field(parts[9])
+        wdir_deg = _ndbc_field(parts[8])
+        atmp_c   = _ndbc_field(parts[16])
+        pres_hpa = _ndbc_field(parts[15])
+
+        # Skip rows with no usable measurements
+        if all(v is None for v in (wvht_m, wtmp_c, wspd_ms)):
+            continue
+
+        try:
+            obs_time = datetime(year, month, day, hour, minute, tzinfo=UTC)
+        except ValueError:
+            continue
+
+        records.append({
+            "buoy_id":  buoy_id,
+            "time":     obs_time,
+            "lat":      lat,
+            "lon":      lon,
+            "wvht_m":   wvht_m,
+            "wtmp_c":   wtmp_c,
+            "wspd_ms":  wspd_ms,
+            "wdir_deg": wdir_deg,
+            "atmp_c":   atmp_c,
+            "pres_hpa": pres_hpa,
+        })
+    return records
+
+
+def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
+    """Upsert NDBC observations into ndbc_obs via psycopg2 (blocking).
+
+    Uses ON CONFLICT DO NOTHING — duplicate (buoy_id, time) rows from
+    back-to-back 15-minute fetches are silently skipped.
+    Returns the number of rows inserted.
+    """
+    insert_sql = """
+        INSERT INTO ndbc_obs
+            (time, buoy_id, lat, lon, wvht_m, wtmp_c, wspd_ms, wdir_deg, atmp_c, pres_hpa, geom)
+        VALUES %s
+        ON CONFLICT DO NOTHING
+    """
+    rows = [
+        (
+            r["time"], r["buoy_id"], r["lat"], r["lon"],
+            r["wvht_m"], r["wtmp_c"], r["wspd_ms"], r["wdir_deg"],
+            r["atmp_c"], r["pres_hpa"],
+            f"SRID=4326;POINT({r['lon']} {r['lat']})",
+        )
+        for r in records
+    ]
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, insert_sql, rows, page_size=500)
+        conn.commit()
+        inserted = cur.rowcount
+        cur.close()
+    finally:
+        conn.close()
+    return inserted
+
+
+# ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
 
@@ -213,6 +326,7 @@ class InfraPollerService:
         self.running = True
         self.redis   = None
         self._geocode_cache: dict[str, tuple[float, float]] = {}
+        self._ndbc_etag: str | None = None
 
     async def setup(self):
         self.redis = await aioredis.from_url(REDIS_URL, decode_responses=True)
@@ -223,6 +337,7 @@ class InfraPollerService:
             asyncio.create_task(self.cables_loop()),
             asyncio.create_task(self.ioda_loop()),
             asyncio.create_task(self.fcc_loop()),
+            asyncio.create_task(self.ndbc_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -489,6 +604,75 @@ class InfraPollerService:
                     os.remove(tmp_path)
                 except OSError:
                     pass
+
+
+    # -----------------------------------------------------------------------
+    # NDBC loop — 15-minute interval, ETag caching
+    # -----------------------------------------------------------------------
+
+    async def ndbc_loop(self):
+        """Poll NDBC latest_obs.txt every 15 minutes, write to ndbc_obs table."""
+        interval_s = POLL_INTERVAL_NDBC_MINUTES * 60
+        while self.running:
+            try:
+                await self._fetch_and_ingest_ndbc()
+            except Exception as e:
+                logger.exception("NDBC fetch error")
+                try:
+                    await self.redis.set(
+                        "poller:ndbc:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_and_ingest_ndbc(self):
+        """Download latest_obs.txt (ETag-cached), parse, and upsert into DB."""
+        headers = {"User-Agent": USER_AGENT}
+        if self._ndbc_etag:
+            headers["If-None-Match"] = self._ndbc_etag
+
+        timeout = aiohttp.ClientTimeout(total=30.0)
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+            async with client.get(NDBC_LATEST_URL) as resp:
+                if resp.status == 304:
+                    logger.info("NDBC: 304 Not Modified — no new data")
+                    return
+                resp.raise_for_status()
+                text = await resp.text(encoding="utf-8", errors="replace")
+                self._ndbc_etag = resp.headers.get("ETag")
+
+        records = parse_ndbc_latest_obs(text)
+        if not records:
+            logger.warning("NDBC: no valid observations parsed")
+            return
+
+        inserted = await asyncio.to_thread(_ingest_ndbc_records_sync, DB_URL, records)
+        logger.info("NDBC: parsed %d obs, inserted %d new rows", len(records), inserted)
+
+        # Cache the latest observation GeoJSON for fast API reads
+        features = [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
+                "properties": {
+                    "buoy_id":  r["buoy_id"],
+                    "wvht_m":   r["wvht_m"],
+                    "wtmp_c":   r["wtmp_c"],
+                    "wspd_ms":  r["wspd_ms"],
+                    "wdir_deg": r["wdir_deg"],
+                    "atmp_c":   r["atmp_c"],
+                    "pres_hpa": r["pres_hpa"],
+                    "time":     r["time"].isoformat(),
+                },
+            }
+            for r in records
+        ]
+        geojson = json.dumps({"type": "FeatureCollection", "features": features})
+        await self.redis.set("ndbc:latest_obs", geojson, ex=1800)  # 30-min TTL
+        logger.info("NDBC: cached %d buoys in Redis (ndbc:latest_obs)", len(features))
 
 
 # ---------------------------------------------------------------------------

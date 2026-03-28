@@ -6,6 +6,7 @@ import {
   Satellite,
   Ship,
   Signal,
+  Waves,
   WifiOff,
   Zap,
 } from "lucide-react";
@@ -45,6 +46,7 @@ function getHoldingSeverity(turnsRaw: number | string | undefined) {
 
 export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isShip = entity.type.includes("S");
+  const isBuoy = entity.type === "buoy";
   const isRepeater = entity.type === "repeater";
   const isTower = entity.type === "tower";
   const isJS8 = entity.type === "js8";
@@ -84,19 +86,21 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         ? "text-emerald-400"
         : isOrbital
           ? "text-purple-400"
-          : isShip
-            ? "text-sea-accent"
-            : isInfra
-              ? "text-cyan-400"
-              : isHold
-                ? holdSeverity.dotClass
-                : isOutage
-                  ? "text-amber-400"
-                  : isGdelt
-                    ? "text-hud-green"
-                    : isJamming
-                      ? jammingColor
-                      : "text-air-accent";
+          : isBuoy
+            ? "text-blue-400"
+            : isShip
+              ? "text-sea-accent"
+              : isInfra
+                ? "text-cyan-400"
+                : isHold
+                  ? holdSeverity.dotClass
+                  : isOutage
+                    ? "text-amber-400"
+                    : isGdelt
+                      ? "text-hud-green"
+                      : isJamming
+                        ? jammingColor
+                        : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -106,19 +110,21 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         ? "border-emerald-400/50"
         : isOrbital
           ? "border-purple-400/50"
-          : isShip
-            ? "border-sea-accent/50"
-            : isInfra
-              ? "border-cyan-400/50"
-              : isHold
-                ? holdSeverity.borderClass
-                : isOutage
-                  ? "border-amber-400/50"
-                  : isGdelt
-                    ? "border-hud-green/30"
-                    : isJamming
-                      ? "border-amber-400/50"
-                      : "border-air-accent/50";
+          : isBuoy
+            ? "border-blue-400/50"
+            : isShip
+              ? "border-sea-accent/50"
+              : isInfra
+                ? "border-cyan-400/50"
+                : isHold
+                  ? holdSeverity.borderClass
+                  : isOutage
+                    ? "border-amber-400/50"
+                    : isGdelt
+                      ? "border-hud-green/30"
+                      : isJamming
+                        ? "border-amber-400/50"
+                        : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -128,19 +134,21 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         ? Signal
         : isOrbital
           ? Satellite
-          : isShip
-            ? Ship
-            : isInfra
-              ? Network
-              : isOutage
-                ? Signal
-                : isGdelt
-                  ? Zap
-                  : isJamming
-                    ? WifiOff
-                    : isHold
-                      ? Crosshair
-                      : Plane;
+          : isBuoy
+            ? Waves
+            : isShip
+              ? Ship
+              : isInfra
+                ? Network
+                : isOutage
+                  ? Signal
+                  : isGdelt
+                    ? Zap
+                    : isJamming
+                      ? WifiOff
+                      : isHold
+                        ? Crosshair
+                        : Plane;
 
   const detail = (entity.detail ?? {}) as Record<string, unknown>;
   const detailProps = (detail.properties ?? {}) as Record<string, unknown>;
@@ -178,17 +186,19 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? "TOWER"
                 : isJS8
                   ? "JS8CALL"
-                  : isInfra
-                    ? "UNDERSEA"
-                    : isOutage
-                      ? "OUTAGE"
-                      : isHold
-                        ? "HOLDING"
-                        : isGdelt
-                          ? "OSINT"
-                          : isJamming
-                            ? "SIGINT"
-                            : "LIVE"}
+                  : isBuoy
+                    ? "BUOY"
+                    : isInfra
+                      ? "UNDERSEA"
+                      : isOutage
+                        ? "OUTAGE"
+                        : isHold
+                          ? "HOLDING"
+                          : isGdelt
+                            ? "OSINT"
+                            : isJamming
+                              ? "SIGINT"
+                              : "LIVE"}
           </span>
         </div>
       </div>
@@ -353,6 +363,57 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               title={String(detailProps.owner || "N/A")}
             >
               {String(detailProps.owner || "N/A")}
+            </span>
+          </div>
+        </div>
+      ) : isBuoy ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-blue-400 font-mono font-bold leading-tight uppercase">
+              OCEANOGRAPHIC BUOY
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              WAVE HEIGHT
+            </span>
+            <span className="text-[10px] text-blue-300 font-mono font-bold leading-tight">
+              {detailProps.wvht_m != null
+                ? `${Number(detailProps.wvht_m).toFixed(2)} m`
+                : "N/A"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              WATER TEMP
+            </span>
+            <span className="text-[10px] text-blue-300 font-mono font-bold leading-tight">
+              {detailProps.wtmp_c != null
+                ? `${Number(detailProps.wtmp_c).toFixed(1)} C`
+                : "N/A"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              WIND SPEED
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.wspd_ms != null
+                ? `${Number(detailProps.wspd_ms).toFixed(1)} m/s`
+                : "N/A"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              WIND DIR
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.wdir_deg != null
+                ? `${Math.round(Number(detailProps.wdir_deg))}°`
+                : "N/A"}
             </span>
           </div>
         </div>
@@ -584,9 +645,11 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? "JS8CALL"
                 : isOrbital
                   ? "ORBITAL"
-                  : isShip
-                    ? "MARITIME"
-                    : "AVIONICS"}
+                  : isBuoy
+                    ? "BUOY"
+                    : isShip
+                      ? "MARITIME"
+                      : "AVIONICS"}
             </span>
           </div>
           <div>

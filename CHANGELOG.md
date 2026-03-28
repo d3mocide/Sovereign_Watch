@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.55.0] - 2026-03-28
+
+### Added
+
+- **NDBC Ocean Buoy Ingestion Loop**: Added a new infra poller loop that ingests NOAA NDBC latest observations on a 15-minute cadence with ETag-aware fetch behavior.
+- **NDBC Parsing and Validation Pipeline**: Added `parse_ndbc_latest_obs()` plus strict coordinate and missing-field guards for robust parsing of space-delimited NDBC payloads.
+- **Buoy API Surface**: Added `/api/buoys/latest` with dual-path delivery: Redis fast-path for world views and bbox-scoped PostGIS query path for viewport requests.
+- **Buoy Geospatial Layer**: Added a Deck.gl Scatterplot buoy layer with wave-height radius encoding, water-temperature color ramp, hover telemetry, and click-through sidebar integration.
+- **Buoy Frontend Data Hook**: Added `useNDBCBuoys()` with 500ms viewport debounce and 15-minute refresh to align with poll cadence.
+- **Buoy UI Controls and Views**: Added map filter support (`showBuoys`), Environmental layer integration, buoy-specific tooltip routing, and buoy right-sidebar telemetry cards.
+- **NDBC Unit Tests**: Added parser test coverage for headers, invalid rows, missing measurements, coordinate bounds, and field extraction edge cases.
+
+### Changed
+
+- **Infra Hover Routing**: Extended infra hover classification to include buoy entities so buoy IDs and telemetry flow correctly into tooltip and sidebar surfaces.
+- **Buoy Interaction UX**: Updated buoy hover-clear behavior to prevent sticky tooltip state when cursor exits buoy marks.
+- **Buoy Render Baseline**: Tuned buoy marker minimum screen footprint for reliable visibility across zoom levels.
+
+### Fixed
+
+- **Buoy Tooltip Misclassification**: Fixed map tooltip fallback behavior that could label buoy hovers as avionics.
+- **Buoy Sidebar Data Density**: Fixed sparse buoy detail cards by exposing collected oceanographic measurements directly in the right sidebar.
+
+### Technical Details
+
+- New `ndbc_obs` hypertable supports upserted buoy observations with deduplication via conflict handling.
+- Added hypertable lifecycle policies: 1-day chunking, compression, and 30-day retention.
+- Added `ndbc_hourly_baseline` continuous aggregate to support Phase 3 Z-score-style anomaly workflows.
+- Latest-observation viewport queries use station-level latest-row selection semantics and recent-time windows.
+
 ## [0.54.0] - 2026-03-28
 
 ### Added

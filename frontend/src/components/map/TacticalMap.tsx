@@ -109,6 +109,8 @@ interface TacticalMapProps {
     } | null,
   ) => void;
   gdeltData?: FeatureCollection | null;
+  /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
+  buoyData?: FeatureCollection | null;
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
@@ -173,6 +175,7 @@ export function TacticalMap({
   towersData,
   onBoundsChange,
   gdeltData: propGdeltData,
+  buoyData,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -214,12 +217,22 @@ export function TacticalMap({
       const isOutage =
         props.entity_type === "outage" || props.severity !== undefined;
       const isTower = obj.type === "tower" || props.entity_type === "tower";
-      const entityType = isTower ? "tower" : isOutage ? "outage" : "infra";
+      const isBuoy = props.buoy_id !== undefined;
+      const entityType = isBuoy
+        ? "buoy"
+        : isTower
+          ? "tower"
+          : isOutage
+            ? "outage"
+            : "infra";
       const entity: CoTEntity = {
-        uid: String(props.id || obj.id || `infra-${Date.now()}`),
+        uid: String(
+          props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
+        ),
         type: entityType,
         callsign: String(
-          props.name ||
+          props.buoy_id ||
+            props.name ||
             props.region ||
             props.fcc_id ||
             (isOutage
@@ -245,10 +258,12 @@ export function TacticalMap({
       setHoveredEntity((prev: CoTEntity | null) =>
         prev?.type === "infra" ||
         prev?.type === "outage" ||
-        prev?.type === "tower"
+        prev?.type === "tower" ||
+        prev?.type === "buoy"
           ? null
           : prev,
       );
+      setHoverPosition(null);
     }
   }, []);
 
@@ -603,9 +618,11 @@ export function TacticalMap({
       const props = info.object.properties || {};
       const isTower =
         info.object.type === "tower" || props.entity_type === "tower";
-      const entityType = isTower ? "tower" : "infra";
+      const isBuoy = props.buoy_id !== undefined;
+      const entityType = isBuoy ? "buoy" : isTower ? "tower" : "infra";
       const callsign = String(
-        props.name ||
+        props.buoy_id ||
+          props.name ||
           props.region ||
           props.fcc_id ||
           (props.entity_type === "outage"
@@ -616,7 +633,9 @@ export function TacticalMap({
       );
 
       const infraEntity: CoTEntity = {
-        uid: String(props.id || info.object.id || `infra-${Date.now()}`),
+        uid: String(
+          props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
+        ),
         lat: info.coordinate?.[1] || 0,
         lon: info.coordinate?.[0] || 0,
         altitude: 0,
@@ -653,6 +672,7 @@ export function TacticalMap({
     auroraData,
     jammingData,
     gdeltData,
+    buoyData,
     gdeltToneThreshold:
       typeof filters?.gdeltToneThreshold === "number"
         ? filters.gdeltToneThreshold

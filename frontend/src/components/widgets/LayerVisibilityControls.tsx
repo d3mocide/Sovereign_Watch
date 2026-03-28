@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   Anchor,
   ChevronDown,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
   RefreshCw,
   Sparkles,
   TowerControl,
+  Waves,
   WifiOff,
 } from "lucide-react";
 import React, { useState } from "react";
@@ -28,6 +30,7 @@ export const LayerVisibilityControls: React.FC<
   const [showLayers, setShowLayers] = useState(false);
   const [infraExpanded, setInfraExpanded] = useState(false);
   const [rfExpanded, setRfExpanded] = useState(false);
+  const [environmentalExpanded, setEnvironmentalExpanded] = useState(false);
   const [hazardsExpanded, setHazardsExpanded] = useState(false);
 
   const handleSubFilterChange = (key: string, value: boolean) => {
@@ -44,11 +47,12 @@ export const LayerVisibilityControls: React.FC<
       filters.showOutages === true ||
       filters.showTowers === true);
 
+  const environmentalIsOn =
+    !!filters && (!!filters.showAurora || !!filters.showBuoys);
+
   const hazardsIsOn =
     !!filters &&
-    (!!filters.showAurora ||
-      !!filters.showJamming ||
-      filters.showHoldingPatterns !== false);
+    (!!filters.showJamming || filters.showHoldingPatterns !== false);
 
   const toggleInfra = () => {
     if (!onFilterChange || !filters) return;
@@ -68,14 +72,23 @@ export const LayerVisibilityControls: React.FC<
     }
   };
 
+  const toggleEnvironmental = () => {
+    if (!onFilterChange || !filters) return;
+    if (environmentalIsOn) {
+      onFilterChange("showAurora", false);
+      onFilterChange("showBuoys", false);
+    } else {
+      onFilterChange("showAurora", getFilterPref("showAurora", false));
+      onFilterChange("showBuoys", getFilterPref("showBuoys", false));
+    }
+  };
+
   const toggleHazards = () => {
     if (!onFilterChange || !filters) return;
     if (hazardsIsOn) {
-      onFilterChange("showAurora", false);
       onFilterChange("showJamming", false);
       onFilterChange("showHoldingPatterns", false);
     } else {
-      onFilterChange("showAurora", getFilterPref("showAurora", false));
       onFilterChange("showJamming", getFilterPref("showJamming", true));
       onFilterChange(
         "showHoldingPatterns",
@@ -138,6 +151,22 @@ export const LayerVisibilityControls: React.FC<
               <button
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
+                  toggleEnvironmental();
+                }}
+                className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-purple-400 outline-none ${
+                  environmentalIsOn
+                    ? "bg-purple-400/10 text-purple-400 border border-purple-400/30"
+                    : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
+                }`}
+                title="Toggle Environmental Layers"
+                aria-label="Toggle Environmental Layers"
+                aria-pressed={environmentalIsOn}
+              >
+                <Sparkles size={12} aria-hidden="true" />
+              </button>
+              <button
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
                   toggleHazards();
                 }}
                 className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-amber-400 outline-none ${
@@ -149,7 +178,7 @@ export const LayerVisibilityControls: React.FC<
                 aria-label="Toggle Hazards Layers"
                 aria-pressed={hazardsIsOn}
               >
-                <WifiOff size={12} aria-hidden="true" />
+                <AlertCircle size={12} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -654,6 +683,146 @@ export const LayerVisibilityControls: React.FC<
             )}
           </div>
 
+          {/* Environmental */}
+          <div className="flex flex-col gap-1">
+            <div
+              className={`group flex items-center justify-between rounded border transition-all ${environmentalIsOn ? "border-purple-400/30 bg-purple-400/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
+            >
+              <button
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEnvironmentalExpanded(!environmentalExpanded);
+                }}
+                aria-expanded={environmentalExpanded}
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles
+                    size={14}
+                    className={
+                      environmentalIsOn ? "text-purple-400" : "text-white/20"
+                    }
+                    aria-hidden="true"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">
+                      Environmental
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className="w-4 flex justify-center transition-transform duration-200 shrink-0"
+                  style={{
+                    transform: environmentalExpanded ? "rotate(90deg)" : "none",
+                  }}
+                >
+                  <ChevronRight
+                    size={14}
+                    className="text-white/40"
+                    aria-hidden="true"
+                  />
+                </div>
+              </button>
+
+              <button
+                className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleEnvironmental();
+                }}
+                aria-label="Toggle Environmental Layers"
+                aria-pressed={environmentalIsOn}
+              >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={environmentalIsOn}
+                  onChange={() => toggleEnvironmental()}
+                  tabIndex={-1}
+                />
+                <div
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${environmentalIsOn ? "bg-purple-400" : "bg-white/10 hover:bg-white/20"}`}
+                >
+                  <div
+                    className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${environmentalIsOn ? "left-3.5" : "left-0.5"}`}
+                  />
+                </div>
+              </button>
+            </div>
+
+            {environmentalExpanded && (
+              <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
+                {/* Aurora Forecast */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showAurora ? "border-purple-500/50 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles
+                      size={10}
+                      className={
+                        filters.showAurora ? "text-purple-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showAurora ? "text-purple-400/80" : "text-white/30"}`}
+                    >
+                      AURORA FORECAST
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={filters.showAurora || false}
+                    onChange={(e) =>
+                      handleSubFilterChange("showAurora", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showAurora ? "bg-purple-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showAurora ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* Ocean Buoys */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showBuoys ? "border-blue-500/50 bg-blue-500/10 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Waves
+                      size={10}
+                      className={
+                        filters.showBuoys ? "text-blue-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showBuoys ? "text-blue-400/80" : "text-blue-400/30"}`}
+                    >
+                      OCEAN BUOYS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showBuoys}
+                    onChange={(e) =>
+                      handleSubFilterChange("showBuoys", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showBuoys ? "bg-blue-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showBuoys ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
+
           {/* Hazards */}
           <div className="flex flex-col gap-1">
             <div
@@ -721,40 +890,6 @@ export const LayerVisibilityControls: React.FC<
 
             {hazardsExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
-                {/* Aurora Forecast */}
-                <label
-                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showAurora ? "border-purple-500/50 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5"}`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles
-                      size={10}
-                      className={
-                        filters.showAurora ? "text-purple-400" : "text-white/20"
-                      }
-                    />
-                    <span
-                      className={`text-[9px] font-bold tracking-wide ${filters.showAurora ? "text-purple-400/80" : "text-white/30"}`}
-                    >
-                      AURORA FORECAST
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={filters.showAurora || false}
-                    onChange={(e) =>
-                      onFilterChange("showAurora", e.target.checked)
-                    }
-                  />
-                  <div
-                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showAurora ? "bg-purple-400/80" : "bg-white/10"}`}
-                  >
-                    <div
-                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showAurora ? "left-2.5" : "left-0.5"}`}
-                    />
-                  </div>
-                </label>
-
                 <label
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showJamming ? "border-rose-500/50 bg-rose-500/10 shadow-[0_0_8px_rgba(244,63,94,0.2)]" : "border-white/5 bg-white/5"}`}
                 >

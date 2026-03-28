@@ -49,3 +49,6 @@
 ## 2024-03-20 - Clear Search Button Accessibility
 **Learning:** Icon-only or symbolic clear buttons (`×`) inside search inputs often lack descriptive labels and focus states because they are visually perceived as part of the input.
 **Action:** Always add `aria-label`, `title`, and distinct keyboard focus indicators (`focus-visible:ring-1`) to input clear buttons to ensure they are discoverable and actionable by all users.
+## 2026-03-28 - Adding ARIA Labels to Delete Preset Button
+**Learning:** Found an accessibility issue where an icon-only button used to delete custom presets lacked an `aria-label`. Screen readers would only announce "button" without context. Adding an `aria-label` that dynamically includes the preset's name (e.g., `Delete preset MyPreset`) greatly improves accessibility and provides immediate context to the user.
+**Action:** Always ensure that icon-only interactive elements (like the `Trash2` icon) have descriptive `aria-label` attributes, especially when dynamically generated based on list items, to provide clear context for screen reader users.
