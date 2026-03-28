@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.55.1] - 2026-03-28
+
+### Fixed
+
+- **Frontend TypeScript Smoke Failure**: Extended `InfraProperties` to inherit `Partial<NDBCBuoyProperties>` so buoy fields (`buoy_id`, `wvht_m`, `wtmp_c`, `wspd_ms`, `wdir_deg`, `atmp_c`, `pres_hpa`) are properly typed and `tsc --noEmit` passes cleanly.
+
 ## [0.55.0] - 2026-03-28
 
 ### Added
