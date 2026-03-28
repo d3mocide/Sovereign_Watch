@@ -451,7 +451,7 @@ export function TacticalMap({
 
     holdingPatternData.features.forEach((f: any) => {
       const p = f.properties;
-      const key = `${p.hex_id}-${p.time}`; // Simple key to prevent duplicate alerts for same event
+      const key = p.hex_id; // Stable per-aircraft key — p.time changes on every API poll and caused alert spam
       if (!seenHoldingRef.current.has(key)) {
         onEvent?.({
           message: `ALERT: Active holding pattern detected — ${p.callsign || p.hex_id} (${p.altitude}ft)`,
