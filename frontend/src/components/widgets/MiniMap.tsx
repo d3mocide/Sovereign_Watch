@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CoTEntity } from "../../types";
 import { calculateZoom } from "../../utils/map/geoUtils";
 
@@ -57,9 +57,15 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   satellitesRef,
   rfSites,
 }) => {
+  const [jammingFeatures, setJammingFeatures] = useState<GeoJSON.Feature[]>([]);
+  const [holdingFeatures, setHoldingFeatures] = useState<GeoJSON.Feature[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapReadyRef = useRef(false);
+  const criticalHolds = holdingFeatures.filter((f: any) => {
+    const turns = Number(f?.properties?.turns_completed ?? 0);
+    return turns >= 5;
+  }).length;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -152,6 +158,112 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           "circle-stroke-color": "#fbbf2433",
         },
       });
+
+      map.addSource("jamming-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "jamming-zone-halo",
+        type: "circle",
+        source: "jamming-zones",
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["get", "confidence"], 0],
+            0,
+            4,
+            1,
+            10,
+          ],
+          "circle-color": [
+            "match",
+            ["get", "assessment"],
+            "jamming",
+            "#fb3c3c",
+            "space_weather",
+            "#a766ff",
+            "equipment",
+            "#6b7280",
+            "#fbbf24",
+          ],
+          "circle-opacity": 0.25,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": [
+            "match",
+            ["get", "assessment"],
+            "jamming",
+            "#fb3c3c",
+            "space_weather",
+            "#a766ff",
+            "equipment",
+            "#94a3b8",
+            "#fbbf24",
+          ],
+          "circle-stroke-opacity": 0.6,
+        },
+      });
+
+      map.addSource("holding-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "holding-zone-halo",
+        type: "circle",
+        source: "holding-zones",
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["get", "turns_completed"], 0],
+            0,
+            3,
+            2,
+            7,
+            5,
+            11,
+          ],
+          "circle-color": [
+            "case",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 5],
+            "#ff3838",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 2],
+            "#ff7800",
+            "#fbb700",
+          ],
+          "circle-opacity": 0.2,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": [
+            "case",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 5],
+            "#ff3838",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 2],
+            "#ff7800",
+            "#fbb700",
+          ],
+          "circle-stroke-opacity": 0.75,
+        },
+      });
+
+      map.addLayer({
+        id: "holding-zone-core",
+        type: "circle",
+        source: "holding-zones",
+        paint: {
+          "circle-radius": 2,
+          "circle-color": [
+            "case",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 5],
+            "#ff3838",
+            [">=", ["coalesce", ["get", "turns_completed"], 0], 2],
+            "#ff7800",
+            "#fbb700",
+          ],
+          "circle-opacity": 0.95,
+        },
+      });
       mapReadyRef.current = true;
     });
     return () => {
@@ -160,6 +272,42 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       mapRef.current = null;
     };
   }, [mission.lat, mission.lon, mission.radius_nm]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchHazardOverlays = async () => {
+      try {
+        const [jammingResp, holdingResp] = await Promise.all([
+          fetch("/api/jamming/active"),
+          fetch("/api/holding-patterns/active"),
+        ]);
+
+        if (!cancelled && jammingResp.ok) {
+          const j = await jammingResp.json();
+          setJammingFeatures(
+            Array.isArray(j?.features) ? (j.features as GeoJSON.Feature[]) : [],
+          );
+        }
+
+        if (!cancelled && holdingResp.ok) {
+          const h = await holdingResp.json();
+          setHoldingFeatures(
+            Array.isArray(h?.features) ? (h.features as GeoJSON.Feature[]) : [],
+          );
+        }
+      } catch {
+        // Non-blocking mini-map overlays.
+      }
+    };
+
+    fetchHazardOverlays();
+    const id = setInterval(fetchHazardOverlays, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   const updateLayers = useCallback(() => {
     const map = mapRef.current;
@@ -195,9 +343,9 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       }
     });
 
-    (map.getSource("entities") as maplibregl.GeoJSONSource | undefined)?.setData(
-      { type: "FeatureCollection", features: airSea },
-    );
+    (
+      map.getSource("entities") as maplibregl.GeoJSONSource | undefined
+    )?.setData({ type: "FeatureCollection", features: airSea });
     (map.getSource("orbital") as maplibregl.GeoJSONSource | undefined)?.setData(
       { type: "FeatureCollection", features: orb },
     );
@@ -205,7 +353,19 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       type: "FeatureCollection",
       features: emcomm,
     });
-  }, [entitiesRef, satellitesRef, rfSites]);
+    (
+      map.getSource("jamming-zones") as maplibregl.GeoJSONSource | undefined
+    )?.setData({
+      type: "FeatureCollection",
+      features: jammingFeatures,
+    });
+    (
+      map.getSource("holding-zones") as maplibregl.GeoJSONSource | undefined
+    )?.setData({
+      type: "FeatureCollection",
+      features: holdingFeatures,
+    });
+  }, [entitiesRef, satellitesRef, rfSites, jammingFeatures, holdingFeatures]);
 
   useEffect(() => {
     const t0 = setTimeout(updateLayers, 1500);
@@ -216,5 +376,37 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
     };
   }, [updateLayers]);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  return (
+    <div className="w-full h-full relative">
+      <div ref={containerRef} className="w-full h-full" />
+
+      {/* Bottom-right mini-map hazard legend */}
+      <div className="pointer-events-none absolute bottom-2 right-2 z-10 rounded border border-amber-400/25 bg-black/75 px-2 py-1 shadow-[0_2px_10px_rgba(0,0,0,0.4)] backdrop-blur-sm">
+        <div className="text-[7px] uppercase tracking-widest text-white/45 font-bold">
+          Hazards
+        </div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+          <span className="text-[8px] font-bold text-rose-300">JAM</span>
+          <span className="text-[8px] text-white/55 tabular-nums">
+            {jammingFeatures.length}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${criticalHolds > 0 ? "bg-red-400" : "bg-amber-400"}`}
+          />
+          <span
+            className={`text-[8px] font-bold ${criticalHolds > 0 ? "text-red-300" : "text-amber-300"}`}
+          >
+            HOLD
+          </span>
+          <span className="text-[8px] text-white/55 tabular-nums">
+            {holdingFeatures.length}
+            {criticalHolds > 0 ? ` (${criticalHolds}C)` : ""}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 };

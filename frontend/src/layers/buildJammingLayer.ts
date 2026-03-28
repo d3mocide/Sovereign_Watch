@@ -107,9 +107,9 @@ export function buildJammingLayer(
       data,
       getPosition: (d: any) => [d.lon, d.lat, 0],
       getRadius: (d: JammingZone) => {
-        // H3 res-6 cell edge ≈ 36 km; pulse from 40 → 80 km
-        const base = 40_000 + d.confidence * 30_000;
-        return base + pulse * 40_000;
+        // Tighter footprint for readability: pulse approx 22-60 km.
+        const base = 22_000 + d.confidence * 18_000;
+        return base + pulse * 20_000;
       },
       radiusUnits: "meters",
       getFillColor: [0, 0, 0, 0],
@@ -137,7 +137,8 @@ export function buildJammingLayer(
       id: `jamming-fill-${globeMode ? "globe" : "merc"}`,
       data,
       getPosition: (d: any) => [d.lon, d.lat, 0],
-      getRadius: (d: JammingZone) => 38_000 + d.confidence * 28_000,
+      // Tighter static zone footprint: approx 18-45 km.
+      getRadius: (d: JammingZone) => 18_000 + d.confidence * 27_000,
       radiusUnits: "meters",
       getFillColor: (d: JammingZone) =>
         zoneColor(d, Math.round(d.confidence * 60 + 15)),

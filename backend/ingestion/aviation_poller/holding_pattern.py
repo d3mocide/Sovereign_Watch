@@ -30,12 +30,50 @@ import redis.asyncio as aioredis
 
 logger = logging.getLogger("holding_pattern_detector")
 
-# Thresholds & Configuration (Set via ENV in docker-compose.yml)
-HOLDING_WINDOW_S = int(os.getenv("HOLDING_WINDOW_S", "300"))  # Rolling observation window
-HOLDING_PATTERN_THRESHOLD = int(os.getenv("HOLDING_PATTERN_THRESHOLD", "300"))  # Degrees to trigger
-MIN_VELOCITY_KNOTS = float(os.getenv("MIN_VELOCITY_KNOTS", "0"))  # Minimum velocity
-HEADING_CHANGE_THRESHOLD = float(os.getenv("HEADING_CHANGE_THRESHOLD", "2"))  # Noise filter
-MIN_CIRCLE_DURATION = int(os.getenv("MIN_CIRCLE_DURATION", "60"))  # Sustained pattern (seconds)
+
+def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
+    """Read and clamp integer env values to avoid invalid detector configs."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r, using default=%s", name, raw, default)
+        return default
+    return max(min_value, min(value, max_value))
+
+
+def _env_float(
+    name: str, default: float, *, min_value: float, max_value: float
+) -> float:
+    """Read and clamp float env values to avoid invalid detector configs."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r, using default=%s", name, raw, default)
+        return default
+    return max(min_value, min(value, max_value))
+
+
+# Thresholds & Configuration (set via ENV in docker-compose/.env)
+HOLDING_WINDOW_S = _env_int("HOLDING_WINDOW_S", 300, min_value=60, max_value=3600)
+HOLDING_PATTERN_THRESHOLD = _env_int(
+    "HOLDING_PATTERN_THRESHOLD", 360, min_value=180, max_value=1080
+)
+MIN_VELOCITY_KNOTS = _env_float(
+    "MIN_VELOCITY_KNOTS", 0.0, min_value=0.0, max_value=450.0
+)
+HEADING_CHANGE_THRESHOLD = _env_float(
+    "HEADING_CHANGE_THRESHOLD", 2.0, min_value=0.5, max_value=30.0
+)
+MIN_CIRCLE_DURATION = _env_int("MIN_CIRCLE_DURATION", 60, min_value=0, max_value=1800)
+MIN_DIRECTIONAL_CONSISTENCY = _env_float(
+    "MIN_DIRECTIONAL_CONSISTENCY", 0.7, min_value=0.5, max_value=1.0
+)
 
 # H3 resolution for zone grouping (same as jamming for consistency)
 H3_RESOLUTION = 6
@@ -93,6 +131,61 @@ class HoldingPatternDetector:
         # Take the shorter arc
         return min(diff, 360 - diff)
 
+    @staticmethod
+    def _signed_turn_angle(prev_heading: float, curr_heading: float) -> float:
+        """
+        Calculate signed turn angle in range [-180, 180].
+        Positive = clockwise/right turn, negative = counter-clockwise/left turn.
+        """
+        prev_heading = HoldingPatternDetector._normalize_heading(prev_heading)
+        curr_heading = HoldingPatternDetector._normalize_heading(curr_heading)
+        return (curr_heading - prev_heading + 540.0) % 360.0 - 180.0
+
+    @staticmethod
+    def _directional_consistency(state: Dict) -> float:
+        """Return ratio of dominant turn direction in [0.0, 1.0]."""
+        cw = float(state.get("clockwise_turn", 0.0))
+        ccw = float(state.get("counterclockwise_turn", 0.0))
+        total = cw + ccw
+        if total <= 0:
+            return 0.0
+        return max(cw, ccw) / total
+
+    def _recalculate_window_metrics(self, state: Dict) -> None:
+        """Rebuild turn totals from in-window heading history."""
+        history = state.get("heading_history", deque())
+        if len(history) < 2:
+            state["total_turn"] = 0.0
+            state["clockwise_turn"] = 0.0
+            state["counterclockwise_turn"] = 0.0
+            state["first_turn_time"] = None
+            return
+
+        total_turn = 0.0
+        clockwise_turn = 0.0
+        counterclockwise_turn = 0.0
+        first_turn_time = None
+
+        for i in range(1, len(history)):
+            prev_ts, prev_heading = history[i - 1]
+            curr_ts, curr_heading = history[i]
+            signed = self._signed_turn_angle(prev_heading, curr_heading)
+            angle = abs(signed)
+            if angle < HEADING_CHANGE_THRESHOLD:
+                continue
+            if first_turn_time is None:
+                first_turn_time = curr_ts
+            total_turn += angle
+            if signed >= 0:
+                clockwise_turn += angle
+            else:
+                counterclockwise_turn += angle
+
+        state["total_turn"] = total_turn
+        state["clockwise_turn"] = clockwise_turn
+        state["counterclockwise_turn"] = counterclockwise_turn
+        state["first_turn_time"] = first_turn_time
+
     def ingest(
         self,
         hex_id: str,
@@ -125,6 +218,9 @@ class HoldingPatternDetector:
                 "heading_history": deque(),
                 "last_recorded_heading": heading,
                 "total_turn": 0.0,
+                "clockwise_turn": 0.0,
+                "counterclockwise_turn": 0.0,
+                "first_turn_time": None,
                 "in_holding": False,
                 "lat": lat,
                 "lon": lon,
@@ -143,7 +239,8 @@ class HoldingPatternDetector:
         state["altitude"] = altitude or state["altitude"]
 
         # Only process if heading changed by at least HEADING_CHANGE_THRESHOLD
-        turn_angle = self._shortest_turn_angle(state["last_recorded_heading"], heading)
+        signed_turn = self._signed_turn_angle(state["last_recorded_heading"], heading)
+        turn_angle = abs(signed_turn)
         if turn_angle < HEADING_CHANGE_THRESHOLD:
             return
 
@@ -152,16 +249,37 @@ class HoldingPatternDetector:
 
         # Accumulate turn angle
         state["total_turn"] += turn_angle
+        if signed_turn >= 0:
+            state["clockwise_turn"] += turn_angle
+        else:
+            state["counterclockwise_turn"] += turn_angle
+        if state["first_turn_time"] is None:
+            state["first_turn_time"] = timestamp
 
-        # Check if pattern detected
-        if state["total_turn"] >= HOLDING_PATTERN_THRESHOLD:
+        circling_duration = 0.0
+        if state["first_turn_time"] is not None:
+            circling_duration = max(0.0, timestamp - state["first_turn_time"])
+        directional_consistency = self._directional_consistency(state)
+
+        # Check if pattern detected (turn amount + sustained duration + consistent turn direction)
+        if (
+            state["total_turn"] >= HOLDING_PATTERN_THRESHOLD
+            and circling_duration >= MIN_CIRCLE_DURATION
+            and directional_consistency >= MIN_DIRECTIONAL_CONSISTENCY
+        ):
             if not state["in_holding"]:
                 state["in_holding"] = True
                 state["pattern_start_time"] = timestamp
                 logger.debug(
                     f"Holding pattern detected for {hex_id} ({callsign}): "
-                    f"total_turn={state['total_turn']:.1f}°"
+                    f"total_turn={state['total_turn']:.1f}°, "
+                    f"duration={circling_duration:.1f}s, "
+                    f"directional_consistency={directional_consistency:.2f}"
                 )
+        elif state["in_holding"]:
+            # Exit hold state if criteria no longer met inside rolling window.
+            state["in_holding"] = False
+            state["pattern_start_time"] = None
 
     def _evict_stale(self) -> None:
         """Remove observations older than WINDOW_SECONDS and stale aircraft entries."""
@@ -175,11 +293,19 @@ class HoldingPatternDetector:
                 (ts, h) for ts, h in state["heading_history"] if ts >= cutoff
             )
 
+            # Recompute metrics so total_turn remains truly window-scoped.
+            self._recalculate_window_metrics(state)
+
             # Check if aircraft is stale (no updates in 30s)
-            last_observation = state["heading_history"][-1][0] if state["heading_history"] else 0
+            last_observation = (
+                state["heading_history"][-1][0] if state["heading_history"] else 0
+            )
             if now - last_observation > 30:
                 # Reset pattern state for stale aircraft
                 state["total_turn"] = 0.0
+                state["clockwise_turn"] = 0.0
+                state["counterclockwise_turn"] = 0.0
+                state["first_turn_time"] = None
                 state["in_holding"] = False
                 state["pattern_start_time"] = None
 
@@ -228,8 +354,10 @@ class HoldingPatternDetector:
             if turn_angles:
                 avg_turn = sum(turn_angles) / len(turn_angles)
                 # Low variance = consistent circular pattern
-                variance = sum((a - avg_turn) ** 2 for a in turn_angles) / len(turn_angles)
-                std_dev = variance ** 0.5
+                variance = sum((a - avg_turn) ** 2 for a in turn_angles) / len(
+                    turn_angles
+                )
+                std_dev = variance**0.5
                 # Bonus if low std dev (≤10° variation)
                 if std_dev <= 10:
                     confidence = min(confidence + 0.1, 1.0)
@@ -266,21 +394,26 @@ class HoldingPatternDetector:
             except Exception:
                 cell = None
 
-            zones.append({
-                "hex_id": hex_id,
-                "callsign": state["callsign"],
-                "centroid_lat": state["lat"],
-                "centroid_lon": state["lon"],
-                "altitude": int(state["altitude"]),
-                "speed": round(state["speed"], 1),
-                "total_turn_degrees": round(state["total_turn"], 1),
-                "turns_completed": round(state["total_turn"] / 360.0, 2),
-                "pattern_duration_sec": int(duration),
-                "confidence": round(confidence, 3),
-                "h3_index": cell,
-                "active": True,
-                "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            })
+            zones.append(
+                {
+                    "hex_id": hex_id,
+                    "callsign": state["callsign"],
+                    "centroid_lat": state["lat"],
+                    "centroid_lon": state["lon"],
+                    "altitude": int(state["altitude"]),
+                    "speed": round(state["speed"], 1),
+                    "total_turn_degrees": round(state["total_turn"], 1),
+                    "turns_completed": round(state["total_turn"] / 360.0, 2),
+                    "pattern_duration_sec": int(duration),
+                    "confidence": round(confidence, 3),
+                    "directional_consistency": round(
+                        self._directional_consistency(state), 3
+                    ),
+                    "h3_index": cell,
+                    "active": True,
+                    "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+            )
 
         # Write to Redis as GeoJSON FeatureCollection
         features = [

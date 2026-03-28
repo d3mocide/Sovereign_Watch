@@ -42,10 +42,11 @@ These three variables define your **monitoring area** and are consumed by the AD
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `HOLDING_PATTERN_THRESHOLD` | `300` | Degrees of total turn within the window to trigger a holding pattern flag. |
+| `HOLDING_PATTERN_THRESHOLD` | `360` | Degrees of total turn within the window to trigger a holding pattern flag. |
 | `HOLDING_WINDOW_S` | `300` | Rolling observation window in seconds (default 300s = 5 min). |
 | `HEADING_CHANGE_THRESHOLD` | `2` | Minimum heading change in degrees to process (noise filter). |
-| `MIN_CIRCLE_DURATION` | `60` | Minimum duration in seconds an aircraft must be circling to be flagged. |
+| `MIN_CIRCLE_DURATION` | `90` | Minimum duration in seconds an aircraft must be circling to be flagged. |
+| `MIN_DIRECTIONAL_CONSISTENCY` | `0.7` | Minimum dominant turn-direction ratio required before a hold is flagged. |
 | `MIN_VELOCITY_KNOTS` | `0` | Minimum velocity in knots to consider for pattern detection. |
 
 ---

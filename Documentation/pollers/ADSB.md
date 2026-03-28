@@ -69,8 +69,11 @@ All configuration is provided via environment variables (set in `docker-compose.
 | `COVERAGE_RADIUS_NM` | `150` | AOR radius in nautical miles |
 | `KAFKA_BROKERS` | `sovereign-redpanda:9092` | Redpanda bootstrap servers |
 | `REDIS_HOST` | `sovereign-redis` | Redis hostname |
-| `HOLDING_PATTERN_THRESHOLD` | `300` | Degrees of total turn within window to flag |
+| `HOLDING_PATTERN_THRESHOLD` | `360` | Degrees of total turn within window to flag |
 | `HOLDING_WINDOW_S` | `300` | Rolling observation window (seconds) |
+| `HEADING_CHANGE_THRESHOLD` | `2` | Minimum heading delta (degrees) to count as real turning |
+| `MIN_CIRCLE_DURATION` | `90` | Minimum circling duration required before flagging |
+| `MIN_DIRECTIONAL_CONSISTENCY` | `0.7` | Minimum dominant turn-direction ratio to suppress zig-zag false positives |
 | `MIN_VELOCITY_KNOTS` | `0` | Minimum velocity for detection |
 | `ARBITRATION_CLEANUP_INTERVAL` | `30` | Stale arbitration entry cleanup interval (seconds) |
 
@@ -131,14 +134,16 @@ The ADS-B poller includes a stateful **Holding Pattern Detector** that tracks th
 ### Detection Logic
 - **Rolling Window**: Tracks heading changes over a `HOLDING_WINDOW_S` period (default: 5 min).
 - **Cumulative Turn**: Accumulates the shortest-turn angle between consecutive updates (e.g., 350° → 10° is counted as 20°). 
-- **Trigger**: An aircraft is flagged when its total turn angle exceeds the `HOLDING_PATTERN_THRESHOLD` (default: 300°).
+- **Trigger**: An aircraft is flagged when its total turn angle exceeds the `HOLDING_PATTERN_THRESHOLD` (default: 360°).
 - **Noise Filter**: Heading changes smaller than `HEADING_CHANGE_THRESHOLD` (default: 2°) are ignored to filter out GPS drift/noise.
+- **Duration Gate**: A hold is only flagged when circling persists for at least `MIN_CIRCLE_DURATION` seconds.
+- **Direction Gate**: A hold is only flagged when turn direction is consistent enough (`MIN_DIRECTIONAL_CONSISTENCY`) to reject back-and-forth vectoring.
 - **Velocity Gate**: Detection only occurs when aircraft speed is above `MIN_VELOCITY_KNOTS`.
 
 ### Confidence Scoring (0.0–1.0)
 The system calculates a "confidence" metric based on:
 1.  **Revolutions**: High base confidence after 1.5 complete circles (540°).
-2.  **Duration**: Bonus if the pattern lasts longer than `MIN_CIRCLE_DURATION` (default: 60s).
+2.  **Duration**: Bonus if the pattern lasts longer than `MIN_CIRCLE_DURATION`.
 3.  **Consistency**: Bonus if the turn rate is stable (low variance in heading change intervals).
 
 Detected holding patterns are published as a separate GeoJSON collection to the Redis key `holding_pattern:active_zones` and annotated in the individual aircraft telemetry.
