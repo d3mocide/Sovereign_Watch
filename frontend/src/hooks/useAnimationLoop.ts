@@ -251,6 +251,20 @@ export function useAnimationLoop({
   const setSelectedInfraRef = useRef(setSelectedInfra);
   setSelectedInfraRef.current = setSelectedInfra;
 
+  // Stable overlay hover handler — defined once so setProps doesn't receive a new
+  // function reference every frame. Accesses setters via their refs (always current).
+  const onOverlayHoverRef = useRef((info: PickingInfo) => {
+    if (!info.object) {
+      setHoveredEntityRef.current(null);
+      setHoverPositionRef.current(null);
+    }
+  });
+
+  // JS8 station array cache — avoids Array.from(Map.values()) on every frame.
+  // Rebuilt only when the Map's size changes (stations join/leave infrequently).
+  const js8StationsArrayRef = useRef<import("../types").JS8Station[]>([]);
+  const js8StationsSizeRef = useRef<number>(0);
+
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
     const map: Record<string, Record<string, unknown>> = {};
@@ -512,12 +526,19 @@ export function useAnimationLoop({
       // ── Layer composition + overlay update ───────────────────────────────
       const zoom = mapRef.current?.getMap()?.getZoom() ?? 0;
 
+      // Update JS8 stations cache only when the Map size changes
+      const currentJs8Size = js8StationsRef?.current.size ?? 0;
+      if (currentJs8Size !== js8StationsSizeRef.current) {
+        js8StationsArrayRef.current = js8StationsRef
+          ? Array.from(js8StationsRef.current.values())
+          : [];
+        js8StationsSizeRef.current = currentJs8Size;
+      }
+
       const layers = composeAllLayers({
         interpolatedEntities: interpolated,
         filteredSatellites,
-        js8Stations: js8StationsRef
-          ? Array.from(js8StationsRef.current.values())
-          : [],
+        js8Stations: js8StationsArrayRef.current,
         rfSites: rfSitesRef?.current || [],
         h3Cells: h3CellsRef.current,
         cablesData: cablesDataRef.current ?? null,
@@ -558,12 +579,7 @@ export function useAnimationLoop({
       if (mapLoadedRef.current && overlayRef.current?.setProps) {
         overlayRef.current.setProps({
           layers,
-          onHover: (info: PickingInfo) => {
-            if (!info.object) {
-              setHoveredEntityRef.current(null);
-              setHoverPositionRef.current(null);
-            }
-          },
+          onHover: onOverlayHoverRef.current,
         });
       }
 

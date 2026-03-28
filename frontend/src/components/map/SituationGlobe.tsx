@@ -41,6 +41,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   onGdeltClick,
   onHover,
 }) => {
+  const GLOBE_ROTATION_DEG_PER_60FPS_FRAME = 0.01;
+
   // Keep a mutable ref for the longitude for smooth, jitter-free spin
   const lngRef = useRef(0);
   const mapRef = useRef<MapRef>(null);
@@ -108,13 +110,13 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     const rotate = () => {
       const currentTime = Date.now();
       const dt = currentTime - lastFrameTimeRef.current;
-      
+
       // Update longitude imperatively for 0-jitter rotation
       const map = mapRef.current?.getMap();
       if (map) {
-        // 0.08 scale was the previous constant, translating to deg/frame
-        // We'll keep it roughly the same speed but time-delta gated
-        lngRef.current = (lngRef.current + (0.08 * (dt / 16.67))) % 360;
+        lngRef.current =
+          (lngRef.current + GLOBE_ROTATION_DEG_PER_60FPS_FRAME * (dt / 16.67)) %
+          360;
         map.jumpTo({
           center: [lngRef.current, viewState.latitude],
         });

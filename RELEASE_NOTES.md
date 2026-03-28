@@ -1,24 +1,32 @@
-# Release - v0.52.0 - Tactical Intelligence Fusion
+# Release - v0.53.0 - App Decomposition and Hazard Intelligence
 
-This release significantly enhances the "Tactical Premium" aesthetic of Sovereign Watch while hardening the underlying intelligence fusion pipeline. Operators now have access to a unified UI for AI analysis and strategic reporting, backed by a more robust and performant rendering engine.
+This release sharpens the tactical operator workflow by significantly simplifying frontend orchestration while improving hazard-focused map controls and alert signal quality. The result is a leaner application shell, cleaner layer semantics, and smoother high-frequency animation behavior under sustained load.
 
 ### Key Features
 
-*   **Premium AI Analyst Panel**: An overhauled, glassmorphic interface with persona-specific operational modes (Tactical, OSINT, SAR) and a unified control scheme.
-*   **Tactical Holding Patterns**: Non-standard flight maneuvers are now automatically detected, visualized as amber-pulsed tactical zones, and integrated into the alerting system.
-*   **Strategic SITREPs**: A new strategic reporting mode that aggregates global OSINT, network outages, and geopolitical events into a cohesive intelligence summary.
-*   **Butter-Smooth Globe Rotation**: Planetary rotation jitter has been eliminated through an imperative animation loop, providing fluid 60FPS motion for the Situational and Intel globes.
-*   **System Health History**: Poller health pips now show a 12-minute rolling history, making it easier to identify intermittent connectivity or ingestion failures at a glance.
+- **App.tsx Refactor Completion**: Reduced `App.tsx` from 1,140 lines to 594 lines through extraction of six cohesive hooks: `useViewMode`, `useSidebarState`, `useIntelEvents`, `useAppFilters`, `useEntitySelection`, and `useReplayController`.
+- **Hazards Layer Grouping**: Renamed the former "Environmental" layer category to **HAZARDS** to better reflect operational threat indicators (aurora, GPS jamming, holding patterns).
+- **Holding Pattern Toggle in Hazards**: Added a dedicated holding-pattern toggle in layer controls, styled in amber to match tactical map visualization.
 
-### Technical Improvements
+### Technical Details
 
-*   **API Stability**: Hardened the analysis backend against telemetry-missing edge cases and resolved Redis encoding regressions.
-*   **Unified Telemetry**: Standardized poller identifiers across all internal APIs for better performance tracking and observability.
-*   **Architecture**: Improved component encapsulation by moving map-specific UI state into individual globe providers.
+- **State Architecture**:
+	- `useViewMode`: view mode with localStorage persistence.
+	- `useSidebarState`: open/close state for all 5 overlays.
+	- `useIntelEvents`: throttled event insertion and hourly feed cleanup.
+	- `useAppFilters`: localStorage toggles, URL hash sync, and computed `orbitalFilters`, `tacticalFilters`, `activeServices`, `rfParams`.
+	- `useEntitySelection`: selected entity state, history segments, follow mode, NORAD resolution, and select/live-update callbacks.
+	- `useReplayController`: replay state, binary-search frame lookup, `requestAnimationFrame` playback loop, and `loadReplayData`.
+- **Alert Deduplication Fix**: Holding pattern alerts now dedupe by `hex_id` only, preventing repetitive 30-second re-alerting for the same circling aircraft.
+- **Animation Performance Path**:
+	- Moved `onHover` in animation composition to a stable callback ref (avoids per-frame callback allocation).
+	- Cached JS8 station array materialization (`Array.from(map.values())`) behind a map-size change check.
+- **Default Filter Explicitness**: Added `showHoldingPatterns: true` to `DEFAULT_FILTERS` for deterministic default behavior.
+- **Situational Globe Motion Tuning**: Default globe auto-rotation now uses the preferred slower baseline speed.
 
 ### Upgrade Instructions
 
-To upgrade your local or remote instance to `v0.52.0`:
+To upgrade your local or remote instance to `v0.53.0`:
 
 ```bash
 # 1. Pull the latest code

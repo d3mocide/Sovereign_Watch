@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.53.0] - 2026-03-28
+
+### Added
+
+- **App.tsx Domain Hook Extraction**: Broke the former monolithic `App.tsx` into cohesive state hooks: `useViewMode`, `useSidebarState`, `useIntelEvents`, `useAppFilters`, `useEntitySelection`, and `useReplayController`.
+- **Holding Pattern Layer Toggle**: Added a dedicated holding-pattern visibility toggle in Layer Visibility Controls alongside Aurora and GPS Integrity Zones.
+
+### Changed
+
+- **App Shell Maintainability**: Reduced `App.tsx` from 1,140 lines to 594 lines by moving domain logic into focused hooks with clearer responsibilities and state boundaries.
+- **Layer Taxonomy Rename**: Renamed the map layer category from "Environmental" to "Hazards" and aligned internal naming (`envIsOn`/`envExpanded`/`toggleEnv` to hazard equivalents), UI copy, and ARIA labels.
+- **Holding Patterns Default Visibility**: Added `showHoldingPatterns: true` to `DEFAULT_FILTERS` so behavior is explicitly enabled by default.
+- **Refactor Tracking**: Updated `agent_docs/frontend-refactoring-report.md` to mark the `App.tsx` extraction milestone as complete.
+- **Situational Globe Spin Calibration**: Set the default globe auto-rotation speed to the preferred slower baseline equivalent to the previous 25% control setting.
+
+### Fixed
+
+- **Holding Pattern Alert Spam**: Changed deduplication key from `${hex_id}-${p.time}` to `hex_id` so each circling aircraft triggers a single alert per `seenHoldingRef` session window.
+
+### Technical Details
+
+- `useViewMode`: View mode state with localStorage persistence.
+- `useSidebarState`: Open/close orchestration for all five overlay panels.
+- `useIntelEvents`: Event feed management with throttled `addEvent` and hourly cleanup.
+- `useAppFilters`: Filter persistence, hash synchronization, and computed domain filters (`orbitalFilters`, `tacticalFilters`, `activeServices`, `rfParams`).
+- `useEntitySelection`: Selection/follow/history behavior including NORAD resolution and live update callbacks.
+- `useReplayController`: Replay loading, binary-search frame lookup, and rAF playback loop.
+- `useAnimationLoop` performance path now uses a stable `onHover` callback reference and caches `Array.from(js8StationsRef.current.values())` behind a size change check.
+
 ## [0.52.0] - 2026-03-27
 
 ### Added
