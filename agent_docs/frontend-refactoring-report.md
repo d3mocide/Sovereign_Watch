@@ -135,6 +135,29 @@ Hooks to extract:
 
 ---
 
+### 6b. `App.tsx` — 1,073 lines → 594 lines ✓
+
+**Path:** `frontend/src/App.tsx`
+
+**What was extracted:**
+
+| Extracted to | Responsibility |
+|---|---|
+| `hooks/useViewMode.ts` | `viewMode` state with localStorage persistence |
+| `hooks/useSidebarState.ts` | Panel open/close state for all 5 overlays |
+| `hooks/useIntelEvents.ts` | Event feed state, throttled `addEvent`, hourly cleanup interval |
+| `hooks/useAppFilters.ts` | All filter state (tactical + orbital), 6 localStorage-persisted toggles, hash sync, computed `orbitalFilters` / `tacticalFilters` / `activeServices` |
+| `hooks/useEntitySelection.ts` | `selectedEntity`, `historySegments`, `followMode`, NORAD resolution, entity select/update callbacks |
+| `hooks/useReplayController.ts` | Full replay state, binary-search frame lookup, rAF animation loop, `loadReplayData` |
+
+**What remains in App.tsx (~594 lines):**
+- Hook orchestration (all 6 new hooks + 9 data hooks)
+- Remaining local state: `trackCounts`, `mapBounds`, `mapActions`, `missionProps`, `orbitalViewMode`, `worldCountriesData`
+- Three effects: entity maintenance/counting, world countries GeoJSON fetch, orbital AOS alert
+- Full JSX render tree for 5 view modes (TACTICAL / ORBITAL / INTEL / DASHBOARD / RADIO)
+
+---
+
 ### 7. `OrbitalMap.tsx` — 943 lines
 **Path:** `frontend/src/components/map/OrbitalMap.tsx`
 
@@ -330,7 +353,7 @@ Ordered by impact vs risk (lower risk items first):
 | DONE | `SystemStatus.tsx` | Extract layer controls + integration status | Low |
 | Done | `useAnimationLoop.ts` | Extract interpolation and filter engines | High — performance critical |
 | 9 | `TacticalMap.tsx` + `OrbitalMap.tsx` | Extract shared map base | High — core rendering path |
-| 10 | `App.tsx` | Introduce Zustand store, extract view wrappers | High — touches everything |
+| Done | `App.tsx` | Extract 6 domain hooks (useViewMode, useSidebarState, useIntelEvents, useAppFilters, useEntitySelection, useReplayController) | High — touches everything |
 
 ---
 
