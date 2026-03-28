@@ -10,9 +10,9 @@
  * Click: emits the buoy as a synthetic CoTEntity for the sidebar.
  */
 
-import { ScatterplotLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
-import type { FeatureCollection, Feature, Point } from "geojson";
+import { ScatterplotLayer } from "@deck.gl/layers";
+import type { Feature, FeatureCollection, Point } from "geojson";
 import type { NDBCBuoyProperties } from "../types";
 
 /** Map water temperature (°C) to an RGBA colour.
@@ -27,8 +27,8 @@ function wtmpColor(wtmp: number | null): [number, number, number, number] {
   const t = clamped / 35; // 0 → 1
 
   // Blue → teal → orange-red gradient
-  const r = Math.round(10  + t * 245);
-  const g = Math.round(80  + t * (200 - 80) * (1 - t) * 4 + t * 40);
+  const r = Math.round(10 + t * 245);
+  const g = Math.round(80 + t * (200 - 80) * (1 - t) * 4 + t * 40);
   const b = Math.round(220 - t * 200);
 
   return [
@@ -64,7 +64,7 @@ export function buildNDBCLayer(
         return wvht !== null && wvht > 0 ? wvht * 15000 : 8000;
       },
       radiusUnits: "meters",
-      radiusMinPixels: 4,
+      radiusMinPixels: 1,
       radiusMaxPixels: 40,
 
       // Fill encodes water temperature
