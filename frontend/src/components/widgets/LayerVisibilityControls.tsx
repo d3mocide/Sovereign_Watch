@@ -7,6 +7,7 @@ import {
   Layers,
   Network,
   Radio,
+  RefreshCw,
   Sparkles,
   TowerControl,
   WifiOff,
@@ -43,7 +44,7 @@ export const LayerVisibilityControls: React.FC<
       filters.showOutages === true ||
       filters.showTowers === true);
 
-  const envIsOn = !!filters && (!!filters.showAurora || !!filters.showJamming);
+  const envIsOn = !!filters && (!!filters.showAurora || !!filters.showJamming || filters.showHoldingPatterns !== false);
 
   const toggleInfra = () => {
     if (!onFilterChange || !filters) return;
@@ -68,9 +69,11 @@ export const LayerVisibilityControls: React.FC<
     if (envIsOn) {
       onFilterChange("showAurora", false);
       onFilterChange("showJamming", false);
+      onFilterChange("showHoldingPatterns", false);
     } else {
       onFilterChange("showAurora", getFilterPref("showAurora", false));
       onFilterChange("showJamming", getFilterPref("showJamming", true));
+      onFilterChange("showHoldingPatterns", getFilterPref("showHoldingPatterns", true));
     }
   };
 
@@ -772,6 +775,39 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showJamming ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showHoldingPatterns !== false ? "border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <RefreshCw
+                      size={10}
+                      className={
+                        filters.showHoldingPatterns !== false ? "text-amber-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showHoldingPatterns !== false ? "text-amber-400/80" : "text-white/30"}`}
+                    >
+                      HOLDING PATTERNS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={filters.showHoldingPatterns !== false}
+                    onChange={(e) =>
+                      handleSubFilterChange("showHoldingPatterns", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showHoldingPatterns !== false ? "bg-amber-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showHoldingPatterns !== false ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>
