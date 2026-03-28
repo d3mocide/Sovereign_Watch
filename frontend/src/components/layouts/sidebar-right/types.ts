@@ -1,4 +1,4 @@
-import { CoTEntity, HistorySegment } from "../../../types";
+import { CoTEntity, HistorySegment, NDBCBuoyProperties } from "../../../types";
 
 export interface BaseViewProps {
   entity: CoTEntity;
@@ -7,7 +7,7 @@ export interface BaseViewProps {
   onOpenAnalystPanel?: () => void;
 }
 
-export interface InfraProperties {
+export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   entity_type?: string;
   id?: string;
   fcc_id?: string;
