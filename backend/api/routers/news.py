@@ -5,8 +5,8 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
 from core.database import db
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.News")
@@ -15,12 +15,13 @@ CACHE_KEY = "news:feed"
 CACHE_TTL = 900  # 15 minutes
 
 # Default RSS feeds — world/conflict/OSINT relevant, all public
-DEFAULT_RSS_URLS = ",".join([
-    "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://rss.cnn.com/rss/edition_world.rss",
-    "https://feeds.reuters.com/reuters/worldNews",
-    "https://thedefensepost.com/feed/",
-])
+DEFAULT_RSS_URLS = ",".join(
+    [
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "https://www.reddit.com/r/news/top/.rss",
+        "https://www.aljazeera.com/xml/rss/all.xml",
+    ]
+)
 
 
 def _source_name(url: str) -> str:
@@ -42,11 +43,26 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                 title_el = item.find("title")
                 link_el = item.find("link")
                 pub_el = item.find("pubDate")
-                title = title_el.text.strip() if title_el is not None and title_el.text else ""
-                link = link_el.text.strip() if link_el is not None and link_el.text else ""
-                pub_date = pub_el.text.strip() if pub_el is not None and pub_el.text else ""
+                title = (
+                    title_el.text.strip()
+                    if title_el is not None and title_el.text
+                    else ""
+                )
+                link = (
+                    link_el.text.strip() if link_el is not None and link_el.text else ""
+                )
+                pub_date = (
+                    pub_el.text.strip() if pub_el is not None and pub_el.text else ""
+                )
                 if title:
-                    items.append({"title": title, "link": link, "pub_date": pub_date, "source": source})
+                    items.append(
+                        {
+                            "title": title,
+                            "link": link,
+                            "pub_date": pub_date,
+                            "source": source,
+                        }
+                    )
         else:
             # Atom feed
             for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
@@ -55,11 +71,24 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                 pub_el = entry.find("{http://www.w3.org/2005/Atom}published")
                 if pub_el is None:
                     pub_el = entry.find("{http://www.w3.org/2005/Atom}updated")
-                title = title_el.text.strip() if title_el is not None and title_el.text else ""
+                title = (
+                    title_el.text.strip()
+                    if title_el is not None and title_el.text
+                    else ""
+                )
                 link = link_el.get("href", "") if link_el is not None else ""
-                pub_date = pub_el.text.strip() if pub_el is not None and pub_el.text else ""
+                pub_date = (
+                    pub_el.text.strip() if pub_el is not None and pub_el.text else ""
+                )
                 if title:
-                    items.append({"title": title, "link": link, "pub_date": pub_date, "source": source})
+                    items.append(
+                        {
+                            "title": title,
+                            "link": link,
+                            "pub_date": pub_date,
+                            "source": source,
+                        }
+                    )
     except ET.ParseError as e:
         logger.warning(f"Failed to parse RSS XML from {source}: {e}")
     return items
@@ -75,13 +104,17 @@ async def _fetch_feeds() -> list[dict]:
         for url in urls:
             source = _source_name(url)
             try:
-                resp = await client.get(url, headers={"User-Agent": "SovereignWatch/1.0"})
+                resp = await client.get(
+                    url, headers={"User-Agent": "SovereignWatch/1.0"}
+                )
                 if resp.status_code == 200:
                     items = _parse_rss(resp.text, source)
                     all_items.extend(items)
                     logger.debug(f"Fetched {len(items)} items from {source}")
                 else:
-                    logger.warning(f"Non-200 response from {source}: {resp.status_code}")
+                    logger.warning(
+                        f"Non-200 response from {source}: {resp.status_code}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to fetch feed from {source}: {e}")
 

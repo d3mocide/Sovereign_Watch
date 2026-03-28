@@ -1,8 +1,38 @@
-import { Crosshair, Map as MapIcon, Shield, Activity, Target, X } from "lucide-react";
+import {
+  Activity,
+  Crosshair,
+  Map as MapIcon,
+  Shield,
+  Target,
+  X,
+} from "lucide-react";
 import React, { useState } from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { TrackHistoryPanel } from "../../widgets/TrackHistoryPanel";
 import { AircraftViewProps } from "./types";
+
+function getHoldingSeverity(turnsRaw: number | string | undefined) {
+  const turns = Number(turnsRaw ?? 0);
+  if (turns >= 5) {
+    return {
+      label: "CRITICAL",
+      textClass: "text-red-400",
+      badgeClass: "bg-red-500/20 text-red-300 border-red-500/40",
+    };
+  }
+  if (turns >= 2) {
+    return {
+      label: "ELEVATED",
+      textClass: "text-orange-300",
+      badgeClass: "bg-orange-500/20 text-orange-200 border-orange-500/40",
+    };
+  }
+  return {
+    label: "NORMAL",
+    textClass: "text-amber-400",
+    badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+  };
+}
 
 export const HoldingPatternView: React.FC<AircraftViewProps> = ({
   entity,
@@ -13,6 +43,7 @@ export const HoldingPatternView: React.FC<AircraftViewProps> = ({
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const p = (entity.detail ?? {}) as any;
+  const severity = getHoldingSeverity(p.turns_completed);
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -40,11 +71,15 @@ export const HoldingPatternView: React.FC<AircraftViewProps> = ({
               <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
                 <div className="flex gap-2">
                   <span className="text-white/30 w-16">Callsign:</span>
-                  <span className="text-white/80">{p.callsign || entity.callsign}</span>
+                  <span className="text-white/80">
+                    {p.callsign || entity.callsign}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-white/30 w-16">Detection:</span>
-                  <span className="text-white/80">TACTICAL_PATTERN_RECOGNITION</span>
+                  <span className="text-white/80">
+                    TACTICAL_PATTERN_RECOGNITION
+                  </span>
                 </div>
               </div>
             </section>
@@ -54,19 +89,42 @@ export const HoldingPatternView: React.FC<AircraftViewProps> = ({
             aria-label="Close details"
             className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group outline-none"
           >
-            <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+            <X
+              size={14}
+              className="group-hover:rotate-90 transition-transform duration-300"
+            />
           </button>
         </div>
 
         {/* Tactical Badges */}
         <div className="flex gap-2 overflow-hidden mb-2">
           <div className="bg-black/40 px-2 py-1 rounded border border-white/10 flex flex-col min-w-0 shadow-inner">
-            <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">TYPE_TAG</span>
-            <span className="text-mono-xs font-bold truncate text-white">{entity.type}</span>
+            <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">
+              TYPE_TAG
+            </span>
+            <span className="text-mono-xs font-bold truncate text-white">
+              {entity.type}
+            </span>
           </div>
           <div className="bg-black/40 px-2 py-1 rounded border border-white/10 flex flex-col flex-1 shadow-inner">
-            <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">STATUS</span>
-            <span className="text-mono-xs font-bold truncate text-amber-400 animate-pulse">ESTABLISHED</span>
+            <span className="text-[8px] text-white/30 uppercase font-bold tracking-tight">
+              STATUS
+            </span>
+            <span
+              className={`text-mono-xs font-bold truncate animate-pulse ${severity.textClass}`}
+            >
+              ESTABLISHED
+            </span>
+          </div>
+          <div
+            className={`px-2 py-1 rounded border flex flex-col shadow-inner ${severity.badgeClass}`}
+          >
+            <span className="text-[8px] uppercase font-bold tracking-tight opacity-70">
+              SEVERITY
+            </span>
+            <span className="text-mono-xs font-bold tracking-wide">
+              {severity.label}
+            </span>
           </div>
         </div>
 
@@ -103,43 +161,58 @@ export const HoldingPatternView: React.FC<AircraftViewProps> = ({
 
         {/* Hold Statistics */}
         <section className="bg-amber-500/5 border border-amber-500/20 p-3 rounded space-y-3">
-            <div className="flex items-center gap-2 text-amber-500/80">
-                <Activity size={12} />
-                <h3 className="text-[10px] font-bold uppercase tracking-widest">Hold Parameter Telemetry</h3>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-mono-xs font-medium">
-                <div className="flex flex-col border-b border-white/5 pb-2">
-                    <span className="text-[8px] text-white/30 uppercase mb-1">Completed Cycles</span>
-                    <span className="text-amber-400 text-lg font-black tracking-tighter">
-                        {p.turns_completed || "0.0"} <span className="text-[10px] opacity-50 font-bold tracking-normal uppercase">Turns</span>
-                    </span>
-                </div>
-                <div className="flex flex-col border-b border-white/5 pb-2">
-                    <span className="text-[8px] text-white/30 uppercase mb-1">Current Altitude</span>
-                    <span className="text-white text-lg font-black tracking-tighter">
-                        {Math.round(entity.altitude || 0).toLocaleString()} <span className="text-[10px] opacity-50 font-bold tracking-normal uppercase">ft</span>
-                    </span>
-                </div>
-            </div>
+          <div className="flex items-center gap-2 text-amber-500/80">
+            <Activity size={12} />
+            <h3 className="text-[10px] font-bold uppercase tracking-widest">
+              Hold Parameter Telemetry
+            </h3>
+          </div>
 
-            <div className="space-y-2 pt-1 font-mono text-mono-xs">
-                <div className="flex justify-between items-center text-white/40">
-                    <span className="text-[9px] uppercase font-bold tracking-widest flex items-center gap-1">
-                        <Target size={10} /> Center Coordinate
-                    </span>
-                    <span className="text-white/80 tabular-nums">
-                        {entity.lat.toFixed(6)} / {entity.lon.toFixed(6)}
-                    </span>
-                </div>
+          <div className="grid grid-cols-2 gap-4 text-mono-xs font-medium">
+            <div className="flex flex-col border-b border-white/5 pb-2">
+              <span className="text-[8px] text-white/30 uppercase mb-1">
+                Completed Cycles
+              </span>
+              <span className="text-amber-400 text-lg font-black tracking-tighter">
+                {p.turns_completed || "0.0"}{" "}
+                <span className="text-[10px] opacity-50 font-bold tracking-normal uppercase">
+                  Turns
+                </span>
+              </span>
             </div>
+            <div className="flex flex-col border-b border-white/5 pb-2">
+              <span className="text-[8px] text-white/30 uppercase mb-1">
+                Current Altitude
+              </span>
+              <span className="text-white text-lg font-black tracking-tighter">
+                {Math.round(entity.altitude || 0).toLocaleString()}{" "}
+                <span className="text-[10px] opacity-50 font-bold tracking-normal uppercase">
+                  ft
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-1 font-mono text-mono-xs">
+            <div className="flex justify-between items-center text-white/40">
+              <span className="text-[9px] uppercase font-bold tracking-widest flex items-center gap-1">
+                <Target size={10} /> Center Coordinate
+              </span>
+              <span className="text-white/80 tabular-nums">
+                {entity.lat.toFixed(6)} / {entity.lon.toFixed(6)}
+              </span>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[10px] text-white/30 font-bold uppercase tracking-[.2em]">Contextual_Analysis</h3>
+          <h3 className="text-[10px] text-white/30 font-bold uppercase tracking-[.2em]">
+            Contextual_Analysis
+          </h3>
           <div className="p-2 bg-white/5 border border-white/10 rounded text-[9px] text-white/60 leading-relaxed italic">
-            This aircraft has triggered pattern recognition for a non-standard holding loop. 
-            Tactical monitoring is advised to determine intent (Arrival delay, Emergency, or SigInt).
+            This aircraft has triggered pattern recognition for a non-standard
+            holding loop. Tactical monitoring is advised to determine intent
+            (Arrival delay, Emergency, or SigInt).
           </div>
         </section>
       </div>
@@ -151,8 +224,13 @@ export const HoldingPatternView: React.FC<AircraftViewProps> = ({
           onOpenPanel={onOpenAnalystPanel}
         />
         <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
-          <span>SOURCE: <span className="text-amber-500/70">AV_TACTICAL_POLLER</span></span>
-          <span className="text-hud-green uppercase font-bold tracking-widest">Pattern_Locked</span>
+          <span>
+            SOURCE:{" "}
+            <span className="text-amber-500/70">AV_TACTICAL_POLLER</span>
+          </span>
+          <span className="text-hud-green uppercase font-bold tracking-widest">
+            Pattern_Locked
+          </span>
         </div>
       </div>
     </div>

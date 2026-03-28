@@ -254,7 +254,8 @@ export function TacticalMap({
 
   const [auroraData, setAuroraData] = useState<any>(null);
   const [jammingData, setJammingData] = useState<any>(null);
-  const [holdingPatternData, setHoldingPatternData] = useState<FeatureCollection | null>(null);
+  const [holdingPatternData, setHoldingPatternData] =
+    useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,11 +265,16 @@ export function TacticalMap({
           const r = await fetch("/api/holding-patterns/active");
           if (r.ok && !cancelled) setHoldingPatternData(await r.json());
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
     fetchAviationAlerts();
     const id = setInterval(fetchAviationAlerts, 30_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [filters?.showHoldingPatterns]);
 
   useEffect(() => {
@@ -442,30 +448,60 @@ export function TacticalMap({
   ]);
 
   // Aviation Holding Pattern Alert Trigger
-  const seenHoldingRef = useRef<Set<string>>(new Set());
+  // Keep per-aircraft alert timestamps so temporary empty polls do not re-alert every active hold.
+  const seenHoldingRef = useRef<Map<string, number>>(new Map());
+  const HOLD_ALERT_MIN_CONFIDENCE = 0.7;
+  const HOLD_ALERT_MIN_TURNS = 1.0;
+  const HOLD_ALERT_MIN_DURATION_SEC = 120;
+  const HOLD_CRITICAL_TURNS = 5.0;
+  const HOLD_ALERT_RENOTIFY_MS = 20 * 60 * 1000;
   useEffect(() => {
-    if (!holdingPatternData?.features || holdingPatternData.features.length === 0) {
-      if (seenHoldingRef.current.size > 0) seenHoldingRef.current.clear();
+    if (
+      !holdingPatternData?.features ||
+      holdingPatternData.features.length === 0
+    ) {
+      // Do not clear cache on empty poll; backend/API jitter can briefly return no features.
       return;
     }
 
+    const now = Date.now();
+
     holdingPatternData.features.forEach((f: any) => {
-      const p = f.properties;
-      const key = p.hex_id; // Stable per-aircraft key — p.time changes on every API poll and caused alert spam
-      if (!seenHoldingRef.current.has(key)) {
+      const p = f.properties ?? {};
+      const key = String(p.hex_id || "").toLowerCase();
+      if (!key) return;
+
+      const confidence = Number(p.confidence ?? 0);
+      const turnsCompleted = Number(p.turns_completed ?? 0);
+      const durationSec = Number(p.pattern_duration_sec ?? 0);
+
+      // Only alert on stronger signals to reduce analyst noise.
+      if (
+        confidence < HOLD_ALERT_MIN_CONFIDENCE ||
+        turnsCompleted < HOLD_ALERT_MIN_TURNS ||
+        durationSec < HOLD_ALERT_MIN_DURATION_SEC
+      ) {
+        return;
+      }
+
+      const lastAlertAt = seenHoldingRef.current.get(key) ?? 0;
+      if (now - lastAlertAt >= HOLD_ALERT_RENOTIFY_MS) {
+        const isCriticalHold = turnsCompleted >= HOLD_CRITICAL_TURNS;
         onEvent?.({
-          message: `ALERT: Active holding pattern detected — ${p.callsign || p.hex_id} (${p.altitude}ft)`,
-          type: "alert",
+          message: `${isCriticalHold ? "ALERT" : "HOLD"}: Active holding pattern detected — ${p.callsign || p.hex_id} (${p.altitude}ft)`,
+          type: isCriticalHold ? "alert" : "new",
           entityType: "air",
         });
-        seenHoldingRef.current.add(key);
+        seenHoldingRef.current.set(key, now);
       }
     });
 
-    // Cleanup old keys (approximate)
-    if (seenHoldingRef.current.size > 50) {
-      const arr = Array.from(seenHoldingRef.current);
-      seenHoldingRef.current = new Set(arr.slice(-30));
+    // Cleanup stale keys to keep memory bounded.
+    const evictionCutoff = now - 6 * 60 * 60 * 1000;
+    for (const [key, ts] of seenHoldingRef.current.entries()) {
+      if (ts < evictionCutoff) {
+        seenHoldingRef.current.delete(key);
+      }
     }
   }, [holdingPatternData, onEvent]);
 
@@ -655,7 +691,6 @@ export function TacticalMap({
     [setSaveFormCoords, setShowSaveForm],
   );
 
-
   // Expose mission management to parent via onMissionPropsReady (handled inside useMissionArea)
 
   // Check if map actions are ready and expose them
@@ -844,9 +879,7 @@ export function TacticalMap({
           { key: "dark", label: "DARK" },
           { key: "satellite", label: "SAT" },
         ]}
-        onSetStyleMode={(mode) =>
-          setMapStyleMode(mode as "dark" | "satellite")
-        }
+        onSetStyleMode={(mode) => setMapStyleMode(mode as "dark" | "satellite")}
         onZoomIn={() => mapRef.current?.getMap().zoomIn()}
         onZoomOut={() => mapRef.current?.getMap().zoomOut()}
         onAdjustBearing={(delta) => handleAdjustCamera("bearing", delta)}

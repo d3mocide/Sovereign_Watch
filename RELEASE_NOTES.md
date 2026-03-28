@@ -1,40 +1,45 @@
-# Release - v0.53.0 - App Decomposition and Hazard Intelligence
+# Release - v0.54.0 - Hazard Signal Hardening and Tactical Overview Parity
 
-This release sharpens the tactical operator workflow by significantly simplifying frontend orchestration while improving hazard-focused map controls and alert signal quality. The result is a leaner application shell, cleaner layer semantics, and smoother high-frequency animation behavior under sustained load.
+This release improves operator trust in hazard intelligence by tightening holding-pattern detection quality gates, reducing alert channel noise, and extending hazard visibility into the Tactical Overview mini-map. The result is clearer hazard severity communication and better signal-to-noise during high-traffic monitoring.
 
 ### Key Features
 
-- **App.tsx Refactor Completion**: Reduced `App.tsx` from 1,140 lines to 594 lines through extraction of six cohesive hooks: `useViewMode`, `useSidebarState`, `useIntelEvents`, `useAppFilters`, `useEntitySelection`, and `useReplayController`.
-- **Hazards Layer Grouping**: Renamed the former "Environmental" layer category to **HAZARDS** to better reflect operational threat indicators (aurora, GPS jamming, holding patterns).
-- **Holding Pattern Toggle in Hazards**: Added a dedicated holding-pattern toggle in layer controls, styled in amber to match tactical map visualization.
+- **Stricter Holding Pattern Detection**: Holding logic now enforces full-turn accumulation, minimum duration, and directional consistency checks before flagging a hold.
+- **Severity-Aware Hazard UX**: Holding severity is now visually aligned across map layer rendering, sidebar detail cards, and hover tooltips.
+- **Tactical Overview Hazard Overlays**: Mini-map now includes live GPS integrity and holding-pattern overlays with a compact hazard legend and critical-hold indicator.
+- **Alert Channel Noise Reduction**: Non-critical holding detections now route to Intel Feed while critical holds remain in Alerts.
 
 ### Technical Details
 
-- **State Architecture**:
-	- `useViewMode`: view mode with localStorage persistence.
-	- `useSidebarState`: open/close state for all 5 overlays.
-	- `useIntelEvents`: throttled event insertion and hourly feed cleanup.
-	- `useAppFilters`: localStorage toggles, URL hash sync, and computed `orbitalFilters`, `tacticalFilters`, `activeServices`, `rfParams`.
-	- `useEntitySelection`: selected entity state, history segments, follow mode, NORAD resolution, and select/live-update callbacks.
-	- `useReplayController`: replay state, binary-search frame lookup, `requestAnimationFrame` playback loop, and `loadReplayData`.
-- **Alert Deduplication Fix**: Holding pattern alerts now dedupe by `hex_id` only, preventing repetitive 30-second re-alerting for the same circling aircraft.
-- **Animation Performance Path**:
-	- Moved `onHover` in animation composition to a stable callback ref (avoids per-frame callback allocation).
-	- Cached JS8 station array materialization (`Array.from(map.values())`) behind a map-size change check.
-- **Default Filter Explicitness**: Added `showHoldingPatterns: true` to `DEFAULT_FILTERS` for deterministic default behavior.
-- **Situational Globe Motion Tuning**: Default globe auto-rotation now uses the preferred slower baseline speed.
+- **Holding Detector Hardening** (`backend/ingestion/aviation_poller/holding_pattern.py`):
+	- Added bounded env parsing and stricter default thresholds.
+	- Added directional consistency scoring and minimum duration gating.
+	- Corrected rolling window turn recomputation to prevent stale-turn inflation.
+- **Frontend Severity Rendering**:
+	- `buildHoldingPatternLayer` now uses an amber/orange/red severity ramp.
+	- 5+ completed turns render as critical red severity.
+	- Sidebar and tooltip now expose severity labels for faster triage.
+- **Mini Tactical Hazard Overlay Pipeline** (`frontend/src/components/widgets/MiniMap.tsx`):
+	- Polls `/api/jamming/active` and `/api/holding-patterns/active` every 30s.
+	- Renders local halo/core circles for hazards.
+	- Hazard legend moved to bottom-right for reduced overlap with mission context.
+- **Test Reliability Updates**:
+	- OpenSky tests updated to use separate bbox/watchlist limiter attributes.
+	- Holding detector tests expanded to cover duration and directional consistency gates.
+- **News Feed Defaults** (`backend/api/routers/news.py`):
+	- Updated default sources to BBC World, Reddit News, and Al Jazeera.
 
 ### Upgrade Instructions
 
-To upgrade your local or remote instance to `v0.53.0`:
+To upgrade your local or remote instance to `v0.54.0`:
 
 ```bash
 # 1. Pull the latest code
 git pull origin main
 
-# 2. Rebuild and restart the tactical stack
+# 2. Rebuild and restart all services
 docker compose up -d --build
 
-# 3. (Optional) Force clear frontend assets if UI anomalies persist
-cd frontend && pnpm run build
+# 3. Optional frontend cache reset if stale UI assets appear
+docker compose build frontend
 ```

@@ -314,12 +314,13 @@ class TestOpenSkyClientFetch:
         """Return a client with the rate-limiter replaced by an async-compatible mock."""
         client = OpenSkyClient(rate_limit_period=0.001)
         # conftest stubs aiolimiter.AsyncLimiter as MagicMock, which doesn't
-        # support `async with`.  Replace _limiter with an AsyncMock so that
-        # `async with self._limiter:` works inside fetch_bbox().
+        # support `async with`. Replace per-route limiters with AsyncMock so
+        # `async with limiter:` works inside _fetch_states().
         limiter_mock = AsyncMock()
         limiter_mock.__aenter__ = AsyncMock(return_value=None)
         limiter_mock.__aexit__ = AsyncMock(return_value=False)
-        client._limiter = limiter_mock
+        client._limiter_bbox = limiter_mock
+        client._limiter_watchlist = limiter_mock
         return client
 
     @pytest.mark.asyncio

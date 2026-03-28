@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.54.0] - 2026-03-28
+
+### Added
+
+- **Mini Tactical Hazard Overlays**: Added live GPS integrity and holding-pattern overlays to the Tactical Overview mini-map, including a compact hazard legend with critical-hold count indicators.
+- **Holding Severity UX Parity**: Added severity badges and severity metadata to both the Holding sidebar view and tactical map tooltip so operator context is consistent across surfaces.
+
+### Changed
+
+- **Holding Detection Policy Tightening**: Upgraded the aviation holding detector to stricter defaults with bounded env-config parsing, directional consistency scoring, and duration gating to reduce ambiguous detections.
+- **Holding Alert Routing**: Reworked hold event routing so non-critical detections are sent to Intel Feed while critical patterns remain alert-channel events.
+- **Hazards Control Visual Language**: Updated Hazards top-level control styling from purple to amber to align with tactical hazard semantics.
+- **GPS Integrity Zone Readability**: Reduced jamming zone radii in map rendering for less visual clutter at mission zoom levels.
+- **News Feed Source Set Refresh**: Updated default RSS source set to BBC World, Reddit News, and Al Jazeera for broader and more reliable feed coverage.
+
+### Fixed
+
+- **Holding Pattern False Positives**: Tightened detector gating to require a full-turn threshold (`360°`), sustained circling duration, and directional consistency, and corrected rolling-window turn recomputation so stale turns no longer inflate current detections.
+- **Holding Pattern Test Reliability**: Updated OpenSky limiter test fixtures to match separate bbox/watchlist limiter internals and restored full aviation poller test pass.
+- **Holding Tooltip Runtime Fault**: Fixed tooltip severity initialization ordering that could trigger runtime errors when rendering holding entities.
+
+### Technical Details
+
+- New holding detector knobs include directional consistency minimums and stricter minimum pattern duration thresholds with explicit env clamping.
+- `buildHoldingPatternLayer` now maps `turns_completed` to amber/orange/red ramp with `>=5` turns rendered as red critical severity.
+- `MiniMap` now polls `/api/jamming/active` and `/api/holding-patterns/active` every 30s and renders overlay sources/layers locally for tactical overview parity.
+- Holding API documentation now includes `directional_consistency` in response property definitions.
+
 ## [0.53.0] - 2026-03-28
 
 ### Added

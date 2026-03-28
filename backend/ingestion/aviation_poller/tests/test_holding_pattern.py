@@ -8,8 +8,10 @@ Tests cover:
   - Pattern detection and eviction
 """
 
-import pytest
+import time
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from holding_pattern import (
     HoldingPatternDetector as Detector,
 )
@@ -21,7 +23,7 @@ class TestHoldingPatternDetector:
     @pytest.fixture
     def detector(self):
         """Create a detector instance with mocked Redis."""
-        with patch('holding_pattern.aioredis.from_url'):
+        with patch("holding_pattern.aioredis.from_url"):
             return Detector("redis://localhost:6379")
 
     def test_normalize_heading(self):
@@ -87,25 +89,66 @@ class TestHoldingPatternDetector:
     def test_ingest_multiple_turns(self, detector):
         """Test accumulating multiple turns toward holding pattern threshold."""
         hex_id = "def456"
+        start_time = time.time() - 120
 
-        # Simulate 4 x 80° turns = 320° total (should trigger pattern)
-        headings = [0, 80, 160, 240, 320]
+        # Simulate 4 x 90° turns = 360° total over >60s (should trigger pattern)
+        headings = [0, 90, 180, 270, 0]
 
-        for heading in headings:
+        for i, heading in enumerate(headings):
             detector.ingest(
                 hex_id=hex_id,
                 heading=heading,
                 speed=100,
                 lat=45.0,
                 lon=-122.0,
+                timestamp=start_time + (i * 30),
             )
 
-        # Total should be around 320°
+        # Total should be around 360°
         total_turn = detector.get_total_turns(hex_id)
-        assert total_turn >= 300, f"Expected ≥300°, got {total_turn}"
+        assert total_turn >= 360, f"Expected ≥360°, got {total_turn}"
 
         # Should be flagged as holding pattern
         assert detector.is_holding_pattern(hex_id) is True
+
+    def test_not_flagged_before_min_circle_duration(self, detector):
+        """Pattern should not be flagged if turn threshold is reached too quickly."""
+        hex_id = "duration_gate"
+        start_time = time.time()
+
+        headings = [0, 90, 180, 270, 0]  # 360° total
+        for i, heading in enumerate(headings):
+            detector.ingest(
+                hex_id=hex_id,
+                heading=heading,
+                speed=130,
+                lat=45.0,
+                lon=-122.0,
+                timestamp=start_time + (i * 10),  # 40s total < default 60s gate
+            )
+
+        assert detector.get_total_turns(hex_id) >= 360
+        assert detector.is_holding_pattern(hex_id) is False
+
+    def test_directional_consistency_gate(self, detector):
+        """Back-and-forth turns should not qualify as a holding pattern."""
+        hex_id = "direction_gate"
+        start_time = time.time() - 180
+
+        # Alternating directions accumulate absolute turn but have poor directional consistency.
+        headings = [0, 90, 0, 90, 0, 90, 0, 90, 0]
+        for i, heading in enumerate(headings):
+            detector.ingest(
+                hex_id=hex_id,
+                heading=heading,
+                speed=130,
+                lat=45.0,
+                lon=-122.0,
+                timestamp=start_time + (i * 30),
+            )
+
+        assert detector.get_total_turns(hex_id) >= 360
+        assert detector.is_holding_pattern(hex_id) is False
 
     def test_heading_change_threshold(self, detector):
         """Test that small heading changes below threshold are ignored."""
@@ -150,7 +193,9 @@ class TestHoldingPatternDetector:
 
         # Total should be small (just accumulation of small changes)
         total_turn = detector.get_total_turns(hex_id)
-        assert total_turn < 100, f"Random jitter should not accumulate to pattern. Got {total_turn}"
+        assert total_turn < 100, (
+            f"Random jitter should not accumulate to pattern. Got {total_turn}"
+        )
         assert detector.is_holding_pattern(hex_id) is False
 
     def test_low_speed_ignores_turns(self, detector):
@@ -231,7 +276,6 @@ class TestHoldingPatternDetector:
         hex_id = "vwx234"
 
         # Simulate 1.5 turns (540°) over >2 min
-        import time
         start_time = time.time() - 120  # 2 minutes ago
 
         # Ingest turns with specific timestamps
@@ -261,7 +305,9 @@ class TestHoldingPatternDetector:
     @pytest.mark.asyncio
     async def test_redis_connection(self):
         """Test that detector initializes Redis correctly."""
-        with patch('holding_pattern.aioredis.from_url', new_callable=AsyncMock) as mock_redis:
+        with patch(
+            "holding_pattern.aioredis.from_url", new_callable=AsyncMock
+        ) as mock_redis:
             detector = Detector("redis://test:6379")
 
             await detector.start()
@@ -272,7 +318,6 @@ class TestHoldingPatternDetector:
     def test_eviction_stale_data(self, detector):
         """Test that old data is evicted correctly."""
         hex_id = "yza567"
-        import time
 
         # Ingest with old timestamp
         old_time = time.time() - 400  # 400 seconds ago (beyond 300s window)
@@ -309,15 +354,16 @@ class TestHoldingPatternIntegration:
 
     @pytest.fixture
     def detector(self):
-        with patch('holding_pattern.aioredis.from_url'):
+        with patch("holding_pattern.aioredis.from_url"):
             return Detector("redis://localhost:6379")
 
     def test_full_circle_detection(self, detector):
         """Test detecting a complete 360° circle."""
         hex_id = "circle_test"
+        start_time = time.time() - 180
 
         # Simulate a complete circle: 0° → 90° → 180° → 270° → 360°(0°)
-        for i in range(36):  # 36 steps of 10° each
+        for i in range(37):  # 36 heading transitions x 10° = 360°
             heading = (i * 10) % 360
             detector.ingest(
                 hex_id=hex_id,
@@ -326,16 +372,18 @@ class TestHoldingPatternIntegration:
                 lat=45.0,
                 lon=-122.0,
                 callsign="CIRCLE1",
+                timestamp=start_time + (i * 5),
             )
 
-        # Should detect at least 350° of turn
+        # Should detect at least 360° of turn
         total_turn = detector.get_total_turns(hex_id)
-        assert total_turn >= 350
+        assert total_turn >= 360
         assert detector.is_holding_pattern(hex_id) is True
 
     def test_spiral_climb(self, detector):
         """Test detecting a spiral pattern (circular with altitude change)."""
         hex_id = "spiral_test"
+        start_time = time.time() - 180
 
         # Spiral: circular heading with increasing altitude
         for i in range(24):  # 24 steps = 240° spiral
@@ -349,8 +397,10 @@ class TestHoldingPatternIntegration:
                 lon=-122.0,
                 altitude=altitude,
                 callsign="SPIRAL1",
+                timestamp=start_time + (i * 8),
             )
 
         # Should accumulate ~345° of turn (23 turns of 15°)
         total_turn = detector.get_total_turns(hex_id)
         assert 300 <= total_turn <= 360
+        assert detector.is_holding_pattern(hex_id) is False

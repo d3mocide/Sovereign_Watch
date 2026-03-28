@@ -4,25 +4,26 @@ import logging
 import os
 import time as _time
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Request
-from models.schemas import MissionLocation, AIModelRequest, WatchlistAddRequest
+
+import yaml
 from core.database import db
+from fastapi import APIRouter, HTTPException, Request
+from models.schemas import AIModelRequest, MissionLocation, WatchlistAddRequest
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.System")
-
-import yaml
 
 # ---------------------------------------------------------------------------
 # AI model registry — read from models.yaml at project root (mounted in Docker).
 # ---------------------------------------------------------------------------
 MODELS_YAML_PATH = os.getenv("MODELS_YAML_PATH", "/app/models.yaml")
 
+
 def load_ai_models():
     try:
         with open(MODELS_YAML_PATH, "r") as f:
             data = yaml.safe_load(f)
-            
+
             if data and "models" in data:
                 models = data["models"]
                 # Resolve environment variables
@@ -36,10 +37,26 @@ def load_ai_models():
         logger.error(f"Failed to load {MODELS_YAML_PATH}: {e}")
     # Fallback default
     return [
-        {"id": "deep-reasoner", "label": "Claude 3.5 Sonnet", "provider": "Anthropic", "local": False},
-        {"id": "public-flash",  "label": "Gemini 1.5 Flash",  "provider": "Google",    "local": False},
-        {"id": "secure-core",   "label": "LLaMA3 (Ollama)",   "provider": "Local",     "local": True},
+        {
+            "id": "deep-reasoner",
+            "label": "Claude 3.5 Sonnet",
+            "provider": "Anthropic",
+            "local": False,
+        },
+        {
+            "id": "public-flash",
+            "label": "Gemini 1.5 Flash",
+            "provider": "Google",
+            "local": False,
+        },
+        {
+            "id": "secure-core",
+            "label": "LLaMA3 (Ollama)",
+            "provider": "Local",
+            "local": True,
+        },
     ]
+
 
 AVAILABLE_AI_MODELS = load_ai_models()
 _VALID_MODEL_IDS = {m["id"] for m in AVAILABLE_AI_MODELS}
@@ -47,9 +64,11 @@ _VALID_MODEL_IDS = {m["id"] for m in AVAILABLE_AI_MODELS}
 AI_MODEL_REDIS_KEY = "config:ai:active_model"
 AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 @router.post("/api/config/location")
 async def set_mission_location(location: MissionLocation):
@@ -62,7 +81,9 @@ async def set_mission_location(location: MissionLocation):
 
     # Validate constraints
     if location.radius_nm < 10 or location.radius_nm > 300:
-        raise HTTPException(status_code=400, detail="Radius must be between 10 and 300 nautical miles")
+        raise HTTPException(
+            status_code=400, detail="Radius must be between 10 and 300 nautical miles"
+        )
 
     if not (-90 <= location.lat <= 90):
         raise HTTPException(status_code=400, detail="Invalid latitude")
@@ -75,7 +96,7 @@ async def set_mission_location(location: MissionLocation):
         "lat": location.lat,
         "lon": location.lon,
         "radius_nm": location.radius_nm,
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     try:
@@ -87,9 +108,12 @@ async def set_mission_location(location: MissionLocation):
         logger.error(f"Mission location update failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    logger.info(f"Mission location updated: {location.lat}, {location.lon} ({location.radius_nm}nm)")
+    logger.info(
+        f"Mission location updated: {location.lat}, {location.lon} ({location.radius_nm}nm)"
+    )
 
     return {"status": "ok", "active_mission": mission_data}
+
 
 @router.get("/api/config/location")
 async def get_mission_location():
@@ -114,10 +138,11 @@ async def get_mission_location():
         "lat": float(os.getenv("CENTER_LAT", "45.5152")),
         "lon": float(os.getenv("CENTER_LON", "-122.6784")),
         "radius_nm": int(os.getenv("COVERAGE_RADIUS_NM", "150")),
-        "updated_at": None
+        "updated_at": None,
     }
 
     return default_mission
+
 
 @router.get("/api/config/ai")
 async def get_ai_config():
@@ -139,23 +164,27 @@ async def get_ai_config():
         "available_models": available_models,
     }
 
+
 @router.get("/api/config/features")
 async def get_features_config():
     """Return enabled functionality based on environment."""
     return {
         "radioref_enabled": bool(
-            os.getenv("RADIOREF_APP_KEY") and
-            os.getenv("RADIOREF_USERNAME") and
-            os.getenv("RADIOREF_PASSWORD")
+            os.getenv("RADIOREF_APP_KEY")
+            and os.getenv("RADIOREF_USERNAME")
+            and os.getenv("RADIOREF_PASSWORD")
         )
     }
+
 
 @router.get("/api/config/streams")
 async def get_streams_config():
     """Return the health and configuration status of various data streams."""
     # Check Maritime (AISStream)
     ais_key = os.getenv("AISSTREAM_API_KEY")
-    maritime_status = "Active" if ais_key and ais_key != "your_key_here" else "Missing Key"
+    maritime_status = (
+        "Active" if ais_key and ais_key != "your_key_here" else "Missing Key"
+    )
 
     # Check Orbital (Always active, no key required currently for Celestrak/SpaceTrack basic)
     orbital_status = "Active"
@@ -167,7 +196,11 @@ async def get_streams_config():
     rr_key = os.getenv("RADIOREF_APP_KEY")
     rr_user = os.getenv("RADIOREF_USERNAME")
     rr_pass = os.getenv("RADIOREF_PASSWORD")
-    rr_status = "Active" if rr_key and rr_user and rr_pass and rr_key != "your_app_key_here" else "Missing Key"
+    rr_status = (
+        "Active"
+        if rr_key and rr_user and rr_pass and rr_key != "your_app_key_here"
+        else "Missing Key"
+    )
 
     # Public RF (ARD/NOAA NWR) - Always active as they don't require keys
     rf_public_status = "Active"
@@ -176,7 +209,9 @@ async def get_streams_config():
     anthropic = os.getenv("ANTHROPIC_API_KEY")
     gemini = os.getenv("GEMINI_API_KEY")
     ai_status = "Disabled"
-    if (anthropic and anthropic != "your_key_here") or (gemini and gemini != "your_key_here"):
+    if (anthropic and anthropic != "your_key_here") or (
+        gemini and gemini != "your_key_here"
+    ):
         ai_status = "Active"
 
     return [
@@ -188,6 +223,7 @@ async def get_streams_config():
         {"id": "ai", "name": "AI Analysis", "status": ai_status},
     ]
 
+
 @router.post("/api/config/ai")
 async def set_ai_config(req: AIModelRequest):
     """Switch the active AI model used for track analysis."""
@@ -197,7 +233,7 @@ async def set_ai_config(req: AIModelRequest):
     if req.model_id not in valid_ids:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown model '{req.model_id}'. Valid options: {sorted(valid_ids)}"
+            detail=f"Unknown model '{req.model_id}'. Valid options: {sorted(valid_ids)}",
         )
 
     if not db.redis_client:
@@ -211,6 +247,7 @@ async def set_ai_config(req: AIModelRequest):
 
     logger.info(f"AI model switched to: {req.model_id}")
     return {"status": "ok", "active_model": req.model_id}
+
 
 _WATCHLIST_KEY = "opensky:watchlist"
 _PERMANENT_SCORE = 32_503_680_000.0  # 01-Jan-3000 — same sentinel used by the poller
@@ -233,11 +270,15 @@ async def get_watchlist():
     result = []
     for icao24, score in raw:
         permanent = score >= _PERMANENT_SCORE - 1
-        result.append({
-            "icao24": icao24,
-            "permanent": permanent,
-            "expires_at": None if permanent else datetime.fromtimestamp(score, timezone.utc).isoformat(),
-        })
+        result.append(
+            {
+                "icao24": icao24,
+                "permanent": permanent,
+                "expires_at": None
+                if permanent
+                else datetime.fromtimestamp(score, timezone.utc).isoformat(),
+            }
+        )
     return result
 
 
@@ -266,10 +307,20 @@ async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
             logger.error(f"Rate limiting error: {e}")
 
     icao24 = req.icao24.lower().strip()
-    if not icao24 or len(icao24) != 6 or not all(c in "0123456789abcdef" for c in icao24):
-        raise HTTPException(status_code=400, detail="icao24 must be exactly 6 hex characters")
+    if (
+        not icao24
+        or len(icao24) != 6
+        or not all(c in "0123456789abcdef" for c in icao24)
+    ):
+        raise HTTPException(
+            status_code=400, detail="icao24 must be exactly 6 hex characters"
+        )
 
-    score = _PERMANENT_SCORE if req.ttl_days is None else _time.time() + req.ttl_days * 86400
+    score = (
+        _PERMANENT_SCORE
+        if req.ttl_days is None
+        else _time.time() + req.ttl_days * 86400
+    )
 
     try:
         await db.redis_client.zadd(_WATCHLIST_KEY, {icao24: score})
@@ -296,7 +347,9 @@ async def remove_from_watchlist(icao24: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if not removed:
-        raise HTTPException(status_code=404, detail=f"'{icao24}' not found in watchlist")
+        raise HTTPException(
+            status_code=404, detail=f"'{icao24}' not found in watchlist"
+        )
 
     logger.info("Watchlist: removed %s", icao24)
     return {"status": "ok", "icao24": icao24}
@@ -311,7 +364,7 @@ async def get_poller_health():
     ais_key = os.getenv("AISSTREAM_API_KEY", "")
     maritime_has_creds = bool(ais_key and ais_key != "your_key_here")
 
-    rr_key  = os.getenv("RADIOREF_APP_KEY", "")
+    rr_key = os.getenv("RADIOREF_APP_KEY", "")
     rr_user = os.getenv("RADIOREF_USERNAME", "")
     rr_pass = os.getenv("RADIOREF_PASSWORD", "")
     radioref_has_creds = bool(
@@ -319,39 +372,139 @@ async def get_poller_health():
     )
 
     anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-    gemini_key    = os.getenv("GEMINI_API_KEY", "")
-    ai_has_creds  = bool(
-        (anthropic_key and anthropic_key != "your_key_here") or
-        (gemini_key    and gemini_key    != "your_key_here")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    ai_has_creds = bool(
+        (anthropic_key and anthropic_key != "your_key_here")
+        or (gemini_key and gemini_key != "your_key_here")
     )
 
     # (id, name, group, fetch_key, error_key, stale_after_s, has_creds)
     # fetch_key="__space_weather__" = special: parse timestamp from kp_current JSON
     # fetch_key=None = no Redis tracking (env-var check only)
     POLLER_SPECS = [
-        ("adsb",          "Aviation (ADS-B)",  "Tracking",       "adsb:last_fetch",                   "poller:adsb:last_error",            300,        True),
-        ("maritime",      "Maritime AIS",       "Tracking",       "maritime:last_message_at",          "poller:maritime:last_error",        300,        maritime_has_creds),
-        ("orbital",       "Orbital (TLE)",      "Orbital",        "orbital_pulse:last_fetch",          "poller:orbital:last_error",         7 * 3600,   True),
-        ("satnogs_net",   "SatNOGS Network",    "Orbital",        "satnogs_pulse:network:last_fetch",  "poller:satnogs_network:last_error", 3 * 3600,   True),
-        ("satnogs_db",    "SatNOGS Database",   "Orbital",        "satnogs_pulse:db:last_fetch",       "poller:satnogs_db:last_error",      30 * 3600,  True),
-        ("space_weather", "Space Weather",      "Environment",    "__space_weather__",                 "poller:space_weather:last_error",   2 * 3600,   True),
-        ("gdelt",         "GDELT Events",       "Intel",          "gdelt_pulse:last_fetch",            "poller:gdelt:last_error",           1800,       True),
-        ("rf_ard",        "RF Amateur (ARD)",   "RF",             "rf_pulse:ard:last_fetch",           "poller:ard:last_error",             30 * 3600,  True),
-        ("rf_noaa",       "NOAA NWR",           "RF",             "rf_pulse:noaa_nwr:last_fetch",      "poller:noaa_nwr:last_error",        8 * 86400,  True),
-        ("radioref",      "RadioReference",     "RF",             "rf_pulse:radioref:last_fetch",      "poller:radioref:last_error",        8 * 86400,  radioref_has_creds),
-        ("infra_cables",  "Undersea Cables",    "Infrastructure", "infra:last_cables_fetch",           "poller:infra_cables:last_error",    8 * 86400,  True),
-        ("infra_towers",  "FCC Towers",         "Infrastructure", "infra:last_fcc_fetch",              "poller:infra_towers:last_error",    8 * 86400,  True),
-        ("ai",            "AI Analysis",        "Analysis",       None,                                None,                                None,       ai_has_creds),
+        (
+            "adsb",
+            "Aviation (ADS-B)",
+            "Tracking",
+            "adsb:last_fetch",
+            "poller:adsb:last_error",
+            300,
+            True,
+        ),
+        (
+            "maritime",
+            "Maritime AIS",
+            "Tracking",
+            "maritime:last_message_at",
+            "poller:maritime:last_error",
+            300,
+            maritime_has_creds,
+        ),
+        (
+            "orbital",
+            "Orbital (TLE)",
+            "Orbital",
+            "orbital_pulse:last_fetch",
+            "poller:orbital:last_error",
+            7 * 3600,
+            True,
+        ),
+        (
+            "satnogs_net",
+            "SatNOGS Network",
+            "Orbital",
+            "satnogs_pulse:network:last_fetch",
+            "poller:satnogs_network:last_error",
+            3 * 3600,
+            True,
+        ),
+        (
+            "satnogs_db",
+            "SatNOGS Database",
+            "Orbital",
+            "satnogs_pulse:db:last_fetch",
+            "poller:satnogs_db:last_error",
+            30 * 3600,
+            True,
+        ),
+        (
+            "space_weather",
+            "Space Weather",
+            "Environment",
+            "__space_weather__",
+            "poller:space_weather:last_error",
+            2 * 3600,
+            True,
+        ),
+        (
+            "gdelt",
+            "GDELT Events",
+            "Intel",
+            "gdelt_pulse:last_fetch",
+            "poller:gdelt:last_error",
+            1800,
+            True,
+        ),
+        (
+            "rf_ard",
+            "RF Amateur (ARD)",
+            "RF",
+            "rf_pulse:ard:last_fetch",
+            "poller:ard:last_error",
+            30 * 3600,
+            True,
+        ),
+        (
+            "rf_noaa",
+            "NOAA NWR",
+            "RF",
+            "rf_pulse:noaa_nwr:last_fetch",
+            "poller:noaa_nwr:last_error",
+            8 * 86400,
+            True,
+        ),
+        (
+            "radioref",
+            "RadioReference",
+            "RF",
+            "rf_pulse:radioref:last_fetch",
+            "poller:radioref:last_error",
+            8 * 86400,
+            radioref_has_creds,
+        ),
+        (
+            "infra_cables",
+            "Undersea Cables",
+            "Infrastructure",
+            "infra:last_cables_fetch",
+            "poller:infra_cables:last_error",
+            8 * 86400,
+            True,
+        ),
+        (
+            "infra_towers",
+            "FCC Towers",
+            "Infrastructure",
+            "infra:last_fcc_fetch",
+            "poller:infra_towers:last_error",
+            8 * 86400,
+            True,
+        ),
+        ("ai", "AI Analysis", "Analysis", None, None, None, ai_has_creds),
     ]
 
     # Fallback when Redis is unavailable
     if not db.redis_client:
         return [
             {
-                "id": sid, "name": name, "group": group,
+                "id": sid,
+                "name": name,
+                "group": group,
                 "status": "no_credentials" if not has_creds else "unknown",
-                "last_success": None, "last_error_ts": None,
-                "last_error_msg": None, "stale_after_s": stale_s,
+                "last_success": None,
+                "last_error_ts": None,
+                "last_error_msg": None,
+                "stale_after_s": stale_s,
             }
             for sid, name, group, _, __, stale_s, has_creds in POLLER_SPECS
         ]
@@ -411,7 +564,7 @@ async def get_poller_health():
             if err_raw:
                 try:
                     err = json.loads(err_raw)
-                    last_error_ts  = err.get("ts")
+                    last_error_ts = err.get("ts")
                     last_error_msg = err.get("msg")
                 except Exception:
                     pass
@@ -437,20 +590,20 @@ async def get_poller_health():
         status, last_success, last_error_ts, last_error_msg = _compute(
             fetch_key, error_key, stale_s, has_creds
         )
-        
+
         # Track and retrieve health history (last 12 mins)
         history = []
         if db.redis_client:
             history_key = f"poller:history:{sid}"
             # Capture current status for history buffer (1 = healthy/active, 0 = stale/error/pending)
             current_bit = 1 if status in ("healthy", "active") else 0
-            
+
             try:
                 # Add to history list, keep last 12
                 await db.redis_client.lpush(history_key, current_bit)
                 await db.redis_client.ltrim(history_key, 0, 11)
                 await db.redis_client.expire(history_key, 3600)
-                
+
                 # Retrieve full history
                 raw_history = await db.redis_client.lrange(history_key, 0, 11)
                 # Redis returns them in reverse (newest first); we want chronological (oldest to newest)
@@ -458,17 +611,19 @@ async def get_poller_health():
             except Exception:
                 pass
 
-        results.append({
-            "id": sid,
-            "name": name,
-            "group": group,
-            "status": status,
-            "last_success": last_success,
-            "last_error_ts": last_error_ts,
-            "last_error_msg": last_error_msg,
-            "stale_after_s": stale_s,
-            "history": history,
-        })
+        results.append(
+            {
+                "id": sid,
+                "name": name,
+                "group": group,
+                "status": status,
+                "last_success": last_success,
+                "last_error_ts": last_error_ts,
+                "last_error_msg": last_error_msg,
+                "stale_after_s": stale_s,
+                "history": history,
+            }
+        )
 
     return results
 
@@ -482,7 +637,7 @@ async def get_h3_cells():
     try:
         # Retrieve all items from the h3:cell_state Hash
         cell_states = await db.redis_client.hgetall("h3:cell_state")
-        
+
         # Parse each state from JSON back into dictionaries
         parsed_cells = []
         for cell_id, state_json in cell_states.items():

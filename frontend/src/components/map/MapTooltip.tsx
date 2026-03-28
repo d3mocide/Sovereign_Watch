@@ -17,6 +17,32 @@ interface MapTooltipProps {
   position: { x: number; y: number };
 }
 
+function getHoldingSeverity(turnsRaw: number | string | undefined) {
+  const turns = Number(turnsRaw ?? 0);
+  if (turns >= 5) {
+    return {
+      label: "CRITICAL",
+      className: "text-red-400",
+      borderClass: "border-red-400/60",
+      dotClass: "text-red-400",
+    };
+  }
+  if (turns >= 2) {
+    return {
+      label: "ELEVATED",
+      className: "text-orange-300",
+      borderClass: "border-orange-400/55",
+      dotClass: "text-orange-300",
+    };
+  }
+  return {
+    label: "NORMAL",
+    className: "text-amber-400",
+    borderClass: "border-amber-400/50",
+    dotClass: "text-amber-400",
+  };
+}
+
 export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isShip = entity.type.includes("S");
   const isRepeater = entity.type === "repeater";
@@ -42,7 +68,14 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
         : jammingAssessment === "equipment"
           ? "text-slate-300"
           : "text-amber-400";
- 
+
+  const holdSeverity = getHoldingSeverity(
+    (entity.detail as Record<string, unknown> | undefined)?.turns_completed as
+      | number
+      | string
+      | undefined,
+  );
+
   const accentColor = isRepeater
     ? "text-emerald-400"
     : isTower
@@ -55,14 +88,16 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "text-sea-accent"
             : isInfra
               ? "text-cyan-400"
-              : isOutage || isHold
-                ? "text-amber-400"
-                : isGdelt
-                  ? "text-hud-green"
-                  : isJamming
-                    ? jammingColor
-                    : "text-air-accent";
- 
+              : isHold
+                ? holdSeverity.dotClass
+                : isOutage
+                  ? "text-amber-400"
+                  : isGdelt
+                    ? "text-hud-green"
+                    : isJamming
+                      ? jammingColor
+                      : "text-air-accent";
+
   const borderColor = isRepeater
     ? "border-emerald-400/50"
     : isTower
@@ -75,14 +110,16 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "border-sea-accent/50"
             : isInfra
               ? "border-cyan-400/50"
-              : isOutage || isHold
-                ? "border-amber-400/50"
-                : isGdelt
-                  ? "border-hud-green/30"
-                  : isJamming
-                    ? "border-amber-400/50"
-                    : "border-air-accent/50";
- 
+              : isHold
+                ? holdSeverity.borderClass
+                : isOutage
+                  ? "border-amber-400/50"
+                  : isGdelt
+                    ? "border-hud-green/30"
+                    : isJamming
+                      ? "border-amber-400/50"
+                      : "border-air-accent/50";
+
   const HeaderIcon = isRepeater
     ? Radio
     : isTower
@@ -101,14 +138,14 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   ? Zap
                   : isJamming
                     ? WifiOff
-                    : isHold 
-                       ? Crosshair
-                       : Plane;
- 
+                    : isHold
+                      ? Crosshair
+                      : Plane;
+
   const detail = (entity.detail ?? {}) as Record<string, unknown>;
   const detailProps = (detail.properties ?? {}) as Record<string, unknown>;
   const detailGeometry = (detail.geometry ?? {}) as Record<string, unknown>;
- 
+
   return (
     <div
       style={{
@@ -145,13 +182,13 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "UNDERSEA"
                     : isOutage
                       ? "OUTAGE"
-                      : isHold 
-                         ? "HOLDING"
-                         : isGdelt
-                           ? "OSINT"
-                           : isJamming
-                             ? "SIGINT"
-                             : "LIVE"}
+                      : isHold
+                        ? "HOLDING"
+                        : isGdelt
+                          ? "OSINT"
+                          : isJamming
+                            ? "SIGINT"
+                            : "LIVE"}
           </span>
         </div>
       </div>
@@ -163,7 +200,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             <span className="text-[8px] text-white/40 block leading-tight">
               TACTICAL STATUS
             </span>
-            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight uppercase">
+            <span
+              className={`text-[10px] font-mono font-bold leading-tight uppercase ${holdSeverity.className}`}
+            >
               AIRCRAFT ESTABLISHED IN HOLD
             </span>
           </div>
@@ -181,8 +220,20 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             <span className="text-[8px] text-white/40 block leading-tight">
               COMPLETED
             </span>
-            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight">
+            <span
+              className={`text-[10px] font-mono font-bold leading-tight ${holdSeverity.className}`}
+            >
               {String(entity.detail?.turns_completed ?? "0")} TURNS
+            </span>
+          </div>
+          <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SEVERITY
+            </span>
+            <span
+              className={`text-[10px] font-mono font-bold leading-tight ${holdSeverity.className}`}
+            >
+              {holdSeverity.label}
             </span>
           </div>
         </div>

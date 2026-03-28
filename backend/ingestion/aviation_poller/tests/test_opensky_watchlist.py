@@ -8,6 +8,7 @@ zremrangebyscore, zscore) are mocked individually.
 fetch_icao_list() tests use the same mock-limiter pattern as
 test_opensky_client.py.
 """
+
 import sys
 import time
 from typing import List
@@ -24,7 +25,11 @@ if "redis" not in sys.modules:
     sys.modules["redis.asyncio"] = _redis_stub.asyncio
 
 from opensky_client import OpenSkyClient  # noqa: E402
-from opensky_watchlist import WatchlistManager, _PERMANENT_SCORE, _WATCHLIST_KEY  # noqa: E402
+from opensky_watchlist import (  # noqa: E402
+    _PERMANENT_SCORE,
+    _WATCHLIST_KEY,
+    WatchlistManager,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -43,13 +48,23 @@ def _make_sv(
     geo_altitude=8_100.0,
 ) -> List:
     return [
-        icao24, callsign, "United States",
-        1_700_000_000, 1_700_000_001,
-        longitude, latitude,
-        baro_altitude, on_ground,
-        velocity, true_track, vertical_rate,
-        None, geo_altitude,
-        "7700", False, 0,
+        icao24,
+        callsign,
+        "United States",
+        1_700_000_000,
+        1_700_000_001,
+        longitude,
+        latitude,
+        baro_altitude,
+        on_ground,
+        velocity,
+        true_track,
+        vertical_rate,
+        None,
+        geo_altitude,
+        "7700",
+        False,
+        0,
     ]
 
 
@@ -293,14 +308,18 @@ class TestFetchIcaoList:
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.raise_for_status = MagicMock()
-        mock_response.json = AsyncMock(return_value={"time": 1_700_000_000, "states": states})
+        mock_response.json = AsyncMock(
+            return_value={"time": 1_700_000_000, "states": states}
+        )
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
         return mock_response
 
     def _make_client(self):
         client = OpenSkyClient(rate_limit_period=0.001)
-        client._limiter = _make_mock_limiter()
+        limiter = _make_mock_limiter()
+        client._limiter_bbox = limiter
+        client._limiter_watchlist = limiter
         return client
 
     @pytest.mark.asyncio
@@ -354,7 +373,9 @@ class TestFetchIcaoList:
     async def test_filters_on_ground(self):
         client = self._make_client()
         mock_session = MagicMock()
-        mock_session.get.return_value = self._make_state_response([_make_sv(on_ground=True)])
+        mock_session.get.return_value = self._make_state_response(
+            [_make_sv(on_ground=True)]
+        )
         client._session = mock_session
 
         result = await client.fetch_icao_list(["ae1234"])
