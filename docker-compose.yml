@@ -21,7 +21,7 @@ services:
       - redpanda
       - start
       - --smp 1
-      - --memory 1G
+      - --memory 2G
       - --reserve-memory 0M
       - --overprovisioned
       - --node-id 0
@@ -36,6 +36,7 @@ services:
       - sovereign-vol-redpanda:/var/lib/redpanda/data
     networks:
       - sovereign-net-backend
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health" ]
       interval: 10s
