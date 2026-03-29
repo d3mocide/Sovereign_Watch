@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.57.0] - 2026-03-28
+
+### Added
+
+- **In-App Article Reader**: Added a backend-powered reader mode for OSINT articles via `/api/news/article`, allowing article content to render inside the app even when publishers block iframe embedding.
+- **News Widget Deep-Link Workflow**: Added in-app article opening from the News widget in Intel view, with compact/full-mode click interception and external-open fallback.
+- **GDELT Source Reader Integration**: Added shared source-open callback plumbing so GDELT `VIEW_SOURCE` actions can open inside the same reader workflow.
+
+### Changed
+
+- **News Widget Feed Experience**: Converted the full Intel News widget to a single-column, time-sorted aggregate feed with tactical metadata rows, Intel-style header treatment, and a slimmer source label presentation.
+- **Intel Layout Balance**: Reduced the Intel News widget container to `75vh`, default-collapsed the Live Threats section, removed the misleading Live Threats count badge, and hid the News widget while the SITREP analyst panel is open.
+- **Cross-View Reader Consistency**: Extended the in-app reader overlay from Intel to Tactical so GDELT source review stays inside the app in both map states.
+- **Intel HUD Positioning**: Nudged Intel map navigation controls upward by 10px and aligned the article viewer top edge with the shared sidebar baseline.
+
+### Fixed
+
+- **Cross-Domain News Mixing**: Fixed News widget ordering so feed entries are sorted by publication time only instead of effectively clustering by source ordering.
+- **Publisher Embed Failures**: Replaced unreliable iframe-based article viewing with extracted reader-mode content to handle sites that refuse embedded rendering.
+
+### Verification
+
+- Frontend: `pnpm run lint && pnpm run test` (pass, 36 tests)
+- Backend API: `python -m ruff check . && python -m pytest` (pass, 46 tests)
+
 ## [0.56.0] - 2026-03-28
 
 ### Changed

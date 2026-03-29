@@ -59,6 +59,10 @@ export interface MapControlsProps {
   // ---- Optional Auto-spin --------------------------------------------------
   spin?: boolean;
   onToggleSpin?: () => void;
+
+  // ---- Positioning ---------------------------------------------------------
+  /** Optional Tailwind class to override the default bottom offset (`bottom-8`). */
+  bottomOffsetClass?: string;
 }
 
 /** Tailwind class sets shared across every mode button. */
@@ -110,6 +114,7 @@ export function MapControls({
   onAdjustPitch,
   spin,
   onToggleSpin,
+  bottomOffsetClass,
 }: MapControlsProps) {
   const showCameraControls =
     enable3d &&
@@ -118,8 +123,12 @@ export function MapControls({
     onResetNorth !== undefined &&
     onAdjustPitch !== undefined;
 
+  const bottomClass = bottomOffsetClass ?? "bottom-8";
+
   return (
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto">
+    <div
+      className={`absolute ${bottomClass} left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto`}
+    >
       {/* Optional 3D camera controls — bearing + pitch */}
       {showCameraControls && (
         <div className="flex flex-row gap-2">
@@ -179,16 +188,10 @@ export function MapControls({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           {!globeMode && (
             <>
-              <button
-                onClick={onSet2D}
-                className={modeBtn(!enable3d)}
-              >
+              <button onClick={onSet2D} className={modeBtn(!enable3d)}>
                 2D
               </button>
-              <button
-                onClick={onSet3D}
-                className={modeBtn(enable3d)}
-              >
+              <button onClick={onSet3D} className={modeBtn(enable3d)}>
                 3D
               </button>
               {divider}
@@ -218,7 +221,8 @@ export function MapControls({
                   className={spin ? "animate-spin-slow" : ""}
                 />
               </button>
-              {!(globeMode && styleOptions && styleOptions.length > 0) && divider}
+              {!(globeMode && styleOptions && styleOptions.length > 0) &&
+                divider}
             </>
           )}
 
