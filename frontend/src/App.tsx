@@ -31,6 +31,9 @@ import { useSidebarState } from "./hooks/useSidebarState";
 import { useSystemHealth } from "./hooks/useSystemHealth";
 import { useTowers } from "./hooks/useTowers";
 import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
+import { useASAMIncidents } from "./hooks/useASAMIncidents";
+import { useMaritimeRisk } from "./hooks/useMaritimeRisk";
+import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
 import { useViewMode } from "./hooks/useViewMode";
 import type { CoTEntity, MapActions, MissionProps } from "./types";
 
@@ -282,6 +285,15 @@ function App() {
 
   const { towers } = useTowers(mapBounds, filters.showTowers);
   const { buoyData } = useNDBCBuoys(mapBounds, filters.showBuoys === true);
+  const { asamData } = useASAMIncidents(mapBounds, filters.showASAM === true);
+
+  // Maritime risk assessment — active only when a sea vessel is selected
+  const isSea = !!selectedEntity?.type?.includes("S");
+  const { report: riskReport, isLoading: riskLoading } = useMaritimeRisk(
+    isSea ? selectedEntity!.uid   : null,
+    isSea ? selectedEntity!.lat   : null,
+    isSea ? selectedEntity!.lon   : null,
+  );
 
   const handleOpenAnalystPanel = useCallback(() => {
     setIsAIAnalystOpen(true);
@@ -393,7 +405,7 @@ function App() {
           viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
               {selectedEntity && (selectedEntity as any).type !== "sitrep" && (
-                <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden">
+                <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col">
                   <SidebarRight
                     entity={selectedEntity}
                     onClose={() => {
@@ -411,6 +423,13 @@ function App() {
                     onHistoryLoaded={setHistorySegments}
                     fetchSatnogsVerification={fetchVerification}
                   />
+                  {isSea && (
+                    <MaritimeRiskPanel
+                      report={riskReport}
+                      isLoading={riskLoading}
+                      callsign={selectedEntity.callsign || selectedEntity.uid}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -460,6 +479,7 @@ function App() {
               onBoundsChange={setMapBounds}
               gdeltData={gdeltData}
               buoyData={buoyData}
+              asamData={asamData}
             />
 
             {replayMode && (

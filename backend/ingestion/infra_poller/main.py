@@ -23,7 +23,7 @@ import tempfile
 import time
 import traceback
 import zipfile
-from datetime import datetime, UTC
+from datetime import datetime, date, UTC
 
 import aiohttp
 import psycopg2
@@ -53,7 +53,24 @@ STATIONS_URL   = "https://www.submarinecablemap.com/api/v3/landing-point/landing
 NOMINATIM_URL  = "https://nominatim.openstreetmap.org/search"
 NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
 
-POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
+POLL_INTERVAL_NDBC_MINUTES  = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
+
+ASAM_URL = "https://msi.nga.mil/api/publications/asam?output=json"
+# Weekday gate: run between 19:00–21:00 UTC (covers 15:00 ET in both EST and EDT)
+ASAM_TRIGGER_HOUR_UTC_START = int(os.getenv("ASAM_TRIGGER_HOUR_UTC_START", "19"))
+ASAM_TRIGGER_HOUR_UTC_END   = int(os.getenv("ASAM_TRIGGER_HOUR_UTC_END", "21"))
+POLL_INTERVAL_ASAM_DAYS     = 1   # re-check every 24 h; only ingests on weekdays
+
+# Hostility keyword → base severity (0–10).  Higher score = more dangerous.
+_ASAM_SEVERITY: list[tuple[str, float]] = [
+    ("kidnapping",  10.0),
+    ("hijacking",    8.0),
+    ("fired upon",   7.0),
+    ("assault",      6.0),
+    ("robbery",      5.0),
+    ("boarding",     4.0),
+    ("attempted",    3.0),
+]
 
 FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
 FCC_CONNECT_TIMEOUT_S    = 30
@@ -208,6 +225,160 @@ def _ingest_fcc_records_sync(db_url: str, records: list[tuple]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# ASAM helpers — pure + blocking, unit-testable without I/O
+# ---------------------------------------------------------------------------
+
+def asam_severity(hostility: str | None) -> float:
+    """Map an ASAM hostility string to a base severity score (0–10).
+
+    Scans _ASAM_SEVERITY keywords in priority order; returns the first match.
+    Returns the default low-severity score (2.0) if no keyword matches.
+    """
+    if not hostility:
+        return 2.0
+    h = hostility.lower()
+    for keyword, score in _ASAM_SEVERITY:
+        if keyword in h:
+            return score
+    return 2.0
+
+
+def asam_recency(incident_date: date, today: date | None = None) -> float:
+    """Compute a recency multiplier for an ASAM incident.
+
+    Uses a step-function decay so recent incidents carry more weight:
+      ≤ 30 days  → 1.00
+      ≤ 90 days  → 0.80
+      ≤ 180 days → 0.60
+      ≤ 365 days → 0.40
+      > 365 days → 0.20
+    """
+    if today is None:
+        today = date.today()
+    days_ago = (today - incident_date).days
+    if days_ago <= 30:
+        return 1.00
+    if days_ago <= 90:
+        return 0.80
+    if days_ago <= 180:
+        return 0.60
+    if days_ago <= 365:
+        return 0.40
+    return 0.20
+
+
+def compute_asam_threat_score(hostility: str | None, incident_date: date, today: date | None = None) -> float:
+    """Composite threat score = severity × recency, capped at 10.0, rounded to 2dp."""
+    score = asam_severity(hostility) * asam_recency(incident_date, today)
+    return round(min(score, 10.0), 2)
+
+
+def parse_asam_json(data: list[dict]) -> list[dict]:
+    """Parse the NGA ASAM JSON response into a list of incident dicts.
+
+    Each output dict contains:
+      reference, incident_date, lat, lon, hostility, victim,
+      nav_area, subreg, description, threat_score
+
+    Rows missing lat/lon or an unparseable date are silently skipped.
+    """
+    today = date.today()
+    records: list[dict] = []
+    for item in data:
+        # Coordinates — required
+        try:
+            lat = float(item.get("latitude") or item.get("lat") or "")
+            lon = float(item.get("longitude") or item.get("lon") or "")
+        except (TypeError, ValueError):
+            continue
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            continue
+
+        # Date — required
+        raw_date = item.get("date") or item.get("occurrenceDate") or ""
+        incident_date: date | None = None
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d-%b-%Y"):
+            try:
+                incident_date = datetime.strptime(str(raw_date).strip(), fmt).date()
+                break
+            except ValueError:
+                continue
+        if incident_date is None:
+            continue
+
+        reference = str(item.get("reference") or "").strip()
+        if not reference:
+            continue
+
+        hostility   = str(item.get("hostility") or "").strip() or None
+        victim      = str(item.get("victim") or "").strip() or None
+        nav_area    = str(item.get("navArea") or "").strip() or None
+        subreg      = str(item.get("subreg") or "").strip() or None
+        description = str(item.get("description") or item.get("detailStr") or "").strip() or None
+
+        records.append({
+            "reference":    reference,
+            "incident_date": incident_date,
+            "lat":          lat,
+            "lon":          lon,
+            "hostility":    hostility,
+            "victim":       victim,
+            "nav_area":     nav_area,
+            "subreg":       subreg,
+            "description":  description,
+            "threat_score": compute_asam_threat_score(hostility, incident_date, today),
+        })
+    return records
+
+
+def _ingest_asam_records_sync(db_url: str, records: list[dict]) -> int:
+    """Upsert ASAM incidents into asam_incidents via psycopg2 (blocking).
+
+    Uses ON CONFLICT (reference) DO UPDATE to refresh threat_score and
+    description when NGA re-issues the same reference.
+    Returns number of rows upserted.
+    """
+    upsert_sql = """
+        INSERT INTO asam_incidents
+            (reference, incident_date, lat, lon, hostility, victim,
+             nav_area, subreg, description, threat_score, geom, ingested_at)
+        VALUES %s
+        ON CONFLICT (reference) DO UPDATE SET
+            incident_date = EXCLUDED.incident_date,
+            lat           = EXCLUDED.lat,
+            lon           = EXCLUDED.lon,
+            hostility     = EXCLUDED.hostility,
+            victim        = EXCLUDED.victim,
+            nav_area      = EXCLUDED.nav_area,
+            subreg        = EXCLUDED.subreg,
+            description   = EXCLUDED.description,
+            threat_score  = EXCLUDED.threat_score,
+            geom          = EXCLUDED.geom,
+            ingested_at   = EXCLUDED.ingested_at
+    """
+    rows = [
+        (
+            r["reference"], r["incident_date"], r["lat"], r["lon"],
+            r["hostility"], r["victim"], r["nav_area"], r["subreg"],
+            r["description"], r["threat_score"],
+            f"SRID=4326;POINT({r['lon']} {r['lat']})",
+            datetime.now(UTC),
+        )
+        for r in records
+    ]
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, upsert_sql, rows, page_size=500)
+        conn.commit()
+        upserted = cur.rowcount
+        cur.close()
+    finally:
+        conn.close()
+    return upserted
+
+
+# ---------------------------------------------------------------------------
 # NDBC helpers — pure + blocking, unit-testable without I/O
 # ---------------------------------------------------------------------------
 
@@ -338,6 +509,7 @@ class InfraPollerService:
             asyncio.create_task(self.ioda_loop()),
             asyncio.create_task(self.fcc_loop()),
             asyncio.create_task(self.ndbc_loop()),
+            asyncio.create_task(self.asam_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -673,6 +845,94 @@ class InfraPollerService:
         geojson = json.dumps({"type": "FeatureCollection", "features": features})
         await self.redis.set("ndbc:latest_obs", geojson, ex=1800)  # 30-min TTL
         logger.info("NDBC: cached %d buoys in Redis (ndbc:latest_obs)", len(features))
+
+
+    # -----------------------------------------------------------------------
+    # ASAM loop — weekday 19–21 UTC gate, 24-hour re-check interval
+    # -----------------------------------------------------------------------
+
+    async def asam_loop(self):
+        """Ingest NGA ASAM piracy incidents once per weekday near 15:00 ET.
+
+        Checks every hour whether the time/day gate is open; if so, fetches
+        the full ASAM JSON feed and upserts into asam_incidents.  A Redis key
+        tracks the last successful ingest so the gate doesn't fire twice in
+        the same day.
+        """
+        while self.running:
+            now_utc = datetime.now(UTC)
+            hour    = now_utc.hour
+            weekday = now_utc.weekday()  # 0=Monday … 4=Friday
+
+            in_hour_gate  = ASAM_TRIGGER_HOUR_UTC_START <= hour < ASAM_TRIGGER_HOUR_UTC_END
+            is_weekday    = weekday < 5
+            today_key     = f"asam:last_ingest:{now_utc.strftime('%Y-%m-%d')}"
+            already_ran   = await self.redis.exists(today_key)
+
+            if in_hour_gate and is_weekday and not already_ran:
+                try:
+                    await self._fetch_and_ingest_asam()
+                    # TTL of 25 h prevents double-runs on the same calendar day
+                    await self.redis.set(today_key, "1", ex=90000)
+                except Exception as e:
+                    logger.exception("ASAM fetch/ingest error")
+                    try:
+                        await self.redis.set(
+                            "poller:asam:last_error",
+                            json.dumps({"ts": time.time(), "msg": str(e)}),
+                            ex=86400,
+                        )
+                    except Exception:
+                        pass
+            else:
+                logger.debug(
+                    "ASAM gate closed (hour=%d, weekday=%d, already_ran=%s); rechecking in 1 h",
+                    hour, weekday, bool(already_ran),
+                )
+
+            await asyncio.sleep(3600)  # check hourly
+
+    async def _fetch_and_ingest_asam(self):
+        """Download the full ASAM JSON feed and upsert all incidents."""
+        logger.info("ASAM: fetching piracy incident feed from NGA...")
+        timeout = aiohttp.ClientTimeout(total=60.0)
+        async with aiohttp.ClientSession(
+            timeout=timeout, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            async with client.get(ASAM_URL) as resp:
+                resp.raise_for_status()
+                raw: list[dict] = await resp.json(content_type=None)
+
+        logger.info("ASAM: received %d raw records", len(raw))
+        records = parse_asam_json(raw)
+        if not records:
+            logger.warning("ASAM: no valid incidents parsed from feed")
+            return
+
+        upserted = await asyncio.to_thread(_ingest_asam_records_sync, DB_URL, records)
+        logger.info("ASAM: parsed %d incidents, upserted %d rows", len(records), upserted)
+
+        # Cache a compact summary (reference + lat/lon + threat_score) for fast API reads
+        features = [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
+                "properties": {
+                    "reference":    r["reference"],
+                    "incident_date": r["incident_date"].isoformat(),
+                    "hostility":    r["hostility"],
+                    "victim":       r["victim"],
+                    "nav_area":     r["nav_area"],
+                    "subreg":       r["subreg"],
+                    "description":  r["description"],
+                    "threat_score": r["threat_score"],
+                },
+            }
+            for r in records
+        ]
+        geojson = json.dumps({"type": "FeatureCollection", "features": features})
+        await self.redis.set("asam:latest", geojson, ex=90000)  # 25-h TTL
+        logger.info("ASAM: cached %d incidents in Redis (asam:latest)", len(features))
 
 
 # ---------------------------------------------------------------------------
