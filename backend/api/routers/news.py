@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -31,6 +33,36 @@ def _source_name(url: str) -> str:
     return host.split(".")[0].upper()
 
 
+def _extract_link(el: ET.Element | None) -> str:
+    """Extract a URL from a link element, checking both text content and href attribute."""
+    if el is None:
+        return ""
+    if el.text and el.text.strip():
+        return el.text.strip()
+    href = el.get("href", "").strip()
+    return href
+
+
+def _parse_pub_date(raw: str) -> datetime:
+    """Parse an RSS/Atom date string into a UTC datetime for sorting.
+
+    Falls back to epoch on failure so unparseable dates sort to the bottom.
+    """
+    if not raw:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+    # Try RFC 2822 (RSS 2.0 pubDate)
+    try:
+        return parsedate_to_datetime(raw)
+    except Exception:
+        pass
+    # Try ISO 8601 (Atom published/updated)
+    try:
+        return datetime.fromisoformat(raw.rstrip("Z")).replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    return datetime.fromtimestamp(0, tz=timezone.utc)
+
+
 def _parse_rss(xml_text: str, source: str) -> list[dict]:
     """Parse RSS XML and return a list of news items."""
     items = []
@@ -48,9 +80,7 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                     if title_el is not None and title_el.text
                     else ""
                 )
-                link = (
-                    link_el.text.strip() if link_el is not None and link_el.text else ""
-                )
+                link = _extract_link(link_el)
                 pub_date = (
                     pub_el.text.strip() if pub_el is not None and pub_el.text else ""
                 )
@@ -61,6 +91,7 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                             "link": link,
                             "pub_date": pub_date,
                             "source": source,
+                            "_ts": _parse_pub_date(pub_date).timestamp(),
                         }
                     )
         else:
@@ -76,7 +107,7 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                     if title_el is not None and title_el.text
                     else ""
                 )
-                link = link_el.get("href", "") if link_el is not None else ""
+                link = _extract_link(link_el)
                 pub_date = (
                     pub_el.text.strip() if pub_el is not None and pub_el.text else ""
                 )
@@ -87,6 +118,7 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
                             "link": link,
                             "pub_date": pub_date,
                             "source": source,
+                            "_ts": _parse_pub_date(pub_date).timestamp(),
                         }
                     )
     except ET.ParseError as e:
@@ -94,8 +126,12 @@ def _parse_rss(xml_text: str, source: str) -> list[dict]:
     return items
 
 
+# Max items retained per source before merging, to prevent one feed dominating.
+PER_SOURCE_CAP = 20
+
+
 async def _fetch_feeds() -> list[dict]:
-    """Fetch all configured RSS feeds and return merged, sorted items."""
+    """Fetch all configured RSS feeds and return merged, date-sorted items."""
     raw_urls = os.getenv("NEWS_RSS_URLS", DEFAULT_RSS_URLS)
     urls = [u.strip() for u in raw_urls.split(",") if u.strip()]
 
@@ -109,14 +145,23 @@ async def _fetch_feeds() -> list[dict]:
                 )
                 if resp.status_code == 200:
                     items = _parse_rss(resp.text, source)
-                    all_items.extend(items)
-                    logger.debug(f"Fetched {len(items)} items from {source}")
+                    # Sort per-source by recency, then cap so no single feed crowds others
+                    items.sort(key=lambda x: x["_ts"], reverse=True)
+                    all_items.extend(items[:PER_SOURCE_CAP])
+                    logger.info(f"Fetched {len(items)} items from {source} (kept {min(len(items), PER_SOURCE_CAP)})")
                 else:
                     logger.warning(
                         f"Non-200 response from {source}: {resp.status_code}"
                     )
             except Exception as e:
                 logger.warning(f"Failed to fetch feed from {source}: {e}")
+
+    # Sort all collected items newest-first so the feed is interleaved by recency
+    all_items.sort(key=lambda x: x["_ts"], reverse=True)
+
+    # Strip internal timestamp before returning
+    for item in all_items:
+        item.pop("_ts", None)
 
     return all_items
 

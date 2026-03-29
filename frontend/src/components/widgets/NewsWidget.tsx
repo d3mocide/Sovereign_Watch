@@ -43,7 +43,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({ compact = false }) => {
   const fetchNews = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch('/api/news/feed?limit=40');
+      const resp = await fetch('/api/news/feed?limit=100');
       if (resp.ok) {
         const data: NewsItem[] = await resp.json();
         setItems(data);
@@ -95,7 +95,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({ compact = false }) => {
             {loading ? 'FETCHING FEEDS...' : 'NO DATA'}
           </div>
         ) : (
-          items.slice(0, 24).map((item, i) => (
+          items.map((item, i) => (
             <a
               key={i}
               href={item.link}
@@ -222,7 +222,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({ compact = false }) => {
           </div>
         ) : (
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-1 p-2">
-            {items.slice(0, 24).map((item, i) => (
+            {items.map((item, i) => (
               <a
                 key={i}
                 href={item.link}
