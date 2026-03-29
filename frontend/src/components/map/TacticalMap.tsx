@@ -221,28 +221,38 @@ export function TacticalMap({
         props.entity_type === "outage" || props.severity !== undefined;
       const isTower = obj.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
-      const entityType = isBuoy
-        ? "buoy"
-        : isTower
-          ? "tower"
-          : isOutage
-            ? "outage"
-            : "infra";
+      const isASAM =
+        props.reference !== undefined && props.threat_score !== undefined;
+      const entityType = isASAM
+        ? "asam"
+        : isBuoy
+          ? "buoy"
+          : isTower
+            ? "tower"
+            : isOutage
+              ? "outage"
+              : "infra";
       const entity: CoTEntity = {
         uid: String(
-          props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
+          props.reference ||
+            props.id ||
+            props.buoy_id ||
+            obj.id ||
+            `infra-${Date.now()}`,
         ),
         type: entityType,
         callsign: String(
-          props.buoy_id ||
-            props.name ||
-            props.region ||
-            props.fcc_id ||
-            (isOutage
-              ? "INTERNET OUTAGE"
-              : isTower
-                ? "FCC TOWER"
-                : "Unknown Infra"),
+          isASAM
+            ? `PIRACY: ${String(props.hostility || "Incident")} (${String(props.reference || "")})`
+            : props.buoy_id ||
+                props.name ||
+                props.region ||
+                props.fcc_id ||
+                (isOutage
+                  ? "INTERNET OUTAGE"
+                  : isTower
+                    ? "FCC TOWER"
+                    : "Unknown Infra"),
         ),
         lat,
         lon,
@@ -262,7 +272,8 @@ export function TacticalMap({
         prev?.type === "infra" ||
         prev?.type === "outage" ||
         prev?.type === "tower" ||
-        prev?.type === "buoy"
+        prev?.type === "buoy" ||
+        prev?.type === "asam"
           ? null
           : prev,
       );
@@ -622,22 +633,36 @@ export function TacticalMap({
       const isTower =
         info.object.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
-      const entityType = isBuoy ? "buoy" : isTower ? "tower" : "infra";
+      const isASAM =
+        props.reference !== undefined && props.threat_score !== undefined;
+      const entityType = isASAM
+        ? "asam"
+        : isBuoy
+          ? "buoy"
+          : isTower
+            ? "tower"
+            : "infra";
       const callsign = String(
-        props.buoy_id ||
-          props.name ||
-          props.region ||
-          props.fcc_id ||
-          (props.entity_type === "outage"
-            ? "INTERNET OUTAGE"
-            : isTower
-              ? "FCC TOWER"
-              : "INFRA"),
+        isASAM
+          ? `PIRACY: ${String(props.hostility || "Incident")} (${String(props.reference || "")})`
+          : props.buoy_id ||
+              props.name ||
+              props.region ||
+              props.fcc_id ||
+              (props.entity_type === "outage"
+                ? "INTERNET OUTAGE"
+                : isTower
+                  ? "FCC TOWER"
+                  : "INFRA"),
       );
 
       const infraEntity: CoTEntity = {
         uid: String(
-          props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
+          props.reference ||
+            props.id ||
+            props.buoy_id ||
+            info.object.id ||
+            `infra-${Date.now()}`,
         ),
         lat: info.coordinate?.[1] || 0,
         lon: info.coordinate?.[0] || 0,
