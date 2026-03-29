@@ -86,7 +86,7 @@ export function buildASAMLayer(
         getLineWidth: 1,
         lineWidthUnits: "pixels",
 
-        parameters: { depthTest: !!globeMode, depthMask: !!globeMode },
+        parameters: { depthTest: !!globeMode, depthMask: !!globeMode } as any,
 
         onHover: (info: unknown) => setHoveredInfra(info),
         onClick: (info: unknown) => setSelectedInfra(info),
@@ -129,7 +129,7 @@ export function buildASAMLayer(
       },
       lineWidthUnits: "pixels",
 
-      parameters: { depthTest: !!globeMode, depthMask: !!globeMode },
+      parameters: { depthTest: !!globeMode, depthMask: !!globeMode } as any,
 
       onHover: (info: unknown) => setHoveredInfra(info),
       onClick: (info: unknown) => setSelectedInfra(info),
