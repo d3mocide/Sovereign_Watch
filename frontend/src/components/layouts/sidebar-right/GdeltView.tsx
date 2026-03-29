@@ -51,7 +51,10 @@ function getGdeltTheme(v: number) {
   };
 }
 
-function quadClassLabel(quadClass: number | undefined, fallback: string | undefined): string {
+function quadClassLabel(
+  quadClass: number | undefined,
+  fallback: string | undefined,
+): string {
   if (quadClass === 1) return "VERBAL_COOP";
   if (quadClass === 2) return "MATERIAL_COOP";
   if (quadClass === 3) return "VERBAL_CONFLICT";
@@ -64,6 +67,7 @@ export const GdeltView: React.FC<BaseViewProps> = ({
   onClose,
   onCenterMap,
   onOpenAnalystPanel,
+  onOpenSource,
 }) => {
   const detail = entity.detail as any;
   const tone = detail.tone ?? 0;
@@ -98,7 +102,10 @@ export const GdeltView: React.FC<BaseViewProps> = ({
                 <div className="flex gap-2">
                   <span className="text-white/30 w-16">Class:</span>
                   <span className="text-white/80">
-                    {quadClassLabel(detail.quad_class, detail.event_root_code || detail.domain)}
+                    {quadClassLabel(
+                      detail.quad_class,
+                      detail.event_root_code || detail.domain,
+                    )}
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -114,7 +121,10 @@ export const GdeltView: React.FC<BaseViewProps> = ({
             title="Close details"
             className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
-            <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+            <X
+              size={14}
+              className="group-hover:rotate-90 transition-transform duration-300"
+            />
           </button>
         </div>
         <div className="flex gap-2 mt-2">
@@ -129,15 +139,35 @@ export const GdeltView: React.FC<BaseViewProps> = ({
             CENTER_VIEW
           </button>
           {detail.url && detail.url.startsWith("http") ? (
-            <a
-              href={detail.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]"
-            >
-              <ExternalLink size={12} />
-              VIEW_SOURCE
-            </a>
+            onOpenSource ? (
+              <button
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onOpenSource({
+                    url: detail.url,
+                    title: entity.callsign || "GDELT EVENT",
+                    source: detail.domain || "GDELT",
+                    pubDate:
+                      detail.dateadded ||
+                      new Date(entity.lastSeen).toISOString(),
+                  });
+                }}
+                className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]"
+              >
+                <ExternalLink size={12} />
+                VIEW_SOURCE
+              </button>
+            ) : (
+              <a
+                href={detail.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 py-1.5 rounded text-[10px] font-bold tracking-widest text-white/70 transition-all active:scale-[0.98]"
+              >
+                <ExternalLink size={12} />
+                VIEW_SOURCE
+              </a>
+            )
           ) : (
             <span
               title="Source URL unavailable for this event"
@@ -220,7 +250,9 @@ export const GdeltView: React.FC<BaseViewProps> = ({
                 title={
                   detail.event_root_code ||
                   detail.domain ||
-                  (detail.quad_class != null ? String(detail.quad_class) : "N/A")
+                  (detail.quad_class != null
+                    ? String(detail.quad_class)
+                    : "N/A")
                 }
               >
                 {quadClassLabel(

@@ -1,4 +1,5 @@
 import type { FeatureCollection } from "geojson";
+import { ExternalLink, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
@@ -14,6 +15,7 @@ import { DashboardView } from "./components/views/DashboardView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
+import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useAppFilters } from "./hooks/useAppFilters";
@@ -35,6 +37,12 @@ import { useSystemHealth } from "./hooks/useSystemHealth";
 import { useTowers } from "./hooks/useTowers";
 import { useViewMode } from "./hooks/useViewMode";
 import type { CoTEntity, MapActions, MissionProps } from "./types";
+
+interface IntelArticleContent {
+  url: string;
+  title: string;
+  content: string;
+}
 
 function App() {
   // ── View & sidebar state ──────────────────────────────────────────────────
@@ -133,6 +141,15 @@ function App() {
     sea: 0,
     orbital: 0,
   });
+  const [activeIntelArticle, setActiveIntelArticle] = useState<NewsItem | null>(
+    null,
+  );
+  const [intelArticleContent, setIntelArticleContent] =
+    useState<IntelArticleContent | null>(null);
+  const [intelArticleLoading, setIntelArticleLoading] = useState(false);
+  const [intelArticleError, setIntelArticleError] = useState<string | null>(
+    null,
+  );
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -319,6 +336,140 @@ function App() {
     setIsAIAnalystOpen(true);
   }, [setIsAIAnalystOpen]);
 
+  useEffect(() => {
+    if (viewMode !== "INTEL" && viewMode !== "TACTICAL") {
+      setActiveIntelArticle(null);
+      setIntelArticleContent(null);
+      setIntelArticleError(null);
+      setIntelArticleLoading(false);
+    }
+  }, [viewMode]);
+
+  const articleViewerOverlay = activeIntelArticle ? (
+    <div className="absolute z-20 top-[71px] left-6 right-6 bottom-14 pointer-events-none flex justify-center">
+      <div className="pointer-events-auto w-full max-w-5xl h-full max-h-[78vh] bg-black/90 border border-white/15 backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
+          <div className="min-w-0 flex items-center gap-2">
+            <span className="text-[8px] font-bold tracking-[.3em] text-amber-400/80 uppercase">
+              Article Viewer
+            </span>
+            <span className="text-[8px] text-white/35 truncate max-w-[52ch]">
+              {activeIntelArticle.source} - {activeIntelArticle.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() =>
+                window.open(
+                  activeIntelArticle.link,
+                  "_blank",
+                  "noopener,noreferrer",
+                )
+              }
+              className="p-1 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors focus-visible:ring-1 focus-visible:ring-amber-400 outline-none"
+              aria-label="Open article in new tab"
+              title="Open in new tab"
+            >
+              <ExternalLink size={12} />
+            </button>
+            <button
+              onClick={() => setActiveIntelArticle(null)}
+              className="p-1 text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
+              aria-label="Close article viewer"
+              title="Close"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+
+        <div className="relative flex-1 min-h-0 bg-black/70 overflow-y-auto custom-scrollbar p-3">
+          {intelArticleLoading && (
+            <div className="h-full w-full flex items-center justify-center gap-2 text-white/45 text-[11px] tracking-wider uppercase">
+              <Loader2 size={14} className="animate-spin" />
+              Loading Reader
+            </div>
+          )}
+
+          {!intelArticleLoading && intelArticleError && (
+            <div className="h-full w-full flex flex-col items-center justify-center gap-3 text-center px-6">
+              <span className="text-[11px] uppercase tracking-[.2em] text-red-400/80">
+                Reader Unavailable
+              </span>
+              <p className="text-[11px] text-white/50 max-w-md">
+                {intelArticleError}. Use the external-link button to open the
+                source directly.
+              </p>
+            </div>
+          )}
+
+          {!intelArticleLoading &&
+            !intelArticleError &&
+            intelArticleContent && (
+              <div className="max-w-3xl mx-auto space-y-3">
+                {intelArticleContent.title && (
+                  <h3 className="text-[14px] font-bold tracking-wide text-white/85">
+                    {intelArticleContent.title}
+                  </h3>
+                )}
+                <div className="text-[11px] leading-relaxed text-white/70 whitespace-pre-wrap">
+                  {intelArticleContent.content}
+                </div>
+              </div>
+            )}
+
+          <div className="sticky bottom-0 mt-3 text-[8px] text-white/35 bg-black/60 border border-white/10 rounded px-2 py-1">
+            Reader mode is fetched by backend extraction to avoid publisher
+            iframe restrictions.
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  useEffect(() => {
+    if (!activeIntelArticle) {
+      setIntelArticleContent(null);
+      setIntelArticleError(null);
+      setIntelArticleLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadArticle = async () => {
+      setIntelArticleLoading(true);
+      setIntelArticleError(null);
+      try {
+        const resp = await fetch(
+          `/api/news/article?url=${encodeURIComponent(activeIntelArticle.link)}`,
+          { signal: controller.signal },
+        );
+
+        if (!resp.ok) {
+          throw new Error(`Reader unavailable (${resp.status})`);
+        }
+
+        const data: IntelArticleContent = await resp.json();
+        setIntelArticleContent(data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setIntelArticleContent(null);
+        setIntelArticleError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load article in reader mode",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIntelArticleLoading(false);
+        }
+      }
+    };
+
+    void loadArticle();
+    return () => controller.abort();
+  }, [activeIntelArticle]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -424,7 +575,7 @@ function App() {
           viewMode === "ORBITAL" ||
           viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
-              {selectedEntity && (selectedEntity as any).type !== "sitrep" && (
+              {selectedEntity && (selectedEntity as any).type !== "sitrep" ? (
                 <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col">
                   <SidebarRight
                     entity={selectedEntity}
@@ -443,6 +594,18 @@ function App() {
                       }
                     }}
                     onOpenAnalystPanel={handleOpenAnalystPanel}
+                    onOpenSource={
+                      viewMode === "INTEL" || viewMode === "TACTICAL"
+                        ? (payload) =>
+                            setActiveIntelArticle({
+                              title: payload.title,
+                              link: payload.url,
+                              source: payload.source ?? "GDELT",
+                              pub_date:
+                                payload.pubDate ?? new Date().toISOString(),
+                            })
+                        : undefined
+                    }
                     onHistoryLoaded={setHistorySegments}
                     fetchSatnogsVerification={fetchVerification}
                   />
@@ -454,7 +617,14 @@ function App() {
                     />
                   )}
                 </div>
-              )}
+              ) : viewMode === "INTEL" &&
+                !(isAIAnalystOpen && selectedEntity?.type === "sitrep") ? (
+                <div className="h-[75vh] max-h-[75vh] min-h-0 pointer-events-auto overflow-hidden flex flex-col bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm shadow-2xl">
+                  <NewsWidget
+                    onOpenArticle={(article) => setActiveIntelArticle(article)}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null
         }
@@ -503,6 +673,8 @@ function App() {
               gdeltData={gdeltData}
               buoyData={buoyData}
             />
+
+            {articleViewerOverlay}
 
             {replayMode && (
               <TimeControls
@@ -582,6 +754,7 @@ function App() {
               worldCountriesData={worldCountriesData}
               onEntitySelect={handleEntitySelect}
             />
+            {articleViewerOverlay}
             <div className="absolute bottom-0 left-0 right-0 z-10">
               <OsintTicker speed={110} />
             </div>

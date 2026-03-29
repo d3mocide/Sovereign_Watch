@@ -1,10 +1,18 @@
 import { CoTEntity, HistorySegment, NDBCBuoyProperties } from "../../../types";
 
+export interface SourceOpenPayload {
+  url: string;
+  title: string;
+  source?: string;
+  pubDate?: string;
+}
+
 export interface BaseViewProps {
   entity: CoTEntity;
   onClose: () => void;
   onCenterMap?: () => void;
   onOpenAnalystPanel?: () => void;
+  onOpenSource?: (payload: SourceOpenPayload) => void;
 }
 
 export interface InfraProperties extends Partial<NDBCBuoyProperties> {

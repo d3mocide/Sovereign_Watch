@@ -209,7 +209,10 @@ export function IntelGlobe({
   }, []);
 
   const handleAdjustBearing = useCallback((delta: number) => {
-    setViewState((prev) => ({ ...prev, bearing: (prev.bearing + delta) % 360 }));
+    setViewState((prev) => ({
+      ...prev,
+      bearing: (prev.bearing + delta) % 360,
+    }));
   }, []);
 
   const handleAdjustPitch = useCallback((delta: number) => {
@@ -319,6 +322,7 @@ export function IntelGlobe({
         onZoomOut={() => zoomBy(-0.75)}
         spin={spin}
         onToggleSpin={() => setSpin((s) => !s)}
+        bottomOffsetClass="bottom-[42px]"
       />
     </div>
   );

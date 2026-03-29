@@ -16,6 +16,12 @@ interface SidebarRightProps {
   onClose: () => void;
   onCenterMap?: () => void;
   onOpenAnalystPanel?: () => void;
+  onOpenSource?: (payload: {
+    url: string;
+    title: string;
+    source?: string;
+    pubDate?: string;
+  }) => void;
   onHistoryLoaded?: (segments: HistorySegment[]) => void;
   fetchSatnogsVerification?: (noradId: string) => Promise<any>;
   onPassData?: (
@@ -32,6 +38,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   onClose,
   onCenterMap,
   onOpenAnalystPanel,
+  onOpenSource,
   onHistoryLoaded,
   fetchSatnogsVerification,
   onPassData,
@@ -39,7 +46,13 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (!entity) return null;
 
   // Common props shared by all domain views
-  const baseProps = { entity, onClose, onCenterMap, onOpenAnalystPanel };
+  const baseProps = {
+    entity,
+    onClose,
+    onCenterMap,
+    onOpenAnalystPanel,
+    onOpenSource,
+  };
 
   // Domain-specific early-return routes
   if (entity.type === "sitrep") {

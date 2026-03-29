@@ -1,47 +1,46 @@
-# Release - v0.56.0 - SMAPS Retirement and Maritime Conditions Stabilization
+# Release - v0.57.0 - OSINT Reader and Intel Workflow Refinement
 
-This release completes the operational retirement of SMAPS from Sovereign Watch runtime paths. Maritime operator workflows remain available through buoy-derived sea-state conditions while retired SMAPS ingestion, API, map-layer, and schema surfaces are removed to reduce runtime fragility and maintenance overhead.
+This release upgrades the Intel and Tactical OSINT workflow from external-link handoff to an in-app reader flow, while also tightening the News widget layout and HUD alignment. The result is a more coherent operator experience for article triage, GDELT source review, and sidebar/map composition.
 
 ### Key Features
 
-- **SMAPS Runtime Removal**: Removed the retired SMAPS incidents route from active backend wiring and deleted the dedicated router module.
-- **Ingestion Simplification**: Removed SMAPS loop/config/helpers from the infra poller and deleted associated test modules.
-- **Frontend Cleanup**: Removed SMAPS hooks/layers/toggles and SMAPS-specific tooltip/sidebar branching from tactical map UX paths.
-- **Schema and Runtime Parity**: Removed `smaps_incidents` bootstrap DDL and dropped the live table so source and runtime database state match.
-- **Maritime Conditions Continuity**: Preserved buoy-driven maritime conditions reporting with compatibility-safe incident field naming.
+- **In-App Reader Mode**: Added a backend-powered article reader that fetches and extracts readable content from source URLs through `/api/news/article`.
+- **News Widget Reader Integration**: News widget stories now open inside the app in Intel view, with a retained external-open control when operators want the original site.
+- **GDELT Reader Integration**: `VIEW_SOURCE` in GDELT detail panels now opens in the same in-app reader flow.
+- **Tactical + Intel Parity**: Extended the article viewer workflow to Tactical view so GDELT article review behaves consistently across both maps.
+
+### UI/UX Improvements
+
+- **Aggregate News Feed**: Full News widget is now a single-column, time-sorted aggregate stream with tactical metadata rows.
+- **Intel Visual Alignment**: News widget header now matches Intel sidebar header conventions and the source label styling has been slimmed down.
+- **Reduced Visual Noise**: Live Threats now starts collapsed by default and no longer shows the misleading count badge.
+- **Balanced Intel Layout**: News widget height is capped at `75vh`, it hides while SITREP is active, Intel map nav is raised by 10px, and the article viewer aligns with the shared sidebar top baseline.
 
 ### Technical Details
 
 - **Backend/API**:
-  - Removed SMAPS router registration and module.
-  - Updated maritime report compatibility naming to `incident_max_score`.
-  - Removed SMAPS schema context and endpoint references from analyst context builders.
-- **Ingestion**:
-  - Removed retired SMAPS scheduling path and parsing/upsert helpers from `infra_poller`.
-  - Removed SMAPS test suite under `backend/ingestion/infra_poller/tests`.
+  - Added `/api/news/article` for HTML fetch + readable text extraction.
+  - Added basic HTML cleaning, title extraction, and content-length caps for reader-mode responses.
 - **Frontend**:
-  - Removed retired SMAPS hook and layer modules.
-  - Removed SMAPS entity/filter/type branches from map composition, tooltip, and right-sidebar rendering.
-  - Updated maritime report hook typings to generic incident compatibility labels.
-- **Database**:
-  - Deleted `smaps_incidents` table/index definitions from `backend/db/init.sql`.
-  - Executed live cleanup: `DROP TABLE IF EXISTS smaps_incidents CASCADE;`.
+  - Added shared article viewer state and overlay rendering in `App.tsx`.
+  - Added `onOpenArticle` handling in `NewsWidget`.
+  - Added `onOpenSource` callback plumbing through `SidebarRight` and `GdeltView`.
+  - Added per-view positioning override support to shared `MapControls`.
 
 ### Verification
 
 - Frontend: `cd frontend && pnpm run lint && pnpm run test` (pass, 36 tests)
-- Backend API: `cd backend/api && ruff check . && python -m pytest` (pass, 46 tests)
-- Infra poller: `cd backend/ingestion/infra_poller && ruff check . && python -m pytest` (pass, 50 tests)
-- Live database: `docker compose exec -T sovereign-timescaledb psql -U postgres -d sovereign_watch -c "\\dt *smaps*"` (no relations found)
+- Backend API: `cd backend/api && python -m ruff check . && python -m pytest` (pass, 46 tests)
 
 ### Upgrade Instructions
 
-To upgrade to v0.56.0:
+To upgrade to v0.57.0:
 
 1. Pull the latest code:
    `git pull origin main`
 2. Rebuild and restart services:
    `docker compose up -d --build`
-3. Validate service health and map overlays:
-   - Confirm buoy data and maritime conditions panel are rendering.
-   - Confirm no SMAPS entities/routes are expected in runtime output.
+3. Validate OSINT workflows:
+   - Open a News widget story in Intel view and confirm reader-mode content loads.
+   - Open GDELT `VIEW_SOURCE` in both Intel and Tactical views and confirm the in-app reader opens.
+   - Verify the Intel News widget layout and article viewer alignment match the HUD grid.
