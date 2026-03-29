@@ -12,6 +12,7 @@ import { IntelGlobe } from "./components/map/IntelGlobe";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
+import { LoginView } from "./components/views/LoginView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
@@ -19,6 +20,7 @@ import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useAppFilters } from "./hooks/useAppFilters";
+import { useAuth } from "./hooks/useAuth";
 import { useEntitySelection } from "./hooks/useEntitySelection";
 import { useEntityWorker } from "./hooks/useEntityWorker";
 import { useInfraData } from "./hooks/useInfraData";
@@ -46,6 +48,9 @@ interface IntelArticleContent {
 }
 
 function App() {
+  // ── Authentication gate ───────────────────────────────────────────────────
+  const { status: authStatus } = useAuth();
+
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
   const {
@@ -475,6 +480,23 @@ function App() {
   }, [activeIntelArticle]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // Show a full-screen loading spinner while checking stored credentials
+  if (authStatus === 'initialising') {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+        <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+          Authenticating…
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login when unauthenticated
+  if (authStatus === 'unauthenticated') {
+    return <LoginView />;
+  }
+
   return (
     <>
       {isTerminalOpen && (

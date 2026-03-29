@@ -1,4 +1,6 @@
 import os
+import secrets
+
 
 class Settings:
     # Database
@@ -31,5 +33,18 @@ class Settings:
 
     # Kafka
     KAFKA_BROKERS = os.getenv('KAFKA_BROKERS', 'sovereign-redpanda:9092')
+
+    # Authentication
+    # When AUTH_ENABLED=false all authentication checks are skipped (local dev only).
+    AUTH_ENABLED: bool = os.getenv('AUTH_ENABLED', 'true').lower() not in ('false', '0', 'no')
+    # Secret key for signing JWTs — MUST be overridden in production via env var.
+    JWT_SECRET_KEY: str = os.getenv('JWT_SECRET_KEY', secrets.token_urlsafe(32))
+    JWT_ALGORITHM: str = os.getenv('JWT_ALGORITHM', 'HS256')
+    # Access token lifetime in minutes (default 8 hours)
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '480'))
+    # First-run admin bootstrap credentials (only used when the users table is empty)
+    BOOTSTRAP_ADMIN_USERNAME: str = os.getenv('BOOTSTRAP_ADMIN_USERNAME', 'admin')
+    BOOTSTRAP_ADMIN_PASSWORD: str | None = os.getenv('BOOTSTRAP_ADMIN_PASSWORD')
+
 
 settings = Settings()

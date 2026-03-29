@@ -3,11 +3,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from core.auth import get_user_by_username, hash_password
+from core.config import settings
 from core.database import db
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     analysis,
+    auth,
     buoys,
     gdelt,
     holding_patterns,
@@ -93,6 +96,30 @@ async def lifespan(app: FastAPI):
     await broadcast_service.start()
     logger.info("Database, Redis, Historian, RF Cleanup, and Broadcast Service started")
 
+    # Bootstrap initial admin account when the users table is empty and a
+    # BOOTSTRAP_ADMIN_PASSWORD is provided via environment variable.
+    if db.pool and settings.BOOTSTRAP_ADMIN_PASSWORD:
+        try:
+            async with db.pool.acquire() as conn:
+                count = await conn.fetchval("SELECT COUNT(*) FROM users")
+            if count == 0:
+                existing = await get_user_by_username(settings.BOOTSTRAP_ADMIN_USERNAME)
+                if not existing:
+                    hashed = hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD)
+                    async with db.pool.acquire() as conn:
+                        await conn.execute(
+                            "INSERT INTO users (username, hashed_password, role, is_active) "
+                            "VALUES ($1, $2, 'admin', TRUE)",
+                            settings.BOOTSTRAP_ADMIN_USERNAME,
+                            hashed,
+                        )
+                    logger.info(
+                        "Bootstrap admin account '%s' created",
+                        settings.BOOTSTRAP_ADMIN_USERNAME,
+                    )
+        except Exception as e:
+            logger.warning("Could not bootstrap admin account: %s", e)
+
     yield
 
     # --- Shutdown ---
@@ -153,6 +180,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth.router)
 app.include_router(system.router)
 app.include_router(tracks.router)
 app.include_router(analysis.router)

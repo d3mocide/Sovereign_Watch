@@ -14,6 +14,8 @@ import {
     Terminal,
     LayoutDashboard,
     Newspaper,
+    LogOut,
+    User,
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
@@ -22,6 +24,7 @@ import { AlertsWidget } from '../widgets/AlertsWidget';
 import { SystemSettingsWidget } from '../widgets/SystemSettingsWidget';
 import { SystemHealthWidget } from '../widgets/SystemHealthWidget';
 import { KpIndexWidget } from '../widgets/KpIndexWidget';
+import { useAuth } from '../../hooks/useAuth';
 
 interface TopBarProps {
     filters: Record<string, boolean | string | number | string[]>;
@@ -67,6 +70,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     isTerminalOpen, onTerminalClick,
 }) => {
     const [time, setTime] = useState(new Date());
+    const { user, logout } = useAuth();
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -415,6 +419,31 @@ export const TopBar: React.FC<TopBarProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* User badge + logout */}
+                {user && (
+                    <div className="flex items-center gap-1.5 ml-1 pl-3 border-l border-white/10">
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/30 border border-white/10 rounded-lg">
+                            <User size={12} className="text-white/50" />
+                            <span className="text-[10px] font-mono text-white/70 tracking-wide">{user.username}</span>
+                            <span className={`text-[8px] font-bold uppercase tracking-widest px-1 py-0.5 rounded ${
+                                user.role === 'admin'
+                                    ? 'text-red-400 bg-red-950/60'
+                                    : user.role === 'operator'
+                                        ? 'text-amber-400 bg-amber-950/60'
+                                        : 'text-emerald-400 bg-emerald-950/60'
+                            }`}>{user.role}</span>
+                        </div>
+                        <button
+                            onClick={() => logout()}
+                            title="Logout"
+                            aria-label="Logout"
+                            className="p-1 rounded-md text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
+                        >
+                            <LogOut size={13} />
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
