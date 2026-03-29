@@ -171,6 +171,8 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       # UTC hour (0-23) at which the weekly FCC tower sync is allowed to run.
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
+      # NDBC latest observations polling interval in minutes.
+      - POLL_INTERVAL_NDBC_MINUTES=${POLL_INTERVAL_NDBC_MINUTES:-15}
     networks:
       - sovereign-net-backend
     depends_on:

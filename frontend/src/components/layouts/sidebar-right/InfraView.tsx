@@ -91,34 +91,39 @@ export const InfraView: React.FC<BaseViewProps> = ({
                       : "SUBMARINE_CABLE"}
               </h3>
               <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
-                <div className="flex gap-2">
-                  <span className="text-white/30 w-16">
-                    {isBuoy
-                      ? "Location:"
-                      : isOutage
-                        ? "Impact:"
-                        : isStation
-                          ? "Country:"
-                          : "Location:"}
-                  </span>
-                  <span className="text-white/80">
-                    {String(
-                      props.region || props.country || props.status || "ACTIVE",
-                    )}
-                  </span>
-                </div>
-                {isOutage && (
+                <>
                   <div className="flex gap-2">
-                    <span className="text-white/30 w-16">Severity:</span>
-                    <span className={accentColor}>{severity}%</span>
+                    <span className="text-white/30 w-16">
+                      {isBuoy
+                        ? "Location:"
+                        : isOutage
+                          ? "Impact:"
+                          : isStation
+                            ? "Country:"
+                            : "Location:"}
+                    </span>
+                    <span className="text-white/80">
+                      {String(
+                        props.region ||
+                          props.country ||
+                          props.status ||
+                          "ACTIVE",
+                      )}
+                    </span>
                   </div>
-                )}
-                {!isStation && props.rfs && !isOutage && (
-                  <div className="flex gap-2">
-                    <span className="text-white/30 w-16">RFS:</span>
-                    <span className="text-white/80">{props.rfs}</span>
-                  </div>
-                )}
+                  {isOutage && (
+                    <div className="flex gap-2">
+                      <span className="text-white/30 w-16">Severity:</span>
+                      <span className={accentColor}>{severity}%</span>
+                    </div>
+                  )}
+                  {!isStation && props.rfs && !isOutage && (
+                    <div className="flex gap-2">
+                      <span className="text-white/30 w-16">RFS:</span>
+                      <span className="text-white/80">{props.rfs}</span>
+                    </div>
+                  )}
+                </>
               </div>
             </section>
           </div>

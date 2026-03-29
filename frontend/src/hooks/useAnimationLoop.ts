@@ -3,6 +3,11 @@ import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
 import React, { MutableRefObject, useEffect, useRef } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
+import {
+  processEntityFrame,
+  processReplayFrame,
+} from "../engine/EntityFilterEngine";
+import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import {
@@ -16,11 +21,6 @@ import {
   Tower,
   VisualState,
 } from "../types";
-import {
-  processEntityFrame,
-  processReplayFrame,
-} from "../engine/EntityFilterEngine";
-import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 
 interface UseAnimationLoopOptions {
@@ -358,7 +358,11 @@ export function useAnimationLoop({
 
         // Live sidebar update for selected entity (throttled to ~30 fps)
         const currentSelected = selectedEntityRef.current;
-        if (currentSelected && _onEntityLiveUpdate && Math.floor(now / 33) % 2 === 0) {
+        if (
+          currentSelected &&
+          _onEntityLiveUpdate &&
+          Math.floor(now / 33) % 2 === 0
+        ) {
           const updatedSelected = interpolated.find(
             (e) => e.uid === currentSelected.uid,
           );

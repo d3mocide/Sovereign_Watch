@@ -13,6 +13,7 @@ import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
+import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useAppFilters } from "./hooks/useAppFilters";
@@ -21,8 +22,10 @@ import { useEntityWorker } from "./hooks/useEntityWorker";
 import { useInfraData } from "./hooks/useInfraData";
 import { useIntelEvents } from "./hooks/useIntelEvents";
 import { useJS8Stations } from "./hooks/useJS8Stations";
+import { useMaritimeRisk } from "./hooks/useMaritimeRisk";
 import { useMissionArea } from "./hooks/useMissionArea";
 import { parseMissionHash } from "./hooks/useMissionHash";
+import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
 import { usePassPredictions } from "./hooks/usePassPredictions";
 import { useReplayController } from "./hooks/useReplayController";
 import { useRFSites } from "./hooks/useRFSites";
@@ -30,7 +33,6 @@ import { useSatNOGS } from "./hooks/useSatNOGS";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useSystemHealth } from "./hooks/useSystemHealth";
 import { useTowers } from "./hooks/useTowers";
-import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
 import { useViewMode } from "./hooks/useViewMode";
 import type { CoTEntity, MapActions, MissionProps } from "./types";
 
@@ -38,11 +40,16 @@ function App() {
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
   const {
-    isAlertsOpen, setIsAlertsOpen,
-    isSystemSettingsOpen, setIsSystemSettingsOpen,
-    isSystemHealthOpen, setIsSystemHealthOpen,
-    isAIAnalystOpen, setIsAIAnalystOpen,
-    isTerminalOpen, setIsTerminalOpen,
+    isAlertsOpen,
+    setIsAlertsOpen,
+    isSystemSettingsOpen,
+    setIsSystemSettingsOpen,
+    isSystemHealthOpen,
+    setIsSystemHealthOpen,
+    isAIAnalystOpen,
+    setIsAIAnalystOpen,
+    isTerminalOpen,
+    setIsTerminalOpen,
   } = useSidebarState();
 
   // ── Intel event feed ──────────────────────────────────────────────────────
@@ -84,12 +91,17 @@ function App() {
 
   // ── Replay controller ─────────────────────────────────────────────────────
   const {
-    replayMode, setReplayMode,
-    isPlaying, setIsPlaying,
-    replayTime, setReplayTime,
+    replayMode,
+    setReplayMode,
+    isPlaying,
+    setIsPlaying,
+    replayTime,
+    setReplayTime,
     replayRange,
-    playbackSpeed, setPlaybackSpeed,
-    historyDuration, setHistoryDuration,
+    playbackSpeed,
+    setPlaybackSpeed,
+    historyDuration,
+    setHistoryDuration,
     replayEntities,
     replayTimeRef,
     loadReplayData,
@@ -116,7 +128,11 @@ function App() {
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
   // ── Track counts ──────────────────────────────────────────────────────────
-  const [trackCounts, setTrackCounts] = useState({ air: 0, sea: 0, orbital: 0 });
+  const [trackCounts, setTrackCounts] = useState({
+    air: 0,
+    sea: 0,
+    orbital: 0,
+  });
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -125,12 +141,16 @@ function App() {
       const STALE_THRESHOLD_AIR_MS = 120 * 1000;
       const STALE_THRESHOLD_SEA_MS = 300 * 1000;
 
-      let air = 0, sea = 0, orbital = 0;
+      let air = 0,
+        sea = 0,
+        orbital = 0;
       const stale: string[] = [];
 
       entitiesRef.current.forEach((entity, uid) => {
         const isShip = entity.type?.includes("S");
-        const threshold = isShip ? STALE_THRESHOLD_SEA_MS : STALE_THRESHOLD_AIR_MS;
+        const threshold = isShip
+          ? STALE_THRESHOLD_SEA_MS
+          : STALE_THRESHOLD_AIR_MS;
         if (now - entity.lastSeen > threshold) {
           stale.push(uid);
         } else {
@@ -148,7 +168,11 @@ function App() {
         if (sat.detail?.constellation !== "Starlink") orbital++;
       });
 
-      if (viewMode === "DASHBOARD" || viewMode === "RADIO" || viewMode === "INTEL") {
+      if (
+        viewMode === "DASHBOARD" ||
+        viewMode === "RADIO" ||
+        viewMode === "INTEL"
+      ) {
         if (
           air !== countsRef.current.air ||
           sea !== countsRef.current.sea ||
@@ -283,6 +307,14 @@ function App() {
   const { towers } = useTowers(mapBounds, filters.showTowers);
   const { buoyData } = useNDBCBuoys(mapBounds, filters.showBuoys === true);
 
+  // Maritime conditions panel — active only when a sea vessel is selected
+  const isSea = !!selectedEntity?.type?.includes("S");
+  const { report: riskReport, isLoading: riskLoading } = useMaritimeRisk(
+    isSea ? selectedEntity!.uid : null,
+    isSea ? selectedEntity!.lat : null,
+    isSea ? selectedEntity!.lon : null,
+  );
+
   const handleOpenAnalystPanel = useCallback(() => {
     setIsAIAnalystOpen(true);
   }, [setIsAIAnalystOpen]);
@@ -393,7 +425,7 @@ function App() {
           viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
               {selectedEntity && (selectedEntity as any).type !== "sitrep" && (
-                <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden">
+                <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col">
                   <SidebarRight
                     entity={selectedEntity}
                     onClose={() => {
@@ -404,13 +436,23 @@ function App() {
                     onCenterMap={() => {
                       setFollowMode(true);
                       if (selectedEntity && mapActions) {
-                        mapActions.flyTo(selectedEntity.lat, selectedEntity.lon);
+                        mapActions.flyTo(
+                          selectedEntity.lat,
+                          selectedEntity.lon,
+                        );
                       }
                     }}
                     onOpenAnalystPanel={handleOpenAnalystPanel}
                     onHistoryLoaded={setHistorySegments}
                     fetchSatnogsVerification={fetchVerification}
                   />
+                  {isSea && (
+                    <MaritimeRiskPanel
+                      report={riskReport}
+                      isLoading={riskLoading}
+                      callsign={selectedEntity.callsign || selectedEntity.uid}
+                    />
+                  )}
                 </div>
               )}
             </div>

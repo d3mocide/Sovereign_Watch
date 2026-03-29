@@ -1,6 +1,8 @@
 # Unified Implementation Roadmap
 ## Geospatial + Infrastructure Data Layers (Complete Initiative)
 
+Retirement note: the SMAPS maritime warnings workstream has been sunset. Current implementation guidance in this roadmap should treat remaining SMAPS references as delivery history, not active scope.
+
 **Date**: March 28, 2026
 **Scope**: 7 new data sources across 2 initiatives (Geospatial + Infrastructure)
 **Total Effort**: ~177 hours (6-7 weeks with parallel tracks)
@@ -18,13 +20,13 @@ WEEK 1-2    │ WEEK 3-4     │ WEEK 5-6     │ WEEK 7-8    │ WEEK 8-10
             │              │              │             │
 GEOSPATIAL  │ GEOSPATIAL   │ INFRA Ph1    │ GEOSPATIAL  │ INFRA Ph2
 Phase 1     │ Phase 2      │ + GEO Ph3    │ Phase 3 +   │ (deferred)
-(NDBC)      │ (ASAM)       │ (parallel)   │ INFRA Ph1   │
-30h         │ 32h          │ ongoing      │ completion  │
+(NDBC)      │ (retired)    │ (parallel)   │ INFRA Ph1   │
+30h         │ sunset       │ ongoing      │ completion  │
 ───────────────────────────────────────────────────────────────────
 Outcome:    │ Outcome:     │ Outcome:     │ Outcome:    │ Outcome:
-NDBC layer  │ + ASAM       │ + IXPs, DCs, │ Fusion      │ DNS, CDN,
-+ sea state │ + threat     │ Towers, ISS  │ queries +   │ Satellites,
-baseline    │ scoring      │ real-time    │ risk panel  │ Ground St.
+NDBC layer  │ Workstream   │ + IXPs, DCs, │ Fusion      │ DNS, CDN,
++ sea state │ retired      │ Towers, ISS  │ queries +   │ Satellites,
+baseline    │              │ real-time    │ risk panel  │ Ground St.
 ```
 
 ---
@@ -53,47 +55,37 @@ baseline    │ scoring      │ real-time    │ risk panel  │ Ground St.
 
 ---
 
-### Phase 2: ASAM Maritime Piracy (Weeks 3–4)
-**Poller Extension**: `infra_poller` → add `asam_loop()`
-**Deliverable**: Piracy threat intelligence + HexagonLayer/IconLayer
+### Phase 2: Maritime Advisory Workstream (Sunset)
+The SMAPS-backed maritime advisory effort was completed experimentally and later retired.
 
-| Component | Details | Effort |
-|-----------|---------|--------|
-| ASAM geopandas client | Shapefile ZIP download, extraction, parsing | 8h |
-| Threat scoring | Recency × severity algorithm | 6h |
-| Database | `asam_incidents` table, threat_score continuous agg | 6h |
-| Scheduler | Weekday 15:00 ET (NGA publish time) | 4h |
-| API Endpoint | GET /api/asam/incidents?bbox={bounds}&threat_min=5 | 4h |
-| Frontend Layers | HexagonLayer (zoom<6), IconLayer (zoom≥8), SVG atlas | 12h |
-| Testing | Shapefile parsing, threat calc, zoom switching | 8h |
-| **Phase 2 Total** | | **~48 hours** |
-
-**Success Criteria**:
-- ✅ ASAM incidents ingested weekly (Friday 15:00 ET)
-- ✅ Threat scores computed correctly (kidnapping > hijacking > robbery)
-- ✅ Zoom-based layer switching works
-- ✅ Click incident → details + nearby vessels highlighted
+Reason for sunset:
+- Upstream reliability and anti-bot behavior made the feed unsuitable for sustained runtime use.
+- The active product path now keeps only buoy-based maritime conditions and removes the retired advisory pipeline from runtime code, schema, and UI.
 
 ---
 
-### Phase 3: Cross-Domain Fusion Queries (Weeks 5–6, parallel with Infra Ph1)
-**Backend**: SQL queries + API endpoints
-**Frontend**: Risk assessment panel, threat highlighting
-**Deliverable**: Multi-source correlation + tactical HUD
+### Phase 3: Cross-Domain Fusion Queries (Weeks 5–6, parallel with Infra Ph1) ✅ COMPLETE
+**Backend**: Fusion SQL queries + 2 new API endpoints
+**Frontend**: MaritimeRiskPanel HUD + useMaritimeRisk hook
+**Deliverable**: Multi-source vessel risk correlation + tactical HUD
 
 | Component | Details | Effort |
 |-----------|---------|--------|
-| Fusion SQL | 3 workflows (vessel risk, sea state, multi-domain) | 12h |
-| API endpoints | GET /api/maritime/risk-assessment?mmsi={MMSI} | 6h |
-| Frontend Panel | Risk visualization, threat scoring UI | 8h |
-| Real-time updates | WebSocket integration with Zustand | 6h |
-| Testing | End-to-end scenario validation | 4h |
-| **Phase 3 Total** | | **~36 hours** |
+| Fusion SQL (legacy incident compatibility) | Compatibility scoring retained after advisory sunset | 6h |
+| Fusion SQL (NDBC) | Lateral join ndbc_obs × ndbc_hourly_baseline → Z-score | 6h |
+| API endpoint 1 | GET /api/maritime/risk-assessment?mmsi&lat&lon&radius_nm&days | 6h |
+| API endpoint 2 | GET /api/maritime/sea-state-anomaly?lat&lon&radius_nm | 4h |
+| useMaritimeRisk hook | Fetch + 30s auto-refresh while vessel selected, AbortController | 4h |
+| MaritimeRiskPanel | Conditions badge, score bar, advisory-list compatibility, sea state Z-score | 8h |
+| App.tsx integration | isSea detection via CoT type, panel shown below SidebarRight | 2h |
+| Testing | 20 unit tests: _threat_label + composite formula | 4h |
+| **Phase 3 Total** | | **~40 hours** |
 
 **Success Criteria**:
-- ✅ Risk assessment queries return vessel threat levels
-- ✅ HUD panel updates in real-time as vessels move
-- ✅ Sea state anomalies flagged correctly (Z-score > 2)
+- ✅ Risk assessment queries return vessel threat levels (LOW/MEDIUM/HIGH/CRITICAL)
+- ✅ HUD panel auto-refreshes every 30s while vessel selected
+- ✅ Sea state anomalies flagged correctly (Z-score > 2σ from ndbc_hourly_baseline)
+- ✅ 20 backend tests pass, 0 regressions (lint clean on API + frontend)
 
 **Geospatial Total**: **~122 hours**
 
@@ -145,10 +137,7 @@ GEO Phase 1      38h     W1     W2     ├─ NDBC poller
 (NDBC)                                  ├─ NDBC layer
                                         └─ Sea state anomaly
 
-GEO Phase 2      48h     W3     W4     ├─ ASAM poller
-(ASAM)                                  ├─ ASAM layer (HexLayer)
-                                        ├─ Threat scoring
-                                        └─ Icon atlas
+GEO Phase 2      sunset  W3     W4     └─ Retired maritime advisory workstream
 
 INFRA Phase 1    84h     W5     W8     ├─ PeeringDB loop
 (Internet Infra)                       ├─ OpenCelliD loop (H3)
@@ -174,9 +163,6 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 1. GEO Phase 1 (38h) → **Must complete before Phase 2**
    - NDBC hypertable + continuous aggregate foundation required by Phase 3 fusion queries
 
-2. GEO Phase 2 (48h) → **Must complete before Phase 3**
-   - ASAM table + threat scoring required for risk assessment queries
-
 3. INFRA Phase 1 (84h) → **Parallel execution possible**
    - Can run simultaneously with GEO Phases 2–3 (different data sources, different pollers)
 
@@ -194,7 +180,7 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 
 | Role | Weeks 1–4 | Weeks 5–8 | Weeks 9–10 |
 |------|-----------|-----------|------------|
-| **Backend Lead** | NDBC (W1–2) + ASAM (W3–4) | Oversee INFRA Ph1 + Phase 3 fusion | INFRA Ph2 planning |
+| **Backend Lead** | NDBC (W1–2) + advisory sunset follow-up | Oversee INFRA Ph1 + Phase 3 fusion | INFRA Ph2 planning |
 | **Backend Dev 2** | NDBC hypertable schema | OpenCelliD H3 aggregation + ISS | Ground station integration |
 | **Frontend Lead** | NDBC layer + composition | PeeringDB + OpenCelliD layers | ISS animation + optimization |
 | **Frontend Dev 2** | Threat UI (hover/click) | ISS WebSocket handler | DNS/CDN layer mockups |
@@ -203,8 +189,8 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 
 ### Effort by Workstream
 
-**Backend**: 74h (NDBC 8h + ASAM 8h + Fusion SQL 12h + Infra APIs 46h)
-**Frontend**: 42h (NDBC 10h + ASAM 12h + Fusion panel 8h + ISS 12h)
+**Backend**: 74h (NDBC 8h + retired advisory work 8h + Fusion SQL 12h + Infra APIs 46h)
+**Frontend**: 42h (NDBC 10h + retired advisory UI work 12h + Fusion panel 8h + ISS 12h)
 **Database**: 34h (Geospatial 16h + Infrastructure 18h)
 **Testing/QA**: 22h (distributed across phases)
 **DevOps/Docs**: 5h
@@ -217,7 +203,6 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 
 **Geospatial Initiative**:
 - `ndbc_obs` (hypertable) — sea state observations
-- `asam_incidents` — piracy incidents
 - `nav_warnings` — safety warnings (optional Phase 2)
 
 **Infrastructure Initiative**:
@@ -230,7 +215,6 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 ### Redis Keys (Caching)
 
 - `ndbc:last_etag` — HTTP caching
-- `maritime:threat_zones` — 24h cache of high-threat ASAM areas
 - `infra:peeringdb_ixps` — 24h cache of IXP data
 - `infra:opencellid_towers` — 24h cache of aggregated towers
 - `infra:iss_latest` — 60s cache of latest ISS position
@@ -251,12 +235,11 @@ Actual (w/slack): ~177h (parallel reduces critical path)
       └─ Cell towers (HeatmapLayer, H3)
 8-11  Maritime Layer Group
       ├─ NDBC buoys (ScatterplotLayer)
-      ├─ ASAM density (HexagonLayer, zoom<6)
-      └─ ASAM incidents (IconLayer, zoom≥8)
+   └─ Maritime condition overlays (future)
 12-14 Threat/Alert Layer Group
-      ├─ Piracy threat rings (optional)
-      ├─ SMAPS jamming zones (PolygonLayer)
-      └─ NOTAM zones (ScatterplotLayer)
+   ├─ Threat rings (optional)
+   ├─ Jamming zones (PolygonLayer)
+   └─ NOTAM zones (ScatterplotLayer)
 15-17 Navigation/Orbital Layer Group
       ├─ ISS ground track (PathLayer)
       ├─ ISS position (IconLayer, animated)
@@ -274,7 +257,6 @@ Actual (w/slack): ~177h (parallel reduces critical path)
 **Geospatial Initiative**:
 ```
 GET /api/buoys/latest?bbox={W},{S},{E},{N}
-GET /api/asam/incidents?bbox={W},{S},{E},{N}&days=90&threat_min=5
 GET /api/maritime/risk-assessment?mmsi={MMSI}
 GET /api/maritime/sea-state-anomaly?lat={lat}&lon={lon}&radius_nm=100
 ```
@@ -299,7 +281,7 @@ WS /ws/infrastructure/iss-stream  # Real-time position updates
 | Redpanda | 800 MB | (no change) | (no change) | 800 MB |
 | Backend (FastAPI) | 400 MB | +20 MB | +30 MB | 450 MB |
 | Frontend | 200 MB | (no change) | (no change) | 200 MB |
-| infra_poller | 310 MB | +150 MB (NDBC+ASAM) | +161 MB | 621 MB |
+| infra_poller | 310 MB | +150 MB (NDBC-focused geospatial work) | +161 MB | 621 MB |
 | space_pulse | 200 MB | (no change) | (no change) | 200 MB |
 | **Total** | **2910 MB** | **+220 MB** | **+291 MB** | **3421 MB** |
 
@@ -312,7 +294,7 @@ WS /ws/infrastructure/iss-stream  # Real-time position updates
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| NDBC/ASAM combined hydration flooding database | High | Stagger Phase 1→2 (don't ingest both simultaneously) |
+| NDBC plus legacy advisory backfill flooding database | High | Stagger heavy ingest operations and keep sunset work off the runtime path |
 | OpenCelliD 3.3GB CSV memory bloat | High | Stream CSV parsing + H3 aggregation (res 6) |
 | ISS real-time 5s polling saturates network | Medium | Fan-out via Redis pub/sub, not direct client polling |
 | Jetson Nano memory pressure at Phase 1 end | Medium | Monitor docker stats, enable swap before Phase 2 |
@@ -324,38 +306,32 @@ WS /ws/infrastructure/iss-stream  # Real-time position updates
 
 ## Go/No-Go Criteria by Phase
 
-### Phase 1 (NDBC) Go/No-Go
+### Phase 1 (NDBC) Go/No-Go ✅ PASSED
 - ✅ NDBC observations flowing to PostgreSQL (100+ per hour)
 - ✅ Continuous aggregate computing rolling mean without errors
 - ✅ Frontend ScatterplotLayer renders 50+ buoys without lag
 - ✅ Hover tooltip displays all fields correctly
 - ✅ pnpm lint + test pass with zero regressions
 
-**Go Criteria**: All ✅ → Proceed to Phase 2
-**No-Go Criteria**: Any test failure → Debug + retry before Phase 2
+**Go Criteria**: All ✅ → Proceeded to Phase 2
 
 ---
 
-### Phase 2 (ASAM) Go/No-Go
-- ✅ First ASAM shapefile ingestion succeeds (verify row count matches NGA data)
-- ✅ Threat scores computed correctly (spot-check 10 incidents)
-- ✅ HexagonLayer renders density correctly at zoom < 6
-- ✅ IconLayer appears correctly at zoom ≥ 8
-- ✅ Zoom switching animates smoothly
-
-**Go Criteria**: All ✅ → Proceed to Phase 3 + INFRA Ph1
+### Phase 2 (Retired Advisory Workstream)
+- Experimental delivery completed and later sunset.
+- Current follow-up work removes the runtime route, ingest loop, layer code, and schema.
 
 ---
 
-### Phase 3 + INFRA Ph1 Go/No-Go
+### Phase 3 + INFRA Ph1 Go/No-Go ✅ Phase 3 PASSED
 - ✅ Fusion SQL queries return results for at-risk vessels
-- ✅ Risk panel updates in real-time (sub-100ms latency)
-- ✅ PeeringDB IXPs rendered without lag
-- ✅ OpenCelliD H3 aggregation correct (spot-check 5 cells)
-- ✅ ISS position updates every 5s via WebSocket
-- ✅ No performance degradation (deck.gl framerate ≥ 50 FPS)
+- ✅ Risk panel auto-refreshes every 30s (sub-500ms API latency target)
+- ☐ PeeringDB IXPs rendered without lag (INFRA Ph1 pending)
+- ☐ OpenCelliD H3 aggregation correct (INFRA Ph1 pending)
+- ☐ ISS position updates every 5s via WebSocket (INFRA Ph1 pending)
+- ✅ No performance degradation (lint + tests clean)
 
-**Go Criteria**: All ✅ → Production deployment Phase 1 complete
+**Go Criteria**: Phase 3 ✅ → Geospatial initiative complete → Begin INFRA Phase 1
 
 ---
 
@@ -374,16 +350,10 @@ WS /ws/infrastructure/iss-stream  # Real-time position updates
 3. Merge to staging branch
 4. Stakeholder review
 
-### Week 3 (GEO Phase 2 Begin)
-1. Add ASAM source module
-2. Update database schema (asam_incidents)
-3. Begin threat scoring algorithm
-4. Parallel: INFRA Phase 1 backend prep (PeeringDB/OpenCelliD modules)
-
-### Week 4 (GEO Phase 2 Complete)
-1. Complete ASAM layer (HexagonLayer + IconLayer)
-2. Testing + optimization
-3. Parallel: INFRA backend 30% complete
+### Week 3-4 (Retired workstream)
+1. Complete experimental maritime advisory evaluation
+2. Sunset unreliable runtime dependencies
+3. Parallel: INFRA Phase 1 backend prep (PeeringDB/OpenCelliD modules)
 
 ### Week 5–6 (GEO Phase 3 + INFRA Phase 1 Parallel)
 1. GEO: Implement fusion queries + risk panel
@@ -462,4 +432,6 @@ WS /ws/infrastructure/iss-stream  # Real-time position updates
 **Status**: Ready for sprint planning
 **Approval**: Pending team + leadership review
 **Estimated Completion**: Week 10 (end of June 2026)
+
+
 

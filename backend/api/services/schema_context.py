@@ -63,6 +63,62 @@ ORBITAL meta fields (entity_id = SAT-{norad_id}, e.g. "SAT-25544"):
 """
 
 # ---------------------------------------------------------------------------
+# NDBC buoy observations schema — mirrors backend/db/init.sql
+# ---------------------------------------------------------------------------
+_NDBC_SCHEMA = """
+NDBC_OBSERVATIONS TABLE SCHEMA (NOAA/NDBC ocean buoy telemetry):
+  time       TIMESTAMPTZ  — UTC observation timestamp (hypertable time column)
+  buoy_id    TEXT         — NDBC station identifier (e.g. "41047", "46042")
+  lat        FLOAT        — Buoy latitude in decimal degrees (WGS84)
+  lon        FLOAT        — Buoy longitude in decimal degrees (WGS84)
+  wvht_m     FLOAT        — Significant wave height in meters (NULL if sensor absent)
+  wtmp_c     FLOAT        — Sea surface temperature in °C (NULL if sensor absent)
+  wspd_ms    FLOAT        — Wind speed in m/s (convert: knots = m/s × 1.944)
+  wdir_deg   FLOAT        — Wind direction in degrees true (meteorological: from)
+  atmp_c     FLOAT        — Air temperature in °C
+  pres_hpa   FLOAT        — Barometric pressure in hPa (standard: ~1013 hPa)
+  geom       GEOMETRY     — PostGIS point (SRID 4326)
+
+NDBC_HOURLY_BASELINE VIEW (TimescaleDB continuous aggregate — hourly Z-score baseline):
+  buoy_id    TEXT         — Buoy identifier
+  bucket     TIMESTAMPTZ  — 1-hour time bucket
+  avg_wvht   FLOAT        — Mean wave height for that hour bucket
+  std_wvht   FLOAT        — Std dev of wave height (Z-score denominator)
+  avg_wtmp   FLOAT        — Mean SST for that hour bucket
+  std_wtmp   FLOAT        — Std dev of SST
+  avg_wspd   FLOAT        — Mean wind speed
+  std_wspd   FLOAT        — Std dev of wind speed
+  NOTE: Z-score = (observed - avg) / std. |Z| > 2 = anomalous, > 3 = severe anomaly.
+"""
+
+# ---------------------------------------------------------------------------
+# Maritime risk API endpoints — Phase 3 fusion
+# ---------------------------------------------------------------------------
+_MARITIME_RISK_API = """
+MARITIME RISK API ENDPOINTS (Phase 3 cross-domain fusion):
+
+GET /api/maritime/risk-assessment?mmsi=&lat=&lon=&radius_nm=&days=
+  — Composite maritime threat report for a vessel at (lat,lon)
+  — radius_nm: search radius in nautical miles (default 100nm)
+  — days: legacy advisory look-back parameter retained for compatibility
+  Response fields:
+    threat_label   TEXT   — CRITICAL | HIGH | MEDIUM | LOW
+    composite_score FLOAT — 0–10 composite (incident_max×0.7 + 2.0 if sea_anomaly, capped 10)
+    incident_max_score FLOAT — Maximum nearby incident score retained for compatibility
+    nearby_incidents [] — Nearby advisory incidents within radius (currently empty after feed sunset)
+    sea_state_anomaly BOOL — True if any nearby NDBC buoy shows |Z-score| > 2 on wvht/wspd
+
+GET /api/maritime/sea-state-anomaly?lat=&lon=&radius_nm=
+  — Returns sea state Z-scores from nearest NDBC buoys within radius
+  Response fields:
+    buoy_id        TEXT   — NDBC station ID
+    wvht_z         FLOAT  — Wave height Z-score vs hourly baseline (NULL if no data)
+    wspd_z         FLOAT  — Wind speed Z-score vs hourly baseline (NULL if no data)
+    anomaly        BOOL   — True if |wvht_z| > 2 or |wspd_z| > 2
+
+"""
+
+# ---------------------------------------------------------------------------
 # Anomaly reference table
 # ---------------------------------------------------------------------------
 _ANOMALY_REFERENCE = """
@@ -88,11 +144,18 @@ Orbital:
   - Maneuver: Sudden orbital parameter change (delta-V event — rendezvous, inspection, or ASAT)
   - Decay: Altitude dropping faster than natural drag curve
   - Object type DEBRIS in unusual orbit: May indicate recent fragmentation event
+
+Environmental / Sea State:
+  - wvht Z-score > 3: Severe wave height anomaly — search/rescue significantly degraded
+  - wspd Z-score > 2: Wind speed anomaly — navigation hazard, affects small vessel stability
+  - Combined wvht + wspd anomaly: Developing storm cell or extreme weather event nearby
+  - SST (wtmp) anomaly: May indicate upwelling, HAB event, or sensor drift (cross-check pressure)
 """
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def get_schema_context(entity_type: str | None = None) -> str:
     """
@@ -108,12 +171,16 @@ def get_schema_context(entity_type: str | None = None) -> str:
         parts.append(_AVIATION_META.strip())
     elif entity_type == "maritime":
         parts.append(_MARITIME_META.strip())
+        parts.append(_NDBC_SCHEMA.strip())
+        parts.append(_MARITIME_RISK_API.strip())
     elif entity_type == "orbital":
         parts.append(_ORBITAL_META.strip())
     else:
         parts.append(_AVIATION_META.strip())
         parts.append(_MARITIME_META.strip())
         parts.append(_ORBITAL_META.strip())
+        parts.append(_NDBC_SCHEMA.strip())
+        parts.append(_MARITIME_RISK_API.strip())
 
     parts.append(_ANOMALY_REFERENCE.strip())
     return "\n\n".join(parts)

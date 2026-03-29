@@ -1,5 +1,5 @@
 # Poller Consolidation Strategy
-## NDBC + ASAM + NOTAM Integration into Existing Pollers
+## NDBC + SMAPS + NOTAM Integration into Existing Pollers
 
 **Date**: March 28, 2026
 **Context**: Implementing research from `research-geospatial-data-layers-implementation.md`
@@ -13,8 +13,8 @@
 
 | Consolidation Strategy | Effort | Complexity | Container Count | Notes |
 |---|---|---|---|---|
-| **Option A: Extend infra_poller for NDBC+ASAM** | ~50 hrs | Medium | +0 containers | **RECOMMENDED** |
-| **Option B: New maritime_data_poller for NDBC+ASAM+NOTAM** | ~60 hrs | Low | +1 container | Cleanest separation |
+| **Option A: Extend infra_poller for NDBC+SMAPS** | ~50 hrs | Medium | +0 containers | **RECOMMENDED** |
+| **Option B: New maritime_data_poller for NDBC+SMAPS+NOTAM** | ~60 hrs | Low | +1 container | Cleanest separation |
 | **Option C: Extend all three (aviation+maritime+infra)** | ~75 hrs | High | +0 containers | Overcomplicates existing pollers |
 
 ---
@@ -23,14 +23,14 @@
 
 ### Rationale
 
-**infra_poller is the optimal host for NDBC + ASAM:**
+**infra_poller is the optimal host for NDBC + SMAPS:**
 
 | Criterion | Score | Rationale |
 |-----------|-------|-----------|
 | **Domain alignment** | ✅ | Maritime infrastructure (cables + outages + hazards) |
 | **Architecture fitness** | ✅✅ | Already multi-source (3 independent async loops) |
-| **Polling pattern** | ✅✅ | Interval-based (1h, 30m, 7d) matches NDBC (15m) + ASAM (1h) |
-| **Data model** | ✅✅ | Uses PostgreSQL + Redis; NDBC/ASAM tables fit seamlessly |
+| **Polling pattern** | ✅✅ | Interval-based (1h, 30m, 7d) matches NDBC (15m) + SMAPS (1h) |
+| **Data model** | ✅✅ | Uses PostgreSQL + Redis; NDBC/SMAPS tables fit seamlessly |
 | **Test impact** | ✅ | No new test files needed, extend existing `test_infra.py` |
 | **Container overhead** | ✅✅ | Zero new containers, reuse existing infra_poller service |
 | **Separation of concerns** | ⚠️ | Expands from "cables/outages/towers" to "maritime infra + hazards" (still cohesive) |
@@ -206,10 +206,10 @@ class NDBCSource:
                 })
 ```
 
-### Step 2: Create ASAM Source Module (`backend/ingestion/infra_poller/sources/asam.py`)
+### Step 2: Create SMAPS Source Module (`backend/ingestion/infra_poller/sources/smaps.py`)
 
 ```python
-# New file: backend/ingestion/infra_poller/sources/asam.py
+# New file: backend/ingestion/infra_poller/sources/smaps.py
 
 import asyncio
 import zipfile
@@ -221,13 +221,13 @@ import geopandas as gpd
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-class ASAMSource:
+class SMAPSSource:
     """
-    Downloads NGA ASAM piracy shapefile weekly.
-    Parses with geopandas → writes to asam_incidents table.
+    Downloads NGA SMAPS piracy shapefile weekly.
+    Parses with geopandas → writes to smaps_incidents table.
     """
 
-    SHAPEFILE_URL = "https://msi.nga.mil/api/public/asam/asam-shapefiles/latest.zip"
+    SHAPEFILE_URL = "https://msi.nga.mil/api/public/SMAPS/SMAPS-shapefiles/latest.zip"
 
     def __init__(self, session: AsyncSession, redis_client, db_engine):
         self.session = session
@@ -235,12 +235,12 @@ class ASAMSource:
         self.db_engine = db_engine
 
     async def fetch_shapefile(self) -> Optional[bytes]:
-        """Download ASAM shapefile ZIP."""
+        """Download SMAPS shapefile ZIP."""
         timeout = aiohttp.ClientTimeout(total=60.0)  # Large ZIP
         async with aiohttp.ClientSession(timeout=timeout) as client:
             async with client.get(self.SHAPEFILE_URL) as resp:
                 if resp.status == 404:
-                    print("ASAM shapefile not found (may be scheduled maintenance)")
+                    print("SMAPS shapefile not found (may be scheduled maintenance)")
                     return None
                 resp.raise_for_status()
                 return await resp.read()
@@ -264,7 +264,7 @@ class ASAMSource:
         async with self.db_engine.begin() as conn:
             for _, row in gdf.iterrows():
                 insert_stmt = text("""
-                    INSERT INTO asam_incidents (
+                    INSERT INTO smaps_incidents (
                         date, geom, attack_type, vessel_name,
                         description, imb_ref, threat_score, h3_res5
                     )
@@ -304,7 +304,7 @@ class ASAMSource:
                 # Find .shp file in temp dir
                 shp_files = list(Path(tmpdir).glob("**/*.shp"))
                 if not shp_files:
-                    print("No shapefile found in ASAM ZIP")
+                    print("No shapefile found in SMAPS ZIP")
                     return None
 
                 gdf = gpd.read_file(str(shp_files[0]))
@@ -314,7 +314,7 @@ class ASAMSource:
 
                 return gdf
         except Exception as e:
-            print(f"Error parsing ASAM shapefile: {e}")
+            print(f"Error parsing SMAPS shapefile: {e}")
             return None
 
     @staticmethod
@@ -362,7 +362,7 @@ class ASAMSource:
 
 # Add to imports:
 from sources.ndbc import NDBCSource
-from sources.asam import ASAMSource
+from sources.SMAPS import SMAPSSource
 
 # In InfraPollerService class, add new methods:
 
@@ -376,7 +376,7 @@ class InfraPollerService:
             self.ioda_loop(),
             self.fcc_loop(),
             self.ndbc_loop(),      # NEW
-            self.asam_loop(),       # NEW
+            self.smaps_loop(),       # NEW
         ]
         await asyncio.gather(*tasks)
 
@@ -409,35 +409,35 @@ class InfraPollerService:
                 )
                 await asyncio.sleep(300)  # Backoff 5 min on error
 
-    async def asam_loop(self):
-        """Download ASAM shapefile weekly (schedule: 15:00 ET weekdays)."""
-        asam = ASAMSource(self.session, self.redis_client, self.db_engine)
+    async def smaps_loop(self):
+        """Download SMAPS shapefile weekly (schedule: 15:00 ET weekdays)."""
+        SMAPS = SMAPSSource(self.session, self.redis_client, self.db_engine)
 
         while self.running:
             try:
-                if not self._should_run_asam():
+                if not self._should_run_SMAPS():
                     await asyncio.sleep(3600)  # Check every hour
                     continue
 
-                zip_bytes = await asam.fetch_shapefile()
+                zip_bytes = await SMAPS.fetch_shapefile()
                 if zip_bytes:
-                    await asam.parse_and_ingest(zip_bytes)
-                    print("Ingested ASAM incidents")
+                    await SMAPS.parse_and_ingest(zip_bytes)
+                    print("Ingested SMAPS incidents")
 
                 await self.redis_client.set(
-                    "poller:asam:last_fetch",
+                    "poller:SMAPS:last_fetch",
                     str(time.time())
                 )
             except Exception as e:
                 await self.redis_client.set(
-                    "poller:asam:last_error",
+                    "poller:SMAPS:last_error",
                     json.dumps({'error': str(e), 'time': datetime.now().isoformat()}),
                     ex=86400
                 )
                 await asyncio.sleep(600)
 
-    def _should_run_asam(self) -> bool:
-        """Check if we should run ASAM (weekday 15:00 ET)."""
+    def _should_run_SMAPS(self) -> bool:
+        """Check if we should run SMAPS (weekday 15:00 ET)."""
         from datetime import datetime
         import pytz
 
@@ -499,8 +499,8 @@ SELECT add_retention_policy('ndbc_obs', INTERVAL '30 days', if_not_exists => TRU
 -- Compression policy: compress after 4 hours
 SELECT add_compression_policy('ndbc_obs', INTERVAL '4 hours', if_not_exists => TRUE);
 
--- NGA ASAM piracy incidents
-CREATE TABLE IF NOT EXISTS asam_incidents (
+-- NGA SMAPS piracy incidents
+CREATE TABLE IF NOT EXISTS smaps_incidents (
   id              SERIAL PRIMARY KEY,
   date            DATE NOT NULL,
   geom            GEOMETRY(Point, 4326) NOT NULL,
@@ -514,19 +514,19 @@ CREATE TABLE IF NOT EXISTS asam_incidents (
   UNIQUE(date, geom, attack_type)
 );
 
-CREATE INDEX asam_geom_idx ON asam_incidents USING GIST (geom);
-CREATE INDEX asam_date_idx ON asam_incidents (date DESC);
-CREATE INDEX asam_h3_idx ON asam_incidents (h3_res5);
+CREATE INDEX SMAPS_geom_idx ON smaps_incidents USING GIST (geom);
+CREATE INDEX SMAPS_date_idx ON smaps_incidents (date DESC);
+CREATE INDEX SMAPS_h3_idx ON smaps_incidents (h3_res5);
 
 -- Threat score continuous aggregate (rolling 90-day piracy density)
-CREATE MATERIALIZED VIEW IF NOT EXISTS asam_threat_density AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS smaps_threat_density AS
 SELECT
   h3_res5,
   date_trunc('day', date) AS day,
   count(*) AS incident_count,
   max(threat_score) AS max_threat,
   ST_Centroid(ST_Collect(geom)) AS cluster_center
-FROM asam_incidents
+FROM smaps_incidents
 WHERE date > NOW()::DATE - INTERVAL '90 days'
 GROUP BY h3_res5, date_trunc('day', date)
 WITH DATA;
@@ -564,7 +564,7 @@ CREATE INDEX nav_warnings_valid_idx ON nav_warnings (valid_from, valid_to);
       CENTER_LAT: ${CENTER_LAT}
       CENTER_LON: ${CENTER_LON}
       NDBC_POLL_INTERVAL_SECONDS: 900      # NEW: 15 minutes
-      ASAM_POLL_SCHEDULE: "0 15 * * MON-FRI"  # NEW: 15:00 ET weekdays
+      SMAPS_POLL_SCHEDULE: "0 15 * * MON-FRI"  # NEW: 15:00 ET weekdays
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       - sovereign-redpanda
@@ -576,7 +576,7 @@ CREATE INDEX nav_warnings_valid_idx ON nav_warnings (valid_from, valid_to);
       interval: 30s
       timeout: 10s
       retries: 3
-    # Memory constraint (current ~150MB, adding ~60MB for NDBC+ASAM)
+    # Memory constraint (current ~150MB, adding ~60MB for NDBC+SMAPS)
     mem_limit: 256m
 ```
 
@@ -588,9 +588,9 @@ CREATE INDEX nav_warnings_valid_idx ON nav_warnings (valid_from, valid_to);
 [project]
 dependencies = [
     # ... existing dependencies ...
-    "geopandas>=0.14.0",        # NEW: for ASAM shapefile parsing
+    "geopandas>=0.14.0",        # NEW: for SMAPS shapefile parsing
     "h3>=3.7.0",                # NEW: for H3 cell computation
-    "pytz>=2023.3",             # NEW: for ASAM schedule TZ handling
+    "pytz>=2023.3",             # NEW: for SMAPS schedule TZ handling
     # Existing: aiohttp, sqlalchemy, redis, psycopg2
 ]
 
@@ -608,7 +608,7 @@ dev = [
 import pytest
 from datetime import datetime
 from ..sources.ndbc import NDBCSource
-from ..sources.asam import ASAMSource
+from ..sources.SMAPS import SMAPSSource
 
 class TestNDBCSource:
     """Test NDBC fetching and parsing."""
@@ -628,22 +628,22 @@ class TestNDBCSource:
         assert obs['41004']['wspd_ms'] == 4.1
 
     def test_compute_threat_score(self):
-        """Test ASAM threat scoring logic."""
-        from ..sources.asam import ASAMSource
+        """Test SMAPS threat scoring logic."""
+        from ..sources.SMAPS import SMAPSSource
 
         # Recent kidnapping: high score
         date_recent = (datetime.now().date())
-        score = ASAMSource._compute_threat_score('Kidnapping', date_recent)
+        score = SMAPSSource._compute_threat_score('Kidnapping', date_recent)
         assert score == 30  # 10 * 3
 
         # Old armed robbery: low score
         date_old = (datetime.now().date() - timedelta(days=91))
-        score = ASAMSource._compute_threat_score('Armed Robbery', date_old)
+        score = SMAPSSource._compute_threat_score('Armed Robbery', date_old)
         assert score == 0  # Outside 90-day window
 
 
-class TestASAMSource:
-    """Test ASAM shapefile parsing."""
+class TestSMAPSSource:
+    """Test SMAPS shapefile parsing."""
 
     async def test_parse_shapefile_sync(self, tmp_path):
         """Test shapefile ZIP extraction and geopandas parsing."""
@@ -683,14 +683,14 @@ CMD ["python", "main.py"]
 | Aspect | Details |
 |--------|---------|
 | **Files Modified** | `main.py`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml` |
-| **Files Created** | `sources/ndbc.py`, `sources/asam.py`, test expansions |
-| **Database Changes** | 4 new tables + 2 continuous aggregates (ndbc_obs, asam_incidents, nav_warnings) |
+| **Files Created** | `sources/ndbc.py`, `sources/smaps.py`, test expansions |
+| **Database Changes** | 4 new tables + 2 continuous aggregates (ndbc_obs, smaps_incidents, nav_warnings) |
 | **New Dependencies** | geopandas, h3, pytz |
 | **Effort** | ~50 hours |
 | **Container Changes** | 0 (extend existing infra_poller) |
 | **Test Impact** | Extend `test_infra.py` (+2 new test classes, ~30 lines each) |
 | **Memory Budget** | ~210 MB total (150 existing + 60 new) |
-| **Caveats** | Requires GDAL system library; ASAM schedule TZ-aware |
+| **Caveats** | Requires GDAL system library; SMAPS schedule TZ-aware |
 
 ---
 
@@ -709,22 +709,24 @@ backend/ingestion/notam_poller/
     └── test_notam.py               # Parser tests
 ```
 
-**Effort**: ~25 hours (REST API, simpler than ASAM shapefile)
+**Effort**: ~25 hours (REST API, simpler than SMAPS shapefile)
 **Container**: +1 (sovereign-notam-poller)
 **Memory**: ~80 MB
-**Schedule**: 5-min poll (vs ASAM 1h)
+**Schedule**: 5-min poll (vs SMAPS 1h)
 
 ---
 
 ## Recommendation Summary
 
-| Option | NDBC | ASAM | NOTAM | Containers | Total Effort | Go/No-Go |
+| Option | NDBC | SMAPS | NOTAM | Containers | Total Effort | Go/No-Go |
 |--------|------|------|-------|-----------|--------------|----------|
 | **A: Extend infra_poller** | ✅ infra_poller | ✅ infra_poller | ❌ defer | +0 | ~50h | ✅ **RECOMMENDED** |
 | **B: New maritime_data_poller** | ✅ maritime_data | ✅ maritime_data | ✅ maritime_data | +1 | ~60h | ✅ Alternative |
 | **C: Extend all three** | aviation | infra | maritime | +0 | ~75h | ❌ Overcomplicates |
 
-**Recommendation**: **Option A** — Extend infra_poller for NDBC + ASAM, then defer NOTAM to Phase 2 (or create separate lightweight notam_poller if Phase 1 needs it).
+**Recommendation**: **Option A** — Extend infra_poller for NDBC + SMAPS, then defer NOTAM to Phase 2 (or create separate lightweight notam_poller if Phase 1 needs it).
 
 This preserves clean separation of concerns (maritime infrastructure stays cohesive) while avoiding container proliferation.
+
+
 

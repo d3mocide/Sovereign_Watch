@@ -1,13 +1,13 @@
 # Geospatial Data Layers Initiative — Executive Summary
 
 **Date**: March 28, 2026  
-**Status**: Research & Consolidation Analysis Complete ✅
+**Status**: Research complete. NDBC remains active; the SMAPS advisory workstream has been retired.
 
 ---
 
 ## TL;DR
 
-We have **researched and designed** a system to integrate three critical intelligence data sources (ocean buoys, maritime piracy warnings, FAA airspace restrictions) into Sovereign Watch using **1 extended poller (infra_poller) + 0 new containers**, **~89 hours of effort across 6 weeks**, and **$0 additional cost** (all open government APIs).
+We have researched a system to integrate ocean buoys and FAA airspace restrictions into Sovereign Watch, with an earlier SMAPS maritime advisory experiment now retired after operational issues.
 
 **Next Step**: Sprint planning. Ready to implement Phase 1 (NDBC ocean buoys) immediately.
 
@@ -38,7 +38,7 @@ Sovereign Watch excels at **air/space/RF intelligence** but lacks:
 
 ## Strategic Decision: Consolidation Option A
 
-**Chosen**: Extend `infra_poller` service to include NDBC + ASAM
+**Chosen**: Extend `infra_poller` service to include NDBC
 
 | Criterion | Option A (Chosen) | Option B (Alternative) | Option C (Not Recommended) |
 |-----------|------------------|------------------------|---------------------------|
@@ -69,22 +69,15 @@ Sovereign Watch excels at **air/space/RF intelligence** but lacks:
 
 **Success**: NDBC data flows → frontend map shows buoy dots colored by temperature
 
-### Phase 2: ASAM Maritime Piracy (Weeks 3–4, ~32 hours)
-**Deliverable**: Piracy threat intelligence + threat scoring
-
-- **Backend**: NGA ASAM shapefile poller (geopandas parsing, weekly schedule 15:00 ET Fridays)
-- **Database**: `asam_incidents` table (90-day threat scores: recency × severity)
-- **Frontend**: HexagonLayer (zoom < 6 density heatmap), IconLayer (zoom ≥ 8 per-incident)
-- **API**: GET /api/asam/incidents?bbox={bounds}&threat_min=5
-
-**Success**: Incidents populated weekly, zoom-based layer switching works
+### Phase 2: Maritime Advisory Workstream (Retired)
+The SMAPS-backed maritime advisory workstream was sunset after upstream reliability and anti-bot issues made it unsuitable for production runtime use.
 
 ### Phase 3: Cross-Domain Fusion (Weeks 5–6, ~27 hours)
 **Deliverable**: Multi-source correlation queries + HUD enrichment
 
 - **SQL**: 3 fusion queries (vessel risk assessment, sea state anomalies, multi-domain threats)
 - **Frontend**: Risk panel (vessels in piracy zones), sea state anomaly highlighting
-- **Integration**: NDBC + ASAM + AIS real-time correlation
+- **Integration**: NDBC + AIS real-time correlation
 
 **Success**: Risk assessment panel updates in real-time as vessels move
 
@@ -106,9 +99,9 @@ Sovereign Watch excels at **air/space/RF intelligence** but lacks:
 | **Total Effort** | ~89 hours | Phases 1–3 (Phase 4 optional) |
 | **New Containers** | 0 | Uses existing infra_poller |
 | **Memory Add** | +60 MB | 150 MB → 210 MB (fits within Jetson budget) |
-| **Data Sources** | 3 primary + 3 sidecars (future) | NDBC, ASAM, NOTAM primaries |
-| **Polling Overhead** | ~5 min per loop | 15-min NDBC, 1h ASAM, 5-min NOTAM |
-| **Database Growth** | ~1 GB/year | NDBC 30-day rolling, ASAM historical |
+| **Data Sources** | 2 active primaries + future sidecars | NDBC, NOTAM primaries |
+| **Polling Overhead** | ~5 min per loop | 15-min NDBC, 5-min NOTAM |
+| **Database Growth** | ~1 GB/year | NDBC 30-day rolling |
 | **Timeline** | 6 weeks | Phased delivery (2 weeks per phase) |
 | **Cost** | $0 | All open government APIs, no commercial dependencies |
 
@@ -118,24 +111,20 @@ Sovereign Watch excels at **air/space/RF intelligence** but lacks:
 
 ### Database Tables (New)
 ```sql
-ndbc_obs          -- 30-day rolling hypertable (15-min refresh)
-asam_incidents    -- Piracy incidents (historical, 90-day threat scores)
-nav_warnings      -- Safety warnings (active only)
+ndbc_obs         -- 30-day rolling hypertable (15-min refresh)
+nav_warnings     -- Safety warnings (active only)
 notams            -- FAA airspace restrictions (14-day retention)
 ```
 
 ### Frontend Layers (New)
 ```
 ScatterplotLayer  -- NDBC buoys (radius=WVHT m, color=WTMP °C)
-HexagonLayer      -- ASAM density (zoom < 6)
-IconLayer         -- ASAM incidents (zoom ≥ 8)
 ScatterplotLayer  -- NOTAM zones (Phase 4, radiusUnits: meters)
 ```
 
 ### API Endpoints (New)
 ```
 GET /api/buoys/latest
-GET /api/asam/incidents
 GET /api/maritime/risk-assessment
 GET /api/notams
 ```
@@ -143,16 +132,14 @@ GET /api/notams
 ### Fusion Queries (New)
 ```sql
 -- Vessel risk assessment
-SELECT * FROM ais_tracks WHERE ST_DWithin(asam.geom, track.geom, 50km)
-  AND asam.threat_score > threshold
-  AND asam.date > NOW()::DATE - INTERVAL '90 days'
+SELECT * FROM ais_tracks WHERE nearby_buoy_anomaly = true
 
 -- Sea state anomaly detection
 SELECT * FROM ndbc_obs WHERE Z_score(wvht_meters) > 2
   AND nearby_ais_gaps > 0
 
 -- Multi-domain incident correlation
-SELECT * FROM ais_tracks JOIN asam_incidents JOIN notams
+SELECT * FROM ais_tracks JOIN notams
   WHERE all geometries overlap AND time overlaps
 ```
 
@@ -163,11 +150,9 @@ SELECT * FROM ais_tracks JOIN asam_incidents JOIN notams
 | Risk | Mitigation |
 |------|-----------|
 | NDBC station metadata lookup slow | Cache metadata in Redis, refresh weekly |
-| ASAM shapefile parsing fails | Try/catch, log to Redis, skip week |
 | NGA API maintenance downtime | Graceful degradation, skip to next fetch |
 | Jetson Nano memory pressure | Monitor with `docker stats`, add swap if needed |
 | GDAL library missing | Update Dockerfile to explicitly install gdal-bin |
-| Time zone issues (ASAM schedule ET) | Use pytz, test schedule logic thoroughly |
 
 ---
 
@@ -201,11 +186,8 @@ SELECT * FROM ais_tracks JOIN asam_incidents JOIN notams
 - ✅ Hover tooltip displays WVHT, WTMP, WSPD
 - ✅ No regressions in existing layers (via pnpm test + lint)
 
-**Phase 1 + 2 Complete**:
-- ✅ ASAM incidents ingested weekly
-- ✅ Threat scores computed correctly
-- ✅ Zoom-based layer switching works (HexagonLayer → IconLayer)
-- ✅ Click on incident shows details + nearby vessels
+**Retired advisory workstream**:
+- No longer part of active implementation scope.
 
 **Phase 3 Complete**:
 - ✅ Risk assessment queries return vessel threat levels
@@ -243,3 +225,5 @@ Refer to the appropriate document section:
 **Date**: March 28, 2026  
 **Approval Status**: Ready for team review  
 **Next Milestone**: Sprint planning + Phase 1 kickoff  
+
+

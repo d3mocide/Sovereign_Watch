@@ -16,14 +16,14 @@ import { buildAuroraLayer } from "./buildAuroraLayer";
 import { buildEntityLayers } from "./buildEntityLayers";
 import { buildGdeltLayer } from "./buildGdeltLayer";
 import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
+import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
 import { buildInfraLayers } from "./buildInfraLayers";
 import { buildJammingLayer } from "./buildJammingLayer";
 import { buildJS8Layers } from "./buildJS8Layers";
+import { buildNDBCLayer } from "./buildNDBCLayer";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
-import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
-import { buildNDBCLayer } from "./buildNDBCLayer";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
 

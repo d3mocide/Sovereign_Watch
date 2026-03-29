@@ -2,12 +2,29 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+
+from core.database import db
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import system, tracks, analysis, rf, orbital, infra, news, space_weather, jamming, holding_patterns, satnogs, gdelt, stats, buoys
-from core.database import db
-from services.historian import historian_task, rf_sites_cleanup_task
+from routers import (
+    analysis,
+    buoys,
+    gdelt,
+    holding_patterns,
+    infra,
+    jamming,
+    maritime,
+    news,
+    orbital,
+    rf,
+    satnogs,
+    space_weather,
+    stats,
+    system,
+    tracks,
+)
 from services.broadcast import broadcast_service
+from services.historian import historian_task, rf_sites_cleanup_task
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -88,8 +105,10 @@ async def lifespan(app: FastAPI):
     await broadcast_service.stop()
     await db.disconnect()
 
+
 # --- Application ---
 app = FastAPI(title="Sovereign Watch API", lifespan=lifespan)
+
 
 # Security Headers Middleware
 @app.middleware("http")
@@ -99,23 +118,33 @@ async def add_security_headers(request: Request, call_next):
     # Base security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
 
     # Relaxed CSP for Swagger UI / ReDoc
     if request.url.path in ["/docs", "/redoc", "/openapi.json"]:
         # Allow inline scripts/styles for Swagger UI
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+        )
         # Allow framing for these if needed, or keep DENY
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
         # Relaxed CSP for API endpoints to allow WebSocket connections
-        response.headers["Content-Security-Policy"] = "default-src 'self' ws: wss:; frame-ancestors 'none'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self' ws: wss:; frame-ancestors 'none'"
+        )
         response.headers["X-Frame-Options"] = "DENY"
 
     return response
 
+
 # CORS
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -137,7 +166,9 @@ app.include_router(satnogs.router)
 app.include_router(gdelt.router)
 app.include_router(stats.router)
 app.include_router(buoys.router)
+app.include_router(maritime.router)
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
