@@ -25,6 +25,7 @@ import { useJS8Stations } from "./hooks/useJS8Stations";
 import { useMaritimeRisk } from "./hooks/useMaritimeRisk";
 import { useMissionArea } from "./hooks/useMissionArea";
 import { parseMissionHash } from "./hooks/useMissionHash";
+import { useISSTracker } from "./hooks/useISSTracker";
 import { useNDBCBuoys } from "./hooks/useNDBCBuoys";
 import { usePassPredictions } from "./hooks/usePassPredictions";
 import { useReplayController } from "./hooks/useReplayController";
@@ -189,7 +190,7 @@ function App() {
   }, [entitiesRef, satellitesRef, knownUidsRef, viewMode]);
 
   // ── Infrastructure data ───────────────────────────────────────────────────
-  const { cablesData, stationsData, outagesData, gdeltData } = useInfraData();
+  const { cablesData, stationsData, outagesData, gdeltData, ixpData, facilityData } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] =
     useState<FeatureCollection | null>(null);
 
@@ -306,6 +307,9 @@ function App() {
 
   const { towers } = useTowers(mapBounds, filters.showTowers);
   const { buoyData } = useNDBCBuoys(mapBounds, filters.showBuoys === true);
+  const { position: issPosition, track: issTrack } = useISSTracker({
+    enabled: filters.showISS !== false,
+  });
 
   // Maritime conditions panel — active only when a sea vessel is selected
   const isSea = !!selectedEntity?.type?.includes("S");
@@ -502,6 +506,10 @@ function App() {
               onBoundsChange={setMapBounds}
               gdeltData={gdeltData}
               buoyData={buoyData}
+              ixpData={ixpData}
+              facilityData={facilityData}
+              issPosition={issPosition}
+              issTrack={issTrack}
             />
 
             {replayMode && (

@@ -12,6 +12,7 @@ from routers import (
     gdelt,
     holding_patterns,
     infra,
+    iss,
     jamming,
     maritime,
     news,
@@ -167,6 +168,7 @@ app.include_router(gdelt.router)
 app.include_router(stats.router)
 app.include_router(buoys.router)
 app.include_router(maritime.router)
+app.include_router(iss.router)
 
 if __name__ == "__main__":
     import uvicorn

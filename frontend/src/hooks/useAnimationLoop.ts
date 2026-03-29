@@ -15,6 +15,7 @@ import {
   DRState,
   GroundTrackPoint,
   HistorySegment,
+  ISSPosition,
   JS8Station,
   RFSite,
   SatNOGSStation,
@@ -65,6 +66,14 @@ interface UseAnimationLoopOptions {
   gdeltToneThreshold?: number;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
+  /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
+  ixpData?: FeatureCollection | null;
+  /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
+  facilityData?: FeatureCollection | null;
+  /** Current ISS position (Initiative B real-time tracker) */
+  issPosition?: ISSPosition | null;
+  /** ISS ground track ring buffer (Initiative B real-time tracker) */
+  issTrack?: ISSPosition[];
   setHoveredInfra?: (info: unknown) => void;
   setSelectedInfra?: (info: unknown) => void;
   worldCountriesData?: FeatureCollection | null;
@@ -140,6 +149,10 @@ export function useAnimationLoop({
   gdeltData,
   gdeltToneThreshold,
   buoyData,
+  ixpData,
+  facilityData,
+  issPosition,
+  issTrack,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -223,6 +236,18 @@ export function useAnimationLoop({
 
   const buoyDataRef = useRef(buoyData);
   buoyDataRef.current = buoyData;
+
+  const ixpDataRef = useRef(ixpData);
+  ixpDataRef.current = ixpData;
+
+  const facilityDataRef = useRef(facilityData);
+  facilityDataRef.current = facilityData;
+
+  const issPositionRef = useRef(issPosition);
+  issPositionRef.current = issPosition;
+
+  const issTrackRef = useRef(issTrack);
+  issTrackRef.current = issTrack;
 
   const worldCountriesDataRef = useRef(worldCountriesData);
   worldCountriesDataRef.current = worldCountriesData;
@@ -577,6 +602,10 @@ export function useAnimationLoop({
         gdeltData: gdeltDataRef.current,
         gdeltToneThreshold: gdeltToneThresholdRef.current,
         buoyData: buoyDataRef.current ?? null,
+        ixpData: ixpDataRef.current ?? null,
+        facilityData: facilityDataRef.current ?? null,
+        issPosition: issPositionRef.current ?? null,
+        issTrack: issTrackRef.current ?? [],
         onEntitySelect: onEntitySelectRef.current,
         setHoveredEntity: setHoveredEntityRef.current,
         setHoverPosition: setHoverPositionRef.current,

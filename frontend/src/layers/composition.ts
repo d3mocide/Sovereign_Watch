@@ -18,6 +18,7 @@ import { buildGdeltLayer } from "./buildGdeltLayer";
 import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
 import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
 import { buildInfraLayers } from "./buildInfraLayers";
+import { buildISSLayer } from "./buildISSLayer";
 import { buildJammingLayer } from "./buildJammingLayer";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildNDBCLayer } from "./buildNDBCLayer";
@@ -27,7 +28,7 @@ import { buildTrailLayers } from "./buildTrailLayers";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
 
-import type { GroundTrackPoint, SatNOGSStation } from "../types";
+import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
 
 interface LayerCompositionOptions {
@@ -65,6 +66,14 @@ interface LayerCompositionOptions {
   gdeltData?: any;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
+  /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
+  ixpData?: FeatureCollection | null;
+  /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
+  facilityData?: FeatureCollection | null;
+  /** Current ISS position (Initiative B real-time tracker) */
+  issPosition?: ISSPosition | null;
+  /** ISS ground track ring buffer (Initiative B real-time tracker) */
+  issTrack?: ISSPosition[];
   /**
    * Minimum tone threshold for GDELT dots (Goldstein scale).
    * Default -Infinity = show all.  Pass -2 for conflict+tension only.
@@ -114,6 +123,10 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     gdeltData,
     gdeltToneThreshold,
     buoyData,
+    ixpData,
+    facilityData,
+    issPosition,
+    issTrack,
     onEntitySelect,
     setHoveredEntity,
     setHoverPosition,
@@ -155,7 +168,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     );
   }
 
-  // Submarine Cables & Stations Layers
+  // Submarine Cables & Stations Layers (+ PeeringDB IXPs/Facilities)
   const infraLayers = buildInfraLayers(
     cablesData,
     stationsData,
@@ -167,6 +180,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     globeMode,
     worldCountriesData,
     countryOutageMap,
+    ixpData ?? null,
+    facilityData ?? null,
   );
 
   // KiwiSDR node marker layer
@@ -276,6 +291,16 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         });
       },
     ),
+    // ISS real-time tracker — Navigation/Orbital group (Z-order 15–17)
+    ...(filters?.showISS !== false
+      ? buildISSLayer({
+          position: issPosition ?? null,
+          track: issTrack ?? [],
+          globeMode,
+          onHover: setHoveredInfra,
+          onSelect: setSelectedInfra,
+        })
+      : []),
     ...getOrbitalLayers({
       satellites: filteredSatellites,
       selectedEntity: currentSelected,

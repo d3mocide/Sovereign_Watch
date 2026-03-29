@@ -420,6 +420,66 @@ SELECT add_compression_policy('ndbc_obs', INTERVAL '1 day', if_not_exists => TRU
 CREATE INDEX IF NOT EXISTS ix_ndbc_obs_geom      ON ndbc_obs USING GIST (geom);
 CREATE INDEX IF NOT EXISTS ix_ndbc_obs_buoy_time ON ndbc_obs (buoy_id, time DESC);
 
+-- TABLE: peeringdb_ixps (Internet Exchange Points — Initiative B Phase 1)
+-- Sourced from PeeringDB public API. 24-hour refresh cadence.
+CREATE TABLE IF NOT EXISTS peeringdb_ixps (
+    ixp_id      INTEGER PRIMARY KEY,   -- PeeringDB ix.id
+    name        TEXT NOT NULL,
+    name_long   TEXT,
+    city        TEXT,
+    country     TEXT,                  -- ISO 3166-1 alpha-2
+    website     TEXT,
+    lat         DOUBLE PRECISION,
+    lon         DOUBLE PRECISION,
+    geom        GEOMETRY(POINT, 4326),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_peeringdb_ixps_geom    ON peeringdb_ixps USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_peeringdb_ixps_country ON peeringdb_ixps (country);
+
+-- TABLE: peeringdb_facilities (Data Centers / Colocation Facilities — Initiative B Phase 1)
+-- Sourced from PeeringDB public API. 24-hour refresh cadence.
+CREATE TABLE IF NOT EXISTS peeringdb_facilities (
+    fac_id      INTEGER PRIMARY KEY,   -- PeeringDB fac.id
+    name        TEXT NOT NULL,
+    city        TEXT,
+    country     TEXT,
+    website     TEXT,
+    org_name    TEXT,
+    lat         DOUBLE PRECISION,
+    lon         DOUBLE PRECISION,
+    geom        GEOMETRY(POINT, 4326),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_peeringdb_fac_geom    ON peeringdb_facilities USING GIST (geom);
+CREATE INDEX IF NOT EXISTS ix_peeringdb_fac_country ON peeringdb_facilities (country);
+
+-- TABLE: iss_positions (ISS Real-time Position Archive — Initiative B Phase 1)
+-- Hypertable; 5-second cadence, 7-day rolling retention.
+-- Live position is also cached in Redis key `infra:iss_latest` (60s TTL)
+-- and broadcast via Redis pub/sub channel `infrastructure:iss-position`.
+CREATE TABLE IF NOT EXISTS iss_positions (
+    time            TIMESTAMPTZ NOT NULL,
+    lat             DOUBLE PRECISION NOT NULL,
+    lon             DOUBLE PRECISION NOT NULL,
+    altitude_km     DOUBLE PRECISION,
+    velocity_kms    DOUBLE PRECISION,
+    geom            GEOMETRY(POINT, 4326)
+);
+
+SELECT create_hypertable('iss_positions', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 hour');
+SELECT add_retention_policy('iss_positions', INTERVAL '7 days', if_not_exists => TRUE);
+
+ALTER TABLE iss_positions SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby = 'time DESC'
+);
+SELECT add_compression_policy('iss_positions', INTERVAL '1 hour', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS ix_iss_positions_time ON iss_positions (time DESC);
+
 -- Continuous aggregate: hourly rolling mean + stddev per buoy
 -- Retained for 30 days; used by Phase 3 sea state anomaly queries (Z-score).
 CREATE MATERIALIZED VIEW IF NOT EXISTS ndbc_hourly_baseline

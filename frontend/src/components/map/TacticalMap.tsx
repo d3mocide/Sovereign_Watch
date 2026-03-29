@@ -111,6 +111,14 @@ interface TacticalMapProps {
   gdeltData?: FeatureCollection | null;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
+  /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
+  ixpData?: FeatureCollection | null;
+  /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
+  facilityData?: FeatureCollection | null;
+  /** Current ISS position (Initiative B real-time tracker) */
+  issPosition?: import("../../types").ISSPosition | null;
+  /** ISS ground track ring buffer (Initiative B real-time tracker) */
+  issTrack?: import("../../types").ISSPosition[];
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
@@ -176,6 +184,10 @@ export function TacticalMap({
   onBoundsChange,
   gdeltData: propGdeltData,
   buoyData,
+  ixpData,
+  facilityData,
+  issPosition,
+  issTrack,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -673,6 +685,10 @@ export function TacticalMap({
     jammingData,
     gdeltData,
     buoyData,
+    ixpData,
+    facilityData,
+    issPosition,
+    issTrack,
     gdeltToneThreshold:
       typeof filters?.gdeltToneThreshold === "number"
         ? filters.gdeltToneThreshold
