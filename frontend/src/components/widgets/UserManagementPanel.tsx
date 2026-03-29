@@ -3,7 +3,7 @@
  * Accessible from the TopBar system settings area.
  */
 
-import { Plus, Shield, Trash2, UserCheck, UserX } from 'lucide-react';
+import { Plus, Shield, UserCheck, UserX } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import {
   createUser,
@@ -212,7 +212,7 @@ export function UserManagementPanel() {
                 <option value="admin">Admin</option>
               </select>
 
-              {/* Toggle active */}
+              {/* Toggle active / deactivate */}
               <button
                 onClick={() => handleToggleActive(u)}
                 disabled={u.id === currentUser?.id}
@@ -225,17 +225,6 @@ export function UserManagementPanel() {
                   <UserX size={14} className="text-red-400" />
                 )}
               </button>
-
-              {/* Deactivate button */}
-              {u.is_active && u.id !== currentUser?.id && (
-                <button
-                  onClick={() => handleToggleActive(u)}
-                  title="Deactivate user"
-                  className="text-gray-600 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
             </div>
           ))}
         </div>

@@ -220,32 +220,35 @@ async def update_user(user_id: int, body: UserUpdate):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    updates: list[str] = []
+    # Build update clause using only whitelisted column names — never interpolate
+    # user-controlled values into the column position.
+    ALLOWED_COLUMNS: dict[str, str] = {
+        "role": "role",
+        "is_active": "is_active",
+        "password": "hashed_password",
+    }
+    clauses: list[str] = []
     params: list = []
-    param_idx = 1
 
     if body.role is not None:
-        updates.append(f"role = ${param_idx}")
+        clauses.append(f"{ALLOWED_COLUMNS['role']} = ${len(params) + 1}")
         params.append(body.role)
-        param_idx += 1
 
     if body.is_active is not None:
-        updates.append(f"is_active = ${param_idx}")
+        clauses.append(f"{ALLOWED_COLUMNS['is_active']} = ${len(params) + 1}")
         params.append(body.is_active)
-        param_idx += 1
 
     if body.password is not None:
-        updates.append(f"hashed_password = ${param_idx}")
+        clauses.append(f"{ALLOWED_COLUMNS['password']} = ${len(params) + 1}")
         params.append(hash_password(body.password))
-        param_idx += 1
 
-    if not updates:
+    if not clauses:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     params.append(user_id)
     query = (
-        f"UPDATE users SET {', '.join(updates)} "
-        f"WHERE id = ${param_idx} "
+        f"UPDATE users SET {', '.join(clauses)} "
+        f"WHERE id = ${len(params)} "
         "RETURNING id, username, role, is_active"
     )
     async with db.pool.acquire() as conn:

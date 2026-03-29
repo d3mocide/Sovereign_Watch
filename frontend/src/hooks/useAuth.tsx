@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('initialising');
   const [user, setUser] = useState<UserProfile | null>(null);
 
-  // On mount, check if there's a stored token from the session
+  // On mount, check if there's a stored token from the session.
+  // The token is kept in sessionStorage so it survives page refreshes within
+  // the same browser tab but is automatically discarded when the tab is closed.
   useEffect(() => {
     // We keep the token in sessionStorage so it survives page refreshes but
     // is discarded when the browser tab is closed.

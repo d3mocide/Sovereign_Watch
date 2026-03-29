@@ -1,9 +1,11 @@
 /**
  * Authentication API client.
  *
- * Stores the JWT access token in memory (module-level variable) so that it
- * is never persisted to localStorage or cookies by default.  Consumers call
- * `getToken()` to include the Bearer header in other API requests.
+ * Stores the JWT access token in memory (module-level variable) as the
+ * authoritative runtime store.  A copy is also persisted in sessionStorage
+ * (via the AuthProvider in useAuth.tsx) so that the token survives page
+ * refreshes within the same browser tab.  sessionStorage is cleared on
+ * browser tab close and on explicit logout.
  */
 
 export interface LoginRequest {
@@ -94,6 +96,13 @@ export async function logout(): Promise<void> {
     }).catch(() => {/* best-effort */});
   }
   setToken(null);
+  // Clear sessionStorage defensively; the AuthProvider also does this, but
+  // calling it here ensures cleanup even if logout() is used standalone.
+  try {
+    sessionStorage.removeItem('sw_token');
+  } catch {
+    // ignore (e.g. in environments where sessionStorage is unavailable)
+  }
 }
 
 export async function getMe(): Promise<UserProfile> {
