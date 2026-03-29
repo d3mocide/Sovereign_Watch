@@ -52,3 +52,6 @@
 ## 2026-03-28 - Adding ARIA Labels to Delete Preset Button
 **Learning:** Found an accessibility issue where an icon-only button used to delete custom presets lacked an `aria-label`. Screen readers would only announce "button" without context. Adding an `aria-label` that dynamically includes the preset's name (e.g., `Delete preset MyPreset`) greatly improves accessibility and provides immediate context to the user.
 **Action:** Always ensure that icon-only interactive elements (like the `Trash2` icon) have descriptive `aria-label` attributes, especially when dynamically generated based on list items, to provide clear context for screen reader users.
+## 2024-03-29 - Missing ARIA label on mute button
+**Learning:** Found a missing `aria-label` on the audio volume toggle button in `ListeningPost.tsx`. Icon-only buttons handling critical state changes (like muting audio) are particularly important targets for screen reader accessibility to avoid silent states.
+**Action:** Always verify icon-only interactive controls (like mute buttons) have state-descriptive `aria-label` and `title` attributes.

@@ -540,18 +540,23 @@ export default function ListeningPost({
           {!audioEnabled ? (
             <button
               onClick={enableAudio}
-              className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+              className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold flex items-center justify-center gap-2 transition-all shadow-lg focus-visible:ring-2 focus-visible:ring-cyan-500 outline-none"
             >
-              <Zap className="w-4 h-4 fill-current" />
+              <Zap className="w-4 h-4 fill-current" aria-hidden="true" />
               ENABLE AUDIO LINK
             </button>
           ) : (
             <div className="flex items-center gap-4 mb-2">
-              <button onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)}>
+              <button
+                onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)}
+                aria-label={volume === 0 ? "Unmute volume" : "Mute volume"}
+                title={volume === 0 ? "Unmute volume" : "Mute volume"}
+                className="p-1 rounded transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-500 outline-none"
+              >
                 {volume === 0 ? (
-                  <VolumeX className="w-5 h-5 text-rose-500" />
+                  <VolumeX className="w-5 h-5 text-rose-500" aria-hidden="true" />
                 ) : (
-                  <Volume2 className="w-5 h-5 text-cyan-400" />
+                  <Volume2 className="w-5 h-5 text-cyan-400" aria-hidden="true" />
                 )}
               </button>
               <div className="flex-1 space-y-1">
