@@ -1,5 +1,6 @@
 import {
   Crosshair,
+  Layers,
   Network,
   Plane,
   Radio,
@@ -59,7 +60,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isOrbital =
     entity.type === "a-s-K" ||
     (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
-  const isInfra = entity.type === "infra";
+  const isInfra = entity.type === "infra" && detailProps.layer !== "ixp" && detailProps.layer !== "facility";
+  const isIXP = entity.type === "infra" && detailProps.layer === "ixp";
+  const isFacility = entity.type === "infra" && detailProps.layer === "facility";
+  const isISS = entity.type === "iss";
   const isOutage = entity.type === "outage";
   const isHold = entity.type === "hold";
   const isGdelt = entity.type === "gdelt";
@@ -96,17 +100,23 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "text-blue-400"
             : isShip
               ? "text-sea-accent"
-              : isInfra
+              : isIXP
                 ? "text-cyan-400"
-                : isHold
-                  ? holdSeverity.dotClass
-                  : isOutage
-                    ? "text-amber-400"
-                    : isGdelt
-                      ? "text-hud-green"
-                      : isJamming
-                        ? jammingColor
-                        : "text-air-accent";
+                : isFacility
+                  ? "text-purple-400"
+                  : isISS
+                    ? "text-yellow-400"
+                    : isInfra
+                      ? "text-cyan-400"
+                      : isHold
+                        ? holdSeverity.dotClass
+                        : isOutage
+                          ? "text-amber-400"
+                          : isGdelt
+                            ? "text-hud-green"
+                            : isJamming
+                              ? jammingColor
+                              : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -120,17 +130,23 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? "border-blue-400/50"
             : isShip
               ? "border-sea-accent/50"
-              : isInfra
+              : isIXP
                 ? "border-cyan-400/50"
-                : isHold
-                  ? holdSeverity.borderClass
-                  : isOutage
-                    ? "border-amber-400/50"
-                    : isGdelt
-                      ? "border-hud-green/30"
-                      : isJamming
-                        ? "border-amber-400/50"
-                        : "border-air-accent/50";
+                : isFacility
+                  ? "border-purple-400/50"
+                  : isISS
+                    ? "border-yellow-400/50"
+                    : isInfra
+                      ? "border-cyan-400/50"
+                      : isHold
+                        ? holdSeverity.borderClass
+                        : isOutage
+                          ? "border-amber-400/50"
+                          : isGdelt
+                            ? "border-hud-green/30"
+                            : isJamming
+                              ? "border-amber-400/50"
+                              : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -144,17 +160,23 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             ? Waves
             : isShip
               ? Ship
-              : isInfra
+              : isIXP
                 ? Network
-                : isOutage
-                  ? Signal
-                  : isGdelt
-                    ? Zap
-                    : isJamming
-                      ? WifiOff
-                      : isHold
-                        ? Crosshair
-                        : Plane;
+                : isFacility
+                  ? Layers
+                  : isISS
+                    ? Satellite
+                    : isInfra
+                      ? Network
+                      : isOutage
+                        ? Signal
+                        : isGdelt
+                          ? Zap
+                          : isJamming
+                            ? WifiOff
+                            : isHold
+                              ? Crosshair
+                              : Plane;
 
   return (
     <div
@@ -416,6 +438,127 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               {detailProps.wdir_deg != null
                 ? `${Math.round(Number(detailProps.wdir_deg))}°`
                 : "N/A"}
+            </span>
+          </div>
+        </div>
+      ) : isIXP ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-cyan-400 font-mono font-bold leading-tight uppercase">
+              INTERNET EXCHANGE
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              NAME
+            </span>
+            <span className="text-[10px] text-white/90 font-mono font-bold leading-tight truncate block">
+              {String(detailProps.name_long || detailProps.name || "UNKNOWN")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CITY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.city || "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COUNTRY
+            </span>
+            <span className="text-[10px] text-cyan-400 font-mono font-bold leading-tight">
+              {String(detailProps.country || "—")}
+            </span>
+          </div>
+        </div>
+      ) : isFacility ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-purple-400 font-mono font-bold leading-tight uppercase">
+              DATA CENTER
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              FACILITY
+            </span>
+            <span className="text-[10px] text-white/90 font-mono font-bold leading-tight truncate block">
+              {String(detailProps.name || "UNKNOWN")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              OPERATOR
+            </span>
+            <span className="text-[10px] text-purple-400 font-mono font-bold leading-tight truncate">
+              {String(detailProps.org_name || "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COUNTRY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.country || "—")}
+            </span>
+          </div>
+        </div>
+      ) : isISS ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SPACECRAFT
+            </span>
+            <span className="text-[10px] text-yellow-400 font-mono font-bold leading-tight uppercase">
+              INTL SPACE STATION
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LATITUDE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.lat != null
+                ? `${Number(detailProps.lat).toFixed(4)}°`
+                : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LONGITUDE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.lon != null
+                ? `${Number(detailProps.lon).toFixed(4)}°`
+                : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ALTITUDE
+            </span>
+            <span className="text-[10px] text-yellow-400 font-mono font-bold leading-tight">
+              {detailProps.altitude_km != null
+                ? `${Number(detailProps.altitude_km).toFixed(1)} km`
+                : "~408 km"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              UPDATED
+            </span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight">
+              {detailProps.timestamp
+                ? new Date(String(detailProps.timestamp)).toLocaleTimeString()
+                : "—"}
             </span>
           </div>
         </div>
