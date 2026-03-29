@@ -111,8 +111,6 @@ interface TacticalMapProps {
   gdeltData?: FeatureCollection | null;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
-  /** ASAM piracy incidents GeoJSON (Phase 2 Geospatial) */
-  asamData?: FeatureCollection | null;
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
@@ -178,7 +176,6 @@ export function TacticalMap({
   onBoundsChange,
   gdeltData: propGdeltData,
   buoyData,
-  asamData,
   historySegments,
 }: TacticalMapProps) {
   // State for UI interactions
@@ -221,38 +218,28 @@ export function TacticalMap({
         props.entity_type === "outage" || props.severity !== undefined;
       const isTower = obj.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
-      const isASAM =
-        props.reference !== undefined && props.threat_score !== undefined;
-      const entityType = isASAM
-        ? "asam"
-        : isBuoy
-          ? "buoy"
-          : isTower
-            ? "tower"
-            : isOutage
-              ? "outage"
-              : "infra";
+      const entityType = isBuoy
+        ? "buoy"
+        : isTower
+          ? "tower"
+          : isOutage
+            ? "outage"
+            : "infra";
       const entity: CoTEntity = {
         uid: String(
-          props.reference ||
-            props.id ||
-            props.buoy_id ||
-            obj.id ||
-            `infra-${Date.now()}`,
+          props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
         ),
         type: entityType,
         callsign: String(
-          isASAM
-            ? `PIRACY: ${String(props.hostility || "Incident")} (${String(props.reference || "")})`
-            : props.buoy_id ||
-                props.name ||
-                props.region ||
-                props.fcc_id ||
-                (isOutage
-                  ? "INTERNET OUTAGE"
-                  : isTower
-                    ? "FCC TOWER"
-                    : "Unknown Infra"),
+          props.buoy_id ||
+            props.name ||
+            props.region ||
+            props.fcc_id ||
+            (isOutage
+              ? "INTERNET OUTAGE"
+              : isTower
+                ? "FCC TOWER"
+                : "Unknown Infra"),
         ),
         lat,
         lon,
@@ -272,8 +259,7 @@ export function TacticalMap({
         prev?.type === "infra" ||
         prev?.type === "outage" ||
         prev?.type === "tower" ||
-        prev?.type === "buoy" ||
-        prev?.type === "asam"
+        prev?.type === "buoy"
           ? null
           : prev,
       );
@@ -633,36 +619,22 @@ export function TacticalMap({
       const isTower =
         info.object.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
-      const isASAM =
-        props.reference !== undefined && props.threat_score !== undefined;
-      const entityType = isASAM
-        ? "asam"
-        : isBuoy
-          ? "buoy"
-          : isTower
-            ? "tower"
-            : "infra";
+      const entityType = isBuoy ? "buoy" : isTower ? "tower" : "infra";
       const callsign = String(
-        isASAM
-          ? `PIRACY: ${String(props.hostility || "Incident")} (${String(props.reference || "")})`
-          : props.buoy_id ||
-              props.name ||
-              props.region ||
-              props.fcc_id ||
-              (props.entity_type === "outage"
-                ? "INTERNET OUTAGE"
-                : isTower
-                  ? "FCC TOWER"
-                  : "INFRA"),
+        props.buoy_id ||
+          props.name ||
+          props.region ||
+          props.fcc_id ||
+          (props.entity_type === "outage"
+            ? "INTERNET OUTAGE"
+            : isTower
+              ? "FCC TOWER"
+              : "INFRA"),
       );
 
       const infraEntity: CoTEntity = {
         uid: String(
-          props.reference ||
-            props.id ||
-            props.buoy_id ||
-            info.object.id ||
-            `infra-${Date.now()}`,
+          props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
         ),
         lat: info.coordinate?.[1] || 0,
         lon: info.coordinate?.[0] || 0,
@@ -701,7 +673,6 @@ export function TacticalMap({
     jammingData,
     gdeltData,
     buoyData,
-    asamData,
     gdeltToneThreshold:
       typeof filters?.gdeltToneThreshold === "number"
         ? filters.gdeltToneThreshold

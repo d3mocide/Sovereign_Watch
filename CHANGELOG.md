@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.56.0] - 2026-03-28
+
+### Changed
+
+- **Maritime Conditions Focus**: Completed retirement of the SMAPS incident intelligence runtime path and standardized surviving maritime surfaces around buoy-driven conditions data.
+- **Compatibility Naming Cleanup**: Replaced legacy incident scoring labels with generic compatibility names (`incident_max_score`) in backend and frontend maritime report handling.
+- **Operational Documentation Refresh**: Updated active roadmap/reference docs to mark SMAPS as retired and prevent stale implementation guidance.
+
+### Removed
+
+- **Retired API Route**: Removed the SMAPS incidents router from active backend routing and deleted the dedicated router module.
+- **Retired Ingestion Path**: Removed SMAPS ingestion loop/config/helpers and associated poller unit tests from `infra_poller`.
+- **Retired Frontend Layering**: Removed SMAPS map hook/layer plumbing, toggle branches, tooltip/sidebar special casing, and related type definitions.
+- **Retired Schema Objects**: Removed `smaps_incidents` DDL from bootstrap schema and dropped the live `smaps_incidents` table.
+
+### Verification
+
+- Frontend: `pnpm run lint && pnpm run test` (pass, 36 tests)
+- Backend API: `ruff check . && python -m pytest` (pass, 46 tests)
+- Infra poller: `ruff check . && python -m pytest` (pass, 50 tests)
+- Live DB: `\dt *smaps*` returned no relations
+
 ## [0.55.1] - 2026-03-28
 
 ### Fixed

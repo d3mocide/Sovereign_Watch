@@ -23,59 +23,46 @@ import tempfile
 import time
 import traceback
 import zipfile
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 
 import aiohttp
 import psycopg2
-from psycopg2.extras import execute_values
 import redis.asyncio as aioredis
+from psycopg2.extras import execute_values
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger("InfraPoller")
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-REDIS_URL    = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
-DB_URL       = os.getenv(
+REDIS_URL = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
+DB_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:password@sovereign-timescaledb:5432/sovereign_watch",
 )
-POLL_FCC_START_HOUR        = int(os.getenv("POLL_FCC_START_HOUR", "3"))
-POLL_INTERVAL_CABLES_DAYS  = 7
+POLL_FCC_START_HOUR = int(os.getenv("POLL_FCC_START_HOUR", "3"))
+POLL_INTERVAL_CABLES_DAYS = 7
 POLL_INTERVAL_IODA_MINUTES = 30
-POLL_INTERVAL_FCC_DAYS     = 7
+POLL_INTERVAL_FCC_DAYS = 7
 
 FCC_TOWERS_URL = "https://data.fcc.gov/download/pub/uls/complete/r_tower.zip"
-IODA_URL       = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
-CABLES_URL     = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
-STATIONS_URL   = "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json"
-NOMINATIM_URL  = "https://nominatim.openstreetmap.org/search"
+IODA_URL = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/summary"
+CABLES_URL = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
+STATIONS_URL = (
+    "https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json"
+)
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
 
-POLL_INTERVAL_NDBC_MINUTES  = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
-
-ASAM_URL = "https://msi.nga.mil/api/publications/asam?output=json"
-# Weekday gate: run between 19:00–21:00 UTC (covers 15:00 ET in both EST and EDT)
-ASAM_TRIGGER_HOUR_UTC_START = int(os.getenv("ASAM_TRIGGER_HOUR_UTC_START", "19"))
-ASAM_TRIGGER_HOUR_UTC_END   = int(os.getenv("ASAM_TRIGGER_HOUR_UTC_END", "21"))
-POLL_INTERVAL_ASAM_DAYS     = 1   # re-check every 24 h; only ingests on weekdays
-
-# Hostility keyword → base severity (0–10).  Higher score = more dangerous.
-_ASAM_SEVERITY: list[tuple[str, float]] = [
-    ("kidnapping",  10.0),
-    ("hijacking",    8.0),
-    ("fired upon",   7.0),
-    ("assault",      6.0),
-    ("robbery",      5.0),
-    ("boarding",     4.0),
-    ("attempted",    3.0),
-]
+POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 
 FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
-FCC_CONNECT_TIMEOUT_S    = 30
-FCC_READ_TIMEOUT_S       = 120
-FCC_MAX_RETRIES          = 5
+FCC_CONNECT_TIMEOUT_S = 30
+FCC_READ_TIMEOUT_S = 120
+FCC_MAX_RETRIES = 5
 
 USER_AGENT = "SovereignWatch/1.0 (InfraPoller; admin@sovereignwatch.local)"
 
@@ -83,6 +70,7 @@ USER_AGENT = "SovereignWatch/1.0 (InfraPoller; admin@sovereignwatch.local)"
 # ---------------------------------------------------------------------------
 # Pure helpers — no I/O, unit-testable directly
 # ---------------------------------------------------------------------------
+
 
 def dms_to_decimal(deg_s, min_s, sec_s, dir_s):
     """Convert separate DMS fields to decimal degrees.
@@ -92,9 +80,9 @@ def dms_to_decimal(deg_s, min_s, sec_s, dir_s):
       [11]=lon_deg [12]=lon_min [13]=lon_sec [14]=lon_dir (E/W)
     """
     try:
-        deg       = float(deg_s)
-        mins      = float(min_s) if min_s and min_s.strip() else 0.0
-        secs      = float(sec_s) if sec_s and sec_s.strip() else 0.0
+        deg = float(deg_s)
+        mins = float(min_s) if min_s and min_s.strip() else 0.0
+        secs = float(sec_s) if sec_s and sec_s.strip() else 0.0
         direction = dir_s.strip().upper() if dir_s else ""
         if not direction:
             return None
@@ -126,6 +114,7 @@ def ioda_severity(overall_score: float) -> float:
 # Blocking helpers — called via asyncio.to_thread
 # ---------------------------------------------------------------------------
 
+
 def _parse_fcc_zip_sync(tmp_path: str) -> list[tuple]:
     """Parse EN.dat, RA.dat, CO.dat from the FCC ASR zip.
 
@@ -143,7 +132,7 @@ def _parse_fcc_zip_sync(tmp_path: str) -> list[tuple]:
                 content = f.read().decode("latin1")
             for row in csv.reader(io.StringIO(content), delimiter="|"):
                 if len(row) > 9 and row[0] == "EN":
-                    usi  = row[3].strip()
+                    usi = row[3].strip()
                     name = row[9].strip()
                     if usi and name:
                         owner_by_usi[usi] = name
@@ -176,11 +165,11 @@ def _parse_fcc_zip_sync(tmp_path: str) -> list[tuple]:
                 continue
             if row[5].strip() not in ("T", ""):
                 continue
-            usi    = row[3].strip()
+            usi = row[3].strip()
             fcc_id = row[2].strip()
             if not usi or not fcc_id:
                 continue
-            lat = dms_to_decimal(row[6],  row[7],  row[8],  row[9])
+            lat = dms_to_decimal(row[6], row[7], row[8], row[9])
             lon = dms_to_decimal(row[11], row[12], row[13], row[14])
             if lat is None or lon is None:
                 continue
@@ -225,162 +214,9 @@ def _ingest_fcc_records_sync(db_url: str, records: list[tuple]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ASAM helpers — pure + blocking, unit-testable without I/O
-# ---------------------------------------------------------------------------
-
-def asam_severity(hostility: str | None) -> float:
-    """Map an ASAM hostility string to a base severity score (0–10).
-
-    Scans _ASAM_SEVERITY keywords in priority order; returns the first match.
-    Returns the default low-severity score (2.0) if no keyword matches.
-    """
-    if not hostility:
-        return 2.0
-    h = hostility.lower()
-    for keyword, score in _ASAM_SEVERITY:
-        if keyword in h:
-            return score
-    return 2.0
-
-
-def asam_recency(incident_date: date, today: date | None = None) -> float:
-    """Compute a recency multiplier for an ASAM incident.
-
-    Uses a step-function decay so recent incidents carry more weight:
-      ≤ 30 days  → 1.00
-      ≤ 90 days  → 0.80
-      ≤ 180 days → 0.60
-      ≤ 365 days → 0.40
-      > 365 days → 0.20
-    """
-    if today is None:
-        today = date.today()
-    days_ago = (today - incident_date).days
-    if days_ago <= 30:
-        return 1.00
-    if days_ago <= 90:
-        return 0.80
-    if days_ago <= 180:
-        return 0.60
-    if days_ago <= 365:
-        return 0.40
-    return 0.20
-
-
-def compute_asam_threat_score(hostility: str | None, incident_date: date, today: date | None = None) -> float:
-    """Composite threat score = severity × recency, capped at 10.0, rounded to 2dp."""
-    score = asam_severity(hostility) * asam_recency(incident_date, today)
-    return round(min(score, 10.0), 2)
-
-
-def parse_asam_json(data: list[dict]) -> list[dict]:
-    """Parse the NGA ASAM JSON response into a list of incident dicts.
-
-    Each output dict contains:
-      reference, incident_date, lat, lon, hostility, victim,
-      nav_area, subreg, description, threat_score
-
-    Rows missing lat/lon or an unparseable date are silently skipped.
-    """
-    today = date.today()
-    records: list[dict] = []
-    for item in data:
-        # Coordinates — required
-        try:
-            lat = float(item.get("latitude") or item.get("lat") or "")
-            lon = float(item.get("longitude") or item.get("lon") or "")
-        except (TypeError, ValueError):
-            continue
-        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-            continue
-
-        # Date — required
-        raw_date = item.get("date") or item.get("occurrenceDate") or ""
-        incident_date: date | None = None
-        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d-%b-%Y"):
-            try:
-                incident_date = datetime.strptime(str(raw_date).strip(), fmt).date()
-                break
-            except ValueError:
-                continue
-        if incident_date is None:
-            continue
-
-        reference = str(item.get("reference") or "").strip()
-        if not reference:
-            continue
-
-        hostility   = str(item.get("hostility") or "").strip() or None
-        victim      = str(item.get("victim") or "").strip() or None
-        nav_area    = str(item.get("navArea") or "").strip() or None
-        subreg      = str(item.get("subreg") or "").strip() or None
-        description = str(item.get("description") or item.get("detailStr") or "").strip() or None
-
-        records.append({
-            "reference":    reference,
-            "incident_date": incident_date,
-            "lat":          lat,
-            "lon":          lon,
-            "hostility":    hostility,
-            "victim":       victim,
-            "nav_area":     nav_area,
-            "subreg":       subreg,
-            "description":  description,
-            "threat_score": compute_asam_threat_score(hostility, incident_date, today),
-        })
-    return records
-
-
-def _ingest_asam_records_sync(db_url: str, records: list[dict]) -> int:
-    """Upsert ASAM incidents into asam_incidents via psycopg2 (blocking).
-
-    Uses ON CONFLICT (reference) DO UPDATE to refresh threat_score and
-    description when NGA re-issues the same reference.
-    Returns number of rows upserted.
-    """
-    upsert_sql = """
-        INSERT INTO asam_incidents
-            (reference, incident_date, lat, lon, hostility, victim,
-             nav_area, subreg, description, threat_score, geom, ingested_at)
-        VALUES %s
-        ON CONFLICT (reference) DO UPDATE SET
-            incident_date = EXCLUDED.incident_date,
-            lat           = EXCLUDED.lat,
-            lon           = EXCLUDED.lon,
-            hostility     = EXCLUDED.hostility,
-            victim        = EXCLUDED.victim,
-            nav_area      = EXCLUDED.nav_area,
-            subreg        = EXCLUDED.subreg,
-            description   = EXCLUDED.description,
-            threat_score  = EXCLUDED.threat_score,
-            geom          = EXCLUDED.geom,
-            ingested_at   = EXCLUDED.ingested_at
-    """
-    rows = [
-        (
-            r["reference"], r["incident_date"], r["lat"], r["lon"],
-            r["hostility"], r["victim"], r["nav_area"], r["subreg"],
-            r["description"], r["threat_score"],
-            f"SRID=4326;POINT({r['lon']} {r['lat']})",
-            datetime.now(UTC),
-        )
-        for r in records
-    ]
-    conn = psycopg2.connect(db_url)
-    try:
-        cur = conn.cursor()
-        execute_values(cur, upsert_sql, rows, page_size=500)
-        conn.commit()
-        upserted = cur.rowcount
-        cur.close()
-    finally:
-        conn.close()
-    return upserted
-
-
-# ---------------------------------------------------------------------------
 # NDBC helpers — pure + blocking, unit-testable without I/O
 # ---------------------------------------------------------------------------
+
 
 def _ndbc_field(value: str):
     """Return float from an NDBC field, or None if the field is 'MM' / empty."""
@@ -410,24 +246,24 @@ def parse_ndbc_latest_obs(text: str) -> list[dict]:
             continue
         try:
             buoy_id = parts[0]
-            lat     = float(parts[1])
-            lon     = float(parts[2])
-            year    = int(parts[3])
-            month   = int(parts[4])
-            day     = int(parts[5])
-            hour    = int(parts[6])
-            minute  = int(parts[7])
+            lat = float(parts[1])
+            lon = float(parts[2])
+            year = int(parts[3])
+            month = int(parts[4])
+            day = int(parts[5])
+            hour = int(parts[6])
+            minute = int(parts[7])
         except (ValueError, IndexError):
             continue
 
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
             continue
 
-        wvht_m   = _ndbc_field(parts[11])
-        wtmp_c   = _ndbc_field(parts[17])
-        wspd_ms  = _ndbc_field(parts[9])
+        wvht_m = _ndbc_field(parts[11])
+        wtmp_c = _ndbc_field(parts[17])
+        wspd_ms = _ndbc_field(parts[9])
         wdir_deg = _ndbc_field(parts[8])
-        atmp_c   = _ndbc_field(parts[16])
+        atmp_c = _ndbc_field(parts[16])
         pres_hpa = _ndbc_field(parts[15])
 
         # Skip rows with no usable measurements
@@ -439,18 +275,20 @@ def parse_ndbc_latest_obs(text: str) -> list[dict]:
         except ValueError:
             continue
 
-        records.append({
-            "buoy_id":  buoy_id,
-            "time":     obs_time,
-            "lat":      lat,
-            "lon":      lon,
-            "wvht_m":   wvht_m,
-            "wtmp_c":   wtmp_c,
-            "wspd_ms":  wspd_ms,
-            "wdir_deg": wdir_deg,
-            "atmp_c":   atmp_c,
-            "pres_hpa": pres_hpa,
-        })
+        records.append(
+            {
+                "buoy_id": buoy_id,
+                "time": obs_time,
+                "lat": lat,
+                "lon": lon,
+                "wvht_m": wvht_m,
+                "wtmp_c": wtmp_c,
+                "wspd_ms": wspd_ms,
+                "wdir_deg": wdir_deg,
+                "atmp_c": atmp_c,
+                "pres_hpa": pres_hpa,
+            }
+        )
     return records
 
 
@@ -469,9 +307,16 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
     """
     rows = [
         (
-            r["time"], r["buoy_id"], r["lat"], r["lon"],
-            r["wvht_m"], r["wtmp_c"], r["wspd_ms"], r["wdir_deg"],
-            r["atmp_c"], r["pres_hpa"],
+            r["time"],
+            r["buoy_id"],
+            r["lat"],
+            r["lon"],
+            r["wvht_m"],
+            r["wtmp_c"],
+            r["wspd_ms"],
+            r["wdir_deg"],
+            r["atmp_c"],
+            r["pres_hpa"],
             f"SRID=4326;POINT({r['lon']} {r['lat']})",
         )
         for r in records
@@ -492,10 +337,11 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
 # Service
 # ---------------------------------------------------------------------------
 
+
 class InfraPollerService:
     def __init__(self):
         self.running = True
-        self.redis   = None
+        self.redis = None
         self._geocode_cache: dict[str, tuple[float, float]] = {}
         self._ndbc_etag: str | None = None
 
@@ -509,7 +355,6 @@ class InfraPollerService:
             asyncio.create_task(self.ioda_loop()),
             asyncio.create_task(self.fcc_loop()),
             asyncio.create_task(self.ndbc_loop()),
-            asyncio.create_task(self.asam_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -526,7 +371,9 @@ class InfraPollerService:
     # Geocoding (Nominatim) — 1 req/s rate limit
     # -----------------------------------------------------------------------
 
-    async def geocode_region(self, region_name: str, country_code: str) -> tuple[float, float]:
+    async def geocode_region(
+        self, region_name: str, country_code: str
+    ) -> tuple[float, float]:
         cache_key = f"{region_name},{country_code}"
         if cache_key in self._geocode_cache:
             return self._geocode_cache[cache_key]
@@ -538,7 +385,11 @@ class InfraPollerService:
             ) as client:
                 async with client.get(
                     NOMINATIM_URL,
-                    params={"q": f"{region_name}, {country_code}", "format": "json", "limit": 1},
+                    params={
+                        "q": f"{region_name}, {country_code}",
+                        "format": "json",
+                        "limit": 1,
+                    },
                 ) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -549,7 +400,9 @@ class InfraPollerService:
                 await asyncio.sleep(1)  # Nominatim: 1 req/s policy
                 return (lat, lon)
         except Exception as exc:
-            logger.error("Geocoding failed for %s, %s: %s", region_name, country_code, exc)
+            logger.error(
+                "Geocoding failed for %s, %s: %s", region_name, country_code, exc
+            )
 
         self._geocode_cache[cache_key] = (0.0, 0.0)
         return (0.0, 0.0)
@@ -560,15 +413,16 @@ class InfraPollerService:
 
     async def cables_loop(self):
         last_fetch_str = await self.redis.get("infra:last_cables_fetch")
-        last_fetch     = float(last_fetch_str) if last_fetch_str else 0.0
-        interval_s     = POLL_INTERVAL_CABLES_DAYS * 86400
+        last_fetch = float(last_fetch_str) if last_fetch_str else 0.0
+        interval_s = POLL_INTERVAL_CABLES_DAYS * 86400
 
         if last_fetch > 0:
             remaining = interval_s - (time.time() - last_fetch)
             if remaining > 0:
                 logger.info(
                     "Cables: cached, next sync in %dd %dh",
-                    int(remaining // 86400), int((remaining % 86400) // 3600),
+                    int(remaining // 86400),
+                    int((remaining % 86400) // 3600),
                 )
                 await asyncio.sleep(remaining)
 
@@ -621,7 +475,7 @@ class InfraPollerService:
 
     async def _fetch_internet_outages(self):
         logger.info("Fetching internet outage summary from IODA...")
-        now       = int(time.time())
+        now = int(time.time())
         from_time = now - (24 * 3600)
 
         timeout = aiohttp.ClientTimeout(total=30.0)
@@ -647,26 +501,28 @@ class InfraPollerService:
 
             country_code = entity.get("code", "")
             country_name = entity.get("name", country_code)
-            severity     = ioda_severity(overall_score)
+            severity = ioda_severity(overall_score)
 
             lat, lon = await self.geocode_region(country_name, country_code)
             if lat == 0.0 and lon == 0.0:
                 continue
 
-            outages.append({
-                "type": "Feature",
-                "properties": {
-                    "id":           f"outage-{country_code}",
-                    "region":       country_name,
-                    "country":      country_name,
-                    "country_code": country_code,
-                    "severity":     round(severity, 1),
-                    "datasource":   "IODA_OVERALL",
-                    "entity_type":  "country",
-                    "score_raw":    overall_score,
-                },
-                "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            })
+            outages.append(
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "id": f"outage-{country_code}",
+                        "region": country_name,
+                        "country": country_name,
+                        "country_code": country_code,
+                        "severity": round(severity, 1),
+                        "datasource": "IODA_OVERALL",
+                        "entity_type": "country",
+                        "score_raw": overall_score,
+                    },
+                    "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                }
+            )
             if len(outages) >= 200:
                 break
 
@@ -680,15 +536,16 @@ class InfraPollerService:
 
     async def fcc_loop(self):
         last_fetch_str = await self.redis.get("infra:last_fcc_fetch")
-        last_fetch     = float(last_fetch_str) if last_fetch_str else 0.0
-        interval_s     = POLL_INTERVAL_FCC_DAYS * 86400
+        last_fetch = float(last_fetch_str) if last_fetch_str else 0.0
+        interval_s = POLL_INTERVAL_FCC_DAYS * 86400
 
         if last_fetch > 0:
             remaining = interval_s - (time.time() - last_fetch)
             if remaining > 0:
                 logger.info(
                     "FCC towers: cached, next sync in %dd %dh",
-                    int(remaining // 86400), int((remaining % 86400) // 3600),
+                    int(remaining // 86400),
+                    int((remaining % 86400) // 3600),
                 )
                 await asyncio.sleep(remaining)
 
@@ -697,7 +554,8 @@ class InfraPollerService:
             if POLL_FCC_START_HOUR != -1 and current_hour != POLL_FCC_START_HOUR:
                 logger.info(
                     "FCC sync due but deferring to %02d:00 UTC (currently %02d:00 UTC).",
-                    POLL_FCC_START_HOUR, current_hour,
+                    POLL_FCC_START_HOUR,
+                    current_hour,
                 )
                 await asyncio.sleep(3600)
                 continue
@@ -732,7 +590,9 @@ class InfraPollerService:
                         resp.raise_for_status()
                         total = 0
                         with open(dest_path, "wb") as fh:
-                            async for chunk in resp.content.iter_chunked(FCC_DOWNLOAD_CHUNK_BYTES):
+                            async for chunk in resp.content.iter_chunked(
+                                FCC_DOWNLOAD_CHUNK_BYTES
+                            ):
                                 fh.write(chunk)
                                 total += len(chunk)
                                 logger.info("FCC download: %.1f MB", total / 1_000_000)
@@ -776,7 +636,6 @@ class InfraPollerService:
                     os.remove(tmp_path)
                 except OSError:
                     pass
-
 
     # -----------------------------------------------------------------------
     # NDBC loop — 15-minute interval, ETag caching
@@ -830,14 +689,14 @@ class InfraPollerService:
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
                 "properties": {
-                    "buoy_id":  r["buoy_id"],
-                    "wvht_m":   r["wvht_m"],
-                    "wtmp_c":   r["wtmp_c"],
-                    "wspd_ms":  r["wspd_ms"],
+                    "buoy_id": r["buoy_id"],
+                    "wvht_m": r["wvht_m"],
+                    "wtmp_c": r["wtmp_c"],
+                    "wspd_ms": r["wspd_ms"],
                     "wdir_deg": r["wdir_deg"],
-                    "atmp_c":   r["atmp_c"],
+                    "atmp_c": r["atmp_c"],
                     "pres_hpa": r["pres_hpa"],
-                    "time":     r["time"].isoformat(),
+                    "time": r["time"].isoformat(),
                 },
             }
             for r in records
@@ -847,100 +706,13 @@ class InfraPollerService:
         logger.info("NDBC: cached %d buoys in Redis (ndbc:latest_obs)", len(features))
 
 
-    # -----------------------------------------------------------------------
-    # ASAM loop — weekday 19–21 UTC gate, 24-hour re-check interval
-    # -----------------------------------------------------------------------
-
-    async def asam_loop(self):
-        """Ingest NGA ASAM piracy incidents once per weekday near 15:00 ET.
-
-        Checks every hour whether the time/day gate is open; if so, fetches
-        the full ASAM JSON feed and upserts into asam_incidents.  A Redis key
-        tracks the last successful ingest so the gate doesn't fire twice in
-        the same day.
-        """
-        while self.running:
-            now_utc = datetime.now(UTC)
-            hour    = now_utc.hour
-            weekday = now_utc.weekday()  # 0=Monday … 4=Friday
-
-            in_hour_gate  = ASAM_TRIGGER_HOUR_UTC_START <= hour < ASAM_TRIGGER_HOUR_UTC_END
-            is_weekday    = weekday < 5
-            today_key     = f"asam:last_ingest:{now_utc.strftime('%Y-%m-%d')}"
-            already_ran   = await self.redis.exists(today_key)
-
-            if in_hour_gate and is_weekday and not already_ran:
-                try:
-                    await self._fetch_and_ingest_asam()
-                    # TTL of 25 h prevents double-runs on the same calendar day
-                    await self.redis.set(today_key, "1", ex=90000)
-                except Exception as e:
-                    logger.exception("ASAM fetch/ingest error")
-                    try:
-                        await self.redis.set(
-                            "poller:asam:last_error",
-                            json.dumps({"ts": time.time(), "msg": str(e)}),
-                            ex=86400,
-                        )
-                    except Exception:
-                        pass
-            else:
-                logger.debug(
-                    "ASAM gate closed (hour=%d, weekday=%d, already_ran=%s); rechecking in 1 h",
-                    hour, weekday, bool(already_ran),
-                )
-
-            await asyncio.sleep(3600)  # check hourly
-
-    async def _fetch_and_ingest_asam(self):
-        """Download the full ASAM JSON feed and upsert all incidents."""
-        logger.info("ASAM: fetching piracy incident feed from NGA...")
-        timeout = aiohttp.ClientTimeout(total=60.0)
-        async with aiohttp.ClientSession(
-            timeout=timeout, headers={"User-Agent": USER_AGENT}
-        ) as client:
-            async with client.get(ASAM_URL) as resp:
-                resp.raise_for_status()
-                raw: list[dict] = await resp.json(content_type=None)
-
-        logger.info("ASAM: received %d raw records", len(raw))
-        records = parse_asam_json(raw)
-        if not records:
-            logger.warning("ASAM: no valid incidents parsed from feed")
-            return
-
-        upserted = await asyncio.to_thread(_ingest_asam_records_sync, DB_URL, records)
-        logger.info("ASAM: parsed %d incidents, upserted %d rows", len(records), upserted)
-
-        # Cache a compact summary (reference + lat/lon + threat_score) for fast API reads
-        features = [
-            {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
-                "properties": {
-                    "reference":    r["reference"],
-                    "incident_date": r["incident_date"].isoformat(),
-                    "hostility":    r["hostility"],
-                    "victim":       r["victim"],
-                    "nav_area":     r["nav_area"],
-                    "subreg":       r["subreg"],
-                    "description":  r["description"],
-                    "threat_score": r["threat_score"],
-                },
-            }
-            for r in records
-        ]
-        geojson = json.dumps({"type": "FeatureCollection", "features": features})
-        await self.redis.set("asam:latest", geojson, ex=90000)  # 25-h TTL
-        logger.info("ASAM: cached %d incidents in Redis (asam:latest)", len(features))
-
-
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 async def main():
-    svc  = InfraPollerService()
+    svc = InfraPollerService()
     loop = asyncio.get_running_loop()
 
     for sig in (signal.SIGINT, signal.SIGTERM):

@@ -278,8 +278,6 @@ export interface MapFilters {
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
-  // Maritime / Geospatial (Phase 2)
-  showASAM?: boolean;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 
@@ -304,28 +302,16 @@ export interface Tower {
   coordinates: [number, number];
 }
 
-/** Properties on a GeoJSON Feature returned by GET /api/asam/incidents */
-export interface ASAMIncidentProperties {
-  reference:     string;
-  incident_date: string;          // ISO date string (YYYY-MM-DD)
-  hostility:     string | null;   // Type of attack (Robbery, Hijacking…)
-  victim:        string | null;   // Type of vessel victim
-  nav_area:      string | null;   // NAVAREA region code
-  subreg:        string | null;   // NGA sub-region number
-  description:   string | null;   // Full narrative description
-  threat_score:  number;          // Composite 0–10 threat score
-}
-
 /** Properties on a GeoJSON Feature returned by GET /api/buoys/latest */
 export interface NDBCBuoyProperties {
-  buoy_id:  string;
-  wvht_m:   number | null;  // Significant wave height (m)
-  wtmp_c:   number | null;  // Water surface temperature (°C)
-  wspd_ms:  number | null;  // Wind speed (m/s)
-  wdir_deg: number | null;  // Wind direction (degrees true)
-  atmp_c:   number | null;  // Air temperature (°C)
-  pres_hpa: number | null;  // Atmospheric pressure (hPa)
-  time:     string;         // ISO-8601 observation timestamp
+  buoy_id: string;
+  wvht_m: number | null; // Significant wave height (m)
+  wtmp_c: number | null; // Water surface temperature (°C)
+  wspd_ms: number | null; // Wind speed (m/s)
+  wdir_deg: number | null; // Wind direction (degrees true)
+  atmp_c: number | null; // Air temperature (°C)
+  pres_hpa: number | null; // Atmospheric pressure (hPa)
+  time: string; // ISO-8601 observation timestamp
 }
 
 export interface DRState {

@@ -1,37 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 
-export interface ASAMIncidentBrief {
-  reference:     string;
-  hostility:     string | null;
-  victim:        string | null;
-  threat_score:  number;
+export interface AdvisoryIncidentBrief {
+  reference: string;
+  hostility: string | null;
+  victim: string | null;
+  threat_score: number;
   incident_date: string;
-  distance_nm:   number;
+  distance_nm: number;
 }
 
 export interface SeaStateBrief {
-  buoy_id:     string;
-  wvht_m:      number | null;
-  avg_wvht_m:  number | null;
+  buoy_id: string;
+  wvht_m: number | null;
+  avg_wvht_m: number | null;
   wvht_zscore: number | null;
   distance_nm: number;
 }
 
 export interface MaritimeRiskReport {
-  mmsi:              string;
-  lat:               number;
-  lon:               number;
-  radius_nm:         number;
-  threat_level:      "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  composite_score:   number;
-  asam_max_score:    number;
-  incident_count:    number;
-  nearby_incidents:  ASAMIncidentBrief[];
+  mmsi: string;
+  lat: number;
+  lon: number;
+  radius_nm: number;
+  threat_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  composite_score: number;
+  incident_max_score: number;
+  incident_count: number;
+  nearby_incidents: AdvisoryIncidentBrief[];
   sea_state_anomaly: boolean;
-  sea_state:         SeaStateBrief[];
+  sea_state: SeaStateBrief[];
 }
 
-/** Fetch maritime risk assessment for a selected vessel.
+/** Fetch maritime conditions assessment for a selected vessel.
  *
  * Behaviour:
  *  - Fetches immediately when mmsi/lat/lon are provided.
@@ -41,13 +41,13 @@ export interface MaritimeRiskReport {
  */
 export function useMaritimeRisk(
   mmsi: string | null,
-  lat:  number | null,
-  lon:  number | null,
+  lat: number | null,
+  lon: number | null,
   radiusNm: number = 100,
 ) {
-  const [report, setReport]       = useState<MaritimeRiskReport | null>(null);
+  const [report, setReport] = useState<MaritimeRiskReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function useMaritimeRisk(
         setReport(data);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        console.warn("Maritime risk fetch failed:", err);
+        console.warn("Maritime conditions fetch failed:", err);
         setError("Risk data unavailable");
       } finally {
         setIsLoading(false);

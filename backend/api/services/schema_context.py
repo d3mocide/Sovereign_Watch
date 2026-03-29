@@ -63,29 +63,6 @@ ORBITAL meta fields (entity_id = SAT-{norad_id}, e.g. "SAT-25544"):
 """
 
 # ---------------------------------------------------------------------------
-# ASAM incidents schema — mirrors backend/db/init.sql
-# ---------------------------------------------------------------------------
-_ASAM_SCHEMA = """
-ASAM_INCIDENTS TABLE SCHEMA (NGA anti-shipping activity messages):
-  reference     TEXT         — NGA unique incident reference (e.g. "2024-001")
-  incident_date DATE         — Date of the incident (UTC)
-  lat           FLOAT        — Latitude of incident in decimal degrees (WGS84)
-  lon           FLOAT        — Longitude of incident in decimal degrees (WGS84)
-  hostility     TEXT         — Type of hostile act (e.g. "Robbery", "Kidnapping", "Fired Upon")
-  victim        TEXT         — Description of attacked vessel / crew
-  nav_area      TEXT         — IMO navigational area code (I–XXI)
-  subreg        TEXT         — NGA sub-region code
-  description   TEXT         — Full incident narrative from NGA
-  threat_score  FLOAT        — Composite threat score 0–10 (severity × recency):
-                                Severity:  Kidnapping=10, Fired Upon=8, Robbery=5,
-                                           Attempted=3, Boarded=7, Hijacking=9
-                                Recency:   ≤30d=1.0, ≤90d=0.7, ≤180d=0.5,
-                                           ≤365d=0.3, >365d=0.2
-  geom          GEOMETRY     — PostGIS point (SRID 4326)
-  ingested_at   TIMESTAMPTZ  — When the record was ingested from NGA API
-"""
-
-# ---------------------------------------------------------------------------
 # NDBC buoy observations schema — mirrors backend/db/init.sql
 # ---------------------------------------------------------------------------
 _NDBC_SCHEMA = """
@@ -123,11 +100,12 @@ MARITIME RISK API ENDPOINTS (Phase 3 cross-domain fusion):
 GET /api/maritime/risk-assessment?mmsi=&lat=&lon=&radius_nm=&days=
   — Composite maritime threat report for a vessel at (lat,lon)
   — radius_nm: search radius in nautical miles (default 100nm)
-  — days: look-back window for ASAM incidents (default 90)
+  — days: legacy advisory look-back parameter retained for compatibility
   Response fields:
     threat_label   TEXT   — CRITICAL | HIGH | MEDIUM | LOW
-    composite_score FLOAT — 0–10 composite (asam_max×0.7 + 2.0 if sea_anomaly, capped 10)
-    asam_incidents []     — Nearby ASAM incidents within radius (reference, hostility, threat_score, distance_nm)
+    composite_score FLOAT — 0–10 composite (incident_max×0.7 + 2.0 if sea_anomaly, capped 10)
+    incident_max_score FLOAT — Maximum nearby incident score retained for compatibility
+    nearby_incidents [] — Nearby advisory incidents within radius (currently empty after feed sunset)
     sea_state_anomaly BOOL — True if any nearby NDBC buoy shows |Z-score| > 2 on wvht/wspd
 
 GET /api/maritime/sea-state-anomaly?lat=&lon=&radius_nm=
@@ -138,9 +116,6 @@ GET /api/maritime/sea-state-anomaly?lat=&lon=&radius_nm=
     wspd_z         FLOAT  — Wind speed Z-score vs hourly baseline (NULL if no data)
     anomaly        BOOL   — True if |wvht_z| > 2 or |wspd_z| > 2
 
-GET /api/asam/incidents?min_lat=&max_lat=&min_lon=&max_lon=&days=&threat_min=&limit=
-  — GeoJSON FeatureCollection of ASAM incidents within bbox and filters
-  — days: look-back window (default 365), threat_min: minimum threat_score (default 0)
 """
 
 # ---------------------------------------------------------------------------
@@ -170,14 +145,6 @@ Orbital:
   - Decay: Altitude dropping faster than natural drag curve
   - Object type DEBRIS in unusual orbit: May indicate recent fragmentation event
 
-Maritime Piracy / ASAM:
-  - High threat_score (≥7): Recent kidnapping, hijacking, or fired-upon incident nearby — CRITICAL
-  - Cluster of incidents: Multiple ASAM events in same nav_area within 30d — elevated corridor risk
-  - Vessel loitering near high-threat nav_area: Cross-correlate AIS dark periods with ASAM hotspots
-  - Sea state anomaly (Z > 2) + high ASAM score: Compounding risk — weather may impede response
-  - Nav areas with chronic activity: Gulf of Guinea (Nav Area II/XI), Strait of Malacca (XI),
-    Horn of Africa / Arabian Sea (Nav Area VIII/IX), Gulf of Mexico approaches (Nav Area IV)
-
 Environmental / Sea State:
   - wvht Z-score > 3: Severe wave height anomaly — search/rescue significantly degraded
   - wspd Z-score > 2: Wind speed anomaly — navigation hazard, affects small vessel stability
@@ -189,13 +156,14 @@ Environmental / Sea State:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def get_schema_context(entity_type: str | None = None) -> str:
     """
     Return a structured schema context string for injection into the LLM
     system prompt.  Scoped to entity_type when known to reduce token count.
 
     Args:
-        entity_type: 'aviation', 'maritime', 'orbital', 'asam', or None for all types.
+        entity_type: 'aviation', 'maritime', 'orbital', or None for all types.
     """
     parts = [_TRACKS_SCHEMA.strip()]
 
@@ -204,20 +172,14 @@ def get_schema_context(entity_type: str | None = None) -> str:
     elif entity_type == "maritime":
         parts.append(_MARITIME_META.strip())
         parts.append(_NDBC_SCHEMA.strip())
-        parts.append(_ASAM_SCHEMA.strip())
         parts.append(_MARITIME_RISK_API.strip())
     elif entity_type == "orbital":
         parts.append(_ORBITAL_META.strip())
-    elif entity_type == "asam":
-        parts.append(_ASAM_SCHEMA.strip())
-        parts.append(_NDBC_SCHEMA.strip())
-        parts.append(_MARITIME_RISK_API.strip())
     else:
         parts.append(_AVIATION_META.strip())
         parts.append(_MARITIME_META.strip())
         parts.append(_ORBITAL_META.strip())
         parts.append(_NDBC_SCHEMA.strip())
-        parts.append(_ASAM_SCHEMA.strip())
         parts.append(_MARITIME_RISK_API.strip())
 
     parts.append(_ANOMALY_REFERENCE.strip())

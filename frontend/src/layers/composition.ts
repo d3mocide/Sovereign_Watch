@@ -16,15 +16,14 @@ import { buildAuroraLayer } from "./buildAuroraLayer";
 import { buildEntityLayers } from "./buildEntityLayers";
 import { buildGdeltLayer } from "./buildGdeltLayer";
 import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
+import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
 import { buildInfraLayers } from "./buildInfraLayers";
 import { buildJammingLayer } from "./buildJammingLayer";
 import { buildJS8Layers } from "./buildJS8Layers";
+import { buildNDBCLayer } from "./buildNDBCLayer";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
-import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
-import { buildASAMLayer } from "./buildASAMLayer";
-import { buildNDBCLayer } from "./buildNDBCLayer";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { getSatNOGSLayer } from "./SatNOGSLayer";
 
@@ -66,8 +65,6 @@ interface LayerCompositionOptions {
   gdeltData?: any;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
-  /** ASAM piracy incidents GeoJSON (Phase 2 Geospatial) */
-  asamData?: FeatureCollection | null;
   /**
    * Minimum tone threshold for GDELT dots (Goldstein scale).
    * Default -Infinity = show all.  Pass -2 for conflict+tension only.
@@ -117,7 +114,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     gdeltData,
     gdeltToneThreshold,
     buoyData,
-    asamData,
     onEntitySelect,
     setHoveredEntity,
     setHoverPosition,
@@ -235,15 +231,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     ...buildNDBCLayer(
       buoyData ?? null,
       !!filters?.showBuoys,
-      globeMode,
-      setHoveredInfra,
-      setSelectedInfra,
-    ),
-    // ASAM Piracy Incidents — Maritime Layer Group (Z-order 8–11, above buoys)
-    ...buildASAMLayer(
-      asamData ?? null,
-      !!filters?.showASAM,
-      zoom,
       globeMode,
       setHoveredInfra,
       setSelectedInfra,

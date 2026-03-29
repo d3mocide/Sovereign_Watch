@@ -1,10 +1,10 @@
 /**
- * MaritimeRiskPanel — Phase 3 Geospatial Cross-Domain Fusion HUD.
+ * MaritimeRiskPanel — Phase 3 Geospatial maritime conditions HUD.
  *
- * Displays the composite maritime risk report for a selected AIS vessel:
- *   - Threat level badge (LOW / MEDIUM / HIGH / CRITICAL) with colour coding
- *   - Composite risk score (0–10) from ASAM + sea state
- *   - List of nearby piracy incidents with distance + hostility type
+ * Presents a compact operating picture for a selected AIS vessel:
+ *   - A simple conditions badge derived from nearby advisories and buoy anomalies
+ *   - A coarse conditions index (0–10) from the existing report payload
+ *   - Nearby advisories when present
  *   - Sea state anomaly alert when Z-score > 2σ
  *
  * Auto-refreshes every 30 s while the vessel remains selected (managed by
@@ -16,20 +16,31 @@ import React from "react";
 import type { MaritimeRiskReport } from "../../hooks/useMaritimeRisk";
 
 interface Props {
-  report:    MaritimeRiskReport | null;
+  report: MaritimeRiskReport | null;
   isLoading: boolean;
-  callsign:  string;
+  callsign: string;
 }
 
 // ─── colour helpers ──────────────────────────────────────────────────────────
 
-function threatBadgeClass(level: string): string {
+function conditionsBadgeClass(level: string): string {
   switch (level) {
-    case "CRITICAL": return "bg-red-600/90 text-white border-red-400/60";
-    case "HIGH":     return "bg-orange-500/90 text-white border-orange-400/60";
-    case "MEDIUM":   return "bg-amber-500/80 text-black border-amber-400/60";
-    default:         return "bg-emerald-700/70 text-emerald-200 border-emerald-500/40";
+    case "ELEVATED":
+      return "bg-red-600/90 text-white border-red-400/60";
+    case "ADVISORY":
+      return "bg-orange-500/90 text-white border-orange-400/60";
+    case "WATCH":
+      return "bg-amber-500/80 text-black border-amber-400/60";
+    default:
+      return "bg-emerald-700/70 text-emerald-200 border-emerald-500/40";
   }
+}
+
+function conditionsBadgeLabel(report: MaritimeRiskReport): string {
+  if (report.incident_count > 0 && report.sea_state_anomaly) return "ELEVATED";
+  if (report.incident_count > 0) return "ADVISORY";
+  if (report.sea_state_anomaly) return "WATCH";
+  return "STABLE";
 }
 
 function scoreBarColor(score: number): string {
@@ -48,10 +59,29 @@ function hostilityColor(hostility: string | null): string {
   return "text-white/60";
 }
 
+function conditionsSummary(report: MaritimeRiskReport): string {
+  if (report.incident_count > 0 && report.sea_state_anomaly) {
+    return "Nearby advisories and elevated buoy conditions.";
+  }
+  if (report.incident_count > 0) {
+    return "Nearby advisories present in the current maritime feed.";
+  }
+  if (report.sea_state_anomaly) {
+    return "Buoy readings are elevated against the local baseline.";
+  }
+  return "No nearby advisories and no buoy anomaly detected.";
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
-export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign }) => {
+export const MaritimeRiskPanel: React.FC<Props> = ({
+  report,
+  isLoading,
+  callsign,
+}) => {
   if (!report && !isLoading) return null;
+
+  const badgeLabel = report ? conditionsBadgeLabel(report) : "STABLE";
 
   return (
     <div className="flex flex-col gap-1.5 px-3 py-2 bg-black/60 border-t border-white/8">
@@ -60,27 +90,31 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
         <div className="flex items-center gap-1.5">
           <Shield size={10} className="text-cyan-400" />
           <span className="text-[9px] font-bold tracking-widest text-cyan-400/80 uppercase">
-            Maritime Risk
+            Maritime Conditions
           </span>
           <span className="text-[8px] text-white/30 font-mono">{callsign}</span>
         </div>
         {isLoading && (
-          <span className="text-[8px] text-white/30 animate-pulse">updating…</span>
+          <span className="text-[8px] text-white/30 animate-pulse">
+            updating…
+          </span>
         )}
       </div>
 
       {isLoading && !report && (
-        <div className="text-[9px] text-white/30 py-1">Assessing threat…</div>
+        <div className="text-[9px] text-white/30 py-1">
+          Updating conditions…
+        </div>
       )}
 
       {report && (
         <>
-          {/* Threat badge + score bar */}
+          {/* Conditions badge + score bar */}
           <div className="flex items-center gap-2">
             <span
-              className={`text-[8px] font-bold px-1.5 py-0.5 rounded border tracking-widest ${threatBadgeClass(report.threat_level)}`}
+              className={`text-[8px] font-bold px-1.5 py-0.5 rounded border tracking-widest ${conditionsBadgeClass(badgeLabel)}`}
             >
-              {report.threat_level}
+              {badgeLabel}
             </span>
             <div className="flex-1 flex items-center gap-1">
               <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
@@ -94,6 +128,9 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
               </span>
             </div>
           </div>
+          <div className="text-[8px] text-white/35 leading-tight">
+            {conditionsSummary(report)}
+          </div>
 
           {/* Sea state anomaly alert */}
           {report.sea_state_anomaly && (
@@ -105,13 +142,15 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
             </div>
           )}
 
-          {/* Nearby ASAM incidents */}
+          {/* Nearby advisories */}
           {report.incident_count > 0 ? (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1 mb-0.5">
                 <Skull size={8} className="text-red-400/70" />
                 <span className="text-[8px] text-white/40 uppercase tracking-wider">
-                  {report.incident_count} incident{report.incident_count !== 1 ? "s" : ""} within {report.radius_nm}nm
+                  {report.incident_count} advisory
+                  {report.incident_count !== 1 ? "s" : ""} within{" "}
+                  {report.radius_nm}nm
                 </span>
               </div>
               {report.nearby_incidents.slice(0, 5).map((inc) => (
@@ -150,7 +189,9 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
           ) : (
             <div className="flex items-center gap-1 text-emerald-500/60">
               <AlertTriangle size={8} />
-              <span className="text-[8px]">No ASAM incidents within {report.radius_nm}nm</span>
+              <span className="text-[8px]">
+                No nearby advisories within {report.radius_nm}nm
+              </span>
             </div>
           )}
 
@@ -158,14 +199,16 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
           {report.sea_state.length > 0 && (
             <div className="flex flex-col gap-0.5 mt-0.5">
               <span className="text-[8px] text-white/30 uppercase tracking-wider">
-                Nearest buoy sea state
+                Nearest buoy conditions
               </span>
               {report.sea_state.slice(0, 2).map((s) => (
                 <div
                   key={s.buoy_id}
                   className="flex items-center justify-between bg-white/3 rounded px-1.5 py-0.5"
                 >
-                  <span className="text-[8px] font-mono text-blue-300/70">{s.buoy_id}</span>
+                  <span className="text-[8px] font-mono text-blue-300/70">
+                    {s.buoy_id}
+                  </span>
                   <div className="flex items-center gap-1.5">
                     {s.wvht_m !== null && (
                       <span className="text-[8px] font-mono text-white/50">
@@ -176,13 +219,25 @@ export const MaritimeRiskPanel: React.FC<Props> = ({ report, isLoading, callsign
                       <span
                         className={`text-[8px] font-mono font-bold ${Math.abs(s.wvht_zscore) > 2 ? "text-blue-400" : "text-white/30"}`}
                       >
-                        Z={s.wvht_zscore > 0 ? "+" : ""}{s.wvht_zscore.toFixed(1)}
+                        Z={s.wvht_zscore > 0 ? "+" : ""}
+                        {s.wvht_zscore.toFixed(1)}
                       </span>
                     )}
-                    <span className="text-[8px] text-white/25">{s.distance_nm}nm</span>
+                    <span className="text-[8px] text-white/25">
+                      {s.distance_nm}nm
+                    </span>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {report.sea_state.length === 0 && (
+            <div className="flex items-center gap-1 text-white/35">
+              <Waves size={8} />
+              <span className="text-[8px]">
+                No recent buoy observations within {report.radius_nm}nm
+              </span>
             </div>
           )}
         </>

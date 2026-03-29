@@ -3,6 +3,11 @@ import type { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
 import React, { MutableRefObject, useEffect, useRef } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
+import {
+  processEntityFrame,
+  processReplayFrame,
+} from "../engine/EntityFilterEngine";
+import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import {
@@ -16,11 +21,6 @@ import {
   Tower,
   VisualState,
 } from "../types";
-import {
-  processEntityFrame,
-  processReplayFrame,
-} from "../engine/EntityFilterEngine";
-import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
 
 interface UseAnimationLoopOptions {
@@ -65,8 +65,6 @@ interface UseAnimationLoopOptions {
   gdeltToneThreshold?: number;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
-  /** ASAM piracy incidents GeoJSON (Phase 2 Maritime) */
-  asamData?: FeatureCollection | null;
   setHoveredInfra?: (info: unknown) => void;
   setSelectedInfra?: (info: unknown) => void;
   worldCountriesData?: FeatureCollection | null;
@@ -142,7 +140,6 @@ export function useAnimationLoop({
   gdeltData,
   gdeltToneThreshold,
   buoyData,
-  asamData,
   setHoveredInfra,
   setSelectedInfra,
   globeMode,
@@ -226,9 +223,6 @@ export function useAnimationLoop({
 
   const buoyDataRef = useRef(buoyData);
   buoyDataRef.current = buoyData;
-
-  const asamDataRef = useRef(asamData);
-  asamDataRef.current = asamData;
 
   const worldCountriesDataRef = useRef(worldCountriesData);
   worldCountriesDataRef.current = worldCountriesData;
@@ -364,7 +358,11 @@ export function useAnimationLoop({
 
         // Live sidebar update for selected entity (throttled to ~30 fps)
         const currentSelected = selectedEntityRef.current;
-        if (currentSelected && _onEntityLiveUpdate && Math.floor(now / 33) % 2 === 0) {
+        if (
+          currentSelected &&
+          _onEntityLiveUpdate &&
+          Math.floor(now / 33) % 2 === 0
+        ) {
           const updatedSelected = interpolated.find(
             (e) => e.uid === currentSelected.uid,
           );
@@ -579,7 +577,6 @@ export function useAnimationLoop({
         gdeltData: gdeltDataRef.current,
         gdeltToneThreshold: gdeltToneThresholdRef.current,
         buoyData: buoyDataRef.current ?? null,
-        asamData: asamDataRef.current ?? null,
         onEntitySelect: onEntitySelectRef.current,
         setHoveredEntity: setHoveredEntityRef.current,
         setHoverPosition: setHoverPositionRef.current,

@@ -69,9 +69,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (entity.type === "infra") {
     return <InfraView key={entity.uid} {...baseProps} />;
   }
-  if (entity.type === "asam") {
-    return <InfraView key={entity.uid} {...baseProps} />;
-  }
   if (entity.type === "gdelt") {
     return <GdeltView key={entity.uid} {...baseProps} />;
   }

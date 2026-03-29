@@ -3,9 +3,8 @@ Cross-Domain Fusion API — Phase 3 Geospatial.
 
 Endpoints:
   GET /api/maritime/risk-assessment?mmsi=&lat=&lon=&radius_nm=100
-      Composite vessel threat score: nearby ASAM incidents + NDBC sea state
-      anomaly within a configurable radius.  Returns a structured risk report
-      ready for the MaritimeRiskPanel HUD.
+    Maritime conditions summary: nearby buoy anomaly check plus compatibility
+    advisory fields retained from the retired incident-intelligence pipeline.
 
   GET /api/maritime/sea-state-anomaly?lat=&lon=&radius_nm=100
       NDBC Z-score anomaly scan near a position.  Returns buoys whose current
@@ -16,13 +15,15 @@ when the pollers haven't run yet; they return safe empty payloads in that case.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Query
+
 from core.database import db
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Maritime")
 
 # ─── helpers ────────────────────────────────────────────────────────────────
+
 
 def _threat_label(score: float) -> str:
     """Translate a composite 0–10 score to a human-readable threat level."""
@@ -36,31 +37,6 @@ def _threat_label(score: float) -> str:
 
 
 # ─── risk-assessment ─────────────────────────────────────────────────────────
-
-_ASAM_QUERY = """
-SELECT
-    reference,
-    hostility,
-    victim,
-    threat_score,
-    incident_date::text,
-    ROUND(
-        (ST_Distance(
-            geom::geography,
-            ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
-        ) / 1852.0)::numeric,
-        1
-    ) AS distance_nm
-FROM asam_incidents
-WHERE ST_DWithin(
-    geom::geography,
-    ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
-    $3 * 1852.0
-)
-  AND incident_date >= CURRENT_DATE - ($4 * INTERVAL '1 day')
-ORDER BY threat_score DESC, distance_nm ASC
-LIMIT 10
-"""
 
 _SEA_STATE_QUERY = """
 SELECT
@@ -113,77 +89,77 @@ LIMIT 10
 
 @router.get("/api/maritime/risk-assessment")
 async def get_risk_assessment(
-    mmsi:      str   = Query(..., description="Vessel MMSI"),
-    lat:       float = Query(..., ge=-90.0,  le=90.0),
-    lon:       float = Query(..., ge=-180.0, le=180.0),
-    radius_nm: float = Query(default=100.0, ge=1.0, le=500.0,
-                             description="Search radius in nautical miles"),
-    days:      int   = Query(default=365,   ge=1,   le=3650,
-                             description="ASAM look-back window in days"),
+    mmsi: str = Query(..., description="Vessel MMSI"),
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    radius_nm: float = Query(
+        default=100.0, ge=1.0, le=500.0, description="Search radius in nautical miles"
+    ),
+    days: int = Query(
+        default=365,
+        ge=1,
+        le=3650,
+        description="Legacy advisory look-back window retained for API compatibility",
+    ),
 ):
-    """Composite maritime risk report for a vessel at (lat, lon).
+    """Return a maritime conditions report for a vessel at (lat, lon).
 
-    Combines:
-    - Nearby ASAM piracy incidents within radius_nm (up to 10, sorted by threat)
-    - NDBC sea state anomaly check (Z-score > 2 = warning)
-    - Composite risk score 0–10 (weighted ASAM max + sea state bonus)
+    The external incident-intelligence feed has been sunset, so the incident
+    fields are returned as empty compatibility values while the buoy anomaly
+    path remains active.
     """
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
 
     try:
         async with db.pool.acquire() as conn:
-            asam_rows = await conn.fetch(_ASAM_QUERY, lat, lon, radius_nm, days)
-            sea_rows  = await conn.fetch(_SEA_STATE_QUERY, lat, lon, radius_nm)
+            sea_rows = await conn.fetch(_SEA_STATE_QUERY, lat, lon, radius_nm)
     except Exception as exc:
         logger.error("Risk assessment DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error")
 
-    incidents = [
-        {
-            "reference":    r["reference"],
-            "hostility":    r["hostility"],
-            "victim":       r["victim"],
-            "threat_score": float(r["threat_score"]),
-            "incident_date": r["incident_date"],
-            "distance_nm":  float(r["distance_nm"]),
-        }
-        for r in asam_rows
-    ]
+    _ = days
+    incidents: list[dict] = []
 
     sea_state = [
         {
-            "buoy_id":     r["buoy_id"],
-            "wvht_m":      float(r["wvht_m"]) if r["wvht_m"] is not None else None,
-            "avg_wvht_m":  float(r["avg_wvht_m"]) if r["avg_wvht_m"] is not None else None,
-            "wvht_zscore": float(r["wvht_zscore"]) if r["wvht_zscore"] is not None else None,
+            "buoy_id": r["buoy_id"],
+            "wvht_m": float(r["wvht_m"]) if r["wvht_m"] is not None else None,
+            "avg_wvht_m": float(r["avg_wvht_m"])
+            if r["avg_wvht_m"] is not None
+            else None,
+            "wvht_zscore": float(r["wvht_zscore"])
+            if r["wvht_zscore"] is not None
+            else None,
             "distance_nm": float(r["distance_nm"]),
         }
         for r in sea_rows
     ]
 
-    max_asam_score  = max((i["threat_score"] for i in incidents), default=0.0)
-    sea_anomaly     = any(
-        s["wvht_zscore"] is not None and abs(s["wvht_zscore"]) > 2.0
-        for s in sea_state
+    max_incident_score = 0.0
+    sea_anomaly = any(
+        s["wvht_zscore"] is not None and abs(s["wvht_zscore"]) > 2.0 for s in sea_state
     )
-    composite_score = min(10.0, round(
-        max_asam_score * 0.7 + (2.0 if sea_anomaly else 0.0),
-        2,
-    ))
+    composite_score = min(
+        10.0,
+        round(
+            max_incident_score * 0.7 + (2.0 if sea_anomaly else 0.0),
+            2,
+        ),
+    )
 
     return {
-        "mmsi":             mmsi,
-        "lat":              lat,
-        "lon":              lon,
-        "radius_nm":        radius_nm,
-        "threat_level":     _threat_label(composite_score),
-        "composite_score":  composite_score,
-        "asam_max_score":   round(max_asam_score, 2),
-        "incident_count":   len(incidents),
+        "mmsi": mmsi,
+        "lat": lat,
+        "lon": lon,
+        "radius_nm": radius_nm,
+        "threat_level": _threat_label(composite_score),
+        "composite_score": composite_score,
+        "incident_max_score": round(max_incident_score, 2),
+        "incident_count": len(incidents),
         "nearby_incidents": incidents,
         "sea_state_anomaly": sea_anomaly,
-        "sea_state":        sea_state,
+        "sea_state": sea_state,
     }
 
 
@@ -253,10 +229,11 @@ LIMIT 20
 
 @router.get("/api/maritime/sea-state-anomaly")
 async def get_sea_state_anomaly(
-    lat:       float = Query(..., ge=-90.0,  le=90.0),
-    lon:       float = Query(..., ge=-180.0, le=180.0),
-    radius_nm: float = Query(default=100.0, ge=1.0, le=1000.0,
-                             description="Search radius in nautical miles"),
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    radius_nm: float = Query(
+        default=100.0, ge=1.0, le=1000.0, description="Search radius in nautical miles"
+    ),
 ):
     """Return NDBC buoys with |Z-score| > 2 within radius_nm of (lat, lon).
 
@@ -276,22 +253,28 @@ async def get_sea_state_anomaly(
 
     anomalies = [
         {
-            "buoy_id":     r["buoy_id"],
-            "lat":         float(r["lat"]),
-            "lon":         float(r["lon"]),
-            "wvht_m":      float(r["wvht_m"]),
-            "avg_wvht_m":  float(r["avg_wvht_m"]) if r["avg_wvht_m"] is not None else None,
-            "std_wvht_m":  float(r["std_wvht_m"]) if r["std_wvht_m"] is not None else None,
-            "wvht_zscore": float(r["wvht_zscore"]) if r["wvht_zscore"] is not None else None,
+            "buoy_id": r["buoy_id"],
+            "lat": float(r["lat"]),
+            "lon": float(r["lon"]),
+            "wvht_m": float(r["wvht_m"]),
+            "avg_wvht_m": float(r["avg_wvht_m"])
+            if r["avg_wvht_m"] is not None
+            else None,
+            "std_wvht_m": float(r["std_wvht_m"])
+            if r["std_wvht_m"] is not None
+            else None,
+            "wvht_zscore": float(r["wvht_zscore"])
+            if r["wvht_zscore"] is not None
+            else None,
             "distance_nm": float(r["distance_nm"]),
         }
         for r in rows
     ]
 
     return {
-        "lat":        lat,
-        "lon":        lon,
-        "radius_nm":  radius_nm,
+        "lat": lat,
+        "lon": lon,
+        "radius_nm": radius_nm,
         "anomaly_count": len(anomalies),
-        "anomalies":  anomalies,
+        "anomalies": anomalies,
     }

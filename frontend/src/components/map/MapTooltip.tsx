@@ -45,6 +45,12 @@ function getHoldingSeverity(turnsRaw: number | string | undefined) {
 }
 
 export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
+  const detail = (entity.detail ?? {}) as Record<string, unknown>;
+  const detailProps = ((detail.properties as
+    | Record<string, unknown>
+    | undefined) ?? detail) as Record<string, unknown>;
+  const detailGeometry = (detail.geometry ?? {}) as Record<string, unknown>;
+
   const isShip = entity.type.includes("S");
   const isBuoy = entity.type === "buoy";
   const isRepeater = entity.type === "repeater";
@@ -149,10 +155,6 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                       : isHold
                         ? Crosshair
                         : Plane;
-
-  const detail = (entity.detail ?? {}) as Record<string, unknown>;
-  const detailProps = (detail.properties ?? {}) as Record<string, unknown>;
-  const detailGeometry = (detail.geometry ?? {}) as Record<string, unknown>;
 
   return (
     <div

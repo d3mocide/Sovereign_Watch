@@ -1,42 +1,47 @@
-# Release - v0.55.0 - NDBC Ocean Buoy Intelligence Layer
+# Release - v0.56.0 - SMAPS Retirement and Maritime Conditions Stabilization
 
-This release integrates real-time NOAA NDBC ocean buoy observations into SovereignWatch as a first-class geospatial intelligence layer. Operators now get sea-state baseline context, water temperature, and wind telemetry directly on the tactical map and sidebar, establishing the environmental foundation needed for Phase 3 vessel risk and anomaly detection workflows.
+This release completes the operational retirement of SMAPS from Sovereign Watch runtime paths. Maritime operator workflows remain available through buoy-derived sea-state conditions while retired SMAPS ingestion, API, map-layer, and schema surfaces are removed to reduce runtime fragility and maintenance overhead.
 
 ### Key Features
 
-- **Real-Time NDBC Polling**: Infra poller now fetches latest buoy observations every 15 minutes with cache-aware request handling.
-- **Operational Buoy API**: New `/api/buoys/latest` endpoint serves buoy observations using Redis for fast global views and PostGIS for viewport-specific queries.
-- **Buoy Layer Rendering**: Added Deck.gl buoy circles with radius mapped to wave height and color mapped to water temperature.
-- **Tooltip and Sidebar Integration**: Hover and click interactions now route buoy entities into dedicated buoy telemetry views.
-- **Map Control Integration**: Added buoy visibility controls under Environmental filters with synchronized tactical map behavior.
+- **SMAPS Runtime Removal**: Removed the retired SMAPS incidents route from active backend wiring and deleted the dedicated router module.
+- **Ingestion Simplification**: Removed SMAPS loop/config/helpers from the infra poller and deleted associated test modules.
+- **Frontend Cleanup**: Removed SMAPS hooks/layers/toggles and SMAPS-specific tooltip/sidebar branching from tactical map UX paths.
+- **Schema and Runtime Parity**: Removed `smaps_incidents` bootstrap DDL and dropped the live table so source and runtime database state match.
+- **Maritime Conditions Continuity**: Preserved buoy-driven maritime conditions reporting with compatibility-safe incident field naming.
 
 ### Technical Details
 
-- **Ingestion and Parsing**:
-	- Added `parse_ndbc_latest_obs()` parsing pipeline for space-delimited NOAA payloads.
-	- Extracts buoy ID, position, timestamp, and meteorological/oceanographic fields.
-	- Filters invalid coordinates and rows with no usable measurements.
-- **Database Layer**:
-	- Added `ndbc_obs` hypertable with 1-day chunking and 30-day retention.
-	- Added compression policy optimized by buoy ID and descending timestamp.
-	- Added geospatial and lookup indexes for viewport and latest-station retrieval paths.
-	- Added `ndbc_hourly_baseline` continuous aggregate for hourly mean/stddev baseline support.
-- **Frontend Data and Rendering**:
-	- Added `useNDBCBuoys()` hook with 500ms bbox debounce and 15-minute auto-refresh.
-	- Added `buildNDBCLayer()` scatterplot with wave-height sizing and water-temperature color scale.
-	- Added buoy entity classification and hover-card routing to prevent fallback avionics tooltips.
-	- Added buoy telemetry fields in right sidebar (wave height, water temp, wind speed/direction, air temp, pressure).
-- **Reliability Fixes**:
-	- Fixed sticky buoy tooltip state on hover exit by clearing buoy hover entity on leave.
-	- Fixed tooltip type fallback so buoy hovers are consistently rendered as buoy, not avionics.
+- **Backend/API**:
+  - Removed SMAPS router registration and module.
+  - Updated maritime report compatibility naming to `incident_max_score`.
+  - Removed SMAPS schema context and endpoint references from analyst context builders.
+- **Ingestion**:
+  - Removed retired SMAPS scheduling path and parsing/upsert helpers from `infra_poller`.
+  - Removed SMAPS test suite under `backend/ingestion/infra_poller/tests`.
+- **Frontend**:
+  - Removed retired SMAPS hook and layer modules.
+  - Removed SMAPS entity/filter/type branches from map composition, tooltip, and right-sidebar rendering.
+  - Updated maritime report hook typings to generic incident compatibility labels.
+- **Database**:
+  - Deleted `smaps_incidents` table/index definitions from `backend/db/init.sql`.
+  - Executed live cleanup: `DROP TABLE IF EXISTS smaps_incidents CASCADE;`.
+
+### Verification
+
+- Frontend: `cd frontend && pnpm run lint && pnpm run test` (pass, 36 tests)
+- Backend API: `cd backend/api && ruff check . && python -m pytest` (pass, 46 tests)
+- Infra poller: `cd backend/ingestion/infra_poller && ruff check . && python -m pytest` (pass, 50 tests)
+- Live database: `docker compose exec -T sovereign-timescaledb psql -U postgres -d sovereign_watch -c "\\dt *smaps*"` (no relations found)
 
 ### Upgrade Instructions
 
-To upgrade your local or remote instance to v0.55.0:
+To upgrade to v0.56.0:
 
 1. Pull the latest code:
-	 git pull origin main
+   `git pull origin main`
 2. Rebuild and restart services:
-	 docker compose up -d --build
-3. Optional frontend image rebuild if UI assets appear stale:
-	 docker compose build frontend
+   `docker compose up -d --build`
+3. Validate service health and map overlays:
+   - Confirm buoy data and maritime conditions panel are rendering.
+   - Confirm no SMAPS entities/routes are expected in runtime output.

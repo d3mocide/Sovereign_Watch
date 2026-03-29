@@ -1,4 +1,4 @@
-import { Crosshair, Network, Signal, Skull, Waves, X } from "lucide-react";
+import { Crosshair, Network, Signal, Waves, X } from "lucide-react";
 import React from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { TimeTracked } from "../TimeTracked";
@@ -14,62 +14,40 @@ export const InfraView: React.FC<BaseViewProps> = ({
   const props = detail.properties || {};
   const isStation = detail.geometry?.type === "Point";
   const isBuoy = props.buoy_id !== undefined;
-  const isASAM =
-    props.reference !== undefined && props.threat_score !== undefined;
   const isOutage =
-    !isASAM &&
-    (props.entity_type === "outage" ||
-      props.id?.includes("outage") ||
-      props.severity !== undefined);
+    props.entity_type === "outage" ||
+    props.id?.includes("outage") ||
+    props.severity !== undefined;
   const severity = Number(props.severity || 0);
-  const threatScore = Number(props.threat_score || 0);
 
-  const accentColor = isASAM
-    ? threatScore >= 7
-      ? "text-red-400"
-      : threatScore >= 4
-        ? "text-orange-400"
+  const accentColor = isBuoy
+    ? "text-blue-400"
+    : isOutage
+      ? severity > 50
+        ? "text-red-400"
         : "text-amber-400"
-    : isBuoy
-      ? "text-blue-400"
-      : isOutage
-        ? severity > 50
-          ? "text-red-400"
-          : "text-amber-400"
-        : "text-cyan-400";
-  const accentBorder = isASAM
-    ? threatScore >= 7
-      ? "border-red-400/30"
-      : "border-orange-400/30"
-    : isBuoy
-      ? "border-blue-400/30"
-      : isOutage
-        ? severity > 50
-          ? "border-red-400/30"
-          : "border-amber-400/30"
-        : "border-cyan-400/30";
-  const accentBg = isASAM
-    ? threatScore >= 7
-      ? "from-red-400/20 to-red-400/5"
-      : "from-orange-400/20 to-orange-400/5"
-    : isBuoy
-      ? "from-blue-400/20 to-blue-400/5"
-      : isOutage
-        ? severity > 50
-          ? "from-red-400/20 to-red-400/5"
-          : "from-amber-400/20 to-amber-400/5"
-        : "from-cyan-400/20 to-cyan-400/5";
-  const accentGlow = isASAM
-    ? threatScore >= 7
-      ? "text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-      : "text-orange-300 drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]"
-    : isBuoy
-      ? "text-blue-300 drop-shadow-[0_0_8px_rgba(96,165,250,0.8)]"
-      : isOutage
-        ? severity > 50
-          ? "text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-          : "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
-        : "text-cyan-300 drop-shadow-[0_0_8px_currentColor]";
+      : "text-cyan-400";
+  const accentBorder = isBuoy
+    ? "border-blue-400/30"
+    : isOutage
+      ? severity > 50
+        ? "border-red-400/30"
+        : "border-amber-400/30"
+      : "border-cyan-400/30";
+  const accentBg = isBuoy
+    ? "from-blue-400/20 to-blue-400/5"
+    : isOutage
+      ? severity > 50
+        ? "from-red-400/20 to-red-400/5"
+        : "from-amber-400/20 to-amber-400/5"
+      : "from-cyan-400/20 to-cyan-400/5";
+  const accentGlow = isBuoy
+    ? "text-blue-300 drop-shadow-[0_0_8px_rgba(96,165,250,0.8)]"
+    : isOutage
+      ? severity > 50
+        ? "text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+        : "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+      : "text-cyan-300 drop-shadow-[0_0_8px_currentColor]";
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -80,9 +58,7 @@ export const InfraView: React.FC<BaseViewProps> = ({
         <div className="flex justify-between items-start">
           <div className="flex flex-col flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              {isASAM ? (
-                <Skull size={14} className={accentColor} />
-              ) : isBuoy ? (
+              {isBuoy ? (
                 <Waves size={14} className={accentColor} />
               ) : isOutage ? (
                 <Signal size={14} className={accentColor} />
@@ -90,13 +66,11 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 <Network size={14} className="text-cyan-400 shrink-0" />
               )}
               <span className="text-[10px] font-bold tracking-[.3em] text-white/40">
-                {isASAM
-                  ? "PIRACY_INCIDENT"
-                  : isBuoy
-                    ? "OCEAN_BUOY"
-                    : isOutage
-                      ? "CRITICAL_EVENT"
-                      : "UNDERSEA_INFRASTRUCTURE"}
+                {isBuoy
+                  ? "OCEAN_BUOY"
+                  : isOutage
+                    ? "CRITICAL_EVENT"
+                    : "UNDERSEA_INFRASTRUCTURE"}
               </span>
             </div>
             <h2
@@ -107,68 +81,49 @@ export const InfraView: React.FC<BaseViewProps> = ({
             </h2>
             <section className="border-l-2 border-l-white/20 pl-3 py-1 mb-2 space-y-0.5">
               <h3 className="text-mono-sm font-bold text-white/90">
-                {isASAM
-                  ? String(props.hostility || "ANTI-SHIPPING ACT")
-                  : isBuoy
-                    ? "OCEANOGRAPHIC_BUOY"
-                    : props.entity_type === "outage" ||
-                        props.id?.includes("outage")
-                      ? "INTERNET_OUTAGE"
-                      : isStation
-                        ? "LANDING_STATION"
-                        : "SUBMARINE_CABLE"}
+                {isBuoy
+                  ? "OCEANOGRAPHIC_BUOY"
+                  : props.entity_type === "outage" ||
+                      props.id?.includes("outage")
+                    ? "INTERNET_OUTAGE"
+                    : isStation
+                      ? "LANDING_STATION"
+                      : "SUBMARINE_CABLE"}
               </h3>
               <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
-                {isASAM ? (
-                  <>
+                <>
+                  <div className="flex gap-2">
+                    <span className="text-white/30 w-16">
+                      {isBuoy
+                        ? "Location:"
+                        : isOutage
+                          ? "Impact:"
+                          : isStation
+                            ? "Country:"
+                            : "Location:"}
+                    </span>
+                    <span className="text-white/80">
+                      {String(
+                        props.region ||
+                          props.country ||
+                          props.status ||
+                          "ACTIVE",
+                      )}
+                    </span>
+                  </div>
+                  {isOutage && (
                     <div className="flex gap-2">
-                      <span className="text-white/30 w-16">Nav Area:</span>
-                      <span className="text-white/80">
-                        {String(props.nav_area || props.subreg || "UNKNOWN")}
-                      </span>
+                      <span className="text-white/30 w-16">Severity:</span>
+                      <span className={accentColor}>{severity}%</span>
                     </div>
+                  )}
+                  {!isStation && props.rfs && !isOutage && (
                     <div className="flex gap-2">
-                      <span className="text-white/30 w-16">Date:</span>
-                      <span className="text-white/80">
-                        {String(props.incident_date || "UNKNOWN")}
-                      </span>
+                      <span className="text-white/30 w-16">RFS:</span>
+                      <span className="text-white/80">{props.rfs}</span>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      <span className="text-white/30 w-16">
-                        {isBuoy
-                          ? "Location:"
-                          : isOutage
-                            ? "Impact:"
-                            : isStation
-                              ? "Country:"
-                              : "Location:"}
-                      </span>
-                      <span className="text-white/80">
-                        {String(
-                          props.region ||
-                            props.country ||
-                            props.status ||
-                            "ACTIVE",
-                        )}
-                      </span>
-                    </div>
-                    {isOutage && (
-                      <div className="flex gap-2">
-                        <span className="text-white/30 w-16">Severity:</span>
-                        <span className={accentColor}>{severity}%</span>
-                      </div>
-                    )}
-                    {!isStation && props.rfs && !isOutage && (
-                      <div className="flex gap-2">
-                        <span className="text-white/30 w-16">RFS:</span>
-                        <span className="text-white/80">{props.rfs}</span>
-                      </div>
-                    )}
-                  </>
-                )}
+                  )}
+                </>
               </div>
             </section>
           </div>
@@ -190,7 +145,7 @@ export const InfraView: React.FC<BaseViewProps> = ({
               e.stopPropagation();
               onCenterMap?.();
             }}
-            className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${isASAM ? "from-red-400/30 to-red-400/10 border-red-400/50 text-red-400" : isOutage ? "from-amber-400/30 to-amber-400/10 border-amber-400/50 text-amber-400" : "from-cyan-400/30 to-cyan-400/10 border-cyan-400/50 text-cyan-400"} hover:brightness-110 py-1.5 rounded text-[10px] font-bold tracking-widest transition-all active:scale-[0.98]`}
+            className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${isOutage ? "from-amber-400/30 to-amber-400/10 border-amber-400/50 text-amber-400" : "from-cyan-400/30 to-cyan-400/10 border-cyan-400/50 text-cyan-400"} hover:brightness-110 py-1.5 rounded text-[10px] font-bold tracking-widest transition-all active:scale-[0.98]`}
           >
             <Crosshair size={12} />
             CENTER_VIEW
@@ -200,77 +155,6 @@ export const InfraView: React.FC<BaseViewProps> = ({
 
       {/* Body */}
       <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
-        {isASAM ? (
-          <section className="space-y-2">
-            <h3 className={`text-[10px] ${accentColor} font-bold uppercase tracking-wider`}>
-              Incident_Report
-            </h3>
-            <div className="space-y-1 text-mono-xs font-medium">
-              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">THREAT SCORE:</span>
-                <span className={`${accentColor} tabular-nums font-bold`}>
-                  {threatScore.toFixed(1)} / 10
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">REFERENCE:</span>
-                <span className="text-white/80 font-mono">
-                  {String(props.reference || "N/A")}
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">HOSTILITY:</span>
-                <span className="text-white/80">
-                  {String(props.hostility || "UNKNOWN")}
-                </span>
-              </div>
-              {props.victim && (
-                <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                  <span className="text-white/30">VICTIM:</span>
-                  <span className="text-white/80">
-                    {String(props.victim)}
-                  </span>
-                </div>
-              )}
-              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">NAV AREA:</span>
-                <span className="text-white/80">
-                  {String(props.nav_area || props.subreg || "UNKNOWN")}
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
-                <span className="text-white/30">DATE:</span>
-                <span className="text-white/80 tabular-nums">
-                  {String(props.incident_date || "UNKNOWN")}
-                </span>
-              </div>
-            </div>
-            {props.description && (
-              <div className="space-y-1 mt-2">
-                <h3 className={`text-[10px] ${accentColor} font-bold uppercase tracking-wider`}>
-                  Incident_Description
-                </h3>
-                <div className="text-[10px] text-white/70 leading-relaxed font-mono bg-white/5 p-2 rounded border border-white/10">
-                  {String(props.description)}
-                </div>
-              </div>
-            )}
-            <div className="flex gap-4 text-mono-xs mt-3 pt-2 border-t border-white/5">
-              <div className="flex gap-2">
-                <span className="text-white/30">LAT:</span>
-                <span className="text-white tabular-nums">
-                  {entity.lat.toFixed(6)}°
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-white/30">LON:</span>
-                <span className="text-white tabular-nums">
-                  {entity.lon.toFixed(6)}°
-                </span>
-              </div>
-            </div>
-          </section>
-        ) : (
         <section className="space-y-2">
           <h3
             className={`text-[10px] ${isOutage ? "text-amber-400" : "text-white/50"} font-bold uppercase tracking-wider`}
@@ -351,11 +235,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
             </div>
           </div>
         </section>
-        )}
 
-        {!isASAM && <div className="h-px bg-white/5 w-full my-2" />}
+        <div className="h-px bg-white/5 w-full my-2" />
 
-        {!isASAM && props.landing_points && (
+        {props.landing_points && (
           <section className="space-y-1">
             <h3 className="text-[10px] text-white/50 font-bold pb-1 text-cyan-400">
               Landing_Points
@@ -366,7 +249,7 @@ export const InfraView: React.FC<BaseViewProps> = ({
           </section>
         )}
 
-        {!isASAM && props.cables && isStation && (
+        {props.cables && isStation && (
           <section className="space-y-1">
             <h3 className="text-[10px] text-white/50 font-bold pb-1 text-cyan-400">
               Connected_Cables
@@ -446,10 +329,7 @@ export const InfraView: React.FC<BaseViewProps> = ({
         </div>
         <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
           <span>
-            SRC:{" "}
-            <span className={isASAM ? "text-red-400/70" : "text-cyan-400/70"}>
-              {isASAM ? "NGA_ASAM" : "INFRA_Poller"}
-            </span>
+            SRC: <span className="text-cyan-400/70">INFRA_Poller</span>
           </span>
           <span>
             <TimeTracked lastSeen={entity.lastSeen} />

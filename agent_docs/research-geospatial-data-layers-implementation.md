@@ -15,9 +15,9 @@ The research document recommends a **sidecar architecture** where alternative so
 
 ### Immediate Value (Weeks 1–2)
 
-**Highest Priority — NDBC + NGA ASAM (Maritime Baseline)**
+**Highest Priority — NDBC + NGA SMAPS (Maritime Baseline)**
 - **NDBC** adds real-time sea state context (wave height WVHT, water temp WTMP, wind WSPD/WDIR) — critical for AIS dropout disambiguation (research section 3)
-- **NGA ASAM** adds piracy/threat spatial intelligence — currently missing entirely
+- **NGA SMAPS** adds piracy/threat spatial intelligence — currently missing entirely
 - Both have straightforward HTTP APIs with no authentication
 - Deck.gl implementation pattern already proven (ScatterplotLayer in your aurora/jamming/gdelt layers)
 - **Effort**: ~25–30 hrs for both pipelines + dual layer rendering
@@ -30,7 +30,7 @@ The research document recommends a **sidecar architecture** where alternative so
 
 **Deferred — VIIRS/FIRMS, SMAPS Advanced, EOG VBD**
 - Higher integration complexity (NASA authentication, NetCDF parsing, IMAP gateway)
-- Better suited for Phase 2 after NDBC/ASAM foundation is solid
+- Better suited for Phase 2 after NDBC/SMAPS foundation is solid
 - Research recommends ~40+ hrs for VIIRS alone
 
 ---
@@ -119,7 +119,7 @@ SELECT add_retention_policy('ndbc_obs', INTERVAL '30 days', if_not_exists => TRU
 
 ---
 
-### 2. NGA ASAM Piracy + Maritime Safety Layer (Primary)
+### 2. NGA SMAPS Piracy + Maritime Safety Layer (Primary)
 
 **Research guidance**: Section 4 — weekly shapefile download, geopandas SHP parsing, nav warnings regex extraction
 
@@ -129,29 +129,29 @@ SELECT add_retention_policy('ndbc_obs', INTERVAL '30 days', if_not_exists => TRU
 Structure:
 ├── nga_msi_pulse.py                 # Main poller (Shapefile download + geopandas)
 ├── sources/
-│   ├── nga_asam_downloader.py       # ZIP download, zipfile extraction
+│   ├── nga_smaps_downloader.py       # ZIP download, zipfile extraction
 │   ├── nga_nav_warnings_parser.py   # Regex coordinate extraction from narrative text
-│   └── asam_shapefile_parser.py     # geopandas GeoDataFrame → GeoJSON
+│   └── smaps_shapefile_parser.py     # geopandas GeoDataFrame → GeoJSON
 ├── processors/
-│   └── threat_correlation.py        # Cross-reference ASAM with AIS tracks
+│   └── threat_correlation.py        # Cross-reference SMAPS with AIS tracks
 └── tests/
     └── test_nga_*.py
 
 Data flow:
-  HTTP GET msi.nga.mil/asam_shapefile.zip (15:00 ET weekdays)
+  HTTP GET msi.nga.mil/smaps_shapefile.zip (15:00 ET weekdays)
     → Decompress ZIP
     → Parse .shp with geopandas (WGS84 EPSG:4326 guaranteed)
-    → asam_incidents table (point geometries for attack locations)
+    → smaps_incidents table (point geometries for attack locations)
     → Separate nav_warnings poll (msi.nga.mil/api/publications/)
     → Regex lat/lon extraction from narrative → nav_warnings table
-    → Kafka topic `sw.nga.asam` + `sw.nga.navwarning`
+    → Kafka topic `sw.nga.SMAPS` + `sw.nga.navwarning`
 ```
 
 **Database schema additions**:
 
 ```sql
--- NGA ASAM piracy incidents
-CREATE TABLE IF NOT EXISTS asam_incidents (
+-- NGA SMAPS piracy incidents
+CREATE TABLE IF NOT EXISTS smaps_incidents (
   id              SERIAL PRIMARY KEY,
   date            DATE NOT NULL,
   geom            GEOMETRY(Point, 4326) NOT NULL,
@@ -164,9 +164,9 @@ CREATE TABLE IF NOT EXISTS asam_incidents (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX asam_geom_idx ON asam_incidents USING GIST (geom);
-CREATE INDEX asam_date_idx ON asam_incidents (date DESC);
-CREATE INDEX asam_h3_idx ON asam_incidents (h3_res5);
+CREATE INDEX SMAPS_geom_idx ON smaps_incidents USING GIST (geom);
+CREATE INDEX SMAPS_date_idx ON smaps_incidents (date DESC);
+CREATE INDEX SMAPS_h3_idx ON smaps_incidents (h3_res5);
 
 -- Navigational warnings (polygons or buffers around hazards)
 CREATE TABLE IF NOT EXISTS nav_warnings (
@@ -184,14 +184,14 @@ CREATE INDEX nav_warnings_geom_idx ON nav_warnings USING GIST (geom);
 CREATE INDEX nav_warnings_valid_idx ON nav_warnings (valid_from, valid_to);
 
 -- Threat score continuous aggregate (rolling 90-day piracy density)
-CREATE MATERIALIZED VIEW IF NOT EXISTS asam_threat_density AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS smaps_threat_density AS
 SELECT
   h3_res5,
   date_trunc('day', date) AS day,
   count(*) AS incident_count,
   max(threat_score) AS max_threat,
   ST_Centroid(ST_Collect(geom)) AS cluster_center
-FROM asam_incidents
+FROM smaps_incidents
 WHERE date > NOW()::DATE - INTERVAL '90 days'
 GROUP BY h3_res5, date_trunc('day', date)
 WITH DATA;
@@ -199,7 +199,7 @@ WITH DATA;
 
 **Poller parameters**:
 - Schedule: 15:00 ET (NGA typically publishes 14:00–15:00 ET, weekdays only)
-- Shapefile URL: `https://msi.nga.mil/api/public/asam_shapefiles/latest.zip`
+- Shapefile URL: `https://msi.nga.mil/api/public/smaps_shapefiles/latest.zip`
 - Field mapping: lat/lon → geom, `type` → attack_type, `date` → date (convert to DATE type)
 - Nav warnings: Secondary poll of RSS feed or manual parsing of `msi.nga.mil/publications/`
 
@@ -341,7 +341,7 @@ onClick on buoy
 
 ---
 
-### 2. NGA ASAM Piracy + Nav Warnings Layer (`frontend/src/layers/buildASAMLayer.ts`)
+### 2. NGA SMAPS Piracy + Nav Warnings Layer (`frontend/src/layers/buildSMAPSLayer.ts`)
 
 **Deck.gl layer types**:
 - Incidents: `IconLayer` (attack-type SVG atlas) + `ScatterplotLayer` (density heatmap at zoom < 6)
@@ -350,7 +350,7 @@ onClick on buoy
 ```typescript
 // Incidents (zoom >= 8):
 IconLayer {
-  data: asamIncidents,
+  data: SMAPSIncidents,
   getPosition: [lon, lat],
   getIcon: (obj) => {
     // SVG atlas: kidnapping → red; armed robbery → orange; hijacking → yellow
@@ -369,7 +369,7 @@ IconLayer {
 
 // Incidents (zoom < 6 — density):
 HexagonLayer {
-  data: asamIncidents,
+  data: SMAPSIncidents,
   getPosition: [lon, lat],
   getElevationValue: (points) => points.length,
   colorDomain: [0, 50],
@@ -409,7 +409,7 @@ SELECT
       WHEN attack_type = 'Armed Robbery' THEN 1.5
       ELSE 1
     END
-FROM asam_incidents
+FROM smaps_incidents
 WHERE date > CURRENT_DATE - INTERVAL '90 days'
 ORDER BY threat_score DESC;
 ```
@@ -531,24 +531,24 @@ ORDER BY ais.time DESC;
 SELECT
   ent.entity_id,
   ent.entity_type,
-  array_agg(DISTINCT asam.attack_type) FILTER (WHERE asam.id IS NOT NULL) AS piracy_threats,
+  array_agg(DISTINCT SMAPS.attack_type) FILTER (WHERE SMAPS.id IS NOT NULL) AS piracy_threats,
   array_agg(DISTINCT nav.title) FILTER (WHERE nav.id IS NOT NULL) AS nav_warnings,
   array_agg(DISTINCT notam.type) FILTER (WHERE notam.id IS NOT NULL) AS active_notams,
   CASE
-    WHEN array_length(array_agg(DISTINCT asam.id), 1) > 0
+    WHEN array_length(array_agg(DISTINCT SMAPS.id), 1) > 0
       AND array_length(array_agg(DISTINCT notam.id), 1) > 0
     THEN 'MULTI_DOMAIN_THREAT'
     ELSE 'NORMAL'
   END AS threat_classification
 FROM entities ent
-LEFT JOIN asam_incidents asam ON ST_DWithin(ent.geom, asam.geom, 50000)
+LEFT JOIN smaps_incidents smaps ON ST_DWithin(ent.geom, SMAPS.geom, 50000)
 LEFT JOIN nav_warnings nav ON ST_DWithin(ent.geom, nav.geom, 50000)
   AND NOW() BETWEEN nav.valid_from AND nav.valid_to
 LEFT JOIN notams notam ON ST_DWithin(ent.geom, notam.geom, 185000)
   AND NOW() BETWEEN notam.valid_from AND notam.valid_to
 WHERE ent.geom IS NOT NULL
 GROUP BY ent.entity_id, ent.entity_type
-HAVING COUNT(DISTINCT asam.id) > 0 OR COUNT(DISTINCT notam.id) > 0;
+HAVING COUNT(DISTINCT SMAPS.id) > 0 OR COUNT(DISTINCT notam.id) > 0;
 ```
 
 ---
@@ -567,12 +567,12 @@ HAVING COUNT(DISTINCT asam.id) > 0 OR COUNT(DISTINCT notam.id) > 0;
    ```sql
    -- NDBC: 30-day rolling window
    -- NOTAM: 14-day (most NOTAMs expire quickly, historical archive not critical)
-   -- ASAM: 90-day (piracy incidents valuable for trend analysis)
+   -- SMAPS: 90-day (piracy incidents valuable for trend analysis)
    ```
 
 3. **Continuous aggregates** (pre-computed for fast queries):
    - `ndbc_anomaly_baseline`: 30-day rolling mean per buoy (1-hour buckets)
-   - `asam_threat_density`: 90-day incident density per H3 cell (daily buckets)
+   - `smaps_threat_density`: 90-day incident density per H3 cell (daily buckets)
 
 4. **Index strategy**:
    - GIST on all geographic columns (spatial searches)
@@ -646,13 +646,13 @@ Total sidecar memory: ~390 MB (fits within Jetson Nano constraints)
 **Backend**:
 ```bash
 cd backend/api && python -m pytest tests/test_ndbc_poller.py -v
-cd backend/api && python -m pytest tests/test_nga_asam_parser.py -v
+cd backend/api && python -m pytest tests/test_nga_smaps_parser.py -v
 cd backend/api && python -m pytest tests/test_notam_poller.py -v
 ```
 
 **Frontend** (via pnpm):
 ```bash
-cd frontend && pnpm run test -- --testPathPattern="buildNDBCLayer|buildASAMLayer|buildNOTAMLayer"
+cd frontend && pnpm run test -- --testPathPattern="buildNDBCLayer|buildSMAPSLayer|buildNOTAMLayer"
 cd frontend && pnpm run lint
 ```
 
@@ -662,8 +662,8 @@ cd frontend && pnpm run lint
    - Poll latest_obs.txt → verify 10+ buoys parsed → check ndbc_obs table rowcount
    - Anomaly detection: Insert test observation +5σ above baseline → verify Z-score flag computed
 
-2. **NGA ASAM ingestion**:
-   - Mock shapefile download → verify asam_incidents table populated
+2. **NGA SMAPS ingestion**:
+   - Mock shapefile download → verify smaps_incidents table populated
    - Cross-reference with sample AIS track → verify ST_DWithin query returns piracy nearby
 
 3. **NOTAM ingestion**:
@@ -673,7 +673,7 @@ cd frontend && pnpm run lint
 4. **Frontend layer rendering**:
    - Load TacticalMap with showBuoys=true → verify ScatterplotLayer appears
    - Hover buoy marker → tooltip displays WVHT, WTMP correctly
-   - Zoom < 6 → ASAM hexagon density layer appears; zoom >= 8 → IconLayer
+   - Zoom < 6 → SMAPS hexagon density layer appears; zoom >= 8 → IconLayer
    - NOTAM critical circle pulsing animation triggers on CRITICAL severity
 
 ### End-to-End Scenario
@@ -692,7 +692,7 @@ cd frontend && pnpm run lint
 | Week | Task | Deliverable |
 |------|------|-------------|
 | 1–2  | NDBC primary + layer | `ndbc_pulse.py`, `buildNDBCLayer.ts`, hypertable + continuous aggregate |
-| 2–3  | NGA ASAM primary + layer | `nga_msi_pulse.py`, `buildASAMLayer.ts`, incident + nav warning tables |
+| 2–3  | NGA SMAPS primary + layer | `nga_msi_pulse.py`, `buildSMAPSLayer.ts`, incident + nav warning tables |
 | 3–4  | NOTAM Phase 1 + layer | `notam_poll_pulse.py`, `buildNOTAMLayer.ts`, NOTAM table, WebSocket critical alert |
 | 4–5  | Sidecar scaffolding | MARAD RSS poller, container definitions (docker-compose.yml) |
 | 5–6+ | Fusion queries + Phase 2 data sources | Dark vessel, GNSS spoofing, incident correlation queries; VIIRS/FIRMS poller |
@@ -705,15 +705,15 @@ cd frontend && pnpm run lint
 - `backend/ingestion/ndbc_pulse.py` (new)
 - `backend/ingestion/sources/ndbc_api.py` (new)
 - `backend/ingestion/nga_msi_pulse.py` (new)
-- `backend/ingestion/sources/nga_asam.py` (new)
+- `backend/ingestion/sources/nga_SMAPS.py` (new)
 - `backend/ingestion/notam_poll_pulse.py` (new)
 - `backend/ingestion/sources/aviationweather.py` (new)
-- `backend/db/init.sql` (additions for ndbc_obs, asam_incidents, nav_warnings, notams tables)
-- `backend/api/app.py` (add `/api/buoys/latest`, `/api/asam/incidents` endpoints)
+- `backend/db/init.sql` (additions for ndbc_obs, smaps_incidents, nav_warnings, notams tables)
+- `backend/api/app.py` (add `/api/buoys/latest`, `/api/smaps/incidents` endpoints)
 
 ### Frontend Additions
 - `frontend/src/layers/buildNDBCLayer.ts` (new)
-- `frontend/src/layers/buildASAMLayer.ts` (new)
+- `frontend/src/layers/buildSMAPSLayer.ts` (new)
 - `frontend/src/layers/buildNOTAMLayer.ts` (new)
 - `frontend/src/components/map/composition.ts` (update z-order, add new layers)
 - `frontend/src/components/map/TacticalMap.tsx` (add filters, API queries)
@@ -727,7 +727,7 @@ cd frontend && pnpm run lint
 
 ## Assumptions & Constraints
 
-1. **Jetson Nano memory budget**: ~1.2 GB available for services. NDBC + ASAM + NOTAM combined ~300 MB footprint allows headroom for browser, future Phase 2 sources.
+1. **Jetson Nano memory budget**: ~1.2 GB available for services. NDBC + SMAPS + NOTAM combined ~300 MB footprint allows headroom for browser, future Phase 2 sources.
 
 2. **API availability**: Research assumes all government APIs (NDBC, NGA, AviationWeather) remain accessible via HTTP without authentication. If API changes occur, fallbacks documented in each poller.
 
@@ -735,7 +735,7 @@ cd frontend && pnpm run lint
 
 4. **Deck.gl 9 capability**: `radiusUnits: 'meters'` is available in your version (confirmed in existing aurora, jamming layers). Geodetic accuracy guaranteed by Deck.gl WebGL shaders.
 
-5. **Redpanda topic naming**: New topics follow existing pattern: `sw.<domain>.<data_type>` (e.g., `sw.ndbc.buoy`, `sw.nga.asam`, `sw.faa.notam`).
+5. **Redpanda topic naming**: New topics follow existing pattern: `sw.<domain>.<data_type>` (e.g., `sw.ndbc.buoy`, `sw.nga.SMAPS`, `sw.faa.notam`).
 
 6. **PostGIS availability**: TimescaleDB + PostGIS extensions assumed installed (verified in existing schema).
 
@@ -746,7 +746,9 @@ cd frontend && pnpm run lint
 1. **VIIRS/FIRMS satellite thermal**: ~40 hrs effort, includes dark vessel correlation engine
 2. **FAA SWIM JMS**: ~50 hrs, requires SCDS approval (6–8 week lead time)
 3. **Copernicus SST sidecar**: Replaces NDBC T&C for global fill (requires free Copernicus account)
-4. **ICC-IMB piracy scraper**: Faster piracy reporting than NGA ASAM (3–7 day lead), HTML parsing
+4. **ICC-IMB piracy scraper**: Faster piracy reporting than NGA SMAPS (3–7 day lead), HTML parsing
 5. **ReCAAP SE Asia piracy**: PDF parsing for Southeast Asian incident granularity
 6. **Vector search fusion**: intel_reports pgvector embedding search + similarity correlation
+
+
 

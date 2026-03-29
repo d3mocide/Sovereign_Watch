@@ -684,7 +684,7 @@ cd frontend && pnpm test -- --testPathPattern="PeeringDB|OpenCelliD|ISS"
 
 ## Integration with Geospatial Data Layers (Prior Initiative)
 
-This Project Backbone infrastructure layer initiative **complements** the earlier NDBC/ASAM/NOTAM geospatial layer work:
+This Project Backbone infrastructure layer initiative **complements** the earlier NDBC/SMAPS/NOTAM geospatial layer work:
 
 **Synergies**:
 - Both extend `infra_poller` (maritime infrastructure + internet infrastructure)
@@ -694,7 +694,7 @@ This Project Backbone infrastructure layer initiative **complements** the earlie
 
 **Sequence**:
 1. **Weeks 1–2**: Complete Geospatial Phase 1 (NDBC ocean buoys)
-2. **Weeks 3–4**: Geospatial Phase 2 (ASAM maritime threat)
+2. **Weeks 3–4**: Geospatial Phase 2 (SMAPS maritime threat)
 3. **Weeks 5–6**: **Begin Infrastructure Phase 1 (PeeringDB + OpenCelliD + ISS)** in parallel
 4. **Weeks 7–8**: Geospatial Phase 3 (Fusion queries) + Infrastructure Phase 1 continuation
 5. **Weeks 9–10**: Integration testing of all 7 new data layers
@@ -710,4 +710,6 @@ Project Backbone's internet infrastructure data sources align perfectly with Sov
 The phased approach (IXPs + Data Centers + Cell Towers + ISS in Phase 1, DNS + CDN + Satellites + Ground Stations in Phase 2) maintains stable deliverables while deferring complex dependencies.
 
 **Recommendation**: Proceed with Phase 1 after Geospatial Phase 1 stabilizes (week 3).
+
+
 

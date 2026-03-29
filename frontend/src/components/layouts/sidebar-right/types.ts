@@ -27,15 +27,6 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   datasource?: string;
   landing_points?: string;
   cables?: string;
-  // ASAM piracy incident fields
-  reference?: string;
-  incident_date?: string;
-  hostility?: string | null;
-  victim?: string | null;
-  nav_area?: string | null;
-  subreg?: string | null;
-  description?: string | null;
-  threat_score?: number;
 }
 
 export interface InfraDetail {
