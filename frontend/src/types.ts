@@ -275,6 +275,9 @@ export interface MapFilters {
   showLandingStations?: boolean;
   showOutages?: boolean;
   showTowers?: boolean;
+  showIXPs?: boolean;
+  showFacilities?: boolean;
+  showISS?: boolean;
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
@@ -312,6 +315,37 @@ export interface NDBCBuoyProperties {
   atmp_c: number | null; // Air temperature (°C)
   pres_hpa: number | null; // Atmospheric pressure (hPa)
   time: string; // ISO-8601 observation timestamp
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/infrastructure/ixps */
+export interface IXPProperties {
+  ixp_id: number;
+  name: string;
+  name_long: string | null;
+  city: string | null;
+  country: string | null;
+  website: string | null;
+  layer: "ixp";
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/infrastructure/facilities */
+export interface FacilityProperties {
+  fac_id: number;
+  name: string;
+  city: string | null;
+  country: string | null;
+  website: string | null;
+  org_name: string | null;
+  layer: "facility";
+}
+
+/** Live ISS position update from WebSocket or REST */
+export interface ISSPosition {
+  lat: number;
+  lon: number;
+  altitude_km: number | null;
+  velocity_kms: number | null;
+  timestamp: string; // ISO-8601
 }
 
 export interface DRState {

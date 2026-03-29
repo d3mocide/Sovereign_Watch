@@ -24,6 +24,8 @@ interface InfraFilters {
     showCables?: boolean;
     showLandingStations?: boolean;
     showOutages?: boolean;
+    showIXPs?: boolean;
+    showFacilities?: boolean;
     cableOpacity?: number;
 }
 
@@ -43,7 +45,9 @@ export function buildInfraLayers(
     selectedEntity: { uid: string } | null = null,
     globeMode: boolean = false,
     worldCountriesData: any = null,
-    countryOutageMap: Record<string, OutageProperties> | null = null
+    countryOutageMap: Record<string, OutageProperties> | null = null,
+    ixpData: any = null,
+    facilityData: any = null,
 ) {
     const layers = [];
 
@@ -225,6 +229,62 @@ export function buildInfraLayers(
                     depthTest: !!globeMode, 
                     depthMask: !!globeMode,
                     depthBias: globeMode ? -40.0 : 0 
+                },
+                onHover: setHoveredInfra,
+                onClick: setSelectedInfra,
+            })
+        );
+    }
+
+    // PeeringDB IXP Layer — cyan diamonds
+    if (ixpData && filters?.showIXPs !== false) {
+        layers.push(
+            new ScatterplotLayer({
+                id: `peeringdb-ixp-layer-${globeMode ? "globe" : "merc"}`,
+                data: ixpData.features || [],
+                pickable: true,
+                opacity: 0.85,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 4,
+                radiusMaxPixels: 14,
+                lineWidthMinPixels: 1,
+                getPosition: (d: unknown) => (d as GeoJsonFeature).geometry.coordinates as [number, number],
+                getFillColor: [34, 211, 238, 220],  // cyan-400
+                getLineColor: [255, 255, 255, 120],
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: !!globeMode,
+                    depthBias: globeMode ? -35.0 : 0,
+                },
+                onHover: setHoveredInfra,
+                onClick: setSelectedInfra,
+            })
+        );
+    }
+
+    // PeeringDB Facilities (Data Centers) Layer — purple dots
+    if (facilityData && filters?.showFacilities !== false) {
+        layers.push(
+            new ScatterplotLayer({
+                id: `peeringdb-fac-layer-${globeMode ? "globe" : "merc"}`,
+                data: facilityData.features || [],
+                pickable: true,
+                opacity: 0.8,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 3,
+                radiusMaxPixels: 10,
+                lineWidthMinPixels: 1,
+                getPosition: (d: unknown) => (d as GeoJsonFeature).geometry.coordinates as [number, number],
+                getFillColor: [168, 85, 247, 200],  // purple-500
+                getLineColor: [255, 255, 255, 80],
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: !!globeMode,
+                    depthBias: globeMode ? -35.0 : 0,
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
