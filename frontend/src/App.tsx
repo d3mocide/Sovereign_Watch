@@ -608,6 +608,8 @@ function App() {
             showTerminator={showTerminator}
             drStateRef={drStateRef}
             gdeltData={gdeltData}
+            ixpData={ixpData}
+            facilityData={facilityData}
           />
         ) : (
           <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">

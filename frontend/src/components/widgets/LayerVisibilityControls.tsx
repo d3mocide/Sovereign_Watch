@@ -45,7 +45,10 @@ export const LayerVisibilityControls: React.FC<
     (filters.showCables !== false ||
       filters.showLandingStations !== false ||
       filters.showOutages === true ||
-      filters.showTowers === true);
+      filters.showTowers === true ||
+      filters.showIXPs === true ||
+      filters.showFacilities === true ||
+      filters.showISS === true);
 
   const environmentalIsOn =
     !!filters && (!!filters.showAurora || !!filters.showBuoys);
@@ -61,6 +64,9 @@ export const LayerVisibilityControls: React.FC<
       onFilterChange("showLandingStations", false);
       onFilterChange("showOutages", false);
       onFilterChange("showTowers", false);
+      onFilterChange("showIXPs", false);
+      onFilterChange("showFacilities", false);
+      onFilterChange("showISS", false);
     } else {
       onFilterChange("showCables", getFilterPref("showCables", true));
       onFilterChange("showOutages", getFilterPref("showOutages", true));
@@ -69,6 +75,9 @@ export const LayerVisibilityControls: React.FC<
         "showLandingStations",
         getFilterPref("showLandingStations", false),
       );
+      onFilterChange("showIXPs", getFilterPref("showIXPs", false));
+      onFilterChange("showFacilities", getFilterPref("showFacilities", false));
+      onFilterChange("showISS", getFilterPref("showISS", true));
     }
   };
 
@@ -646,6 +655,102 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showTowers ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* Internet Exchanges (IXPs) */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showIXPs ? "border-cyan-400/50 bg-cyan-400/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Network
+                      size={10}
+                      className={filters.showIXPs ? "text-cyan-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showIXPs ? "text-cyan-400/80" : "text-white/30"}`}
+                    >
+                      INTERNET EXCHANGES
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showIXPs}
+                    onChange={(e) =>
+                      handleSubFilterChange("showIXPs", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showIXPs ? "bg-cyan-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showIXPs ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* Data Centers / Facilities */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showFacilities ? "border-purple-500/50 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Layers
+                      size={10}
+                      className={filters.showFacilities ? "text-purple-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showFacilities ? "text-purple-400/80" : "text-white/30"}`}
+                    >
+                      DATA CENTERS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showFacilities}
+                    onChange={(e) =>
+                      handleSubFilterChange("showFacilities", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFacilities ? "bg-purple-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFacilities ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* ISS Tracker */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showISS !== false ? "border-yellow-400/50 bg-yellow-400/10 shadow-[0_0_8px_rgba(250,204,21,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Anchor
+                      size={10}
+                      className={filters.showISS !== false ? "text-yellow-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showISS !== false ? "text-yellow-400/80" : "text-white/30"}`}
+                    >
+                      ISS TRACKER
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={filters.showISS !== false}
+                    onChange={(e) =>
+                      handleSubFilterChange("showISS", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showISS !== false ? "bg-yellow-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showISS !== false ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>

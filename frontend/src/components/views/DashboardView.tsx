@@ -43,6 +43,8 @@ interface DashboardViewProps {
   showTerminator: boolean;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
   gdeltData: FeatureCollection | null;
+  ixpData?: FeatureCollection | null;
+  facilityData?: FeatureCollection | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -58,6 +60,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   showTerminator,
   drStateRef,
   gdeltData,
+  ixpData,
+  facilityData,
 }) => {
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
@@ -412,6 +416,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               setHoveredGdelt(entity);
               if (pos) setHoverPos(pos);
             }}
+            ixpData={ixpData}
+            facilityData={facilityData}
           />
 
           {/* Situation Globe Tooltip (Heads-up Display) */}
