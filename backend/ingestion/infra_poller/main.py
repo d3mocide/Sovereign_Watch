@@ -58,7 +58,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
 PEERINGDB_IXP_URL = "https://www.peeringdb.com/api/ix"
 PEERINGDB_FAC_URL = "https://www.peeringdb.com/api/fac"
-ISS_NOW_URL = "http://api.open-notify.org/iss-now.json"
+PEERINGDB_IXFAC_URL = "https://www.peeringdb.com/api/ixfac"
 
 POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
@@ -69,7 +69,7 @@ FCC_CONNECT_TIMEOUT_S = 30
 FCC_READ_TIMEOUT_S = 120
 FCC_MAX_RETRIES = 5
 
-USER_AGENT = "SovereignWatch/1.0 (InfraPoller; admin@sovereignwatch.local)"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 # ---------------------------------------------------------------------------
@@ -343,26 +343,43 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def parse_peeringdb_ixps(data: dict) -> list[dict]:
-    """Parse PeeringDB /api/ix response into a list of IXP dicts.
+def parse_peeringdb_ixps(
+    ix_data: dict, fac_records: list[dict], ixfac_data: dict
+) -> list[dict]:
+    """Parse PeeringDB /api/ix and join with facilities to get coordinates.
 
-    Returns only records with valid lat/lon.
+    IXPs themselves don't have lat/lon; we must find which facility they are in.
     """
+    # 1. Map fac_id -> (lat, lon)
+    fac_map = {f["fac_id"]: (f["lat"], f["lon"]) for f in fac_records}
+
+    # 2. Map ix_id -> fac_id (take the first one found)
+    ix_to_fac = {}
+    for item in ixfac_data.get("data", []):
+        try:
+            ix_id = int(item["ix_id"])
+            fac_id = int(item["fac_id"])
+            if ix_id not in ix_to_fac:
+                ix_to_fac[ix_id] = fac_id
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    # 3. Build IXP records
     records = []
-    for item in data.get("data", []):
+    for item in ix_data.get("data", []):
         try:
             ixp_id = int(item["id"])
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
-            lat_raw = item.get("lat") or item.get("latitude")
-            lon_raw = item.get("lon") or item.get("longitude")
-            if lat_raw is None or lon_raw is None:
+
+            # Resolve location from facility mapping
+            fac_id = ix_to_fac.get(ixp_id)
+            if not fac_id or fac_id not in fac_map:
                 continue
-            lat = float(lat_raw)
-            lon = float(lon_raw)
-            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-                continue
+
+            lat, lon = fac_map[fac_id]
+
             records.append(
                 {
                     "ixp_id": ixp_id,
@@ -506,68 +523,6 @@ def _upsert_peeringdb_fac_sync(db_url: str, records: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
-# ISS helpers — pure + blocking, unit-testable without I/O
-# ---------------------------------------------------------------------------
-
-
-def parse_iss_position(data: dict) -> dict | None:
-    """Parse open-notify.org ISS-now response into a position dict.
-
-    Expected shape:
-      {"message": "success", "timestamp": 1234567890,
-       "iss_position": {"latitude": "12.34", "longitude": "56.78"}}
-    Returns None if the response is not valid.
-    """
-    if data.get("message") != "success":
-        return None
-    try:
-        pos = data["iss_position"]
-        lat = float(pos["latitude"])
-        lon = float(pos["longitude"])
-        ts = int(data["timestamp"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-        return None
-    return {
-        "time": datetime.fromtimestamp(ts, tz=UTC),
-        "lat": lat,
-        "lon": lon,
-        # open-notify does not provide altitude/velocity — use None
-        "altitude_km": None,
-        "velocity_kms": None,
-    }
-
-
-def _insert_iss_position_sync(db_url: str, record: dict) -> None:
-    """Insert a single ISS position into iss_positions (blocking)."""
-    sql = """
-        INSERT INTO iss_positions (time, lat, lon, altitude_km, velocity_kms, geom)
-        VALUES (%s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
-        ON CONFLICT DO NOTHING
-    """
-    conn = psycopg2.connect(db_url)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            sql,
-            (
-                record["time"],
-                record["lat"],
-                record["lon"],
-                record["altitude_km"],
-                record["velocity_kms"],
-                record["lon"],
-                record["lat"],
-            ),
-        )
-        conn.commit()
-        cur.close()
-    finally:
-        conn.close()
-
-
-# ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
 
@@ -590,12 +545,54 @@ class InfraPollerService:
             asyncio.create_task(self.fcc_loop()),
             asyncio.create_task(self.ndbc_loop()),
             asyncio.create_task(self.peeringdb_loop()),
-            asyncio.create_task(self.iss_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             pass
+
+    # -----------------------------------------------------------------------
+    # Network Helpers
+    # -----------------------------------------------------------------------
+
+    async def fetch_api(self, client, url, log_tag, cache_key=None, ttl=86400, max_retries=3):
+        """Helper to fetch from an API with caching, retry, and timeout handling."""
+        # 1. Cache Check
+        if cache_key:
+            cached = await self.redis.get(cache_key)
+            if cached:
+                logger.info("[%s] Using cached data for %s", log_tag, url)
+                return json.loads(cached)
+
+        # 2. Fetch with Retry
+        timeout = aiohttp.ClientTimeout(total=45.0)  # Generous timeout for slow APIs
+        for attempt in range(max_retries):
+            try:
+                async with client.get(url, timeout=timeout) as resp:
+                    if resp.status == 429:
+                        wait = (attempt + 1) * 60
+                        logger.warning(
+                            "[%s] 429 Too Many Requests for %s, waiting %ds (attempt %d/%d)",
+                            log_tag, url, wait, attempt + 1, max_retries
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                    # 3. Cache Save
+                    if cache_key:
+                        await self.redis.set(cache_key, json.dumps(data), ex=ttl)
+                    
+                    return data
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                wait = (attempt + 1) * 5
+                logger.warning("[%s] Fetch failed for %s (attempt %d/%d): %s. Retrying in %ds...", 
+                             log_tag, url, attempt + 1, max_retries, exc, wait)
+                await asyncio.sleep(wait)
+        
+        raise Exception(f"[{log_tag}] Failed to fetch {url} after {max_retries} attempts.")
 
     async def shutdown(self):
         logger.info("InfraPoller: shutting down...")
@@ -979,23 +976,25 @@ class InfraPollerService:
 
     async def _fetch_and_ingest_peeringdb(self):
         logger.info("Fetching PeeringDB IXPs and facilities...")
-        timeout = aiohttp.ClientTimeout(total=60.0)
         headers = {"User-Agent": USER_AGENT}
 
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+        async with aiohttp.ClientSession(headers=headers) as client:
             # --- IXPs ---
-            async with client.get(PEERINGDB_IXP_URL) as resp:
-                resp.raise_for_status()
-                ixp_data = await resp.json()
-            await asyncio.sleep(1)  # polite 1 req/s between endpoints
+            ix_data = await self.fetch_api(client, PEERINGDB_IXP_URL, "PeeringDB", 
+                                         cache_key="infra:raw_peeringdb_ix", max_retries=5)
+            await asyncio.sleep(6)  # Be polite
 
             # --- Facilities ---
-            async with client.get(PEERINGDB_FAC_URL) as resp:
-                resp.raise_for_status()
-                fac_data = await resp.json()
+            fac_data = await self.fetch_api(client, PEERINGDB_FAC_URL, "PeeringDB", 
+                                          cache_key="infra:raw_peeringdb_fac", max_retries=5)
+            await asyncio.sleep(6)
 
-        ixp_records = parse_peeringdb_ixps(ixp_data)
+            # --- IXP to Facility Mapping ---
+            ixfac_data = await self.fetch_api(client, PEERINGDB_IXFAC_URL, "PeeringDB", 
+                                            cache_key="infra:raw_peeringdb_ixfac", max_retries=5)
+
         fac_records = parse_peeringdb_facilities(fac_data)
+        ixp_records = parse_peeringdb_ixps(ix_data, fac_records, ixfac_data)
 
         if ixp_records:
             ixp_count = await asyncio.to_thread(
@@ -1027,68 +1026,6 @@ class InfraPollerService:
             ),
             ex=86400 * 2,
         )
-
-    # -----------------------------------------------------------------------
-    # ISS loop — 5-second interval, Redis pub/sub + DB archive
-    # -----------------------------------------------------------------------
-
-    async def iss_loop(self):
-        """Poll open-notify.org for ISS position every 5 seconds.
-
-        Each observation is:
-          - Written to the iss_positions hypertable (DB archive).
-          - Cached at infra:iss_latest (60s TTL) for REST polling.
-          - Published to infrastructure:iss-position channel for WebSocket fans.
-        """
-        while self.running:
-            try:
-                await self._fetch_and_publish_iss()
-            except Exception as e:
-                logger.exception("ISS fetch error")
-                try:
-                    await self.redis.set(
-                        "poller:iss:last_error",
-                        json.dumps({"ts": time.time(), "msg": str(e)}),
-                        ex=3600,
-                    )
-                except Exception:
-                    pass
-            await asyncio.sleep(POLL_INTERVAL_ISS_SECONDS)
-
-    async def _fetch_and_publish_iss(self):
-        timeout = aiohttp.ClientTimeout(total=10.0)
-        async with aiohttp.ClientSession(
-            timeout=timeout, headers={"User-Agent": USER_AGENT}
-        ) as client:
-            async with client.get(ISS_NOW_URL) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-
-        record = parse_iss_position(data)
-        if record is None:
-            logger.warning("ISS: invalid response from open-notify: %s", data)
-            return
-
-        payload = json.dumps(
-            {
-                "lat": record["lat"],
-                "lon": record["lon"],
-                "altitude_km": record["altitude_km"],
-                "velocity_kms": record["velocity_kms"],
-                "timestamp": record["time"].isoformat(),
-            }
-        )
-
-        # 1. Cache latest position for REST endpoint (60s TTL)
-        await self.redis.set("infra:iss_latest", payload, ex=60)
-
-        # 2. Publish to pub/sub channel for WebSocket subscribers
-        await self.redis.publish("infrastructure:iss-position", payload)
-
-        # 3. Archive to DB (offload blocking write to thread pool)
-        await asyncio.to_thread(_insert_iss_position_sync, DB_URL, record)
-
-        logger.debug("ISS: lat=%.4f lon=%.4f", record["lat"], record["lon"])
 
 
 # ---------------------------------------------------------------------------

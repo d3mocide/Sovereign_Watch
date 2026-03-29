@@ -1,46 +1,48 @@
-# Release - v0.57.0 - OSINT Reader and Intel Workflow Refinement
+# Release - v0.58.0 - "Infrastructure & Orbital Tracking"
 
-This release upgrades the Intel and Tactical OSINT workflow from external-link handoff to an in-app reader flow, while also tightening the News widget layout and HUD alignment. The result is a more coherent operator experience for article triage, GDELT source review, and sidebar/map composition.
+## High-Level Summary
+This release marks a significant expansion of the **Sovereign Watch** infrastructure and orbital intelligence suite. We have integrated real-time tracking for the **International Space Station (ISS)** and synchronized global internet exchange metadata from **PeeringDB**. Additionally, this release formalizes our **V1.0 Readiness Pivot**, cleaning up legacy documentation and prioritizing security and reliability for the path to a full release candidate.
 
-### Key Features
+---
 
-- **In-App Reader Mode**: Added a backend-powered article reader that fetches and extracts readable content from source URLs through `/api/news/article`.
-- **News Widget Reader Integration**: News widget stories now open inside the app in Intel view, with a retained external-open control when operators want the original site.
-- **GDELT Reader Integration**: `VIEW_SOURCE` in GDELT detail panels now opens in the same in-app reader flow.
-- **Tactical + Intel Parity**: Extended the article viewer workflow to Tactical view so GDELT article review behaves consistently across both maps.
+## Key Features
 
-### UI/UX Improvements
+### 📡 Internet Infrastructure (Initiative B Phase 1)
+- **PeeringDB Integration**: Automatic daily ingestion of global Internet Exchange Points (IXPs) and Data Center facilities.
+- **Interactive Mapping**: New cyan diamond (IXP) and purple dot (Facility) markers in the `GLOBAL NETWORK` layer, providing deep context for terrestrial traffic flows.
+- **BBox Query Support**: Optimized spatial queries for high-density infrastructure visualization.
 
-- **Aggregate News Feed**: Full News widget is now a single-column, time-sorted aggregate stream with tactical metadata rows.
-- **Intel Visual Alignment**: News widget header now matches Intel sidebar header conventions and the source label styling has been slimmed down.
-- **Reduced Visual Noise**: Live Threats now starts collapsed by default and no longer shows the misleading count badge.
-- **Balanced Intel Layout**: News widget height is capped at `75vh`, it hides while SITREP is active, Intel map nav is raised by 10px, and the article viewer aligns with the shared sidebar top baseline.
+### 🛰️ Orbital Intelligence
+- **ISS Real-time Tracking**: 5-second position updates with low-latency WebSocket streaming.
+- **Animated Ground-track**: Smoothly transition from 2D and 3D views with a rolling orbital path fade effect.
+- **Historical Analysis**: Integrated with TimescaleDB for high-resolution pass archival.
 
-### Technical Details
+### 🏛️ Strategic Consolidation
+- **Unified Roadmap**: Consolidated all fragmented roadmap files into a single source of truth at the project root.
+- **V1.0 Reliability Focus**: Shifted development priority to **Authentication (JWT)**, **CI/CD Hardening**, and **Jetson Nano hardware optimization**.
 
-- **Backend/API**:
-  - Added `/api/news/article` for HTML fetch + readable text extraction.
-  - Added basic HTML cleaning, title extraction, and content-length caps for reader-mode responses.
-- **Frontend**:
-  - Added shared article viewer state and overlay rendering in `App.tsx`.
-  - Added `onOpenArticle` handling in `NewsWidget`.
-  - Added `onOpenSource` callback plumbing through `SidebarRight` and `GdeltView`.
-  - Added per-view positioning override support to shared `MapControls`.
+---
 
-### Verification
+## Technical Details
+- **TimescaleDB**: New `iss_positions` hypertable created with 30-day retention and compression.
+- **Backend**: Added `iss.py` and `infra.py` routers with WebSocket support.
+- **Frontend**: Lightweight `useISSTracker` hook with exponential backoff and REST fallback.
+- **Z-Ordering**: Fine-tuned Deck.gl layer stacking to prevent flickering between orbital and terrestrial layers in Globe mode.
 
-- Frontend: `cd frontend && pnpm run lint && pnpm run test` (pass, 36 tests)
-- Backend API: `cd backend/api && python -m ruff check . && python -m pytest` (pass, 46 tests)
+---
 
-### Upgrade Instructions
+## Upgrade Instructions
+To deploy the new features and schema updates:
 
-To upgrade to v0.57.0:
+```bash
+# 1. Pull latest changes
+git pull origin main
 
-1. Pull the latest code:
-   `git pull origin main`
-2. Rebuild and restart services:
-   `docker compose up -d --build`
-3. Validate OSINT workflows:
-   - Open a News widget story in Intel view and confirm reader-mode content loads.
-   - Open GDELT `VIEW_SOURCE` in both Intel and Tactical views and confirm the in-app reader opens.
-   - Verify the Intel News widget layout and article viewer alignment match the HUD grid.
+# 2. Rebuild and restart containers
+docker compose up -d --build
+```
+
+---
+
+- **Released By**: Sovereign Watch Agent
+- **Date**: 2026-03-29

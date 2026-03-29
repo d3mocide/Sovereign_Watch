@@ -230,13 +230,16 @@ export function TacticalMap({
         props.entity_type === "outage" || props.severity !== undefined;
       const isTower = obj.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
+      const isISS = props.entity_type === "iss";
       const entityType = isBuoy
         ? "buoy"
         : isTower
           ? "tower"
           : isOutage
             ? "outage"
-            : "infra";
+            : isISS
+              ? "iss"
+              : "infra";
       const entity: CoTEntity = {
         uid: String(
           props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
@@ -631,7 +634,14 @@ export function TacticalMap({
       const isTower =
         info.object.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
-      const entityType = isBuoy ? "buoy" : isTower ? "tower" : "infra";
+      const isISS = props.entity_type === "iss";
+      const entityType = isBuoy
+        ? "buoy"
+        : isTower
+          ? "tower"
+          : isISS
+            ? "iss"
+            : "infra";
       const callsign = String(
         props.buoy_id ||
           props.name ||

@@ -88,6 +88,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (entity.type === "jamming") {
     return <JammingView key={entity.uid} {...baseProps} />;
   }
+  if (entity.type === "iss") {
+    return <InfraView key={entity.uid} {...baseProps} />;
+  }
 
   // Trackable domain: satellite / ship / aircraft
   const isSat = entity.type === "a-s-K" || entity.type.indexOf("K") === 4;

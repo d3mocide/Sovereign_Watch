@@ -102,7 +102,7 @@ export function buildISSLayer({
                     depthTest: !!globeMode,
                     depthMask: !!globeMode,
                     depthBias: globeMode ? -30.0 : 0,
-                },
+                } as any,
                 onHover: onHover
                     ? (info: unknown) => {
                           const pickInfo = info as { object?: ISSPosition; x: number; y: number };
@@ -130,7 +130,23 @@ export function buildISSLayer({
                 onClick: onSelect
                     ? (info: unknown) => {
                           const pickInfo = info as { object?: ISSPosition };
-                          if (pickInfo.object) onSelect(info);
+                          if (pickInfo.object) {
+                              onSelect({
+                                  ...pickInfo,
+                                  object: {
+                                      type: "iss",
+                                      properties: {
+                                          name: "ISS (International Space Station)",
+                                          entity_type: "iss",
+                                          lat: pickInfo.object.lat,
+                                          lon: pickInfo.object.lon,
+                                          altitude_km: pickInfo.object.altitude_km,
+                                          velocity_kms: pickInfo.object.velocity_kms,
+                                          timestamp: pickInfo.object.timestamp,
+                                      },
+                                  },
+                              });
+                          }
                       }
                     : undefined,
             })

@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.58.0] - 2026-03-29
+
+### Added
+
+- **PeeringDB Infrastructure Ingestion**: Added global Internet Exchange Points (IXPs) and Data Center facilities ingestion from PeeringDB with 24-hour polling and spatial query support.
+- **ISS Real-time Tracking**: Implemented International Space Station (ISS) live position tracking with 5-second updates, ground-track visualization, and WebSocket streaming.
+- **Orbital History Archival**: Added TimescaleDB hypertable (`iss_positions`) for high-resolution historical orbital tracking.
+- **Unified Infrastructure Layers**: Added dedicated Deck.gl layers for IXPs (cyan diamonds), Data Centers (purple dots), and the ISS (yellow glow icon with ground-track fade).
+- **V1.0 Roadmap Pivot**: Established a security-first roadmap prioritizing Authentication (JWT/RBAC), CI/CD Hardening, and Operational Reliability.
+
+### Changed
+
+- **Roadmap Consolidation**: Merged fragmented research and roadmap documents into a single authoritative `ROADMAP.md` at the root.
+- **Historical Documentation Archive**: Moved legacy implementation and research docs to `agent_docs/archive/` to maintain a clean workspace.
+- **Infra Detail Routing**: Extended `InfraView` to support PeeringDB facility and IXP metadata presentation.
+
+### Fixed
+
+- **Replay Mode UI Cleanup**: Wired `onClose` navigation in `TimeControls.tsx` and resolved button placeholder artifacts.
+- **Satellite Footprint Rendering**: Enabled real-time footprint visualization in `OrbitalLayer` based on altitude and sensor FOV.
+
+### Verification
+
+- Frontend: `npm run lint && npm run build` (pass)
+- Backend API: `ruff check . && python -m pytest` (pass)
+- Ingestion: `ruff check . && python -m pytest` (pass)
+
+
+
 ## [0.57.0] - 2026-03-28
 
 ### Added

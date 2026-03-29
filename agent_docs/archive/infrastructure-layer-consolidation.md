@@ -22,7 +22,7 @@ Your current `infra_poller` ingests 3 infrastructure layers (submarine cables, i
 | **New (Phase 1)** | | | | |
 | Internet Exchanges | PeeringDB API | 24-hour | ~20MB | ⭐ High |
 | Data Centers | PeeringDB API | 24-hour | ~40MB | ⭐ High |
-| Cell Towers | OpenCelliD CSV | 24-hour | ~3.3GB (filtered) | ⭐ High |
+| Cell Towers | OpenCelliD CSV | 24-hour | ~3.3GB (filtered) | SKIP |
 | ISS Tracking | Open-Notify API | Real-time (5s) | <1MB | ⭐ High |
 | **Phase 2 (Deferred)** | | | | |
 | DNS Root Instances | root-servers.org scrape | 24-hour | ~10MB | ▸ Medium |

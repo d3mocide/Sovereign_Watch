@@ -25,6 +25,7 @@ from sources.orbital import OrbitalSource
 from sources.satnogs_db import SatNOGSDBSource
 from sources.satnogs_network import SatNOGSNetworkSource
 from sources.space_weather import SpaceWeatherSource
+from sources.iss import ISSSource
 
 logger = logging.getLogger("space_pulse")
 
@@ -92,6 +93,10 @@ class SpacePulseService:
                 db_url=DATABASE_URL,
                 aurora_interval_s=AURORA_INTERVAL_S,
                 kp_interval_s=KP_INTERVAL_S,
+            ),
+            ISSSource(
+                redis_client=self.redis_client,
+                db_url=DATABASE_URL,
             ),
         ]
 
