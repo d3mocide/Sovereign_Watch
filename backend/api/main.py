@@ -3,6 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from core.config import settings
 from core.database import db
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from routers import (
     iss,
     jamming,
     maritime,
+    metrics,
     news,
     orbital,
     rf,
@@ -26,6 +28,7 @@ from routers import (
 )
 from services.broadcast import broadcast_service
 from services.historian import historian_task, rf_sites_cleanup_task
+from services.log_handler import RedisLogHandler
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +90,13 @@ async def lifespan(app: FastAPI):
                 logger.info("TimescaleDB extension check/update completed")
     except Exception as e:
         logger.warning(f"Failed to auto-update TimescaleDB extension: {e}")
+
+    # Install Redis log handler so all SovereignWatch log records are
+    # captured in the ``logs:recent`` list for the Operations dashboard.
+    if db.redis_client:
+        redis_handler = RedisLogHandler(settings.REDIS_URL)
+        logging.getLogger("SovereignWatch").addHandler(redis_handler)
+        logger.info("Redis log handler installed")
 
     historian_task_handle = asyncio.create_task(_historian_supervisor())
     rf_cleanup_task_handle = asyncio.create_task(rf_sites_cleanup_task())
@@ -154,6 +164,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(system.router)
+app.include_router(metrics.router)
 app.include_router(tracks.router)
 app.include_router(analysis.router)
 app.include_router(rf.router)

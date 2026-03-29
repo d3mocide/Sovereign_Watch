@@ -1,22 +1,32 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { 
-  Bell, 
-  Terminal, 
-  Settings, 
-  Activity, 
-  ShieldAlert, 
-  Download, 
-  Network, 
-  BarChart3, 
+import {
+  Bell,
+  Terminal,
+  Settings,
+  Activity,
+  ShieldAlert,
+  Download,
+  Network,
+  BarChart3,
   ChevronDown,
   ChevronUp,
   Server,
   Plane,
   Ship,
   Rocket,
-  Satellite
+  Satellite,
+  Cpu,
+  Database,
 } from 'lucide-react';
+import {
+  fetchSystemMetrics,
+  fetchRecentLogs,
+  fetchBackupStatus,
+  type SystemMetrics,
+  type LogLevel,
+  type BackupStatus,
+} from '../../api/metrics';
 
 interface PollerHealth {
   id: string;
@@ -43,10 +53,10 @@ interface TakBreakdown {
 }
 
 interface LogEntry {
-  id: number;
-  time: string;
+  ts: string;
+  level: LogLevel;
+  logger: string;
   msg: string;
-  type: 'info' | 'warn' | 'success' | 'cmd';
 }
 
 export default function StatsDashboardView() {
@@ -54,7 +64,10 @@ export default function StatsDashboardView() {
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis' | 'networking'>('ingression');
+  const [activeTab, setActiveTab] = useState<'ingression' | 'protocol' | 'analysis' | 'networking' | 'operations'>('ingression');
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
+  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
+  const [logFilter, setLogFilter] = useState<LogLevel | null>(null);
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
@@ -64,11 +77,7 @@ export default function StatsDashboardView() {
     total_bandwidth_mb: number;
   }>({ throughput: {}, total_bandwidth_mb: 0 });
 
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: 1, time: new Date().toLocaleTimeString(), msg: "> INIT INGRESSION_PROTOCOL.SH --TARGET=GLOBAL_WATCH", type: 'cmd' },
-    { id: 2, time: new Date().toLocaleTimeString(), msg: "> LOADING ASSETS... [DONE]", type: 'success' },
-    { id: 3, time: new Date().toLocaleTimeString(), msg: "> ESTABLISHING SECURE TUNNEL 128.0.0.1:443 -> 10.0.0.5:2026", type: 'info' }
-  ]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -113,34 +122,29 @@ export default function StatsDashboardView() {
     };
   }, []);
 
-  // Log Simulator
+  // Operations data polling: real logs, system metrics, backup status
   useEffect(() => {
-    const messages = [
-      { msg: "> PKT_RX_SUCCESS :: 12.4KB FROM ADSBX_POLLER", type: 'success' },
-      { msg: "> MAPPING COT_TYPE: a-f-A-C-M -> CIVILIAN FIXED WING", type: 'info' },
-      { msg: "> HEARTBEAT DETECTED ON NODE MARITIME_01", type: 'info' },
-      { msg: "> [WARN] LATENCY SPIKE DETECTED IN ORBITAL INGRESION", type: 'warn' },
-      { msg: "> RECALIBRATING GLOBAL SIGNAL ACTIVITY LINE...", type: 'cmd' },
-      { msg: "> SYNCING TIMESCALEDB HYPERTABLES...", type: 'cmd' }
-    ];
-
-    const iv = setInterval(() => {
-      const rand = messages[Math.floor(Math.random() * messages.length)];
-      const newLog = { 
-        id: Date.now(), 
-        time: new Date().toLocaleTimeString(), 
-        msg: rand.msg, 
-        type: rand.type as any 
-      };
-      setLogs(prev => {
-        const newLogs = [...prev.slice(-99), newLog]; // Keep last 100 logs
-        return newLogs;
-      });
-      if (newLog.type === 'warn') {
-        setAlertCount(c => c + 1);
+    const fetchOpsData = async () => {
+      try {
+        const [newLogs, sysM, backup] = await Promise.all([
+          fetchRecentLogs(100),
+          fetchSystemMetrics(),
+          fetchBackupStatus(),
+        ]);
+        setLogs(newLogs);
+        setSystemMetrics(sysM);
+        setBackupStatus(backup);
+        const warnCount = newLogs.filter(
+          l => l.level === 'WARNING' || l.level === 'ERROR' || l.level === 'CRITICAL'
+        ).length;
+        setAlertCount(warnCount);
+      } catch (e) {
+        console.error('Operations fetch error:', e);
       }
-    }, 4000);
-    return () => clearInterval(iv);
+    };
+    fetchOpsData();
+    const t = setInterval(fetchOpsData, 10000);
+    return () => clearInterval(t);
   }, []);
 
   // Terminal Auto-scroll Logic
@@ -482,7 +486,7 @@ export default function StatsDashboardView() {
                     </button>
                   </div>
                </div>
-               
+
                <div className="bg-surface-container p-6 border border-primary/10">
                   <h3 className="font-bold text-xs tracking-widest text-primary uppercase mb-4">Anomaly Heatmap</h3>
                   <div className="grid grid-cols-8 gap-1 opacity-40">
@@ -494,6 +498,213 @@ export default function StatsDashboardView() {
                     DETECTION ENGINE: <span className="text-primary">RUNNING</span>
                   </div>
                </div>
+            </div>
+          </div>
+        );
+      case 'operations':
+        return (
+          <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline gap-6">
+            <div className="pb-4 border-b border-primary/10">
+              <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">OPERATIONS CENTER</h1>
+              <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">SYSTEM VITALS · LIVE LOGS · DATABASE & BACKUP STATUS</p>
+            </div>
+
+            {/* Panel 1: System Vitals (Ops-02) */}
+            <div className="bg-surface-container p-6 border border-primary/10">
+              <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-4 flex items-center gap-2">
+                <Cpu size={16} /> System Vitals
+              </h3>
+              {systemMetrics ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {/* CPU */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase text-on-surface-variant">
+                      <span>CPU Usage</span>
+                      <span className="text-primary">{systemMetrics.cpu_percent?.toFixed(1) ?? '--'}%</span>
+                    </div>
+                    <div className="h-2 bg-primary/5 border border-primary/10 overflow-hidden">
+                      <div className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-500" style={{ width: `${systemMetrics.cpu_percent ?? 0}%` }}></div>
+                    </div>
+                    {systemMetrics.cpu_per_core.length > 0 && (
+                      <div className="grid grid-cols-8 gap-0.5 mt-1">
+                        {systemMetrics.cpu_per_core.map((c, i) => (
+                          <div key={i} title={`Core ${i}: ${c}%`} className="h-3 bg-primary/5 border border-primary/10 overflow-hidden">
+                            <div className="h-full bg-primary/70 transition-all duration-500" style={{ width: `${c}%` }}></div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Memory */}
+                  {systemMetrics.memory && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] uppercase text-on-surface-variant">
+                        <span>Memory</span>
+                        <span className="text-primary">{systemMetrics.memory.used_gb} / {systemMetrics.memory.total_gb} GB ({systemMetrics.memory.percent}%)</span>
+                      </div>
+                      <div className="h-2 bg-primary/5 border border-primary/10 overflow-hidden">
+                        <div className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-500" style={{ width: `${systemMetrics.memory.percent}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Disk */}
+                  {systemMetrics.disk && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] uppercase text-on-surface-variant">
+                        <span>Disk</span>
+                        <span className="text-primary">{systemMetrics.disk.used_gb} / {systemMetrics.disk.total_gb} GB ({systemMetrics.disk.percent}%)</span>
+                      </div>
+                      <div className="h-2 bg-primary/5 border border-primary/10 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 shadow-[0_0_10px_rgba(57,255,20,0.5)] ${systemMetrics.disk.percent > 90 ? 'bg-error' : systemMetrics.disk.percent > 75 ? 'bg-alert-amber' : 'bg-primary'}`}
+                          style={{ width: `${systemMetrics.disk.percent}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Redis Health */}
+                  {systemMetrics.redis && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase text-on-surface-variant mb-2 font-bold">Redis Health</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant">Memory</span><span className="text-primary">{systemMetrics.redis.used_memory_mb} MB</span></div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant">Clients</span><span className="text-primary">{systemMetrics.redis.connected_clients}</span></div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant">Hit Rate</span><span className="text-primary">{systemMetrics.redis.hit_rate_pct}%</span></div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant">Evicted</span><span className={systemMetrics.redis.evicted_keys > 0 ? 'text-alert-amber' : 'text-primary'}>{systemMetrics.redis.evicted_keys}</span></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Kafka Lag */}
+                  {systemMetrics.kafka_lag && Object.entries(systemMetrics.kafka_lag).map(([group, lag]) => (
+                    <div key={group} className="space-y-1 xl:col-span-2">
+                      <div className="flex justify-between text-[10px] uppercase text-on-surface-variant mb-2 font-bold">
+                        <span>Kafka Lag: {group}</span>
+                        <span className={lag.severity === 'ok' ? 'text-primary' : lag.severity === 'amber' ? 'text-alert-amber' : 'text-error'}>
+                          {lag.total_lag.toLocaleString()} msgs [{lag.severity.toUpperCase()}]
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-6 gap-y-1">
+                        {Object.entries(lag.topics).map(([topic, topicLag]) => (
+                          <div key={topic} className="flex justify-between text-[10px]">
+                            <span className="text-on-surface-variant truncate">{topic.replace('_raw', '')}</span>
+                            <span className={topicLag > 500 ? 'text-alert-amber' : 'text-primary'}>{topicLag.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {/* Temperatures */}
+                  {systemMetrics.temperatures && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase text-on-surface-variant mb-2 font-bold">Temperatures</div>
+                      {Object.entries(systemMetrics.temperatures).map(([sensor, temps]) => (
+                        <div key={sensor} className="flex justify-between text-[10px]">
+                          <span className="text-on-surface-variant">{sensor}</span>
+                          <span className={Math.max(...temps) > 80 ? 'text-error' : Math.max(...temps) > 70 ? 'text-alert-amber' : 'text-primary'}>{Math.max(...temps)}°C</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-on-surface-variant text-[10px] uppercase animate-pulse">Loading system metrics...</div>
+              )}
+            </div>
+
+            {/* Panel 2: Live Log Terminal (Ops-01) */}
+            <div className="bg-surface-container border border-primary/10 flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-primary/10">
+                <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+                  <Terminal size={16} /> Live System Logs
+                </h3>
+                <div className="flex gap-2">
+                  {(['ALL', 'WARNING', 'ERROR'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setLogFilter(f === 'ALL' ? null : f as LogLevel)}
+                      className={`px-2 py-1 text-[9px] uppercase tracking-widest border transition-all ${
+                        (f === 'ALL' && logFilter === null) || logFilter === f
+                          ? 'bg-primary/10 border-primary/40 text-primary'
+                          : 'border-primary/10 text-on-surface-variant hover:border-primary/20'
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="h-56 overflow-y-auto font-mono text-[9px] p-4 space-y-1 bg-black/40 custom-scrollbar">
+                {logs
+                  .filter(l => logFilter === null || l.level === logFilter)
+                  .slice(0, 200)
+                  .map((log, idx) => (
+                    <p
+                      key={`${log.ts}-${idx}`}
+                      className={`hover:brightness-125 transition-all cursor-default ${
+                        log.level === 'ERROR' || log.level === 'CRITICAL'
+                          ? 'text-red-400/70'
+                          : log.level === 'WARNING'
+                          ? 'text-yellow-400/80'
+                          : 'text-primary/60'
+                      }`}
+                    >
+                      <span className="opacity-30 mr-4">[{new Date(log.ts).toLocaleTimeString()}]</span>
+                      <span className={`mr-2 text-[8px] ${log.level === 'ERROR' || log.level === 'CRITICAL' ? 'text-red-400' : log.level === 'WARNING' ? 'text-yellow-400' : 'text-primary/40'}`}>[{log.level}]</span>
+                      {log.msg}
+                    </p>
+                  ))}
+                {logs.filter(l => logFilter === null || l.level === logFilter).length === 0 && (
+                  <p className="text-on-surface-variant/40 uppercase text-[9px] animate-pulse">
+                    {logs.length === 0 ? 'Waiting for log entries...' : `No ${logFilter} entries`}
+                  </p>
+                )}
+                <p className="animate-pulse text-primary/30">_</p>
+              </div>
+            </div>
+
+            {/* Panel 3: Database & Backup (Ops-03) */}
+            <div className="bg-surface-container p-6 border border-primary/10">
+              <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-4 flex items-center gap-2">
+                <Database size={16} /> Database & Backup
+              </h3>
+              {backupStatus ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <div className="text-[10px] text-on-surface-variant uppercase mb-2 font-bold">TimescaleDB Status</div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Database Size</span><span className="text-primary">{backupStatus.db_size_mb?.toFixed(1) ?? '--'} MB</span></div>
+                      <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Active Chunks</span><span className="text-primary">{backupStatus.chunk_count ?? '--'}</span></div>
+                      <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Oldest Data</span><span className="text-primary text-right">{backupStatus.oldest_chunk_time ? new Date(backupStatus.oldest_chunk_time).toLocaleString() : 'No data'}</span></div>
+                      <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Retention Policy</span><span className="text-primary">{backupStatus.retention_hours}h rolling</span></div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="text-[10px] text-on-surface-variant uppercase mb-2 font-bold">Last Backup Run</div>
+                    {backupStatus.backup ? (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-on-surface-variant uppercase">Status</span>
+                          <span className={backupStatus.backup.status === 'success' ? 'text-primary' : 'text-error'}>{backupStatus.backup.status.toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Run Time</span><span className="text-primary">{new Date(backupStatus.backup.ts).toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">File Size</span><span className="text-primary">{(backupStatus.backup.size_bytes / 1024 / 1024).toFixed(1)} MB</span></div>
+                        <div className="flex justify-between text-[10px]"><span className="text-on-surface-variant uppercase">Duration</span><span className="text-primary">{backupStatus.backup.duration_s}s</span></div>
+                        {backupStatus.backup.error && (
+                          <div className="text-[9px] text-error mt-2 font-mono">{backupStatus.backup.error}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-on-surface-variant text-[10px] uppercase">No backup on record</p>
+                    )}
+                    <div className="mt-4 p-3 bg-surface-container-high border border-primary/5">
+                      <p className="text-[9px] text-on-surface-variant uppercase tracking-widest">Run backup:</p>
+                      <code className="text-[9px] text-primary font-mono mt-1 block">python backend/scripts/backup_timescale.py --keep 7</code>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-on-surface-variant text-[10px] uppercase animate-pulse">Loading database stats...</div>
+              )}
             </div>
           </div>
         );
@@ -570,11 +781,17 @@ export default function StatsDashboardView() {
             >
               <Download size={16} /> NETWORKING
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('analysis')}
               className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'analysis' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
             >
               <BarChart3 size={16} /> ANALYSIS
+            </button>
+            <button
+              onClick={() => setActiveTab('operations')}
+              className={`px-6 py-3 flex items-center gap-4 uppercase tracking-[0.1em] text-[10px] transition-all border-l-4 ${activeTab === 'operations' ? 'bg-surface-container-highest text-primary border-primary' : 'text-[#8eff71]/40 hover:text-primary border-transparent hover:bg-surface-container'}`}
+            >
+              <Cpu size={16} /> OPERATIONS
             </button>
           </nav>
           <div className="mt-auto px-6 mb-8 flex flex-col gap-4 font-headline">
@@ -668,16 +885,25 @@ export default function StatsDashboardView() {
               onScroll={handleScroll}
               className={`p-4 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/40 custom-scrollbar transition-opacity duration-300 ${isLogsExpanded ? 'flex-1 opacity-100' : 'hidden opacity-0 pointer-events-none'}`}
             >
-              {logs.map((log) => (
-                <p key={log.id} className={`${
-                  log.type === 'warn' ? 'text-error/70' : 
-                  log.type === 'success' ? 'text-primary' : 
-                  log.type === 'cmd' ? 'text-primary/90' : 'text-primary/50'
-                } hover:brightness-125 transition-all cursor-default`}>
-                  <span className="opacity-30 mr-4">[{log.time}]</span>
+              {logs.map((log, idx) => (
+                <p
+                  key={`${log.ts}-${idx}`}
+                  className={`hover:brightness-125 transition-all cursor-default ${
+                    log.level === 'ERROR' || log.level === 'CRITICAL'
+                      ? 'text-red-400/70'
+                      : log.level === 'WARNING'
+                      ? 'text-yellow-400/80'
+                      : 'text-primary/60'
+                  }`}
+                >
+                  <span className="opacity-30 mr-4">[{new Date(log.ts).toLocaleTimeString()}]</span>
+                  <span className={`mr-2 text-[8px] ${log.level === 'ERROR' || log.level === 'CRITICAL' ? 'text-red-400' : log.level === 'WARNING' ? 'text-yellow-400' : 'text-primary/40'}`}>[{log.level}]</span>
                   {log.msg}
                 </p>
               ))}
+              {logs.length === 0 && (
+                <p className="text-on-surface-variant/40 uppercase text-[9px] animate-pulse">Waiting for log entries...</p>
+              )}
               <p className="animate-pulse text-primary/30">_</p>
             </div>
           </div>
