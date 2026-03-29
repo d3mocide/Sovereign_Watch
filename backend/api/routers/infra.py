@@ -103,3 +103,115 @@ async def get_infra_towers(
     except Exception as e:
         logger.error(f"Error fetching FCC towers: {e}")
         raise HTTPException(status_code=500, detail="Database error")
+
+
+@router.get("/api/infrastructure/ixps")
+async def get_ixps(
+    min_lat: float = -90.0,
+    min_lon: float = -180.0,
+    max_lat: float = 90.0,
+    max_lon: float = 180.0,
+    limit: int = 2000,
+):
+    """Returns PeeringDB Internet Exchange Points within a bounding box as GeoJSON."""
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    min_lat = max(-90.0, min(90.0, min_lat))
+    max_lat = max(-90.0, min(90.0, max_lat))
+    min_lon = max(-180.0, min(180.0, min_lon))
+    max_lon = max(-180.0, min(180.0, max_lon))
+
+    query = """
+    SELECT json_build_object(
+        'type', 'FeatureCollection',
+        'features', COALESCE(json_agg(
+            json_build_object(
+                'type', 'Feature',
+                'geometry', ST_AsGeoJSON(geom)::json,
+                'properties', json_build_object(
+                    'ixp_id',   ixp_id,
+                    'name',     name,
+                    'name_long', name_long,
+                    'city',     city,
+                    'country',  country,
+                    'website',  website,
+                    'layer',    'ixp'
+                )
+            )
+        ), '[]'::json)
+    )
+    FROM (
+        SELECT ixp_id, name, name_long, city, country, website, geom
+        FROM peeringdb_ixps
+        WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        ORDER BY ixp_id
+        LIMIT $5
+    ) sub;
+    """
+
+    try:
+        async with db.pool.acquire() as conn:
+            result = await conn.fetchval(query, min_lon, min_lat, max_lon, max_lat, limit)
+            if not result:
+                return {"type": "FeatureCollection", "features": []}
+            return json.loads(result)
+    except Exception as e:
+        logger.error(f"Error fetching IXPs: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@router.get("/api/infrastructure/facilities")
+async def get_facilities(
+    min_lat: float = -90.0,
+    min_lon: float = -180.0,
+    max_lat: float = 90.0,
+    max_lon: float = 180.0,
+    limit: int = 5000,
+):
+    """Returns PeeringDB data center facilities within a bounding box as GeoJSON."""
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not connected")
+
+    min_lat = max(-90.0, min(90.0, min_lat))
+    max_lat = max(-90.0, min(90.0, max_lat))
+    min_lon = max(-180.0, min(180.0, min_lon))
+    max_lon = max(-180.0, min(180.0, max_lon))
+
+    query = """
+    SELECT json_build_object(
+        'type', 'FeatureCollection',
+        'features', COALESCE(json_agg(
+            json_build_object(
+                'type', 'Feature',
+                'geometry', ST_AsGeoJSON(geom)::json,
+                'properties', json_build_object(
+                    'fac_id',   fac_id,
+                    'name',     name,
+                    'city',     city,
+                    'country',  country,
+                    'website',  website,
+                    'org_name', org_name,
+                    'layer',    'facility'
+                )
+            )
+        ), '[]'::json)
+    )
+    FROM (
+        SELECT fac_id, name, city, country, website, org_name, geom
+        FROM peeringdb_facilities
+        WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        ORDER BY fac_id
+        LIMIT $5
+    ) sub;
+    """
+
+    try:
+        async with db.pool.acquire() as conn:
+            result = await conn.fetchval(query, min_lon, min_lat, max_lon, max_lat, limit)
+            if not result:
+                return {"type": "FeatureCollection", "features": []}
+            return json.loads(result)
+    except Exception as e:
+        logger.error(f"Error fetching facilities: {e}")
+        raise HTTPException(status_code=500, detail="Database error")

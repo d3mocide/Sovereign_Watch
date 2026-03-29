@@ -1,5 +1,5 @@
 import type { FeatureCollection } from "geojson";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const isFeatureCollection = (value: unknown): value is FeatureCollection => {
   return (
@@ -125,6 +125,11 @@ export const useInfraData = () => {
     null,
   );
   const [gdeltData, setGdeltData] = useState<FeatureCollection | null>(null);
+  const [ixpData, setIxpData] = useState<FeatureCollection | null>(null);
+  const [facilityData, setFacilityData] = useState<FeatureCollection | null>(null);
+
+  // Track whether PeeringDB data has been fetched once (it's global, no bbox needed)
+  const peeringdbFetchedRef = useRef(false);
 
   useEffect(() => {
     const fetchCables = async () => {
@@ -187,11 +192,29 @@ export const useInfraData = () => {
       }
     };
 
+    const fetchPeeringDB = async () => {
+      if (peeringdbFetchedRef.current) return;
+      try {
+        const [ixpRes, facRes] = await Promise.all([
+          fetch("/api/infrastructure/ixps"),
+          fetch("/api/infrastructure/facilities"),
+        ]);
+        const ixpJson: unknown = await ixpRes.json();
+        const facJson: unknown = await facRes.json();
+        if (isFeatureCollection(ixpJson)) setIxpData(ixpJson);
+        if (isFeatureCollection(facJson)) setFacilityData(facJson);
+        peeringdbFetchedRef.current = true;
+      } catch (err) {
+        console.warn("PeeringDB fetch failed:", err);
+      }
+    };
+
     const fetchAll = () => {
       fetchCables();
       fetchStations();
       fetchOutages();
       fetchGdelt();
+      fetchPeeringDB();
     };
 
     fetchAll();
@@ -200,11 +223,20 @@ export const useInfraData = () => {
     const outageInterval = setInterval(fetchOutages, 10 * 60 * 1000);
     // Refresh GDELT every 15 minutes
     const gdeltInterval = setInterval(fetchGdelt, 15 * 60 * 1000);
+    // Refresh PeeringDB once every 24 hours (matches poller cadence)
+    const peeringdbInterval = setInterval(
+      () => {
+        peeringdbFetchedRef.current = false;
+        fetchPeeringDB();
+      },
+      24 * 60 * 60 * 1000,
+    );
     return () => {
       clearInterval(outageInterval);
       clearInterval(gdeltInterval);
+      clearInterval(peeringdbInterval);
     };
   }, []);
 
-  return { cablesData, stationsData, outagesData, gdeltData };
+  return { cablesData, stationsData, outagesData, gdeltData, ixpData, facilityData };
 };

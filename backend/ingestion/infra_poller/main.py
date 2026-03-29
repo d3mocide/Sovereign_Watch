@@ -56,8 +56,13 @@ STATIONS_URL = (
 )
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
+PEERINGDB_IXP_URL = "https://www.peeringdb.com/api/ix"
+PEERINGDB_FAC_URL = "https://www.peeringdb.com/api/fac"
+ISS_NOW_URL = "http://api.open-notify.org/iss-now.json"
 
 POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
+POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
+POLL_INTERVAL_ISS_SECONDS = int(os.getenv("POLL_INTERVAL_ISS_SECONDS", "5"))
 
 FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
 FCC_CONNECT_TIMEOUT_S = 30
@@ -334,6 +339,235 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# PeeringDB helpers — pure + blocking, unit-testable without I/O
+# ---------------------------------------------------------------------------
+
+
+def parse_peeringdb_ixps(data: dict) -> list[dict]:
+    """Parse PeeringDB /api/ix response into a list of IXP dicts.
+
+    Returns only records with valid lat/lon.
+    """
+    records = []
+    for item in data.get("data", []):
+        try:
+            ixp_id = int(item["id"])
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+            lat_raw = item.get("lat") or item.get("latitude")
+            lon_raw = item.get("lon") or item.get("longitude")
+            if lat_raw is None or lon_raw is None:
+                continue
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
+            records.append(
+                {
+                    "ixp_id": ixp_id,
+                    "name": name,
+                    "name_long": str(item.get("name_long", "") or "").strip() or None,
+                    "city": str(item.get("city", "") or "").strip() or None,
+                    "country": str(item.get("country", "") or "").strip() or None,
+                    "website": str(item.get("website", "") or "").strip() or None,
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return records
+
+
+def parse_peeringdb_facilities(data: dict) -> list[dict]:
+    """Parse PeeringDB /api/fac response into a list of facility dicts.
+
+    Returns only records with valid lat/lon.
+    """
+    records = []
+    for item in data.get("data", []):
+        try:
+            fac_id = int(item["id"])
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+            lat_raw = item.get("lat") or item.get("latitude")
+            lon_raw = item.get("lon") or item.get("longitude")
+            if lat_raw is None or lon_raw is None:
+                continue
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
+            records.append(
+                {
+                    "fac_id": fac_id,
+                    "name": name,
+                    "city": str(item.get("city", "") or "").strip() or None,
+                    "country": str(item.get("country", "") or "").strip() or None,
+                    "website": str(item.get("website", "") or "").strip() or None,
+                    "org_name": str(item.get("org", {}).get("name", "") or "").strip() or None
+                    if isinstance(item.get("org"), dict)
+                    else None,
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return records
+
+
+def _upsert_peeringdb_ixps_sync(db_url: str, records: list[dict]) -> int:
+    """Upsert PeeringDB IXP records into peeringdb_ixps (blocking)."""
+    insert_sql = """
+        INSERT INTO peeringdb_ixps
+            (ixp_id, name, name_long, city, country, website, lat, lon, geom)
+        VALUES %s
+        ON CONFLICT (ixp_id) DO UPDATE SET
+            name       = EXCLUDED.name,
+            name_long  = EXCLUDED.name_long,
+            city       = EXCLUDED.city,
+            country    = EXCLUDED.country,
+            website    = EXCLUDED.website,
+            lat        = EXCLUDED.lat,
+            lon        = EXCLUDED.lon,
+            geom       = EXCLUDED.geom,
+            updated_at = CURRENT_TIMESTAMP
+    """
+    rows = [
+        (
+            r["ixp_id"],
+            r["name"],
+            r["name_long"],
+            r["city"],
+            r["country"],
+            r["website"],
+            r["lat"],
+            r["lon"],
+            f"SRID=4326;POINT({r['lon']} {r['lat']})",
+        )
+        for r in records
+    ]
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, insert_sql, rows, page_size=500)
+        conn.commit()
+        count = cur.rowcount
+        cur.close()
+    finally:
+        conn.close()
+    return count
+
+
+def _upsert_peeringdb_fac_sync(db_url: str, records: list[dict]) -> int:
+    """Upsert PeeringDB facility records into peeringdb_facilities (blocking)."""
+    insert_sql = """
+        INSERT INTO peeringdb_facilities
+            (fac_id, name, city, country, website, org_name, lat, lon, geom)
+        VALUES %s
+        ON CONFLICT (fac_id) DO UPDATE SET
+            name       = EXCLUDED.name,
+            city       = EXCLUDED.city,
+            country    = EXCLUDED.country,
+            website    = EXCLUDED.website,
+            org_name   = EXCLUDED.org_name,
+            lat        = EXCLUDED.lat,
+            lon        = EXCLUDED.lon,
+            geom       = EXCLUDED.geom,
+            updated_at = CURRENT_TIMESTAMP
+    """
+    rows = [
+        (
+            r["fac_id"],
+            r["name"],
+            r["city"],
+            r["country"],
+            r["website"],
+            r["org_name"],
+            r["lat"],
+            r["lon"],
+            f"SRID=4326;POINT({r['lon']} {r['lat']})",
+        )
+        for r in records
+    ]
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, insert_sql, rows, page_size=500)
+        conn.commit()
+        count = cur.rowcount
+        cur.close()
+    finally:
+        conn.close()
+    return count
+
+
+# ---------------------------------------------------------------------------
+# ISS helpers — pure + blocking, unit-testable without I/O
+# ---------------------------------------------------------------------------
+
+
+def parse_iss_position(data: dict) -> dict | None:
+    """Parse open-notify.org ISS-now response into a position dict.
+
+    Expected shape:
+      {"message": "success", "timestamp": 1234567890,
+       "iss_position": {"latitude": "12.34", "longitude": "56.78"}}
+    Returns None if the response is not valid.
+    """
+    if data.get("message") != "success":
+        return None
+    try:
+        pos = data["iss_position"]
+        lat = float(pos["latitude"])
+        lon = float(pos["longitude"])
+        ts = int(data["timestamp"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return None
+    return {
+        "time": datetime.fromtimestamp(ts, tz=UTC),
+        "lat": lat,
+        "lon": lon,
+        # open-notify does not provide altitude/velocity — use None
+        "altitude_km": None,
+        "velocity_kms": None,
+    }
+
+
+def _insert_iss_position_sync(db_url: str, record: dict) -> None:
+    """Insert a single ISS position into iss_positions (blocking)."""
+    sql = """
+        INSERT INTO iss_positions (time, lat, lon, altitude_km, velocity_kms, geom)
+        VALUES (%s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+        ON CONFLICT DO NOTHING
+    """
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            sql,
+            (
+                record["time"],
+                record["lat"],
+                record["lon"],
+                record["altitude_km"],
+                record["velocity_kms"],
+                record["lon"],
+                record["lat"],
+            ),
+        )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
 
@@ -355,6 +589,8 @@ class InfraPollerService:
             asyncio.create_task(self.ioda_loop()),
             asyncio.create_task(self.fcc_loop()),
             asyncio.create_task(self.ndbc_loop()),
+            asyncio.create_task(self.peeringdb_loop()),
+            asyncio.create_task(self.iss_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -704,6 +940,155 @@ class InfraPollerService:
         geojson = json.dumps({"type": "FeatureCollection", "features": features})
         await self.redis.set("ndbc:latest_obs", geojson, ex=1800)  # 30-min TTL
         logger.info("NDBC: cached %d buoys in Redis (ndbc:latest_obs)", len(features))
+
+    # -----------------------------------------------------------------------
+    # PeeringDB loop — 24-hour interval
+    # -----------------------------------------------------------------------
+
+    async def peeringdb_loop(self):
+        """Fetch IXPs + facilities from PeeringDB every 24 hours."""
+        last_fetch_str = await self.redis.get("infra:last_peeringdb_fetch")
+        last_fetch = float(last_fetch_str) if last_fetch_str else 0.0
+        interval_s = POLL_INTERVAL_PEERINGDB_HOURS * 3600
+
+        if last_fetch > 0:
+            remaining = interval_s - (time.time() - last_fetch)
+            if remaining > 0:
+                logger.info(
+                    "PeeringDB: cached, next sync in %dh %dm",
+                    int(remaining // 3600),
+                    int((remaining % 3600) // 60),
+                )
+                await asyncio.sleep(remaining)
+
+        while self.running:
+            try:
+                await self._fetch_and_ingest_peeringdb()
+                await self.redis.set("infra:last_peeringdb_fetch", str(time.time()))
+            except Exception as e:
+                logger.exception("PeeringDB fetch error")
+                try:
+                    await self.redis.set(
+                        "poller:peeringdb:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_and_ingest_peeringdb(self):
+        logger.info("Fetching PeeringDB IXPs and facilities...")
+        timeout = aiohttp.ClientTimeout(total=60.0)
+        headers = {"User-Agent": USER_AGENT}
+
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+            # --- IXPs ---
+            async with client.get(PEERINGDB_IXP_URL) as resp:
+                resp.raise_for_status()
+                ixp_data = await resp.json()
+            await asyncio.sleep(1)  # polite 1 req/s between endpoints
+
+            # --- Facilities ---
+            async with client.get(PEERINGDB_FAC_URL) as resp:
+                resp.raise_for_status()
+                fac_data = await resp.json()
+
+        ixp_records = parse_peeringdb_ixps(ixp_data)
+        fac_records = parse_peeringdb_facilities(fac_data)
+
+        if ixp_records:
+            ixp_count = await asyncio.to_thread(
+                _upsert_peeringdb_ixps_sync, DB_URL, ixp_records
+            )
+            logger.info("PeeringDB: upserted %d IXPs (parsed %d)", ixp_count, len(ixp_records))
+        else:
+            logger.warning("PeeringDB: no valid IXP records parsed")
+
+        if fac_records:
+            fac_count = await asyncio.to_thread(
+                _upsert_peeringdb_fac_sync, DB_URL, fac_records
+            )
+            logger.info(
+                "PeeringDB: upserted %d facilities (parsed %d)", fac_count, len(fac_records)
+            )
+        else:
+            logger.warning("PeeringDB: no valid facility records parsed")
+
+        # Cache lightweight summaries (count + last-updated) for health checks
+        await self.redis.set(
+            "infra:peeringdb_stats",
+            json.dumps(
+                {
+                    "ixp_count": len(ixp_records),
+                    "fac_count": len(fac_records),
+                    "fetched_at": time.time(),
+                }
+            ),
+            ex=86400 * 2,
+        )
+
+    # -----------------------------------------------------------------------
+    # ISS loop — 5-second interval, Redis pub/sub + DB archive
+    # -----------------------------------------------------------------------
+
+    async def iss_loop(self):
+        """Poll open-notify.org for ISS position every 5 seconds.
+
+        Each observation is:
+          - Written to the iss_positions hypertable (DB archive).
+          - Cached at infra:iss_latest (60s TTL) for REST polling.
+          - Published to infrastructure:iss-position channel for WebSocket fans.
+        """
+        while self.running:
+            try:
+                await self._fetch_and_publish_iss()
+            except Exception as e:
+                logger.exception("ISS fetch error")
+                try:
+                    await self.redis.set(
+                        "poller:iss:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=3600,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(POLL_INTERVAL_ISS_SECONDS)
+
+    async def _fetch_and_publish_iss(self):
+        timeout = aiohttp.ClientTimeout(total=10.0)
+        async with aiohttp.ClientSession(
+            timeout=timeout, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            async with client.get(ISS_NOW_URL) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+        record = parse_iss_position(data)
+        if record is None:
+            logger.warning("ISS: invalid response from open-notify: %s", data)
+            return
+
+        payload = json.dumps(
+            {
+                "lat": record["lat"],
+                "lon": record["lon"],
+                "altitude_km": record["altitude_km"],
+                "velocity_kms": record["velocity_kms"],
+                "timestamp": record["time"].isoformat(),
+            }
+        )
+
+        # 1. Cache latest position for REST endpoint (60s TTL)
+        await self.redis.set("infra:iss_latest", payload, ex=60)
+
+        # 2. Publish to pub/sub channel for WebSocket subscribers
+        await self.redis.publish("infrastructure:iss-position", payload)
+
+        # 3. Archive to DB (offload blocking write to thread pool)
+        await asyncio.to_thread(_insert_iss_position_sync, DB_URL, record)
+
+        logger.debug("ISS: lat=%.4f lon=%.4f", record["lat"], record["lon"])
 
 
 # ---------------------------------------------------------------------------

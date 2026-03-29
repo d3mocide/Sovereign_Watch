@@ -24,6 +24,10 @@ interface SituationGlobeProps {
   mission: { lat: number; lon: number; radius_nm: number } | null;
   onGdeltClick?: (event: any) => void;
   onHover?: (entity: any | null, pos: { x: number; y: number } | null) => void;
+  /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
+  ixpData?: FeatureCollection | null;
+  /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
+  facilityData?: FeatureCollection | null;
 }
 
 const DARK_MAP_STYLE =
@@ -40,6 +44,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   mission,
   onGdeltClick,
   onHover,
+  ixpData,
+  facilityData,
 }) => {
   const GLOBE_ROTATION_DEG_PER_60FPS_FRAME = 0.01;
 
@@ -191,6 +197,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         showCables: true,
         showLandingStations: false,
         showOutages: true,
+        showIXPs: true,
+        showFacilities: false, // too dense for the ambient globe
         cableOpacity: 0.5,
       },
       () => {}, // No-op hover
@@ -199,6 +207,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       true, // globeMode
       worldCountriesData,
       countryOutageMap,
+      ixpData ?? null,
+      facilityData ?? null,
     );
 
     // 3. Build Orbital Layers
