@@ -14,6 +14,7 @@ import { DashboardView } from "./components/views/DashboardView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
+import { NewsWidget } from "./components/widgets/NewsWidget";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useAppFilters } from "./hooks/useAppFilters";
@@ -424,7 +425,7 @@ function App() {
           viewMode === "ORBITAL" ||
           viewMode === "INTEL" ? (
             <div className="flex flex-col h-full gap-4">
-              {selectedEntity && (selectedEntity as any).type !== "sitrep" && (
+              {selectedEntity && (selectedEntity as any).type !== "sitrep" ? (
                 <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col">
                   <SidebarRight
                     entity={selectedEntity}
@@ -454,7 +455,11 @@ function App() {
                     />
                   )}
                 </div>
-              )}
+              ) : viewMode === "INTEL" ? (
+                <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm shadow-2xl">
+                  <NewsWidget />
+                </div>
+              ) : null}
             </div>
           ) : null
         }
