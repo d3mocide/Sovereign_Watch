@@ -61,12 +61,19 @@ class Settings:
             )
         return self._fallback_jwt_secret
 
-    JWT_ALGORITHM: str = os.getenv('JWT_ALGORITHM', 'HS256')
+    _JWT_ALGORITHM_RAW: str = os.getenv('JWT_ALGORITHM', 'HS256')
+
+    @property
+    def JWT_ALGORITHM(self) -> str:
+        _allowed = {"HS256", "HS384", "HS512"}
+        if self._JWT_ALGORITHM_RAW not in _allowed:
+            raise ValueError(
+                f"JWT_ALGORITHM must be one of {sorted(_allowed)}, "
+                f"got '{self._JWT_ALGORITHM_RAW}'"
+            )
+        return self._JWT_ALGORITHM_RAW
     # Access token lifetime in minutes (default 8 hours)
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '480'))
-    # First-run admin bootstrap credentials (only used when the users table is empty)
-    BOOTSTRAP_ADMIN_USERNAME: str = os.getenv('BOOTSTRAP_ADMIN_USERNAME', 'admin')
-    BOOTSTRAP_ADMIN_PASSWORD: str | None = os.getenv('BOOTSTRAP_ADMIN_PASSWORD')
 
 
 settings = Settings()

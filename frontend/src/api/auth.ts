@@ -110,6 +110,11 @@ export async function getMe(): Promise<UserProfile> {
   return handleResponse<UserProfile>(res);
 }
 
+export async function getSetupStatus(): Promise<{ setup_required: boolean }> {
+  const res = await fetch('/api/auth/setup-status');
+  return handleResponse<{ setup_required: boolean }>(res);
+}
+
 export async function firstSetup(username: string, password: string): Promise<UserProfile> {
   const res = await fetch('/api/auth/first-setup', {
     method: 'POST',

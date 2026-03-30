@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react";
+import { getToken } from "../api/auth";
 
 export interface WorkerProtocolOptions {
   /** Ref that will be populated with the running Worker instance. */
@@ -43,14 +44,12 @@ export function startWorkerProtocol({
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const getWsUrl = () => {
     const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && !envUrl.includes("localhost")) {
-      return envUrl.replace("http", "ws") + "/api/tracks/live";
-    }
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/api/tracks/live`;
+    const base = envUrl && !envUrl.includes("localhost")
+      ? envUrl.replace("http", "ws") + "/api/tracks/live"
+      : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/tracks/live`;
+    const tok = getToken();
+    return tok ? `${base}?token=${encodeURIComponent(tok)}` : base;
   };
-
-  const wsUrl = getWsUrl();
 
   let ws: WebSocket | null = null;
   let reconnectAttempts = 0;
@@ -62,7 +61,8 @@ export function startWorkerProtocol({
   const connect = () => {
     if (isCleaningUp) return;
 
-    ws = new WebSocket(wsUrl);
+    // Re-derive URL each time so a fresh token is used after reconnection.
+    ws = new WebSocket(getWsUrl());
     ws.binaryType = "arraybuffer";
 
     ws.onopen = () => {

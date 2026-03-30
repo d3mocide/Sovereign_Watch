@@ -3,10 +3,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from core.auth import get_user_by_username, hash_password
+from core.auth import require_role
 from core.config import settings
 from core.database import db
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     analysis,
@@ -105,30 +105,6 @@ async def lifespan(app: FastAPI):
     await broadcast_service.start()
     logger.info("Database, Redis, Historian, RF Cleanup, and Broadcast Service started")
 
-    # Bootstrap initial admin account when the users table is empty and a
-    # BOOTSTRAP_ADMIN_PASSWORD is provided via environment variable.
-    if db.pool and settings.BOOTSTRAP_ADMIN_PASSWORD:
-        try:
-            async with db.pool.acquire() as conn:
-                count = await conn.fetchval("SELECT COUNT(*) FROM users")
-            if count == 0:
-                existing = await get_user_by_username(settings.BOOTSTRAP_ADMIN_USERNAME)
-                if not existing:
-                    hashed = hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD)
-                    async with db.pool.acquire() as conn:
-                        await conn.execute(
-                            "INSERT INTO users (username, hashed_password, role, is_active) "
-                            "VALUES ($1, $2, 'admin', TRUE)",
-                            settings.BOOTSTRAP_ADMIN_USERNAME,
-                            hashed,
-                        )
-                    logger.info(
-                        "Bootstrap admin account '%s' created",
-                        settings.BOOTSTRAP_ADMIN_USERNAME,
-                    )
-        except Exception as e:
-            logger.warning("Could not bootstrap admin account: %s", e)
-
     yield
 
     # --- Shutdown ---
@@ -186,27 +162,51 @@ ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+# ── Health check (public — used by Docker/nginx probes) ──────────────────────
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
+
+# ── Minimum auth gate applied to every data router ───────────────────────────
+# require_role("viewer") validates the Bearer token, checks is_active, and
+# enforces the lowest privilege tier.  Routers that need higher privileges
+# add their own per-endpoint Depends on top of this.
+_viewer_auth = [Depends(require_role("viewer"))]
+
+# auth router manages its own per-endpoint auth — no global gate needed.
 app.include_router(auth.router)
-app.include_router(system.router)
-app.include_router(metrics.router)
-app.include_router(tracks.router)
-app.include_router(analysis.router)
-app.include_router(rf.router)
-app.include_router(orbital.router)
-app.include_router(infra.router)
-app.include_router(news.router)
-app.include_router(space_weather.router)
-app.include_router(jamming.router)
-app.include_router(holding_patterns.router)
-app.include_router(satnogs.router)
-app.include_router(gdelt.router)
-app.include_router(stats.router)
-app.include_router(buoys.router)
-app.include_router(maritime.router)
-app.include_router(iss.router)
+
+# system router: /health is served above; all other system endpoints are
+# protected by the viewer gate.
+app.include_router(system.router, dependencies=_viewer_auth)
+
+# tracks router: HTTP endpoints are protected, but the WebSocket at
+# /api/tracks/live cannot use Bearer headers (browser limitation).
+# WebSocket auth via query-param token is a planned follow-up.
+# TODO(security): add WS query-param token auth to tracks.router
+app.include_router(tracks.router, dependencies=_viewer_auth)
+
+app.include_router(metrics.router, dependencies=_viewer_auth)
+app.include_router(analysis.router, dependencies=_viewer_auth)
+app.include_router(rf.router, dependencies=_viewer_auth)
+app.include_router(orbital.router, dependencies=_viewer_auth)
+app.include_router(infra.router, dependencies=_viewer_auth)
+app.include_router(news.router, dependencies=_viewer_auth)
+app.include_router(space_weather.router, dependencies=_viewer_auth)
+app.include_router(jamming.router, dependencies=_viewer_auth)
+app.include_router(holding_patterns.router, dependencies=_viewer_auth)
+app.include_router(satnogs.router, dependencies=_viewer_auth)
+app.include_router(gdelt.router, dependencies=_viewer_auth)
+app.include_router(stats.router, dependencies=_viewer_auth)
+app.include_router(buoys.router, dependencies=_viewer_auth)
+app.include_router(maritime.router, dependencies=_viewer_auth)
+app.include_router(iss.router, dependencies=_viewer_auth)
 
 if __name__ == "__main__":
     import uvicorn

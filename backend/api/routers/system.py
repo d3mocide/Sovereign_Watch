@@ -65,11 +65,6 @@ AI_MODEL_REDIS_KEY = "config:ai:active_model"
 AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
 
-@router.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
 @router.post("/api/config/location")
 async def set_mission_location(location: MissionLocation):
     """

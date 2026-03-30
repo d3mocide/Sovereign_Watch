@@ -51,6 +51,8 @@ _MOCK_USER = {
     "hashed_password": HASHED_PASS,
     "role": "admin",
     "is_active": True,
+    "password_version": 0,
+    "created_at": None,
 }
 
 _MOCK_VIEWER = {
@@ -59,6 +61,8 @@ _MOCK_VIEWER = {
     "hashed_password": HASHED_PASS,
     "role": "viewer",
     "is_active": True,
+    "password_version": 0,
+    "created_at": None,
 }
 
 
@@ -109,6 +113,8 @@ async def test_login_success():
     data = resp.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+    assert "expires_in" in data
+    assert data["expires_in"] > 0
 
 
 @pytest.mark.asyncio
@@ -169,22 +175,13 @@ async def test_me_without_token_auth_enabled():
 
 @pytest.mark.asyncio
 async def test_first_setup_creates_admin():
-    """first-setup works when no users exist."""
+    """first-setup works when no users exist (atomic INSERT returns a row)."""
     transport = ASGITransport(app=app)
 
-    mock_row = MagicMock()
-    mock_row.__iter__ = MagicMock(
-        return_value=iter(
-            [("id", 1), ("username", "newadmin"), ("role", "admin"), ("is_active", True)]
-        )
-    )
-    mock_row.keys = MagicMock(return_value=["id", "username", "role", "is_active"])
-
-    # Build a dict-like row object
-    row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True}
+    row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True, "created_at": None}
 
     mock_conn = MagicMock()
-    mock_conn.fetchval = AsyncMock(return_value=0)  # count = 0
+    # Atomic INSERT … WHERE NOT EXISTS returns the new row when table was empty
     mock_conn.fetchrow = AsyncMock(return_value=row_dict)
     mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_conn.__aexit__ = AsyncMock(return_value=None)
@@ -203,11 +200,12 @@ async def test_first_setup_creates_admin():
 
 @pytest.mark.asyncio
 async def test_first_setup_blocked_when_users_exist():
-    """first-setup returns 409 when users already exist."""
+    """first-setup returns 404 when users already exist (atomic INSERT returns None)."""
     transport = ASGITransport(app=app)
 
     mock_conn = MagicMock()
-    mock_conn.fetchval = AsyncMock(return_value=3)  # 3 users exist
+    # Atomic INSERT … WHERE NOT EXISTS returns None when table was not empty
+    mock_conn.fetchrow = AsyncMock(return_value=None)
     mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_conn.__aexit__ = AsyncMock(return_value=None)
 
@@ -220,7 +218,47 @@ async def test_first_setup_blocked_when_users_exist():
                 "/api/auth/first-setup",
                 json={"username": "another", "password": "Str0ngP@ssword"},
             )
-    assert resp.status_code == 409
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_setup_status_when_empty():
+    """setup-status returns setup_required=true when no users exist."""
+    transport = ASGITransport(app=app)
+
+    mock_conn = MagicMock()
+    mock_conn.fetchval = AsyncMock(return_value=0)
+    mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire = MagicMock(return_value=mock_conn)
+
+    with patch("core.database.db.pool", mock_pool):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/setup-status")
+    assert resp.status_code == 200
+    assert resp.json() == {"setup_required": True}
+
+
+@pytest.mark.asyncio
+async def test_setup_status_when_users_exist():
+    """setup-status returns setup_required=false when users already exist."""
+    transport = ASGITransport(app=app)
+
+    mock_conn = MagicMock()
+    mock_conn.fetchval = AsyncMock(return_value=3)
+    mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire = MagicMock(return_value=mock_conn)
+
+    with patch("core.database.db.pool", mock_pool):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/setup-status")
+    assert resp.status_code == 200
+    assert resp.json() == {"setup_required": False}
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 VALID_ROLES = ("viewer", "operator", "admin")
@@ -20,6 +22,7 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int  # seconds until token expiry
 
 
 class UserResponse(BaseModel):
@@ -27,6 +30,7 @@ class UserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    created_at: datetime | None = None
 
 
 class UserCreate(BaseModel):

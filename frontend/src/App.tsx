@@ -1,6 +1,7 @@
 import type { FeatureCollection } from "geojson";
 import { ExternalLink, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getSetupStatus } from "./api/auth";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { MainHud } from "./components/layouts/MainHud";
@@ -50,6 +51,17 @@ interface IntelArticleContent {
 function App() {
   // ── Authentication gate ───────────────────────────────────────────────────
   const { status: authStatus } = useAuth();
+
+  // null = not yet checked, true/false = result from /api/auth/setup-status
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      getSetupStatus()
+        .then(({ setup_required }) => setSetupRequired(setup_required))
+        .catch(() => setSetupRequired(false));
+    }
+  }, [authStatus]);
 
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
@@ -494,9 +506,19 @@ function App() {
     );
   }
 
-  // Redirect to login when unauthenticated
+  // Show login or first-run setup when unauthenticated
   if (authStatus === 'unauthenticated') {
-    return <LoginView />;
+    // Still waiting for setup-status check — reuse the existing loading screen
+    if (setupRequired === null) {
+      return (
+        <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+          <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+            Initialising…
+          </div>
+        </div>
+      );
+    }
+    return <LoginView isFirstSetup={setupRequired} />;
   }
 
   return (
