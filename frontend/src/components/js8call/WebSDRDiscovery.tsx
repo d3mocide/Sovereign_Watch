@@ -138,6 +138,7 @@ export default function WebSDRDiscovery({
           <button
             onClick={() => setViewMode("list")}
             title="List view"
+            aria-label="List view"
             className={`p-1.5 rounded transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none ${
               viewMode === "list"
                 ? "text-violet-400 bg-violet-500/15"
@@ -149,6 +150,7 @@ export default function WebSDRDiscovery({
           <button
             onClick={() => setViewMode("map")}
             title="Map view"
+            aria-label="Map view"
             className={`p-1.5 rounded transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none ${
               viewMode === "map"
                 ? "text-violet-400 bg-violet-500/15"
@@ -164,6 +166,7 @@ export default function WebSDRDiscovery({
             onClick={() => webSDRRefetch()}
             disabled={webSDRLoading}
             title="Refresh node list"
+            aria-label="Refresh node list"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
           >
             <RefreshCw
@@ -173,6 +176,7 @@ export default function WebSDRDiscovery({
           {!inlineMode && (
             <button
               onClick={onClose}
+              aria-label="Close WebSDR discovery"
               className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
             >
               <X className="w-3.5 h-3.5" />
