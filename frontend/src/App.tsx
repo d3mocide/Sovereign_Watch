@@ -60,6 +60,8 @@ function App() {
     setIsSystemSettingsOpen,
     isSystemHealthOpen,
     setIsSystemHealthOpen,
+    isAIAnalystOpen,
+    setIsAIAnalystOpen,
     isTerminalOpen,
     setIsTerminalOpen,
     isUserMenuOpen,
