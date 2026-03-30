@@ -1,8 +1,6 @@
 import { Server, X } from "lucide-react";
 import React from "react";
-import { useAuth } from "../../hooks/useAuth";
 import { FilterPresets } from "./FilterPresets";
-import { UserManagementPanel } from "./UserManagementPanel";
 import { WatchlistManager } from "./WatchlistManager";
 
 interface SystemSettingsWidgetProps {
@@ -21,7 +19,6 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
   filters,
   onFilterChange,
 }) => {
-  const { hasRole } = useAuth();
   if (!isOpen) return null;
 
   return (
@@ -97,13 +94,6 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
           <div className="h-px w-full bg-hud-green/10" />
 
           <WatchlistManager isOpen={isOpen} />
-
-          {hasRole('admin') && (
-            <>
-              <div className="h-px w-full bg-hud-green/10" />
-              <UserManagementPanel />
-            </>
-          )}
         </div>
       </div>
     </div>

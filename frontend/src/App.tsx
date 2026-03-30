@@ -60,10 +60,10 @@ function App() {
     setIsSystemSettingsOpen,
     isSystemHealthOpen,
     setIsSystemHealthOpen,
-    isAIAnalystOpen,
-    setIsAIAnalystOpen,
     isTerminalOpen,
     setIsTerminalOpen,
+    isUserMenuOpen,
+    setIsUserMenuOpen,
   } = useSidebarState();
 
   // ── Intel event feed ──────────────────────────────────────────────────────
@@ -542,6 +542,9 @@ function App() {
             }
             onSystemHealthClose={() => setIsSystemHealthOpen(false)}
             onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            isUserMenuOpen={isUserMenuOpen}
+            onUserMenuClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            onUserMenuClose={() => setIsUserMenuOpen(false)}
           />
         }
         leftSidebar={
