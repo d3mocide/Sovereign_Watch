@@ -40,6 +40,8 @@ The platform's "System of Systems" architecture is documented in detail within t
 | **FE-36**     | Env Layers           | Frontend  | Auroral Oval polygon layer and solar activity status widget.                |
 | **FE-38**     | Multi-INT Dashboard  | Frontend  | Integrated HUD: Polymarket probabilities, Live TV Grid, and DEFCON Status.  |
 | **FE-37**     | RF Band Plan Context | Frontend  | Offline SQLite frequency allocation lookup (FCC/ITU).                       |
+| **FE-39**     | Analysis Tab Content | Frontend  | Populate placeholder Analysis tab: historian lag timeline, data freshness calendar heatmap, entity count trends over retention window. |
+| **FE-40**     | JS8Call Ops Panel    | Frontend  | Status card in Operations tab: HF bridge connected/disconnected, last message timestamp, active KiwiSDR node count. |
 
 ---
 
