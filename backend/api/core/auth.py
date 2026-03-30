@@ -45,6 +45,37 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Rate limiting (Redis-backed, fail-open)
+# ---------------------------------------------------------------------------
+
+
+async def check_rate_limit(identifier: str, limit: int = 10, window: int = 60) -> None:
+    """
+    Increment a Redis fixed-window counter keyed by `identifier`.
+    Raises HTTP 429 if more than `limit` calls occur within `window` seconds.
+    Silently no-ops when Redis is unavailable so auth is never blocked by a
+    cache outage.
+    """
+    if not db.redis_client:
+        return
+    key = f"ratelimit:{identifier}"
+    try:
+        pipe = db.redis_client.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, window)
+        results = await pipe.execute()
+        count = results[0]
+    except Exception:
+        return  # fail-open on Redis errors
+    if count > limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(window)},
+        )
+
+
+# ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
 
@@ -174,7 +205,8 @@ def require_role(minimum_role: str):
     min_index = ROLES.index(minimum_role)
 
     async def _check(user: dict = Depends(get_current_user)):
-        role_index = ROLES.index(user.get("role", "viewer"))
+        role = user.get("role", "viewer")
+        role_index = ROLES.index(role) if role in ROLES else -1
         if role_index < min_index:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

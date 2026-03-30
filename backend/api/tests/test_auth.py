@@ -169,22 +169,13 @@ async def test_me_without_token_auth_enabled():
 
 @pytest.mark.asyncio
 async def test_first_setup_creates_admin():
-    """first-setup works when no users exist."""
+    """first-setup works when no users exist (atomic INSERT returns a row)."""
     transport = ASGITransport(app=app)
 
-    mock_row = MagicMock()
-    mock_row.__iter__ = MagicMock(
-        return_value=iter(
-            [("id", 1), ("username", "newadmin"), ("role", "admin"), ("is_active", True)]
-        )
-    )
-    mock_row.keys = MagicMock(return_value=["id", "username", "role", "is_active"])
-
-    # Build a dict-like row object
     row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True}
 
     mock_conn = MagicMock()
-    mock_conn.fetchval = AsyncMock(return_value=0)  # count = 0
+    # Atomic INSERT … WHERE NOT EXISTS returns the new row when table was empty
     mock_conn.fetchrow = AsyncMock(return_value=row_dict)
     mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_conn.__aexit__ = AsyncMock(return_value=None)
@@ -203,11 +194,12 @@ async def test_first_setup_creates_admin():
 
 @pytest.mark.asyncio
 async def test_first_setup_blocked_when_users_exist():
-    """first-setup returns 409 when users already exist."""
+    """first-setup returns 404 when users already exist (atomic INSERT returns None)."""
     transport = ASGITransport(app=app)
 
     mock_conn = MagicMock()
-    mock_conn.fetchval = AsyncMock(return_value=3)  # 3 users exist
+    # Atomic INSERT … WHERE NOT EXISTS returns None when table was not empty
+    mock_conn.fetchrow = AsyncMock(return_value=None)
     mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_conn.__aexit__ = AsyncMock(return_value=None)
 
@@ -220,7 +212,7 @@ async def test_first_setup_blocked_when_users_exist():
                 "/api/auth/first-setup",
                 json={"username": "another", "password": "Str0ngP@ssword"},
             )
-    assert resp.status_code == 409
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
