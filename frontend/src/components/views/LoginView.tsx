@@ -23,7 +23,7 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
     setError(null);
 
     if (isFirstSetup && password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Passwords do not match');
       return;
     }
 
@@ -31,120 +31,140 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
     try {
       if (isFirstSetup) {
         await firstSetup(username, password);
-        // After setup, log in with the new credentials
         await login(username, password);
         onSetupComplete?.();
       } else {
         await login(username, password);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      {/* Background grid effect */}
-      <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(0,255,128,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,128,0.3) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
+    <div className="min-h-screen bg-tactical-bg flex items-center justify-center p-4 overflow-hidden relative">
 
-      <div className="relative w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Shield className="text-emerald-400" size={32} />
-            <span className="text-2xl font-bold text-white tracking-wider uppercase">
+      {/* Background grid */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-30 pointer-events-none" />
+
+      {/* Ambient green glow centered behind the card */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-[700px] h-[500px] rounded-full bg-hud-green/5 blur-[140px]" />
+      </div>
+
+      {/* Scanline sweep */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="animate-scanline absolute w-full h-32 opacity-20 scanline" />
+      </div>
+
+      {/* Content */}
+      <div className="relative w-full max-w-sm animate-in fade-in duration-700">
+
+        {/* Wordmark */}
+        <div className="text-center mb-7">
+          <div className="flex items-center justify-center gap-2.5 mb-2">
+            <Shield
+              size={26}
+              className="text-hud-green drop-shadow-[0_0_14px_rgba(0,255,65,0.9)]"
+            />
+            <span className="text-lg font-black text-white tracking-[0.3em] uppercase">
               Sovereign Watch
             </span>
           </div>
-          <p className="text-gray-400 text-sm uppercase tracking-widest">
+          <p className="text-hud-green/50 text-[10px] uppercase tracking-[0.45em]">
             {isFirstSetup ? 'Initial System Setup' : 'Intelligence Fusion Platform'}
           </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-8 shadow-2xl">
-          <h2 className="text-white font-semibold text-lg mb-1">
-            {isFirstSetup ? 'Create Admin Account' : 'Operator Authentication'}
-          </h2>
-          {isFirstSetup && (
-            <p className="text-gray-400 text-sm mb-6">
-              No accounts detected. Create the first administrator account to continue.
-            </p>
-          )}
+        {/* Glass panel */}
+        <div className="bg-black/60 backdrop-blur-md border border-hud-green/20 rounded
+                        shadow-[0_0_50px_rgba(0,255,65,0.07),inset_0_1px_1px_rgba(255,255,255,0.06)]">
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {/* Top accent line */}
+          <div className="h-px bg-gradient-to-r from-transparent via-hud-green/50 to-transparent rounded-t" />
+
+          <div className="px-6 pt-5 pb-6 space-y-4">
+
+            {/* First-run badge */}
+            {isFirstSetup && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-amber-400/25
+                              bg-amber-400/8 text-amber-400 text-[10px] uppercase tracking-widest font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse
+                                 shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
+                First run — create admin account
+              </div>
+            )}
+
+            {/* Panel heading */}
+            <p className="text-white font-bold text-xs uppercase tracking-[0.2em]">
+              {isFirstSetup ? 'Create Admin Account' : 'Operator Authentication'}
+            </p>
+
             {/* Username */}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                 Username
               </label>
               <div className="relative">
-                <User
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                />
+                <User size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   autoComplete="username"
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 pl-9 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   placeholder="Enter username"
+                  className="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 pl-8
+                             text-white text-sm placeholder-white/20 font-mono
+                             focus:outline-none focus:border-hud-green/45 focus:ring-1 focus:ring-hud-green/20
+                             transition-colors"
                 />
               </div>
             </div>
 
             {/* Password */}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                 Password
               </label>
               <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                />
+                <Lock size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete={isFirstSetup ? 'new-password' : 'current-password'}
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 pl-9 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   placeholder={isFirstSetup ? 'Min. 8 characters' : 'Enter password'}
+                  className="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 pl-8
+                             text-white text-sm placeholder-white/20 font-mono
+                             focus:outline-none focus:border-hud-green/45 focus:ring-1 focus:ring-hud-green/20
+                             transition-colors"
                 />
               </div>
             </div>
 
-            {/* Confirm password (first-setup only) */}
+            {/* Confirm password — first-setup only */}
             {isFirstSetup && (
-              <div>
-                <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <Lock
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                  />
+                  <Lock size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     autoComplete="new-password"
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 pl-9 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                     placeholder="Repeat password"
+                    className="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 pl-8
+                               text-white text-sm placeholder-white/20 font-mono
+                               focus:outline-none focus:border-hud-green/45 focus:ring-1 focus:ring-hud-green/20
+                               transition-colors"
                   />
                 </div>
               </div>
@@ -152,8 +172,10 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
 
             {/* Error */}
             {error && (
-              <div className="bg-red-950 border border-red-700 rounded px-3 py-2 text-red-300 text-sm">
-                {error}
+              <div className="flex items-start gap-2 bg-alert-red/8 border border-alert-red/30 rounded
+                              px-3 py-2 text-alert-red text-[11px] uppercase tracking-wider font-bold">
+                <span className="mt-px shrink-0">▲</span>
+                <span>{error}</span>
               </div>
             )}
 
@@ -161,7 +183,12 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded text-sm uppercase tracking-wider transition-colors"
+              onClick={handleSubmit}
+              className="w-full bg-hud-green text-black font-black py-2.5 rounded
+                         text-[11px] uppercase tracking-[0.25em]
+                         transition-all duration-200
+                         hover:shadow-[0_0_28px_rgba(0,255,65,0.45)]
+                         disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none"
             >
               {loading
                 ? 'Authenticating…'
@@ -169,10 +196,14 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
                   ? 'Create Account & Login'
                   : 'Authenticate'}
             </button>
-          </form>
+          </div>
+
+          {/* Bottom accent line */}
+          <div className="h-px bg-gradient-to-r from-transparent via-white/8 to-transparent rounded-b" />
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6 uppercase tracking-widest">
+        {/* Footer */}
+        <p className="text-center text-white/15 text-[9px] mt-5 uppercase tracking-[0.45em]">
           Sovereign Watch · Secure Access Required
         </p>
       </div>
