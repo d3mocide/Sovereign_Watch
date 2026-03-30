@@ -501,3 +501,41 @@ SELECT add_continuous_aggregate_policy('ndbc_hourly_baseline',
     end_offset        => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour',
     if_not_exists     => TRUE);
+
+
+-- TABLE: users (Authentication & access control)
+-- Stores operator accounts with bcrypt-hashed passwords and role-based access.
+-- Roles: viewer (read-only) | operator (read + write) | admin (full access)
+CREATE TABLE IF NOT EXISTS users (
+    id               SERIAL PRIMARY KEY,
+    username         TEXT NOT NULL UNIQUE,
+    hashed_password  TEXT NOT NULL,
+    role             TEXT NOT NULL DEFAULT 'viewer'
+                         CHECK (role IN ('viewer', 'operator', 'admin')),
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_users_username ON users (username);
+
+-- Trigger: keep updated_at current on every UPDATE
+CREATE OR REPLACE FUNCTION update_users_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated_at'
+    ) THEN
+        CREATE TRIGGER trg_users_updated_at
+            BEFORE UPDATE ON users
+            FOR EACH ROW EXECUTE FUNCTION update_users_updated_at();
+    END IF;
+END;
+$$;
