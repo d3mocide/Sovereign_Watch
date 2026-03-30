@@ -216,6 +216,46 @@ async def test_first_setup_blocked_when_users_exist():
 
 
 @pytest.mark.asyncio
+async def test_setup_status_when_empty():
+    """setup-status returns setup_required=true when no users exist."""
+    transport = ASGITransport(app=app)
+
+    mock_conn = MagicMock()
+    mock_conn.fetchval = AsyncMock(return_value=0)
+    mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire = MagicMock(return_value=mock_conn)
+
+    with patch("core.database.db.pool", mock_pool):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/setup-status")
+    assert resp.status_code == 200
+    assert resp.json() == {"setup_required": True}
+
+
+@pytest.mark.asyncio
+async def test_setup_status_when_users_exist():
+    """setup-status returns setup_required=false when users already exist."""
+    transport = ASGITransport(app=app)
+
+    mock_conn = MagicMock()
+    mock_conn.fetchval = AsyncMock(return_value=3)
+    mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire = MagicMock(return_value=mock_conn)
+
+    with patch("core.database.db.pool", mock_pool):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/setup-status")
+    assert resp.status_code == 200
+    assert resp.json() == {"setup_required": False}
+
+
+@pytest.mark.asyncio
 async def test_list_users_admin_only():
     """Non-admin token is rejected with 403."""
     transport = ASGITransport(app=app)

@@ -74,9 +74,6 @@ class Settings:
         return self._JWT_ALGORITHM_RAW
     # Access token lifetime in minutes (default 8 hours)
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '480'))
-    # First-run admin bootstrap credentials (only used when the users table is empty)
-    BOOTSTRAP_ADMIN_USERNAME: str = os.getenv('BOOTSTRAP_ADMIN_USERNAME', 'admin')
-    BOOTSTRAP_ADMIN_PASSWORD: str | None = os.getenv('BOOTSTRAP_ADMIN_PASSWORD')
 
 
 settings = Settings()

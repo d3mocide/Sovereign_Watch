@@ -110,6 +110,22 @@ async def first_setup(request: Request, body: FirstSetupRequest):
     return UserResponse(**dict(row))
 
 
+@router.get("/setup-status", summary="Check whether initial setup is required")
+async def setup_status():
+    """
+    Returns {"setup_required": true} when no user accounts exist yet.
+    Safe to call unauthenticated — reveals no user data, only a boolean.
+    Used by the frontend to decide whether to show the first-run setup form
+    or the normal login screen.
+    """
+    if not db.pool:
+        # DB not reachable — show login screen rather than a misleading setup form.
+        return {"setup_required": False}
+    async with db.pool.acquire() as conn:
+        count = await conn.fetchval("SELECT COUNT(*) FROM users")
+    return {"setup_required": count == 0}
+
+
 # ---------------------------------------------------------------------------
 # Authenticated endpoints
 # ---------------------------------------------------------------------------
