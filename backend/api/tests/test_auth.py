@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,31 +28,9 @@ from httpx import ASGITransport, AsyncClient
 # ---------------------------------------------------------------------------
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from test_stubs import install_common_test_stubs  # noqa: E402
 
-_mock_asyncpg = MagicMock()
-_mock_asyncpg.create_pool = AsyncMock()
-sys.modules["asyncpg"] = _mock_asyncpg
-
-_mock_redis_pkg = types.ModuleType("redis")
-_mock_redis_asyncio = types.ModuleType("redis.asyncio")
-_mock_redis_asyncio.from_url = AsyncMock()
-_mock_redis_asyncio.Redis = MagicMock()
-_mock_redis_pkg.asyncio = _mock_redis_asyncio
-sys.modules["redis"] = _mock_redis_pkg
-sys.modules["redis.asyncio"] = _mock_redis_asyncio
-
-_mock_aiokafka = types.ModuleType("aiokafka")
-_mock_aiokafka.AIOKafkaConsumer = MagicMock()
-_mock_aiokafka.AIOKafkaProducer = MagicMock()
-sys.modules["aiokafka"] = _mock_aiokafka
-
-_mock_numpy = types.ModuleType("numpy")
-_mock_numpy.bool_ = bool
-_mock_numpy.isscalar = lambda _: False
-_mock_numpy.ndarray = tuple
-sys.modules["numpy"] = _mock_numpy
-
-sys.modules["litellm"] = MagicMock()
+install_common_test_stubs()
 
 from core.auth import (  # noqa: E402
     create_access_token,

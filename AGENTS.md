@@ -79,9 +79,9 @@ To avoid excessive runtime, **only** run verification suites for the components/
 | Component / Language | Verification Command(s) |
 | :--- | :--- |
 | **Frontend** (`.ts`, `.tsx`, `.css`) | `cd frontend && pnpm run lint && pnpm run test` |
-| **Backend API** (`api/*.py`) | `cd backend/api && ruff check . && python -m pytest` |
-| **Ingestion Pollers** (`ingestion/*.py`) | `cd backend/ingestion/<poller> && ruff check . && python -m pytest` |
-| **Radio Service** (`js8call/*.py`) | `cd js8call && ruff check . && python -m pytest` |
+| **Backend API** (`api/*.py`) | `cd backend/api && uv tool run ruff check . && uv run python -m pytest` |
+| **Ingestion Pollers** (`ingestion/*.py`) | `cd backend/ingestion/<poller> && uv tool run ruff check . && uv run python -m pytest` |
+| **Radio Service** (`js8call/*.py`) | `cd js8call && uv tool run ruff check . && uv run python -m pytest` |
 | **Documentation Only** (`.md`) | Skip code suites; ensure MD rules/consistency pass. |
 
 ### Verification Decision Gate (Efficiency + Parity)

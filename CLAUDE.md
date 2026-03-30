@@ -10,22 +10,22 @@ Containers may not be running during Claude sessions. Run lint and unit tests on
 
 ```bash
 cd frontend && pnpm run lint && pnpm run test
-cd backend/api && ruff check . && python -m pytest
-cd backend/ingestion/<poller> && ruff check . && python -m pytest
-cd js8call && ruff check . && python -m pytest
+cd backend/api && uv tool run ruff check . && uv run python -m pytest
+cd backend/ingestion/<poller> && uv tool run ruff check . && uv run python -m pytest
+cd js8call && uv tool run ruff check . && uv run python -m pytest
 ```
 
 If containers ARE already running, prefer:
 
 ```bash
 docker compose exec sovereign-frontend pnpm run lint
-docker compose exec sovereign-backend ruff check
-docker compose exec sovereign-adsb-poller ruff check
-docker compose exec sovereign-ais-poller ruff check
-docker compose exec sovereign-space-pulse ruff check
-docker compose exec sovereign-rf-pulse ruff check
-docker compose exec sovereign-infra-poller ruff check
-docker compose exec sovereign-js8call ruff check
+docker compose exec sovereign-backend uv tool run ruff check .
+docker compose exec sovereign-adsb-poller uv tool run ruff check .
+docker compose exec sovereign-ais-poller uv tool run ruff check .
+docker compose exec sovereign-space-pulse uv tool run ruff check .
+docker compose exec sovereign-rf-pulse uv tool run ruff check .
+docker compose exec sovereign-infra-poller uv tool run ruff check .
+docker compose exec sovereign-js8call uv tool run ruff check .
 ```
 
 **Container-first still applies for:** building images, running the application, and
