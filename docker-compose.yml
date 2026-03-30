@@ -137,7 +137,7 @@ services:
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       # UTC hour (0-23) at which Celestrak TLE refreshes are allowed to run.
       # Set to -1 to disable hour gating and fetch immediately when interval elapses.
       - SPACE_TLE_FETCH_HOUR=${SPACE_TLE_FETCH_HOUR:-${ORBITAL_TLE_FETCH_HOUR:-2}}
@@ -168,7 +168,7 @@ services:
     container_name: sovereign-infra-poller
     environment:
       - REDIS_URL=redis://sovereign-redis:6379/0
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       # UTC hour (0-23) at which the weekly FCC tower sync is allowed to run.
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
       # NDBC latest observations polling interval in minutes.
@@ -234,7 +234,7 @@ services:
     image: timescale/timescaledb-ha:pg16
     container_name: sovereign-timescaledb
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
     volumes:
       - sovereign-vol-postgres:/home/postgres/pgdata/data
@@ -270,7 +270,7 @@ services:
       dockerfile: Dockerfile
     container_name: sovereign-backend
     environment:
-      - DB_DSN=postgresql://postgres:${POSTGRES_PASSWORD:-password}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+      - DB_DSN=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       - CENTER_LAT=${CENTER_LAT:-45.5152}
       - CENTER_LON=${CENTER_LON:--122.6784}
       - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}

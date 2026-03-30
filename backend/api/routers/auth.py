@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 
+from core.config import settings
 from core.auth import (
     check_rate_limit,
     create_access_token,
@@ -57,22 +58,39 @@ async def login(request: Request, body: LoginRequest):
     await check_rate_limit(f"login:{request.client.host}", limit=10, window=60)
     user = await get_user_by_username(body.username)
     if user is None or not verify_password(body.password, user["hashed_password"]):
+        logger.warning(
+            "Failed login attempt for username '%s' from %s",
+            body.username,
+            request.client.host,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user["is_active"]:
+        logger.warning(
+            "Login attempt on disabled account '%s' from %s",
+            body.username,
+            request.client.host,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
-    # NOTE: role is embedded in the token for informational purposes only.
-    # All authorization decisions use the role fetched live from the database
-    # via get_current_user — never the JWT claim directly.
-    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
-    logger.info("User '%s' authenticated successfully", body.username)
-    return TokenResponse(access_token=token)
+    # NOTE: role and pwv (password version) are embedded in the token for
+    # informational/revocation purposes only.  All authorization decisions use
+    # the role fetched live from the database via get_current_user.
+    token = create_access_token({
+        "sub": str(user["id"]),
+        "role": user["role"],
+        "pwv": user.get("password_version", 0),
+    })
+    logger.info("User '%s' authenticated successfully from %s", body.username, request.client.host)
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
 
 @router.post(
@@ -98,7 +116,7 @@ async def first_setup(request: Request, body: FirstSetupRequest):
             "INSERT INTO users (username, hashed_password, role, is_active) "
             "SELECT $1, $2, 'admin', TRUE "
             "WHERE NOT EXISTS (SELECT 1 FROM users) "
-            "RETURNING id, username, role, is_active",
+            "RETURNING id, username, role, is_active, created_at",
             body.username,
             hashed,
         )
@@ -167,7 +185,7 @@ async def list_users():
         raise HTTPException(status_code=503, detail="Database not available")
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, username, role, is_active FROM users ORDER BY id"
+            "SELECT id, username, role, is_active, created_at FROM users ORDER BY id"
         )
     return [UserResponse(**dict(r)) for r in rows]
 
@@ -194,7 +212,7 @@ async def create_user(body: UserCreate):
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
             "INSERT INTO users (username, hashed_password, role, is_active) "
-            "VALUES ($1, $2, $3, TRUE) RETURNING id, username, role, is_active",
+            "VALUES ($1, $2, $3, TRUE) RETURNING id, username, role, is_active, created_at",
             body.username,
             hashed,
             body.role,
@@ -251,6 +269,8 @@ async def update_user(user_id: int, body: UserUpdate):
     if body.password is not None:
         clauses.append(f"{ALLOWED_COLUMNS['password']} = ${len(params) + 1}")
         params.append(hash_password(body.password))
+        # Bump password_version so all currently-issued tokens become invalid.
+        clauses.append("password_version = password_version + 1")
 
     if not clauses:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -259,7 +279,7 @@ async def update_user(user_id: int, body: UserUpdate):
     query = (
         f"UPDATE users SET {', '.join(clauses)} "
         f"WHERE id = ${len(params)} "
-        "RETURNING id, username, role, is_active"
+        "RETURNING id, username, role, is_active, created_at"
     )
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(query, *params)

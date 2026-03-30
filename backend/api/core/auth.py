@@ -115,7 +115,8 @@ async def get_user_by_username(username: str) -> dict[str, Any] | None:
         return None
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, hashed_password, role, is_active "
+            "SELECT id, username, hashed_password, role, is_active, "
+            "created_at, password_version "
             "FROM users WHERE username = $1",
             username,
         )
@@ -128,7 +129,8 @@ async def get_user_by_id(user_id: int) -> dict[str, Any] | None:
         return None
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, hashed_password, role, is_active "
+            "SELECT id, username, hashed_password, role, is_active, "
+            "created_at, password_version "
             "FROM users WHERE id = $1",
             user_id,
         )
@@ -187,6 +189,14 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Verify the password-version claim matches the DB.  A mismatch means the
+    # password was changed after this token was issued — force re-login.
+    if payload.get("pwv", 0) != user.get("password_version", 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalidated — please log in again",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user

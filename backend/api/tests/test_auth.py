@@ -51,6 +51,8 @@ _MOCK_USER = {
     "hashed_password": HASHED_PASS,
     "role": "admin",
     "is_active": True,
+    "password_version": 0,
+    "created_at": None,
 }
 
 _MOCK_VIEWER = {
@@ -59,6 +61,8 @@ _MOCK_VIEWER = {
     "hashed_password": HASHED_PASS,
     "role": "viewer",
     "is_active": True,
+    "password_version": 0,
+    "created_at": None,
 }
 
 
@@ -109,6 +113,8 @@ async def test_login_success():
     data = resp.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+    assert "expires_in" in data
+    assert data["expires_in"] > 0
 
 
 @pytest.mark.asyncio
@@ -172,7 +178,7 @@ async def test_first_setup_creates_admin():
     """first-setup works when no users exist (atomic INSERT returns a row)."""
     transport = ASGITransport(app=app)
 
-    row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True}
+    row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True, "created_at": None}
 
     mock_conn = MagicMock()
     # Atomic INSERT … WHERE NOT EXISTS returns the new row when table was empty

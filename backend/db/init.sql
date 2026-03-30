@@ -514,10 +514,16 @@ CREATE TABLE IF NOT EXISTS users (
                          CHECK (role IN ('viewer', 'operator', 'admin')),
     is_active        BOOLEAN NOT NULL DEFAULT TRUE,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Incremented on every password change; embedded as 'pwv' claim in JWTs so
+    -- tokens issued before the change are immediately invalidated on next request.
+    password_version INT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS ix_users_username ON users (username);
+
+-- Migration: add password_version to existing deployments.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_version INT NOT NULL DEFAULT 0;
 
 -- Trigger: keep updated_at current on every UPDATE
 CREATE OR REPLACE FUNCTION update_users_updated_at()
