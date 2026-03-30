@@ -20,8 +20,8 @@ export default function NetworkingTab({ healthData, throughputData }: Props) {
             <Download size={16} /> Data Throughput (KB/S)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-            {healthData.map(p => {
-              const metrics = throughputData.throughput[p.id] ?? { kb_per_sec: 0, total_bytes: 0 };
+            {healthData.filter(p => p.id in throughputData.throughput).map(p => {
+              const metrics = throughputData.throughput[p.id];
               const rate = metrics.kb_per_sec;
               const percentage = Math.min(100, (rate / 512) * 100);
               return (

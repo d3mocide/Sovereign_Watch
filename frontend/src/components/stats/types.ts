@@ -31,7 +31,7 @@ export interface LogEntry {
   msg: string;
 }
 
-export type TabName = 'ingression' | 'protocol' | 'networking' | 'analysis' | 'operations';
+export type TabName = 'protocol' | 'networking' | 'operations';
 
 export interface ThroughputData {
   throughput: Record<string, { kb_per_sec: number; total_bytes: number }>;

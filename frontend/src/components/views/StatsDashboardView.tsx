@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Terminal, Settings, Network, ShieldAlert, Download, BarChart3, Cpu } from 'lucide-react';
+import { Bell, Terminal, Settings, ShieldAlert, Download, Cpu } from 'lucide-react';
 import {
   fetchSystemMetrics,
   fetchRecentLogs,
@@ -8,10 +8,8 @@ import {
   type BackupStatus,
 } from '../../api/metrics';
 import type { PollerHealth, ActivityData, TakBreakdown, LogEntry, TabName, ThroughputData } from '../stats/types';
-import IngresionTab from '../stats/IngresionTab';
 import ProtocolTab from '../stats/ProtocolTab';
 import NetworkingTab from '../stats/NetworkingTab';
-import AnalysisTab from '../stats/AnalysisTab';
 import OperationsTab from '../stats/OperationsTab';
 import PollerHealthSidebar from '../stats/PollerHealthSidebar';
 import LogBar from '../stats/LogBar';
@@ -25,7 +23,7 @@ export default function StatsDashboardView() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<TabName>('ingression');
+  const [activeTab, setActiveTab] = useState<TabName>('protocol');
   const [alertCount, setAlertCount] = useState(0);
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
 
@@ -100,19 +98,15 @@ export default function StatsDashboardView() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'ingression':  return <IngresionTab healthData={healthData} activityData={activityData} takBreakdown={takBreakdown} loading={loading} />;
-      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} />;
+      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} activityData={activityData} loading={loading} />;
       case 'networking':  return <NetworkingTab healthData={healthData} throughputData={throughputData} />;
-      case 'analysis':    return <AnalysisTab onExportCSV={handleExportCSV} />;
       case 'operations':  return <OperationsTab systemMetrics={systemMetrics} logs={logs} backupStatus={backupStatus} />;
     }
   };
 
   const NAV: { id: TabName; label: string; icon: React.ReactNode }[] = [
-    { id: 'ingression',  label: 'INGRESSION',  icon: <Network size={16} /> },
     { id: 'protocol',    label: 'PROTOCOL',    icon: <ShieldAlert size={16} /> },
     { id: 'networking',  label: 'NETWORKING',  icon: <Download size={16} /> },
-    { id: 'analysis',    label: 'ANALYSIS',    icon: <BarChart3 size={16} /> },
     { id: 'operations',  label: 'OPERATIONS',  icon: <Cpu size={16} /> },
   ];
 

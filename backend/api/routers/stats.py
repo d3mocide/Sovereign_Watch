@@ -131,13 +131,15 @@ async def get_throughput_stats():
     ]
     
     # Map topics to the IDs used in the Dashboard UI (canonical IDs)
+    # satnogs_transmitters → SatNOGSDBSource (db.satnogs.org) → poller id "satnogs_db"
+    # satnogs_observations → SatNOGSNetworkSource (network.satnogs.org) → poller id "satnogs_net"
     TOPIC_TO_ID = {
         "adsb_raw": "adsb",
         "ais_raw": "maritime",
         "orbital_raw": "orbital",
         "rf_raw": "rf_ard",
-        "satnogs_transmitters": "satnogs_net",
-        "satnogs_observations": "satnogs_db",
+        "satnogs_transmitters": "satnogs_db",
+        "satnogs_observations": "satnogs_net",
         "gdelt_raw": "gdelt"
     }
 
