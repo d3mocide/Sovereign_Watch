@@ -39,6 +39,9 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
   } else if (accentColor.includes('red')) {
     accentBorder = 'border-red-400/30';
     accentBg = 'bg-gradient-to-br from-red-400/10 to-red-400/5';
+  } else if (accentColor.includes('yellow')) {
+    accentBorder = 'border-yellow-400/30';
+    accentBg = 'bg-gradient-to-br from-yellow-400/10 to-yellow-400/5';
   }
 
   return (

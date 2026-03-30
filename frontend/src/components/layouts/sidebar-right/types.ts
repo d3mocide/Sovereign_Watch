@@ -35,6 +35,19 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   datasource?: string;
   landing_points?: string;
   cables?: string;
+  // IXP / Facility additions
+  ixp_id?: number;
+  fac_id?: number;
+  name?: string;
+  name_long?: string;
+  city?: string;
+  website?: string;
+  org_name?: string;
+  layer?: "ixp" | "facility" | string;
+  // ISS Tracker additions
+  altitude_km?: number;
+  velocity_kms?: number;
+  timestamp?: number | string;
 }
 
 export interface InfraDetail {

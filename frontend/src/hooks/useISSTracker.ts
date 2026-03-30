@@ -78,6 +78,26 @@ export const useISSTracker = ({
     }
   }, [appendPosition]);
 
+  const fetchTrack = useCallback(async () => {
+    try {
+      const res = await fetch(`${REST_PATH.replace("/position", "/track")}?points=${trackLength}`);
+      if (!res.ok) return;
+      const data: any = await res.json();
+      if (data?.features && Array.isArray(data.features)) {
+        const positions: ISSPosition[] = data.features.map((f: any) => ({
+          lat: f.geometry.coordinates[1],
+          lon: f.geometry.coordinates[0],
+          timestamp: f.properties.timestamp,
+          altitude_km: f.properties.altitude_km,
+          velocity_kms: f.properties.velocity_kms,
+        }));
+        setTrack(positions);
+      }
+    } catch {
+      // ignore track fetch failures
+    }
+  }, [trackLength]);
+
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
 
@@ -152,7 +172,9 @@ export const useISSTracker = ({
     }
 
     mountedRef.current = true;
-    connect();
+    fetchTrack(); // Load historical ground track
+    fetchRest();  // Fast initial load of current position
+    connect();    // Setup live WebSocket stream
 
     return () => {
       mountedRef.current = false;

@@ -14,7 +14,7 @@ import {
   Waves,
   WifiOff,
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MapFilters } from "../../types";
 import { getFilterPref, saveFilterPref } from "../../utils/filterPreferences";
 
@@ -27,11 +27,39 @@ interface LayerVisibilityControlsProps {
 export const LayerVisibilityControls: React.FC<
   LayerVisibilityControlsProps
 > = ({ filters, onFilterChange, radiorefEnabled }) => {
-  const [showLayers, setShowLayers] = useState(false);
-  const [infraExpanded, setInfraExpanded] = useState(false);
-  const [rfExpanded, setRfExpanded] = useState(false);
-  const [environmentalExpanded, setEnvironmentalExpanded] = useState(false);
-  const [hazardsExpanded, setHazardsExpanded] = useState(false);
+  // Persistent expansion states (Map Layers panel)
+  const [showLayers, setShowLayers] = useState(() => {
+    return localStorage.getItem("ui_layers_expanded") === "true";
+  });
+  const [infraExpanded, setInfraExpanded] = useState(() => {
+    return localStorage.getItem("ui_infra_expanded") === "true";
+  });
+  const [rfExpanded, setRfExpanded] = useState(() => {
+    return localStorage.getItem("ui_rf_expanded") === "true";
+  });
+  const [environmentalExpanded, setEnvironmentalExpanded] = useState(() => {
+    return localStorage.getItem("ui_enviro_expanded") === "true";
+  });
+  const [hazardsExpanded, setHazardsExpanded] = useState(() => {
+    return localStorage.getItem("ui_hazards_expanded") === "true";
+  });
+
+  // Sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem("ui_layers_expanded", String(showLayers));
+  }, [showLayers]);
+  useEffect(() => {
+    localStorage.setItem("ui_infra_expanded", String(infraExpanded));
+  }, [infraExpanded]);
+  useEffect(() => {
+    localStorage.setItem("ui_rf_expanded", String(rfExpanded));
+  }, [rfExpanded]);
+  useEffect(() => {
+    localStorage.setItem("ui_enviro_expanded", String(environmentalExpanded));
+  }, [environmentalExpanded]);
+  useEffect(() => {
+    localStorage.setItem("ui_hazards_expanded", String(hazardsExpanded));
+  }, [hazardsExpanded]);
 
   const handleSubFilterChange = (key: string, value: boolean) => {
     if (onFilterChange) {
@@ -87,8 +115,8 @@ export const LayerVisibilityControls: React.FC<
       onFilterChange("showAurora", false);
       onFilterChange("showBuoys", false);
     } else {
-      onFilterChange("showAurora", getFilterPref("showAurora", false));
-      onFilterChange("showBuoys", getFilterPref("showBuoys", false));
+      onFilterChange("showAurora", getFilterPref("showAurora", true));
+      onFilterChange("showBuoys", getFilterPref("showBuoys", true));
     }
   };
 
@@ -612,9 +640,10 @@ export const LayerVisibilityControls: React.FC<
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showOutages === true}
-                    onChange={(e) =>
-                      handleSubFilterChange("showOutages", e.target.checked)
-                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showOutages", e.target.checked);
+                    }}
                   />
                   <div
                     className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showOutages === true ? "bg-red-400/80" : "bg-white/10"}`}
@@ -678,9 +707,10 @@ export const LayerVisibilityControls: React.FC<
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showIXPs}
-                    onChange={(e) =>
-                      handleSubFilterChange("showIXPs", e.target.checked)
-                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showIXPs", e.target.checked);
+                    }}
                   />
                   <div
                     className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showIXPs ? "bg-cyan-400/80" : "bg-white/10"}`}
@@ -710,9 +740,10 @@ export const LayerVisibilityControls: React.FC<
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showFacilities}
-                    onChange={(e) =>
-                      handleSubFilterChange("showFacilities", e.target.checked)
-                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showFacilities", e.target.checked);
+                    }}
                   />
                   <div
                     className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFacilities ? "bg-purple-400/80" : "bg-white/10"}`}
@@ -742,9 +773,10 @@ export const LayerVisibilityControls: React.FC<
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showISS !== false}
-                    onChange={(e) =>
-                      handleSubFilterChange("showISS", e.target.checked)
-                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showISS", e.target.checked);
+                    }}
                   />
                   <div
                     className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showISS !== false ? "bg-yellow-400/80" : "bg-white/10"}`}

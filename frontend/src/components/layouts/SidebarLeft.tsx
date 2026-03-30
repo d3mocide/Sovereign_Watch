@@ -56,12 +56,13 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
     <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
       {/* Search Widget */}
       {mapActions && (
-        <SearchWidget mapActions={mapActions} onEntitySelect={onEntitySelect} />
+        <SearchWidget key="search-widget" mapActions={mapActions} onEntitySelect={onEntitySelect} />
       )}
 
       {/* Mission Navigator */}
       {missionProps && (
         <MissionNavigator
+          key="mission-navigator"
           savedMissions={missionProps.savedMissions || []}
           currentMission={missionProps.currentMission}
           onSwitchMission={missionProps.onSwitchMission}
@@ -71,7 +72,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       )}
 
       {/* 2. System Intelligence Feed - Takes remaining space */}
-      <div className="flex-1 min-h-[300px] overflow-hidden flex flex-col">
+      <div key="intel-feed" className="flex-1 min-h-[300px] overflow-hidden flex flex-col">
         <IntelFeed
           events={events}
           onEntitySelect={onEntitySelect}
@@ -83,6 +84,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
       {/* 3. JS8Call / HF Radio */}
       <JS8Widget
+        key="js8-widget"
         stations={js8Stations}
         logEntries={js8LogEntries}
         statusLine={js8StatusLine}
@@ -95,11 +97,13 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       />
 
       {/* 4. Metrics, Analytics & Map Layers */}
-      <SystemStatus
-        trackCounts={trackCounts}
-        filters={filters}
-        onFilterChange={onFilterChange}
-      />
+      <div className="shrink-0">
+        <SystemStatus
+          trackCounts={trackCounts}
+          filters={filters}
+          onFilterChange={onFilterChange}
+        />
+      </div>
     </div>
   );
 };
