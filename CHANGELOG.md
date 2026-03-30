@@ -1,6 +1,37 @@
 # Changelog
 
-## [0.58.0] - 2026-03-29
+## [0.59.0] - 2026-03-30
+
+### Added
+
+- **Operations Dashboard Tab**: New `OperationsTab` surfaces real-time system health — CPU, memory, disk, and network I/O via `psutil` (`/api/metrics/system`), Redpanda topic lag per consumer group, and poller heartbeat grid.
+- **Backup Status Panel**: New `/api/backup/status` endpoint and status card in Operations tab showing last backup timestamp, size, and age.
+- **Live Log Tail**: `LogBar` component with SSE-powered `/api/logs/stream` endpoint; expandable panel with severity counts (INFO/WARN/ERROR), node count badge, and CTRL+L keyboard shortcut.
+- **JammingAlertEngine**: GPS jamming and mixed-assessment zones now emit `alert`-type events into the `IntelFeed` event log and increment the TopBar bell badge. Suppresses `space_weather` and `equipment` assessments (handled by dedicated widgets). 15-minute re-notify window per H3 zone.
+- **HoldingPatternAlertEngine**: Holding pattern alert thresholds (`confidence ≥ 0.7`, `turns ≥ 1`, `duration ≥ 120s`) extracted from `TacticalMap` into a standalone engine module. Critical holds (≥ 5 turns) escalate to `alert` type; standard holds emit as `new`. 20-minute re-notify window per aircraft.
+
+### Changed
+
+- **Stats Dashboard Decomposition**: `StatsDashboardView` refactored into discrete sub-components — `ProtocolTab`, `NetworkingTab`, `OperationsTab`, `PollerHealthSidebar`, and `LogBar`. Each tab is independently maintainable.
+- **Protocol Tab Enhancement**: Global Signal Activity line-area chart migrated from the removed Ingression tab into the Protocol tab, now rendered above the TAK/CoT classification pie chart with an activity stats header.
+- **NetworkingTab Data-Driven**: Poller rows now filtered to only those present in live Kafka throughput data. Non-Kafka pollers (Space Weather, NOAA NWR, RadioReference, Cables, FCC, AI Analysis) no longer appear with misleading 0.0 KB/s entries.
+- **Roadmap & Archive**: `ROADMAP.md` updated to v0.58.0 baseline; Ops-01/02/03, FE-44, FE-45 moved to `COMPLETED_ARCHIVE.md`.
+
+### Removed
+
+- **Analysis Tab**: Removed placeholder `AnalysisTab` (static histogram stub + hardcoded heatmap — no real data backend).
+- **Ingression Tab**: Removed redundant `IngresionTab` after chart migration to Protocol tab.
+
+### Fixed
+
+- **`psutil` Container Crash**: `psutil==6.1.1` was listed in `pyproject.toml` but absent from `uv.lock`; `uv sync --frozen` in the Docker build never installed it, causing `ModuleNotFoundError: No module named 'psutil'` on every container start. Regenerated lockfile.
+- **SatNOGS Bandwidth Swap**: `satnogs_transmitters` and `satnogs_observations` were mapped to the wrong poller IDs in `TOPIC_TO_ID` (`routers/stats.py`), causing SatNOGS DB and Network bandwidth figures to display swapped.
+
+### Verification
+
+- Frontend: `pnpm run lint` (pass, 0 warnings); `pnpm exec tsc --noEmit` (pass, 0 errors)
+- Backend API: `ruff check .` (pass)
+
 
 ### Added
 
