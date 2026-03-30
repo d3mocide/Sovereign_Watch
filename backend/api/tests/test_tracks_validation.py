@@ -26,7 +26,13 @@ sys.modules["redis.asyncio"] = _mock_redis_asyncio
 _mock_aiokafka = types.ModuleType("aiokafka")
 _mock_aiokafka.AIOKafkaConsumer = MagicMock()
 _mock_aiokafka.AIOKafkaProducer = MagicMock()
+_mock_aiokafka_admin = types.ModuleType("aiokafka.admin")
+_mock_aiokafka_admin.AIOKafkaAdminClient = MagicMock()
+_mock_aiokafka.admin = _mock_aiokafka_admin
 sys.modules["aiokafka"] = _mock_aiokafka
+sys.modules["aiokafka.admin"] = _mock_aiokafka_admin
+
+sys.modules["psutil"] = MagicMock()
 
 _mock_numpy = types.ModuleType("numpy")
 _mock_numpy.bool_ = bool

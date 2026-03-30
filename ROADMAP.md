@@ -7,7 +7,7 @@ This document outlines the trajectory for the Sovereign Watch platform. For curr
 Sovereign Watch is transitioning from initial feature parity to a **Version 1.0 Release Candidate**. Our focus is shifting from "Core Ingestion" to **Systems Reliability**, **Security Hardening**, and **Operational Maturity**.
 
 - **Strategic Vision**: Reclaiming data sovereignty through active, self-hosted multi-INT fusion on low-power hardware.
-- **Current Status**: v0.57.0 (Development). Core pipelines stable; Security & CI/CD gaps identified.
+- **Current Status**: v0.58.0 (Development). Core pipelines stable; Security & CI/CD gaps identified.
 - **Archive**: For a full list of completed milestones, see [COMPLETED_ARCHIVE.md](./agent_docs/COMPLETED_ARCHIVE.md).
 
 ---
@@ -32,9 +32,6 @@ Hardening the platform for autonomous deployment on low-power edge devices (Jets
 
 | ID | Task Name | Component | Description |
 | :--- | :--- | :--- | :--- |
-| **Ops-01** | Centralized Logging | DevOps | Prometheus/Loki/Grafana integration for system-wide observability. |
-| **Ops-02** | Metrics & Dashboards | DevOps | Operational health dashboards (CPU/Temp/Mem/IO/SDR Heat). |
-| **Ops-03** | Backup & Recovery | Database | Document and automate TimescaleDB incremental backup rotations. |
 | **Test-01** | UI Test Coverage | Quality | Initial Playwright E2E tests for the "Golden Path" mission flow. |
 | **Test-02** | Unit Test Expansion | Quality | Increase Vitest coverage for mission hooks and layer builders. |
 
@@ -67,4 +64,4 @@ Future-looking features for distributed operations.
 
 ---
 
-- **Last Updated**: 2026-03-29 (V1.0 Readiness Pivot).
+- **Last Updated**: 2026-03-30 (V1.0 Readiness Pivot).

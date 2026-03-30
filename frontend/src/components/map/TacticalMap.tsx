@@ -12,7 +12,19 @@ import React, {
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
 import { useMapBase } from "../../hooks/useMapBase";
 import { useMapCamera } from "../../hooks/useMapCamera";
-import { CoTEntity, JS8Station, RFSite, Tower } from "../../types";
+import { CoTEntity, JS8Station, JammingZone, RFSite, Tower } from "../../types";
+import {
+  buildHoldingAlertMessage,
+  getHoldingAlertKey,
+  HOLD_ALERT_RENOTIFY_MS,
+  isHoldingPatternCritical,
+  shouldSuppressHoldingAlert,
+} from "../../alerts/HoldingPatternAlertEngine";
+import {
+  buildJammingAlertMessage,
+  getJammingAlertKey,
+  JAMMING_ALERT_RENOTIFY_MS,
+} from "../../alerts/JammingAlertEngine";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { AltitudeLegend } from "./AltitudeLegend";
 import { MapContextMenu } from "./MapContextMenu";
@@ -480,11 +492,6 @@ export function TacticalMap({
   // Aviation Holding Pattern Alert Trigger
   // Keep per-aircraft alert timestamps so temporary empty polls do not re-alert every active hold.
   const seenHoldingRef = useRef<Map<string, number>>(new Map());
-  const HOLD_ALERT_MIN_CONFIDENCE = 0.7;
-  const HOLD_ALERT_MIN_TURNS = 1.0;
-  const HOLD_ALERT_MIN_DURATION_SEC = 120;
-  const HOLD_CRITICAL_TURNS = 5.0;
-  const HOLD_ALERT_RENOTIFY_MS = 20 * 60 * 1000;
   useEffect(() => {
     if (
       !holdingPatternData?.features ||
@@ -498,28 +505,17 @@ export function TacticalMap({
 
     holdingPatternData.features.forEach((f: any) => {
       const p = f.properties ?? {};
-      const key = String(p.hex_id || "").toLowerCase();
+      const key = getHoldingAlertKey(p);
       if (!key) return;
 
-      const confidence = Number(p.confidence ?? 0);
-      const turnsCompleted = Number(p.turns_completed ?? 0);
-      const durationSec = Number(p.pattern_duration_sec ?? 0);
-
-      // Only alert on stronger signals to reduce analyst noise.
-      if (
-        confidence < HOLD_ALERT_MIN_CONFIDENCE ||
-        turnsCompleted < HOLD_ALERT_MIN_TURNS ||
-        durationSec < HOLD_ALERT_MIN_DURATION_SEC
-      ) {
-        return;
-      }
+      if (shouldSuppressHoldingAlert(p)) return;
 
       const lastAlertAt = seenHoldingRef.current.get(key) ?? 0;
       if (now - lastAlertAt >= HOLD_ALERT_RENOTIFY_MS) {
-        const isCriticalHold = turnsCompleted >= HOLD_CRITICAL_TURNS;
+        const isCritical = isHoldingPatternCritical(p);
         onEvent?.({
-          message: `${isCriticalHold ? "ALERT" : "HOLD"}: Active holding pattern detected — ${p.callsign || p.hex_id} (${p.altitude}ft)`,
-          type: isCriticalHold ? "alert" : "new",
+          message: buildHoldingAlertMessage(p, isCritical),
+          type: isCritical ? "alert" : "new",
           entityType: "air",
         });
         seenHoldingRef.current.set(key, now);
@@ -534,6 +530,42 @@ export function TacticalMap({
       }
     }
   }, [holdingPatternData, onEvent]);
+
+  // GPS Jamming Alert Trigger
+  // Alerts only for intentional jamming or mixed assessments — space_weather and equipment
+  // faults are suppressed here (handled by the Space Weather widget and layer tooltips).
+  const seenJammingRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!jammingData?.features?.length) return;
+
+    const now = Date.now();
+
+    jammingData.features.forEach((f: any) => {
+      const zone = f.properties as JammingZone;
+      if (!zone) return;
+
+      const key = getJammingAlertKey(zone);
+      if (!key) return;
+
+      const lastAlertAt = seenJammingRef.current.get(key) ?? 0;
+      if (now - lastAlertAt >= JAMMING_ALERT_RENOTIFY_MS) {
+        onEvent?.({
+          message: buildJammingAlertMessage(zone),
+          type: "alert",
+          entityType: "infra",
+        });
+        seenJammingRef.current.set(key, now);
+      }
+    });
+
+    // Cleanup stale keys to keep memory bounded.
+    const evictionCutoff = now - 6 * 60 * 60 * 1000;
+    for (const [key, ts] of seenJammingRef.current.entries()) {
+      if (ts < evictionCutoff) {
+        seenJammingRef.current.delete(key);
+      }
+    }
+  }, [jammingData, onEvent]);
 
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
