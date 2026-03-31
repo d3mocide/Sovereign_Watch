@@ -1,4 +1,4 @@
-name: CI Smoke
+name: CI
 
 on:
   push:
@@ -10,13 +10,21 @@ permissions:
   contents: read
 
 jobs:
+  # ── Path-change detection ─────────────────────────────────────────────────
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      python: ${{ steps.filter.outputs.python }}
+      frontend:    ${{ steps.filter.outputs.frontend }}
+      api:         ${{ steps.filter.outputs.api }}
+      aviation:    ${{ steps.filter.outputs.aviation }}
+      maritime:    ${{ steps.filter.outputs.maritime }}
+      space-pulse: ${{ steps.filter.outputs.space-pulse }}
+      rf-pulse:    ${{ steps.filter.outputs.rf-pulse }}
+      infra-poller: ${{ steps.filter.outputs.infra-poller }}
+      gdelt-pulse: ${{ steps.filter.outputs.gdelt-pulse }}
+      js8call:     ${{ steps.filter.outputs.js8call }}
     steps:
       # Pin to immutable SHA to prevent supply-chain attacks via tag mutation.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -28,18 +36,38 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
-            python:
-              - 'backend/**'
+            api:
+              - 'backend/api/**'
+              - '.github/workflows/ci.yml'
+            aviation:
+              - 'backend/ingestion/aviation_poller/**'
+              - '.github/workflows/ci.yml'
+            maritime:
+              - 'backend/ingestion/maritime_poller/**'
+              - '.github/workflows/ci.yml'
+            space-pulse:
+              - 'backend/ingestion/space_pulse/**'
+              - '.github/workflows/ci.yml'
+            rf-pulse:
+              - 'backend/ingestion/rf_pulse/**'
+              - '.github/workflows/ci.yml'
+            infra-poller:
+              - 'backend/ingestion/infra_poller/**'
+              - '.github/workflows/ci.yml'
+            gdelt-pulse:
+              - 'backend/ingestion/gdelt_pulse/**'
+              - '.github/workflows/ci.yml'
+            js8call:
               - 'js8call/**'
-              - 'tools/run-ci-checks.ps1'
               - '.github/workflows/ci.yml'
 
-  frontend-smoke:
-    name: Frontend Smoke
+  # ── Frontend: Lint + Typecheck + Test + Build ─────────────────────────────
+  frontend:
+    name: Frontend (Lint + Typecheck + Test + Build)
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: frontend
@@ -49,8 +77,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4
         with:
-          # Pin to a major version instead of 'latest' to avoid unexpected
-          # breaking changes or a malicious package being installed.
           version: 9
 
       - name: Setup Node.js
@@ -63,86 +89,226 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck smoke
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
         run: pnpm run typecheck
 
-  python-smoke:
-    name: Python Smoke
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+        env:
+          # Mapbox is optional; disable it so the build succeeds without a token.
+          VITE_ENABLE_MAPBOX: 'false'
+          VITE_MAPBOX_TOKEN: ''
+
+  # ── Shared Python setup (used as a comment template below) ────────────────
+  # Each Python job: checkout → setup-python → install uv → lint → test.
+  # uv tool run ruff: installs ruff as an isolated tool (not a project dep).
+  # uv run python -m pytest: syncs project + dev deps, then runs all tests.
+
+  # ── Backend API ───────────────────────────────────────────────────────────
+  api:
+    name: Backend API (Lint + Test)
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
+        working-directory: backend/api
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: backend/api
+        run: uv run python -m pytest -q
+
+  # ── Aviation Poller ───────────────────────────────────────────────────────
+  aviation:
+    name: Aviation Poller (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.aviation == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - name: Backend API smoke
-        working-directory: backend/api
-        run: |
-          python - <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-          import tomllib
+      - name: Install uv
+        run: pip install uv
 
-          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          deps = list(pyproject.get('project', {}).get('dependencies', []))
-          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
-          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
-          PY
-          python -m pytest tests/test_cors.py -q
-
-      - name: Aviation poller smoke
+      - name: Lint
         working-directory: backend/ingestion/aviation_poller
-        run: |
-          python - <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-          import tomllib
+        run: uv tool run ruff check .
 
-          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          deps = list(pyproject.get('project', {}).get('dependencies', []))
-          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
-          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
-          PY
-          python -m pytest tests/test_utils.py -q
+      - name: Test
+        working-directory: backend/ingestion/aviation_poller
+        run: uv run python -m pytest -q
 
-      - name: Space pulse smoke
+  # ── Maritime Poller ───────────────────────────────────────────────────────
+  maritime:
+    name: Maritime Poller (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.maritime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
+        working-directory: backend/ingestion/maritime_poller
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: backend/ingestion/maritime_poller
+        run: uv run python -m pytest -q
+
+  # ── Space Pulse ───────────────────────────────────────────────────────────
+  space-pulse:
+    name: Space Pulse (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.space-pulse == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
         working-directory: backend/ingestion/space_pulse
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: backend/ingestion/space_pulse
+        run: uv run python -m pytest -q
         env:
           SPACE_PULSE_CACHE_DIR: /tmp/space_pulse_cache
-        run: |
-          python - <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-          import tomllib
 
-          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          deps = list(pyproject.get('project', {}).get('dependencies', []))
-          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
-          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
-          PY
-          python -m pytest tests/test_orbital.py -q
+  # ── RF Pulse ──────────────────────────────────────────────────────────────
+  rf-pulse:
+    name: RF Pulse (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.rf-pulse == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Infrastructure poller smoke
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
+        working-directory: backend/ingestion/rf_pulse
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: backend/ingestion/rf_pulse
+        run: uv run python -m pytest -q
+
+  # ── Infrastructure Poller ─────────────────────────────────────────────────
+  infra-poller:
+    name: Infra Poller (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.infra-poller == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
         working-directory: backend/ingestion/infra_poller
-        run: |
-          python - <<'PY'
-          import pathlib
-          import subprocess
-          import sys
-          import tomllib
+        run: uv tool run ruff check .
 
-          pyproject = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          deps = list(pyproject.get('project', {}).get('dependencies', []))
-          deps.extend(pyproject.get('dependency-groups', {}).get('dev', []))
-          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', *deps])
-          PY
-          python -m pytest tests/test_infra.py -q
+      - name: Test
+        working-directory: backend/ingestion/infra_poller
+        run: uv run python -m pytest -q
 
+  # ── GDELT Pulse ───────────────────────────────────────────────────────────
+  gdelt-pulse:
+    name: GDELT Pulse (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.gdelt-pulse == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
+        working-directory: backend/ingestion/gdelt_pulse
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: backend/ingestion/gdelt_pulse
+        run: uv run python -m pytest -q
+
+  # ── JS8Call Bridge ────────────────────────────────────────────────────────
+  js8call:
+    name: JS8Call Bridge (Lint + Test)
+    needs: changes
+    if: needs.changes.outputs.js8call == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Lint
+        working-directory: js8call
+        run: uv tool run ruff check .
+
+      - name: Test
+        working-directory: js8call
+        # Exclude manual_test_* files — they require a live JS8Call or KiwiSDR instance.
+        run: uv run python -m pytest tests/test_kiwi_compatibility.py tests/test_kiwi_debounce.py -q
