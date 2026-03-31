@@ -1,5 +1,4 @@
 import pytest
-import math
 from backend.ingestion.maritime_poller.utils import calculate_bbox
 
 class TestMaritimeUtils:
