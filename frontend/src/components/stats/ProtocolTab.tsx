@@ -1,19 +1,18 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Activity, ShieldAlert } from 'lucide-react';
-import type { ActivityData, TakBreakdown } from './types';
+import { Activity, Zap, AlertTriangle, TrendingUp } from 'lucide-react';
+import type { ActivityData, TakBreakdown, TakMetrics, ProtocolIntelligence } from './types';
 
 interface Props {
   takBreakdown: TakBreakdown[];
   activityData: ActivityData[];
   loading: boolean;
+  takMetrics: TakMetrics | null;
+  intelligence: ProtocolIntelligence | null;
 }
 
-export default function ProtocolTab({ takBreakdown, activityData, loading }: Props) {
-  const totalSignals = useMemo(
-    () => takBreakdown.reduce((acc, b) => acc + b.count, 0),
-    [takBreakdown]
-  );
+export default function ProtocolTab({ takBreakdown, activityData, loading, takMetrics, intelligence }: Props) {
+  const totalSignals = takMetrics?.total_count ?? 0;
 
   const activityChartOptions = useMemo(() => {
     const times = activityData.map(d =>
@@ -22,28 +21,34 @@ export default function ProtocolTab({ takBreakdown, activityData, loading }: Pro
     const typesSet = new Set<string>();
     activityData.forEach(d => Object.keys(d.counts).forEach(k => typesSet.add(k)));
     const types = Array.from(typesSet);
-    const getColor = (t: string) => takBreakdown.find(b => b.type === t)?.color ?? '#39FF14';
+    
+    // Create a mapping for consistent labels between chart and sidebar
+    const typeMap = new Map<string, { label: string; color: string }>();
+    takBreakdown.forEach(b => typeMap.set(b.type, { label: b.label.toUpperCase(), color: b.color }));
 
-    const series = types.map(type => ({
-      name: type.toUpperCase(),
-      type: 'line',
-      smooth: true,
-      showSymbol: false,
-      areaStyle: {
-        opacity: 0.3,
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: getColor(type) },
-            { offset: 1, color: 'rgba(57, 255, 20, 0)' },
-          ],
+    const series = types.map(type => {
+      const info = typeMap.get(type) || { label: type.toUpperCase(), color: '#39FF14' };
+      return {
+        name: info.label,
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        areaStyle: {
+          opacity: 0.3,
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: info.color },
+              { offset: 1, color: 'rgba(57, 255, 20, 0)' },
+            ],
+          },
         },
-      },
-      lineStyle: { color: getColor(type), width: 2 },
-      itemStyle: { color: getColor(type) },
-      data: activityData.map(d => d.counts[type] ?? 0),
-    }));
+        lineStyle: { color: info.color, width: 2 },
+        itemStyle: { color: info.color },
+        data: activityData.map(d => d.counts[type] ?? 0),
+      };
+    });
 
     return {
       backgroundColor: 'transparent',
@@ -73,36 +78,39 @@ export default function ProtocolTab({ takBreakdown, activityData, loading }: Pro
     };
   }, [activityData, takBreakdown]);
 
-  const takChartOptions = useMemo(() => ({
-    backgroundColor: 'transparent',
-    tooltip: { show: false },
-    series: [
-      {
-        name: 'TAK TYPE',
-        type: 'pie',
-        radius: ['50%', '80%'],
-        avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 0, borderColor: '#0e0e0e', borderWidth: 2 },
-        label: {
-          show: false,
-          position: 'outside',
-          color: '#39FF14',
-          fontFamily: 'monospace',
-          formatter: '{b}: {c} ({d}%)',
-        },
-        labelLine: { show: false, lineStyle: { color: 'rgba(57, 255, 20, 0.3)' } },
-        emphasis: {
-          label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#39FF14', position: 'outside' },
-          labelLine: { show: true },
-        },
-        data: takBreakdown.map(b => ({
-          value: b.count,
-          name: b.label.toUpperCase(),
-          itemStyle: { color: b.color },
-        })),
+  const persistenceOptions = useMemo(() => {
+    if (!intelligence?.persistence) return null;
+    const sorted = [...intelligence.persistence].sort((a, b) => b.seconds - a.seconds).slice(0, 8);
+    
+    return {
+      backgroundColor: 'transparent',
+      grid: { left: '3%', right: '10%', bottom: '3%', top: '3%', containLabel: true },
+      xAxis: { 
+        type: 'value', 
+        axisLabel: { show: false }, 
+        splitLine: { show: false }, 
+        axisLine: { show: false } 
       },
-    ],
-  }), [takBreakdown]);
+      yAxis: {
+        type: 'category',
+        data: sorted.map(p => p.type.split('-').pop()?.toUpperCase() || p.type),
+        axisLabel: { color: '#8eff71', fontSize: 9, fontFamily: 'monospace' },
+        axisLine: { show: false },
+        axisTick: { show: false }
+      },
+      series: [{
+        type: 'bar',
+        data: sorted.map(p => p.seconds),
+        itemStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: [{ offset: 0, color: '#39FF14' }, { offset: 1, color: 'rgba(57, 255, 20, 0.1)' }]
+          }
+        },
+        label: { show: true, position: 'right', color: '#39FF14', fontSize: 9, formatter: '{c}s' }
+      }]
+    };
+  }, [intelligence]);
 
   return (
     <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline">
@@ -119,44 +127,98 @@ export default function ProtocolTab({ takBreakdown, activityData, loading }: Pro
           <div className="w-px h-8 bg-on-surface-variant/20"></div>
           <div className="text-right">
             <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
-            <div className="text-2xl font-bold text-tertiary">0.02%</div>
+            <div className="text-2xl font-bold text-tertiary">{takMetrics?.noise_pct ?? '0.00'}%</div>
           </div>
         </div>
       </div>
 
-      <div className="bg-surface-container p-6 flex flex-col min-h-[320px] border border-primary/10 mb-8 relative overflow-hidden">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
-              <Activity size={16} /> Global Signal Activity
-            </h3>
-            <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
-          </div>
-          <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
-        </div>
-        <div className="flex-1 relative">
-          {loading ? (
-            <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em]">
-              Synchronizing telemetry...
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+        <div className="bg-surface-container p-6 flex flex-col min-h-[320px] border border-primary/10 relative overflow-hidden xl:col-span-2">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+                <Activity size={16} /> Global Signal Activity
+              </h3>
+              <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
             </div>
-          ) : (
-            <ReactECharts option={activityChartOptions} style={{ height: '100%', width: '100%', minHeight: '240px' }} />
-          )}
+            <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
+          </div>
+          <div className="flex-1 relative">
+            {loading ? (
+              <div className="h-full flex items-center justify-center animate-pulse text-primary/30 uppercase tracking-[0.3em]">
+                Synchronizing telemetry...
+              </div>
+            ) : (
+              <ReactECharts option={activityChartOptions} style={{ height: '100%', width: '100%', minHeight: '240px' }} />
+            )}
+          </div>
+        </div>
+
+        <div className="bg-surface-container p-6 border border-primary/10 flex flex-col">
+          <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-4 flex items-center gap-2">
+            <TrendingUp size={16} /> Avg Persistence
+          </h3>
+          <div className="flex-1 relative min-h-[160px]">
+            {persistenceOptions ? (
+              <ReactECharts option={persistenceOptions} style={{ height: '100%', width: '100%' }} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-[10px] text-on-surface-variant/40 uppercase">Calculating...</div>
+            )}
+          </div>
+          <p className="text-[8px] text-on-surface-variant/60 uppercase mt-4 text-center tracking-widest">Average Lock duration by Target Type</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="bg-surface-container p-6 border border-primary/10 xl:col-span-2">
-          <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
-            <ShieldAlert size={16} /> Load Distribution
-          </h3>
-          <div className="flex items-center justify-center relative py-6">
-            <div className="h-[400px] w-full">
-              <ReactECharts option={takChartOptions} style={{ height: '100%', width: '100%' }} />
-            </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-5xl font-black text-primary tracking-tighter">84%</span>
-              <span className="text-xs text-on-surface-variant uppercase tracking-[0.2em] font-bold">Efficiency</span>
+        <div className="bg-surface-container p-6 border border-primary/10 xl:col-span-2 flex flex-col">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
+              <Zap size={16} /> Priority Watchlist
+            </h3>
+            <span className="text-[9px] text-on-surface-variant uppercase">Extreme Behavior Monitoring</span>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+              {intelligence?.watchlist.map(entry => (
+                <div 
+                  key={entry.id} 
+                  className={`p-3 border flex items-center justify-between transition-all group ${
+                    entry.is_extreme 
+                      ? 'bg-error/5 border-error/20 hover:bg-error/10' 
+                      : 'bg-surface-container-high border-primary/5 hover:border-primary/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 ${entry.is_extreme ? 'text-error animate-pulse' : 'text-primary/40'}`}>
+                      {entry.is_extreme ? <AlertTriangle size={18} /> : <Activity size={18} />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-on-surface uppercase">{entry.callsign}</span>
+                        <span className="text-[9px] text-on-surface-variant/60">ID: {entry.id}</span>
+                      </div>
+                      <div className="flex gap-3 text-[9px] uppercase tracking-tighter">
+                        <span className={entry.is_extreme && entry.speed > 600 ? 'text-error font-bold' : 'text-on-surface-variant'}>SPD: {entry.speed}KT</span>
+                        <span className={entry.is_extreme && entry.alt > 45000 ? 'text-error font-bold' : 'text-on-surface-variant'}>ALT: {entry.alt}FT</span>
+                        <span className="text-primary/40">{entry.affiliation}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-primary/80 font-mono italic">
+                      {entry.is_extreme ? 'EXTREME' : 'MONITORING'}
+                    </div>
+                    <div className="text-[8px] text-on-surface-variant opacity-40">
+                      {new Date(entry.ts).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {(!intelligence?.watchlist || intelligence.watchlist.length === 0) && (
+                <div className="h-40 flex items-center justify-center text-on-surface-variant/30 uppercase text-xs animate-pulse">
+                  Scanning for High-Interest Targets...
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -169,7 +231,10 @@ export default function ProtocolTab({ takBreakdown, activityData, loading }: Pro
                 <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: tak.color }}></div>
                 <div className="flex-1 flex flex-col min-w-0 text-[10px]">
                   <span className="font-bold text-on-surface uppercase truncate">{tak.label}</span>
-                  <span className="text-on-surface-variant uppercase tracking-tighter opacity-70">{tak.type}</span>
+                  <div className="flex justify-between items-center opacity-70">
+                    <span className="text-on-surface-variant uppercase tracking-tighter">{tak.type}</span>
+                    <span className="text-primary font-mono">{tak.count.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             ))}

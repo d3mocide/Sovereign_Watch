@@ -1,6 +1,7 @@
 import type { FeatureCollection } from "geojson";
 import { ExternalLink, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { getSetupStatus } from "./api/auth";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { MainHud } from "./components/layouts/MainHud";
@@ -12,6 +13,7 @@ import { IntelGlobe } from "./components/map/IntelGlobe";
 import { OrbitalMap } from "./components/map/OrbitalMap";
 import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
+import { LoginView } from "./components/views/LoginView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
@@ -19,6 +21,7 @@ import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
 import { useAppFilters } from "./hooks/useAppFilters";
+import { useAuth } from "./hooks/useAuth";
 import { useEntitySelection } from "./hooks/useEntitySelection";
 import { useEntityWorker } from "./hooks/useEntityWorker";
 import { useInfraData } from "./hooks/useInfraData";
@@ -45,7 +48,10 @@ interface IntelArticleContent {
   content: string;
 }
 
-function App() {
+const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
+
+function AuthenticatedApp() {
+
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
   const {
@@ -59,6 +65,8 @@ function App() {
     setIsAIAnalystOpen,
     isTerminalOpen,
     setIsTerminalOpen,
+    isUserMenuOpen,
+    setIsUserMenuOpen,
   } = useSidebarState();
 
   // ── Intel event feed ──────────────────────────────────────────────────────
@@ -475,6 +483,7 @@ function App() {
   }, [activeIntelArticle]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <>
       {isTerminalOpen && (
@@ -520,6 +529,9 @@ function App() {
             }
             onSystemHealthClose={() => setIsSystemHealthOpen(false)}
             onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            isUserMenuOpen={isUserMenuOpen}
+            onUserMenuClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            onUserMenuClose={() => setIsUserMenuOpen(false)}
           />
         }
         leftSidebar={
@@ -817,6 +829,61 @@ function App() {
       />
     </>
   );
+}
+
+function App() {
+  const { status: authStatus, hasRole } = useAuth();
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      getSetupStatus()
+        .then(({ setup_required }) => setSetupRequired(setup_required))
+        .catch(() => setSetupRequired(false));
+    }
+  }, [authStatus]);
+
+  if (authStatus === 'initialising') {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+        <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+          Authenticating…
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
+    if (setupRequired === null) {
+      return (
+        <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+          <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+            Initialising…
+          </div>
+        </div>
+      );
+    }
+    return <LoginView isFirstSetup={setupRequired} />;
+  }
+
+  if (authStatus === 'authenticated') {
+    const isStatsRoute = window.location.pathname === '/stats';
+
+    if (isStatsRoute && hasRole('admin')) {
+      return (
+        <Suspense fallback={
+          <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0f0] font-mono animate-pulse">
+            INITIALIZING STATS...
+          </div>
+        }>
+          <StatsDashboardView />
+        </Suspense>
+      );
+    }
+    return <AuthenticatedApp />;
+  }
+
+  return null;
 }
 
 export default App;

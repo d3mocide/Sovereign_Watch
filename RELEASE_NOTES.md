@@ -1,53 +1,24 @@
-# Release - v0.59.0 - "Operational Intelligence"
+# Release - v0.60.0 - Sovereign Glass: Security and Intelligence Baseline
 
 ## High-Level Summary
-
-v0.59.0 delivers two parallel improvements: **operator observability** and **tactical intelligence awareness**. The platform can now monitor itself — system metrics, live log streaming, and backup health are surfaced in a dedicated Operations dashboard. At the same time, GPS jamming zones and aircraft holding patterns now actively alert operators through the IntelFeed event log and the TopBar bell badge, rather than requiring a manual click to discover them on the map.
-
----
+This landmark release transitions SovereignWatch from a single-user prototype into a hardened, multi-user operational platform. It introduces the first complete JWT-based Authentication layer and a granular RBAC (Role-Based Access Control) system. Simultaneously, the Stats Dashboard has been evolved into a high-density tactical intelligence suite.
 
 ## Key Features
 
-### ??? Operations Dashboard
-- **System Metrics**: Real-time CPU, memory, disk, and network I/O polled from the backend host via `psutil` at `/api/metrics/system`.
-- **Redpanda Lag Monitor**: Per-topic Kafka consumer group lag visible in the Operations tab, making queue pressure immediately visible.
-- **Backup Status Panel**: `/api/backup/status` endpoint and a status card showing last backup timestamp, size, and age classification (RECENT / AGING / STALE).
-- **Live Log Tail**: Expandable `LogBar` component driven by SSE stream from `/api/logs/stream`. Persists INFO/WARN/ERROR counts and supports CTRL+L toggle.
+### Platform Security and Auth [FIRST RELEASE]
+SovereignWatch is now a restricted environment. This release implements:
+- JWT Authentication: Secure, token-based session management with BCrypt password hashing.
+- Bitmask RBAC: Four granular roles (VIEWER, OPERATOR, ANALYST, ADMIN) for least-privileged access.
+- User Management HUD: A new administrative interface for approving registrations and managing role assignments.
 
-### ?? Tactical Alert Engines
-- **JammingAlertEngine**: GPS jamming and mixed-assessment H3 zones now emit alerts into the IntelFeed and increment the TopBar bell badge. Space weather and single-aircraft equipment faults are intentionally suppressed — they have dedicated display surfaces. 15-minute re-notify window per zone.
-- **HoldingPatternAlertEngine**: Holding pattern detection thresholds extracted from `TacticalMap` into a reusable, testable engine module. Standard holds appear as `new` events; critical holds (= 5 turns) escalate to `alert` type. 20-minute re-notify window per aircraft.
-- Both engines plug into the existing `onEvent` ? `useIntelEvents` ? `IntelFeed` + `AlertsWidget` pipeline with no new data fetches required.
-
-### ?? Stats Dashboard Refactor
-- `StatsDashboardView` fully decomposed into `ProtocolTab`, `NetworkingTab`, `OperationsTab`, `PollerHealthSidebar`, and `LogBar`.
-- Global Signal Activity chart consolidated into the Protocol tab alongside the TAK/CoT classification breakdown.
-- NetworkingTab is now data-driven: only pollers with live Kafka throughput appear, eliminating misleading 0.0 KB/s rows for non-Kafka services.
-- Placeholder Analysis and Ingression tabs removed entirely.
-
----
-
-## Technical Details
-
-- **New modules**: `frontend/src/alerts/JammingAlertEngine.ts`, `frontend/src/alerts/HoldingPatternAlertEngine.ts`
-- **New endpoints**: `GET /api/metrics/system` (psutil), `GET /api/backup/status`, `GET /api/logs/stream` (SSE)
-- **Bug fix**: `psutil==6.1.1` was missing from `backend/api/uv.lock` despite being in `pyproject.toml` — Docker `uv sync --frozen` never installed it. Lockfile regenerated.
-- **Bug fix**: `satnogs_transmitters` ? `satnogs_observations` TOPIC_TO_ID mapping was swapped in `routers/stats.py`, causing SatNOGS bandwidth figures to display under the wrong poller.
-- **TypeScript**: Zero errors post-merge (pre-existing `buildISSLayer.ts` `depthTest` error resolved by main's `as any` fix in v0.58.0 merge).
-
----
+### Tactical Intelligence Expansion
+The Stats Dashboard has been overhauled with high-cadence intelligence modules:
+- Sensor Intelligence: Tactical radar visualizing target density and signal integrity trends.
+- Fusion Audit: Real-time processing latency gauges and storage velocity forecasting.
+- Protocol Deep-Dive: Integrated Extreme Behavior Detection in the Priority Watchlist.
 
 ## Upgrade Instructions
-
-```bash
-# Pull latest
-git pull origin main
-
-# Rebuild backend (psutil lockfile fix requires image rebuild)
-docker compose up -d --build sovereign-backend
-
-# Frontend picks up via HMR or standard rebuild
-docker compose up -d --build sovereign-frontend
-```
-
-> **Note**: The `sovereign-backend` rebuild is required for this release. The `psutil` lockfile fix will not take effect until the image is rebuilt — running containers will continue to fail on `/api/metrics/system` until rebuilt.
+1. Pull the latest repository changes.
+2. Update your .env with a unique USERS_SECRET_KEY.
+3. Rebuild and restart the platform: docker compose up -d --build
+4. Access the new login screen at your deployment URL.

@@ -14,14 +14,17 @@ import {
     Terminal,
     LayoutDashboard,
     Newspaper,
+    User,
 } from 'lucide-react';
 
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
 import { AlertsWidget } from '../widgets/AlertsWidget';
+import { KpIndexWidget } from '../widgets/KpIndexWidget';
+import { useAuth } from '../../hooks/useAuth';
+import { UserMenuWidget } from '../widgets/UserMenuWidget';
 import { SystemSettingsWidget } from '../widgets/SystemSettingsWidget';
 import { SystemHealthWidget } from '../widgets/SystemHealthWidget';
-import { KpIndexWidget } from '../widgets/KpIndexWidget';
 
 interface TopBarProps {
     filters: Record<string, boolean | string | number | string[]>;
@@ -52,6 +55,9 @@ interface TopBarProps {
     onSystemHealthClose?: () => void;
     isTerminalOpen?: boolean;
     onTerminalClick?: () => void;
+    isUserMenuOpen?: boolean;
+    onUserMenuClick?: () => void;
+    onUserMenuClose?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -65,8 +71,10 @@ export const TopBar: React.FC<TopBarProps> = ({
     isSystemSettingsOpen, onSystemSettingsClick, onSystemSettingsClose,
     isSystemHealthOpen, onSystemHealthClick, onSystemHealthClose,
     isTerminalOpen, onTerminalClick,
+    isUserMenuOpen, onUserMenuClick, onUserMenuClose,
 }) => {
     const [time, setTime] = useState(new Date());
+    const { user } = useAuth();
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -126,7 +134,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
             </div>
             {/* Center Area - View Mode Toggle / Telemetry cluster */}
-            <div className="ml-12 hidden items-center gap-6 xl:flex relative z-10">
+            <div className="ml-10 hidden items-center gap-4 xl:flex relative z-10">
                 <div className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-full shadow-inner" role="tablist" aria-label="View Modes">
                     <button
                         role="tab"
@@ -207,7 +215,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
 
             {/* Right Side - Status and Time */}
-            <div className="ml-auto flex items-center gap-5 relative z-10">
+            <div className="ml-auto flex items-center gap-3 relative z-10">
                 {/* Latency Block */}
                 <div className="flex flex-col items-center mr-2">
                     <div className="flex items-center gap-2">
@@ -371,7 +379,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         onClick={onAlertsClick}
                         aria-label={alertsCount > 0 ? `${alertsCount} Active Alerts` : "Alerts"}
                         aria-haspopup="dialog"
-                        className={`group relative flex items-center gap-2 rounded-full px-3 py-1 transition-all duration-300 backdrop-blur-md shadow-lg focus-visible:ring-1 focus-visible:ring-alert-red outline-none ${alertsCount > 0
+                        className={`group relative flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-all duration-300 backdrop-blur-md shadow-lg focus-visible:ring-1 focus-visible:ring-alert-red outline-none ${alertsCount > 0
                             ? 'bg-alert-red/20 shadow-[0_0_15px_rgba(255,0,0,0.3)] ring-1 ring-alert-red/60 hover:bg-alert-red/30'
                             : 'bg-black/30 ring-1 ring-white/10 hover:bg-black/50 hover:ring-white/20 hover:cursor-pointer cursor-default'
                             }`}
@@ -401,20 +409,46 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
 
                 {/* Tactical Clock */}
-                <div className="flex flex-col items-end pl-1 justify-center">
-                    <div className="flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-3 pr-1.5 py-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
-                        <div className="flex items-center gap-0.5 text-lg font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
+                <div className="flex flex-col items-end pl-0.5 justify-center">
+                    <div className="flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-2 pr-1.5 py-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
+                        <div className="flex items-center gap-0.5 text-base font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
                             <span>{hh}</span>
-                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity delay-75`}>:</span>
+                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity`}>:</span>
                             <span>{mm}</span>
-                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity delay-75`}>:</span>
+                            <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity`}>:</span>
                             <span className="text-hud-green/80">{ss}</span>
                         </div>
-                        <div className="ml-4 bg-hud-green/20 border border-hud-green/40 text-hud-green pl-2 pr-2.5 py-0.5 rounded-sm flex items-center justify-center shadow-[0_0_5px_rgba(0,255,65,0.3)]">
-                            <span className="text-[10px] font-black tracking-widest drop-shadow-[0_0_3px_rgba(0,255,65,0.5)]">ZULU</span>
+                        <div className="ml-2 bg-hud-green/20 border border-hud-green/40 text-hud-green px-1.5 py-0.5 rounded-sm flex items-center justify-center shadow-[0_0_5px_rgba(0,255,65,0.3)]">
+                            <span className="text-[9px] font-black tracking-widest drop-shadow-[0_0_3px_rgba(0,255,65,0.5)]">ZULU</span>
                         </div>
                     </div>
                 </div>
+
+                {/* User badge + dropdown */}
+                {user && (
+                    <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-white/10 relative">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onUserMenuClick?.();
+                            }}
+                            className={`flex items-center gap-1.5 px-2 py-1 bg-black/30 border border-white/10 rounded-lg hover:bg-white/5 transition-all outline-none focus-visible:ring-1 focus-visible:ring-hud-green ${
+                                isUserMenuOpen ? 'bg-white/10 border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : ''
+                            }`}
+                            aria-expanded={isUserMenuOpen}
+                        >
+                            <User size={12} className={user.role === 'admin' ? 'text-red-400' : 'text-hud-green/80'} />
+                            <span className="text-[10px] font-mono text-white/70 tracking-wide uppercase shrink-0">{user.username}</span>
+                        </button>
+
+                        {isUserMenuOpen && (
+                            <UserMenuWidget 
+                                isOpen={isUserMenuOpen} 
+                                onClose={() => onUserMenuClose?.()} 
+                            />
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

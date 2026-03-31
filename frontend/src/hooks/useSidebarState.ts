@@ -6,6 +6,7 @@ export function useSidebarState() {
   const [isSystemHealthOpen, setIsSystemHealthOpen] = useState(false);
   const [isAIAnalystOpen, setIsAIAnalystOpen] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   return {
     isAlertsOpen,
@@ -18,5 +19,7 @@ export function useSidebarState() {
     setIsAIAnalystOpen,
     isTerminalOpen,
     setIsTerminalOpen,
+    isUserMenuOpen,
+    setIsUserMenuOpen,
   };
 }

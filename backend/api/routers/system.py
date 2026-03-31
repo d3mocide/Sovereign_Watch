@@ -6,9 +6,11 @@ import time as _time
 from datetime import datetime, timezone
 
 import yaml
+from core.auth import require_role
 from core.database import db
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from models.schemas import AIModelRequest, MissionLocation, WatchlistAddRequest
+
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.System")
@@ -65,13 +67,9 @@ AI_MODEL_REDIS_KEY = "config:ai:active_model"
 AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
 
-@router.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-@router.post("/api/config/location")
+@router.post("/api/config/location", dependencies=[Depends(require_role("operator"))])
 async def set_mission_location(location: MissionLocation):
+
     """
     Update the active surveillance area.
     Publishes to Redis pub/sub to notify all pollers.
@@ -224,7 +222,7 @@ async def get_streams_config():
     ]
 
 
-@router.post("/api/config/ai")
+@router.post("/api/config/ai", dependencies=[Depends(require_role("admin"))])
 async def set_ai_config(req: AIModelRequest):
     """Switch the active AI model used for track analysis."""
     available_models = load_ai_models()
@@ -282,8 +280,9 @@ async def get_watchlist():
     return result
 
 
-@router.post("/api/watchlist", status_code=201)
+@router.post("/api/watchlist", status_code=201, dependencies=[Depends(require_role("operator"))])
 async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
+
     """Add or refresh an ICAO24 in the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
@@ -332,8 +331,9 @@ async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
     return {"status": "ok", "icao24": icao24, "permanent": req.ttl_days is None}
 
 
-@router.delete("/api/watchlist/{icao24}")
+@router.delete("/api/watchlist/{icao24}", dependencies=[Depends(require_role("operator"))])
 async def remove_from_watchlist(icao24: str):
+
     """Remove an ICAO24 from the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")

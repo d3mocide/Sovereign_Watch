@@ -6,16 +6,18 @@ import os
 import time as time_module
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK
 from uvicorn.protocols.utils import ClientDisconnected
 import httpx
 import numpy as np
 from sgp4.api import Satrec, jday as sgp4_jday
+from core.auth import _decode_token, get_user_by_id, require_role
 from core.database import db
 from core.config import settings
 from services.broadcast import broadcast_service
 from utils.sgp4_utils import teme_to_ecef, ecef_to_lla_vectorized
+from fastapi import Depends
 
 
 def _jday(dt: datetime):
@@ -24,29 +26,62 @@ def _jday(dt: datetime):
                      dt.second + dt.microsecond / 1e6)
 
 router = APIRouter()
+_viewer_auth = [Depends(require_role("viewer"))]
 logger = logging.getLogger("SovereignWatch.Tracks")
 
 @router.websocket("/api/tracks/live")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str | None = Query(default=None),
+):
+    # Authenticate before accepting the connection so unauthenticated callers
+    # receive a proper close code rather than an HTTP 401 (which browsers can't
+    # read from a WS handshake).  We must call accept() first to be able to
+    # send a close frame; if auth fails we close with 4001 and return.
     await websocket.accept()
-    client_id = f"api-client-{uuid.uuid4().hex[:8]}"
+
+    if settings.AUTH_ENABLED:
+        if not token:
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        try:
+            payload = _decode_token(token)
+            user_id_raw = payload.get("sub")
+            user_id = int(user_id_raw) if user_id_raw is not None else None
+        except Exception:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+
+        user = await get_user_by_id(user_id) if user_id is not None else None
+        if user is None or not user.get("is_active"):
+            await websocket.close(code=4001, reason="User not found or inactive")
+            return
+        if payload.get("pwv", 0) != user.get("password_version", 0):
+            await websocket.close(code=4001, reason="Token invalidated")
+            return
+
+        client_id = f"api-client-{uuid.uuid4().hex[:8]}"
+        log_user = user.get("username", user_id)
+    else:
+        client_id = f"api-client-{uuid.uuid4().hex[:8]}"
+        log_user = "anonymous"
 
     # Register with Broadcast Service
     await broadcast_service.connect(websocket)
-    logger.info(f"Client {client_id} connected")
+    logger.info(f"Client {client_id} ({log_user}) connected")
 
     try:
         while True:
             # Wait for client to close connection or send a message (ignored)
             await websocket.receive_text()
     except (WebSocketDisconnect, ConnectionClosedOK, ClientDisconnected):
-        logger.info(f"Client {client_id} disconnected")
+        logger.info(f"Client {client_id} ({log_user}) disconnected")
     except Exception as e:
         logger.error(f"WebSocket Loop failed for {client_id}: {e}")
     finally:
         await broadcast_service.disconnect(websocket)
 
-@router.get("/api/tracks/history/{entity_id}")
+@router.get("/api/tracks/history/{entity_id}", dependencies=_viewer_auth)
 async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     """
     Get raw track points for a specific entity.
@@ -154,7 +189,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         logger.error(f"History query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/api/tracks/search")
+@router.get("/api/tracks/search", dependencies=_viewer_auth)
 async def search_tracks(q: str, limit: int = 10):
     """
     Search for entities by ID or Callsign (substring).
@@ -255,7 +290,7 @@ async def search_tracks(q: str, limit: int = 10):
         logger.error(f"Search query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/api/tracks/replay")
+@router.get("/api/tracks/replay", dependencies=_viewer_auth)
 async def replay_tracks(start: str, end: str, limit: int = 1000):
     """
     Get all track points within a time window for replay.
@@ -350,7 +385,7 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/api/tracks/flight-info/{entity_id}")
+@router.get("/api/tracks/flight-info/{entity_id}", dependencies=_viewer_auth)
 async def get_flight_info(entity_id: str):
     """
     Fetch the most recent departure/arrival airport for an aircraft from the

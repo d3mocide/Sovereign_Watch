@@ -12,7 +12,9 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 import React, { useState } from "react";
+
 
 type FilterValue = boolean | string | number | string[];
 type Filters = Record<string, FilterValue>;
@@ -80,10 +82,12 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
   filters,
   onFilterChange,
 }) => {
+  const { hasRole } = useAuth();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [customPresets, setCustomPresets] =
     useState<Record<string, Record<string, unknown>>>(loadCustomPresets);
+
 
   const handleCopyUrl = async () => {
     try {
@@ -318,27 +322,30 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
         </span>
 
         {/* Save Input */}
-        <div className="flex gap-1.5">
-          <input
-            type="text"
-            placeholder="PRESET NAME..."
-            aria-label="Custom preset name"
-            value={presetName}
-            onChange={(e) => setPresetName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSaveCustomPreset();
-            }}
-            className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white placeholder-white/20 focus:outline-none focus:border-hud-green/50 focus:ring-1 focus:ring-hud-green/50"
-          />
-          <button
-            onClick={handleSaveCustomPreset}
-            disabled={!presetName.trim()}
-            className="flex items-center gap-1.5 px-3 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 disabled:opacity-30 disabled:hover:bg-hud-green/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-          >
-            <Save size={12} />
-            <span className="text-[9px] font-bold tracking-wider">SAVE</span>
-          </button>
-        </div>
+        {hasRole("operator") && (
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              placeholder="PRESET NAME..."
+              aria-label="Custom preset name"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveCustomPreset();
+              }}
+              className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white placeholder-white/20 focus:outline-none focus:border-hud-green/50 focus:ring-1 focus:ring-hud-green/50"
+            />
+            <button
+              onClick={handleSaveCustomPreset}
+              disabled={!presetName.trim()}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 disabled:opacity-30 disabled:hover:bg-hud-green/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            >
+              <Save size={12} />
+              <span className="text-[9px] font-bold tracking-wider">SAVE</span>
+            </button>
+          </div>
+        )}
+
 
         {/* Custom Presets List */}
         {Object.keys(customPresets).length > 0 && (
@@ -354,44 +361,49 @@ export const FilterPresets: React.FC<FilterPresetsProps> = ({
                 >
                   {name}
                 </button>
-                <button
-                  onClick={(e) => deleteCustomPreset(name, e)}
-                  className="p-1.5 text-alert-red/50 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
-                  title="Delete Preset"
-                  aria-label={`Delete preset ${name}`}
-                >
-                  <Trash2 size={12} aria-hidden="true" />
-                </button>
+                {hasRole("operator") && (
+                  <button
+                    onClick={(e) => deleteCustomPreset(name, e)}
+                    className="p-1.5 text-alert-red/50 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-hud-green"
+                    title="Delete Preset"
+                    aria-label={`Delete preset ${name}`}
+                  >
+                    <Trash2 size={12} aria-hidden="true" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
 
         {/* Export / Import */}
-        <div className="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-white/5">
-          <button
-            onClick={handleExportPresets}
-            disabled={Object.keys(customPresets).length === 0}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors text-white/70 hover:text-white focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-          >
-            <Download size={10} />
-            <span className="text-[9px] font-bold tracking-wider">
-              EXPORT JSON
-            </span>
-          </button>
-          <label className="flex-1 flex items-center justify-center gap-1.5 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-white/70 hover:text-white cursor-pointer focus-within:ring-1 focus-within:ring-hud-green outline-none">
-            <Upload size={10} />
-            <span className="text-[9px] font-bold tracking-wider">
-              IMPORT JSON
-            </span>
-            <input
-              type="file"
-              accept=".json"
-              className="sr-only"
-              onChange={handleImportPresets}
-            />
-          </label>
-        </div>
+        {hasRole("operator") && (
+          <div className="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-white/5">
+            <button
+              onClick={handleExportPresets}
+              disabled={Object.keys(customPresets).length === 0}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors text-white/70 hover:text-white focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            >
+              <Download size={10} />
+              <span className="text-[9px] font-bold tracking-wider">
+                EXPORT JSON
+              </span>
+            </button>
+            <label className="flex-1 flex items-center justify-center gap-1.5 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-white/70 hover:text-white cursor-pointer focus-within:ring-1 focus-within:ring-hud-green outline-none">
+              <Upload size={10} />
+              <span className="text-[9px] font-bold tracking-wider">
+                IMPORT JSON
+              </span>
+              <input
+                type="file"
+                accept=".json"
+                className="sr-only"
+                onChange={handleImportPresets}
+              />
+            </label>
+          </div>
+        )}
+
       </div>
     </div>
   );

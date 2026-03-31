@@ -2,33 +2,11 @@
 
 import os
 import sys
-import types
-from unittest.mock import AsyncMock, MagicMock
+
+from test_stubs import install_common_test_stubs
 
 # ── mock heavy deps before any project imports ──────────────────────────────
-_mock_asyncpg = MagicMock()
-_mock_asyncpg.create_pool = AsyncMock()
-sys.modules["asyncpg"] = _mock_asyncpg
-
-_mock_redis_pkg = types.ModuleType("redis")
-_mock_redis_asyncio = types.ModuleType("redis.asyncio")
-_mock_redis_asyncio.from_url = AsyncMock()
-_mock_redis_asyncio.Redis = MagicMock()
-_mock_redis_pkg.asyncio = _mock_redis_asyncio
-sys.modules["redis"] = _mock_redis_pkg
-sys.modules["redis.asyncio"] = _mock_redis_asyncio
-
-_mock_aiokafka = types.ModuleType("aiokafka")
-_mock_aiokafka.AIOKafkaConsumer = MagicMock()
-_mock_aiokafka.AIOKafkaProducer = MagicMock()
-sys.modules["aiokafka"] = _mock_aiokafka
-
-sys.modules.setdefault("websockets", MagicMock())
-sys.modules.setdefault("websockets.exceptions", MagicMock())
-sys.modules.setdefault("uvicorn", MagicMock())
-sys.modules.setdefault("uvicorn.protocols", MagicMock())
-sys.modules.setdefault("uvicorn.protocols.utils", MagicMock())
-sys.modules.setdefault("litellm", MagicMock())
+install_common_test_stubs(include_web_stack=True)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Cpu, Terminal, Database } from 'lucide-react';
+import { Cpu, Terminal, Database, Network, Download } from 'lucide-react';
 import type { SystemMetrics, LogLevel, BackupStatus } from '../../api/metrics';
-import type { LogEntry } from './types';
+import type { LogEntry, PollerHealth, ThroughputData } from './types';
 
 interface Props {
   systemMetrics: SystemMetrics | null;
   logs: LogEntry[];
   backupStatus: BackupStatus | null;
+  healthData: PollerHealth[];
+  throughputData: ThroughputData;
 }
 
-export default function OperationsTab({ systemMetrics, logs, backupStatus }: Props) {
+export default function OperationsTab({ systemMetrics, logs, backupStatus, healthData, throughputData }: Props) {
   const [logFilter, setLogFilter] = useState<LogLevel | null>(null);
 
   const filteredLogs = logFilter === null ? logs : logs.filter(l => l.level === logFilter);
@@ -170,7 +172,47 @@ export default function OperationsTab({ systemMetrics, logs, backupStatus }: Pro
         )}
       </div>
 
-      {/* Panel 2: Live Log Terminal (Ops-01) */}
+      {/* Panel 2: Data Throughput (Combined from Networking) */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="bg-surface-container p-6 border border-primary/10 xl:col-span-2">
+          <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
+            <Download size={16} /> Data Throughput (KB/S)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+            {healthData.filter(p => p.id in throughputData.throughput).map(p => {
+              const metrics = throughputData.throughput[p.id];
+              const rate = metrics.kb_per_sec;
+              const percentage = Math.min(100, (rate / 512) * 100);
+              return (
+                <div key={p.id} className="space-y-1">
+                  <div className="flex justify-between text-[10px] uppercase font-bold text-on-surface-variant">
+                    <span>{p.name}</span>
+                    <span className="text-primary">{rate.toFixed(1)} KB/S</span>
+                  </div>
+                  <div className="h-1.5 bg-primary/5 border border-primary/10 overflow-hidden">
+                    <div
+                      className="h-full bg-primary shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-500"
+                      style={{ width: `${Math.max(2, percentage)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-surface-container p-6 border border-primary/10 flex flex-col justify-center text-center">
+          <Network size={40} className="text-primary/20 mx-auto mb-4" />
+          <h4 className="text-xl font-black text-primary uppercase italic">
+            {throughputData.total_bandwidth_mb > 1024
+              ? `${(throughputData.total_bandwidth_mb / 1024).toFixed(2)} GB`
+              : `${throughputData.total_bandwidth_mb.toFixed(1)} MB`}
+          </h4>
+          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">TOTAL BANDWIDTH (24H)</p>
+        </div>
+      </div>
+
+      {/* Panel 3: Live Log Terminal (Ops-01) */}
       <div className="bg-surface-container border border-primary/10 flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-primary/10">
           <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">

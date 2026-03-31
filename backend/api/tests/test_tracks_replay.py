@@ -1,49 +1,26 @@
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 import os
 import sys
-import types
 from datetime import datetime, timedelta, timezone
 from httpx import AsyncClient, ASGITransport
 
 # Add the api directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from test_stubs import install_common_test_stubs  # noqa: E402
 
 # Mock heavy dependencies before importing main so that modules which are
 # not installed (asyncpg, redis, aiokafka, litellm) never need to be resolved.
-_mock_asyncpg = MagicMock()
-_mock_asyncpg.create_pool = AsyncMock()
-sys.modules["asyncpg"] = _mock_asyncpg
+install_common_test_stubs(include_psutil=True)
 
-_mock_redis_pkg = types.ModuleType("redis")
-_mock_redis_asyncio = types.ModuleType("redis.asyncio")
-_mock_redis_asyncio.from_url = AsyncMock()
-_mock_redis_asyncio.Redis = MagicMock()
-_mock_redis_pkg.asyncio = _mock_redis_asyncio
-sys.modules["redis"] = _mock_redis_pkg
-sys.modules["redis.asyncio"] = _mock_redis_asyncio
-
-_mock_aiokafka = types.ModuleType("aiokafka")
-_mock_aiokafka.AIOKafkaConsumer = MagicMock()
-_mock_aiokafka.AIOKafkaProducer = MagicMock()
-_mock_aiokafka_admin = types.ModuleType("aiokafka.admin")
-_mock_aiokafka_admin.AIOKafkaAdminClient = MagicMock()
-_mock_aiokafka.admin = _mock_aiokafka_admin
-sys.modules["aiokafka"] = _mock_aiokafka
-sys.modules["aiokafka.admin"] = _mock_aiokafka_admin
-
-sys.modules["psutil"] = MagicMock()
-
-_mock_numpy = types.ModuleType("numpy")
-_mock_numpy.bool_ = bool
-_mock_numpy.isscalar = lambda _obj: False
-_mock_numpy.ndarray = tuple
-sys.modules["numpy"] = _mock_numpy
-
-sys.modules["litellm"] = MagicMock()
-
+from core.auth import get_current_user # noqa: E402
 from main import app  # noqa: E402
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+    yield
+    app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_replay_limit_exceeded():

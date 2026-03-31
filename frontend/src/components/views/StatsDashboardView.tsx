@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Terminal, Settings, ShieldAlert, Download, Cpu } from 'lucide-react';
+import { Bell, Terminal, Settings, ShieldAlert, Download, Cpu, Activity, Zap } from 'lucide-react';
 import {
   fetchSystemMetrics,
   fetchRecentLogs,
@@ -7,10 +7,15 @@ import {
   type SystemMetrics,
   type BackupStatus,
 } from '../../api/metrics';
-import type { PollerHealth, ActivityData, TakBreakdown, LogEntry, TabName, ThroughputData } from '../stats/types';
+import type { 
+  PollerHealth, ActivityData, TakBreakdown, TakMetrics, 
+  TakBreakdownResponse, LogEntry, TabName, ThroughputData,
+  SensorMetrics, FusionMetrics, ProtocolIntelligence 
+} from '../stats/types';
 import ProtocolTab from '../stats/ProtocolTab';
-import NetworkingTab from '../stats/NetworkingTab';
 import OperationsTab from '../stats/OperationsTab';
+import SensorIntelligenceTab from '../stats/SensorIntelligenceTab';
+import FusionAuditTab from '../stats/FusionAuditTab';
 import PollerHealthSidebar from '../stats/PollerHealthSidebar';
 import LogBar from '../stats/LogBar';
 
@@ -18,6 +23,7 @@ export default function StatsDashboardView() {
   const [healthData, setHealthData] = useState<PollerHealth[]>([]);
   const [activityData, setActivityData] = useState<ActivityData[]>([]);
   const [takBreakdown, setTakBreakdown] = useState<TakBreakdown[]>([]);
+  const [takMetrics, setTakMetrics] = useState<TakMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [throughputData, setThroughputData] = useState<ThroughputData>({ throughput: {}, total_bandwidth_mb: 0 });
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
@@ -27,20 +33,36 @@ export default function StatsDashboardView() {
   const [alertCount, setAlertCount] = useState(0);
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
 
-  // Heavy stats: poller health, activity, TAK breakdown (30 s)
+  // New tactical intelligence state
+  const [sensorMetrics, setSensorMetrics] = useState<SensorMetrics | null>(null);
+  const [fusionMetrics, setFusionMetrics] = useState<FusionMetrics | null>(null);
+  const [protocolIntel, setProtocolIntel] = useState<ProtocolIntelligence | null>(null);
+
+  // Heavy stats: poller health, activity, TAK breakdown, and Intelligence (30 s)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [healthRes, activityRes, takRes, throughputRes] = await Promise.all([
+        const [healthRes, activityRes, takRes, throughputRes, sensorRes, fusionRes, intelRes] = await Promise.all([
           fetch('/api/config/poller-health'),
           fetch('/api/stats/activity?hours=24'),
           fetch('/api/stats/tak-breakdown'),
           fetch('/api/stats/throughput'),
+          fetch('/api/stats/sensors'),
+          fetch('/api/stats/fusion'),
+          fetch('/api/stats/protocol-intelligence'),
         ]);
+
         if (healthRes.ok) setHealthData(await healthRes.json());
         if (activityRes.ok) { const j = await activityRes.json(); setActivityData(j.data ?? []); }
-        if (takRes.ok)      { const j = await takRes.json();      setTakBreakdown(j.data ?? []); }
+        if (takRes.ok) { 
+          const j: TakBreakdownResponse = await takRes.json(); 
+          setTakBreakdown(j.data ?? []);
+          setTakMetrics(j.metrics);
+        }
         if (throughputRes.ok) setThroughputData(await throughputRes.json());
+        if (sensorRes.ok) { const j = await sensorRes.json(); if (j.status === 'ok') setSensorMetrics(j); }
+        if (fusionRes.ok) { const j = await fusionRes.json(); if (j.status === 'ok') setFusionMetrics(j); }
+        if (intelRes.ok) { const j = await intelRes.json(); if (j.status === 'ok') setProtocolIntel(j); }
       } catch (e) {
         console.error('Dashboard fetch error:', e);
       } finally {
@@ -49,10 +71,21 @@ export default function StatsDashboardView() {
     };
     fetchData();
     const t  = setInterval(fetchData, 30_000);
+    
+    // High-cadence throughput & sensor refresh (5 s)
     const t2 = setInterval(async () => {
-      const res = await fetch('/api/stats/throughput');
-      if (res.ok) setThroughputData(await res.json());
+      try {
+        const [thru, sens] = await Promise.all([
+          fetch('/api/stats/throughput'),
+          fetch('/api/stats/sensors')
+        ]);
+        if (thru.ok) setThroughputData(await thru.json());
+        if (sens.ok) { const j = await sens.json(); if (j.status === 'ok') setSensorMetrics(j); }
+      } catch {
+        // Ignore transient fetch failures; next interval retries automatically.
+      }
     }, 5_000);
+
     return () => { clearInterval(t); clearInterval(t2); };
   }, []);
 
@@ -79,6 +112,7 @@ export default function StatsDashboardView() {
   }, []);
 
   const handleExportCSV = () => {
+    // ... same as before
     if (!activityData.length) return;
     const typesSet = new Set<string>();
     activityData.forEach(d => Object.keys(d.counts).forEach(k => typesSet.add(k)));
@@ -98,15 +132,17 @@ export default function StatsDashboardView() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} activityData={activityData} loading={loading} />;
-      case 'networking':  return <NetworkingTab healthData={healthData} throughputData={throughputData} />;
-      case 'operations':  return <OperationsTab systemMetrics={systemMetrics} logs={logs} backupStatus={backupStatus} />;
+      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} activityData={activityData} loading={loading} takMetrics={takMetrics} intelligence={protocolIntel} />;
+      case 'operations':  return <OperationsTab systemMetrics={systemMetrics} logs={logs} backupStatus={backupStatus} healthData={healthData} throughputData={throughputData} />;
+      case 'sensors':     return <SensorIntelligenceTab metrics={sensorMetrics} loading={loading} />;
+      case 'audit':       return <FusionAuditTab metrics={fusionMetrics} loading={loading} />;
     }
   };
 
   const NAV: { id: TabName; label: string; icon: React.ReactNode }[] = [
     { id: 'protocol',    label: 'PROTOCOL',    icon: <ShieldAlert size={16} /> },
-    { id: 'networking',  label: 'NETWORKING',  icon: <Download size={16} /> },
+    { id: 'sensors',     label: 'SENSORS',     icon: <Activity size={16} /> },
+    { id: 'audit',       label: 'FUSION AUDIT', icon: <Zap size={16} /> },
     { id: 'operations',  label: 'OPERATIONS',  icon: <Cpu size={16} /> },
   ];
 

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Radio, MapPin, ChevronDown, ChevronUp, Send, Terminal, Users, RadioReceiver, Activity } from 'lucide-react';
+import { Radio, MapPin, ChevronDown, ChevronUp, Send, Terminal, Users, RadioReceiver, Activity, Lock } from 'lucide-react';
 import type { JS8Station, JS8LogEntry, JS8StatusLine, KiwiConfig } from '../../types';
 import { useKiwiNodes } from '../../hooks/useKiwiNodes';
+import { useAuth } from '../../hooks/useAuth';
 
 /**
  * JS8Call decode thresholds:
@@ -54,6 +55,8 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
   const [activeTab, setActiveTab] = useState<'HEARD' | 'CHAT' | 'SDR'>('HEARD');
   const [msgInput, setMsgInput] = useState('');
   const [msgTarget, setMsgTarget] = useState('@ALLCALL');
+  const { hasRole } = useAuth();
+  const isOperator = hasRole('operator');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Default to 7078 unless we know the current active Kiwi freq
@@ -78,6 +81,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
   const [editGridVal, setEditGridVal] = useState('');
 
   const submitCall = () => {
+    if (!isOperator) return;
     setEditingCall(false);
     if (editCallVal && editCallVal.toUpperCase() !== statusLine.callsign) {
       sendAction({ action: 'SET_STATION', callsign: editCallVal.toUpperCase() });
@@ -85,6 +89,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
   };
 
   const submitGrid = () => {
+    if (!isOperator) return;
     setEditingGrid(false);
     if (editGridVal && editGridVal.toUpperCase() !== statusLine.grid) {
       sendAction({ action: 'SET_STATION', grid: editGridVal.toUpperCase() });
@@ -99,7 +104,7 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!msgInput.trim() || !js8Connected) return;
+    if (!isOperator || !msgInput.trim() || !js8Connected) return;
     sendMessage(msgTarget.trim(), msgInput.trim());
     setMsgInput('');
   };
@@ -187,10 +192,11 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
             />
           ) : (
             <span 
-              className="text-indigo-300 font-bold hover:text-indigo-200 cursor-text transition-colors"
-              onClick={() => { setEditCallVal(statusLine.callsign); setEditingCall(true); }}
-              title="Edit Callsign"
+              className={`text-indigo-300 font-bold ${isOperator ? 'hover:text-indigo-200 cursor-text' : ''} transition-colors`}
+              onClick={() => { if (isOperator) { setEditCallVal(statusLine.callsign); setEditingCall(true); } }}
+              title={isOperator ? "Edit Callsign" : "Locked"}
             >
+              {!isOperator && <Lock size={8} className="inline mr-1 opacity-40" />}
               {statusLine.callsign}
             </span>
           )}
@@ -208,9 +214,9 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
             />
           ) : (
             <span 
-              className="text-slate-400 hover:text-slate-300 cursor-text transition-colors"
-              onClick={() => { setEditGridVal(statusLine.grid); setEditingGrid(true); }}
-              title="Edit Grid Square"
+              className={`text-slate-400 ${isOperator ? 'hover:text-slate-300 cursor-text' : ''} transition-colors`}
+              onClick={() => { if (isOperator) { setEditGridVal(statusLine.grid); setEditingGrid(true); } }}
+              title={isOperator ? "Edit Grid Square" : "Locked"}
             >
               {statusLine.grid}
             </span>
@@ -306,18 +312,19 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                             </div>
                             {isActive ? (
                               <button
-                                onClick={() => sendAction({ action: 'DISCONNECT_KIWI' })}
-                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors pointer-events-auto focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
+                                onClick={() => isOperator && sendAction({ action: 'DISCONNECT_KIWI' })}
+                                disabled={!isOperator}
+                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors pointer-events-auto focus-visible:ring-1 focus-visible:ring-red-400 outline-none disabled:opacity-20 disabled:cursor-not-allowed"
                               >
-                                {kiwiConnecting ? 'Busy...' : 'Disconnect'}
+                                {kiwiConnecting ? 'Busy...' : isOperator ? 'Disconnect' : <Lock size={10} />}
                               </button>
                             ) : (
                               <button
-                                onClick={() => sendAction({ action: 'SET_KIWI', host: node.host, port: node.port, freq: sdrFreq, mode: 'usb' })}
-                                disabled={kiwiConnecting || (node.users && (node.sq || node.num_ch) && node.users >= (node.sq || node.num_ch)) === true}
-                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-30 disabled:pointer-events-none pointer-events-auto focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
+                                onClick={() => isOperator && sendAction({ action: 'SET_KIWI', host: node.host, port: node.port, freq: sdrFreq, mode: 'usb' })}
+                                disabled={!isOperator || kiwiConnecting || (node.users && (node.sq || node.num_ch) && node.users >= (node.sq || node.num_ch)) === true}
+                                className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-20 disabled:cursor-not-allowed pointer-events-auto focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
                               >
-                                Connect
+                                {isOperator ? 'Connect' : <Lock size={10} />}
                               </button>
                             )}
                           </div>
@@ -371,20 +378,27 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                         type="text"
                         value={msgInput}
                         onChange={(e) => setMsgInput(e.target.value)}
-                        placeholder={js8Connected ? "Type message..." : "RADIO OFFLINE"}
+                        placeholder={!isOperator ? "READ ONLY TERMINAL" : js8Connected ? "Type message..." : "RADIO OFFLINE"}
                         aria-label="Message text"
-                        disabled={!js8Connected}
+                        disabled={!js8Connected || !isOperator}
                         className="w-full bg-black/40 border border-white/10 rounded-sm pl-2 pr-7 py-1 text-[10px] text-slate-300 placeholder:text-white/10 focus:border-indigo-500/50 outline-none disabled:opacity-50"
                       />
-                      <button
-                        type="submit"
-                        disabled={!msgInput.trim() || !js8Connected}
-                        aria-label="Send message"
-                        title="Send message"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-300 disabled:opacity-30 p-0.5 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none rounded"
-                      >
-                        <Send size={11} />
-                      </button>
+                      {isOperator && (
+                        <button
+                          type="submit"
+                          disabled={!msgInput.trim() || !js8Connected}
+                          aria-label="Send message"
+                          title="Send message"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-300 disabled:opacity-30 p-0.5 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none rounded"
+                        >
+                          <Send size={11} />
+                        </button>
+                      )}
+                      {!isOperator && (
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-20">
+                          <Lock size={11} className="text-white" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </form>

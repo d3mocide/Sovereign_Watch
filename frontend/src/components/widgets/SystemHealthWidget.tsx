@@ -6,7 +6,9 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 import React, { useEffect, useState } from "react";
+
 
 type PollerStatus =
   | "healthy"
@@ -117,7 +119,9 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { hasRole } = useAuth();
   const [pollers, setPollers] = useState<PollerHealth[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [prevOpen, setPrevOpen] = useState(isOpen);
 
@@ -181,17 +185,20 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
             </h3>
           </div>
           <div className="flex items-center gap-1">
+            {hasRole("admin") && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open("/stats", "_blank");
+                }}
+                className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
+                title="Open Performance Dashboard"
+              >
+                STATS
+              </button>
+            )}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open('/stats', '_blank');
-              }}
-              className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
-              title="Open Performance Dashboard"
-            >
-              STATS
-            </button>
-            <button
+
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();
