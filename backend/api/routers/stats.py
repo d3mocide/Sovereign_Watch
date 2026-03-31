@@ -1,8 +1,11 @@
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from core.auth import require_role
+
 from core.database import db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_role("viewer"))])
+
 logger = logging.getLogger("SovereignWatch.Stats")
 
 @router.get("/api/stats/activity")

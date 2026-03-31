@@ -866,21 +866,23 @@ function App() {
     return <LoginView isFirstSetup={setupRequired} />;
   }
 
-  const isStatsRoute = window.location.pathname === '/stats';
-
-  if (isStatsRoute) {
-    return (
-      <Suspense fallback={
-        <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0f0] font-mono animate-pulse">
-          INITIALIZING STATS...
-        </div>
-      }>
-        <StatsDashboardView />
-      </Suspense>
-    );
+  if (authStatus === 'authenticated') {
+    const isStatsRoute = window.location.pathname === '/stats';
+    if (isStatsRoute) {
+      return (
+        <Suspense fallback={
+          <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0f0] font-mono animate-pulse">
+            INITIALIZING STATS...
+          </div>
+        }>
+          <StatsDashboardView />
+        </Suspense>
+      );
+    }
+    return <AuthenticatedApp />;
   }
 
-  return <AuthenticatedApp />;
+  return null;
 }
 
 export default App;
