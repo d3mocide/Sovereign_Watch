@@ -231,7 +231,6 @@ class EscalationDetector:
         anomalies = []
 
         for clause in tak_clauses:
-            adverbial = clause.get("adverbial_context", {})
             # Check if classification contains emergency code
             classification = clause.get("detail", {}).get("classification", {})
             squawk = classification.get("squawk", "")
