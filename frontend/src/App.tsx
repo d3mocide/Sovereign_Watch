@@ -1,6 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import { ExternalLink, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getSetupStatus } from "./api/auth";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
@@ -47,6 +47,8 @@ interface IntelArticleContent {
   title: string;
   content: string;
 }
+
+const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
 
 function AuthenticatedApp() {
 
@@ -862,6 +864,20 @@ function App() {
       );
     }
     return <LoginView isFirstSetup={setupRequired} />;
+  }
+
+  const isStatsRoute = window.location.pathname === '/stats';
+
+  if (isStatsRoute) {
+    return (
+      <Suspense fallback={
+        <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0f0] font-mono animate-pulse">
+          INITIALIZING STATS...
+        </div>
+      }>
+        <StatsDashboardView />
+      </Suspense>
+    );
   }
 
   return <AuthenticatedApp />;
