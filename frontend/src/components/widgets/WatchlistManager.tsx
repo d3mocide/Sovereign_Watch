@@ -1,6 +1,8 @@
-import { Eye, Loader2, Plus, Trash2 } from "lucide-react";
+import { Eye, Loader2, Plus, Trash2, ShieldCheck } from "lucide-react";
 import React, { useEffect } from "react";
+import { useAuth } from "../../hooks/useAuth";
 import { useWatchlist } from "../../hooks/useWatchlist";
+
 
 interface WatchlistManagerProps {
   isOpen: boolean;
@@ -20,6 +22,9 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
     addEntry,
     removeEntry,
   } = useWatchlist();
+  const { hasRole } = useAuth();
+  const isOperator = hasRole("operator");
+
 
   useEffect(() => {
     if (isOpen) fetchWatchlist();
@@ -40,37 +45,45 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
       </div>
 
       {/* Add ICAO24 input */}
-      <div className="flex gap-1.5">
-        <input
-          type="text"
-          maxLength={6}
-          placeholder="ICAO24 HEX..."
-          aria-label="ICAO24 Hex Code"
-          value={newIcao24}
-          onChange={(e) =>
-            setNewIcao24(
-              e.target.value.toLowerCase().replace(/[^0-9a-f]/g, ""),
-            )
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter") addEntry();
-          }}
-          className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white placeholder-white/20 focus:outline-none focus:border-hud-green/50 focus:ring-1 focus:ring-hud-green/50 uppercase"
-        />
-        <button
-          onClick={addEntry}
-          disabled={newIcao24.length !== 6 || addLoading}
-          className="flex items-center gap-1 px-2.5 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 disabled:opacity-30 disabled:hover:bg-hud-green/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-          title="Add to watchlist (permanent)"
-        >
-          {addLoading ? (
-            <Loader2 size={11} className="animate-spin" />
-          ) : (
-            <Plus size={11} />
-          )}
-          <span className="text-[9px] font-bold tracking-wider">ADD</span>
-        </button>
-      </div>
+      {isOperator ? (
+        <div className="flex gap-1.5 shadow-sm">
+          <input
+            type="text"
+            maxLength={6}
+            placeholder="ICAO24 HEX..."
+            aria-label="ICAO24 Hex Code"
+            value={newIcao24}
+            onChange={(e) =>
+              setNewIcao24(
+                e.target.value.toLowerCase().replace(/[^0-9a-f]/g, ""),
+              )
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addEntry();
+            }}
+            className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white placeholder-white/20 focus:outline-none focus:border-hud-green/50 focus:ring-1 focus:ring-hud-green/50 uppercase"
+          />
+          <button
+            onClick={addEntry}
+            disabled={newIcao24.length !== 6 || addLoading}
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 disabled:opacity-30 disabled:hover:bg-hud-green/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            title="Add to watchlist (permanent)"
+          >
+            {addLoading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Plus size={11} />
+            )}
+            <span className="text-[9px] font-bold tracking-wider">ADD</span>
+          </button>
+        </div>
+      ) : (
+        <div className="px-2 py-1 bg-white/5 border border-white/10 rounded flex items-center gap-2">
+          <ShieldCheck size={10} className="text-hud-green/40" />
+          <span className="text-[8px] text-white/30 font-bold tracking-wider uppercase">Monitoring: Synchronized</span>
+        </div>
+      )}
+
 
       {/* Error */}
       {error && (
@@ -97,14 +110,17 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
                       : ""}
                 </span>
               </div>
-              <button
-                onClick={() => removeEntry(entry.icao24)}
-                className="p-1.5 text-alert-red/40 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
-                title="Remove from watchlist"
-              >
-                <Trash2 size={11} />
-              </button>
+              {isOperator && (
+                <button
+                  onClick={() => removeEntry(entry.icao24)}
+                  className="p-1.5 text-alert-red/40 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
+                  title="Remove from watchlist"
+                >
+                  <Trash2 size={11} />
+                </button>
+              )}
             </div>
+
           ))}
         </div>
       ) : (

@@ -867,8 +867,10 @@ function App() {
   }
 
   if (authStatus === 'authenticated') {
+    const { hasRole } = useAuth();
     const isStatsRoute = window.location.pathname === '/stats';
-    if (isStatsRoute) {
+
+    if (isStatsRoute && hasRole('admin')) {
       return (
         <Suspense fallback={
           <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0f0] font-mono animate-pulse">

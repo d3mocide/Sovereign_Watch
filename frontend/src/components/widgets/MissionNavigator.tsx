@@ -1,5 +1,7 @@
+import { useAuth } from '../../hooks/useAuth';
 import React, { useState } from 'react';
-import { MapPin, Trash2, ChevronDown, Crosshair, Plane, Building2, Waves, Globe2 } from 'lucide-react';
+import { MapPin, Trash2, ChevronDown, Crosshair, Plane, Building2, Waves, Globe2, Lock } from 'lucide-react';
+
 import { MissionLocation } from '../../types';
 
 // Mission Presets - aligned with documentation
@@ -25,7 +27,10 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
   onDeleteMission,
   onPresetSelect,
 }) => {
+  const { hasRole } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const isOperator = hasRole('operator');
+
 
   return (
     <div className="flex flex-col overflow-visible widget-panel">
@@ -61,39 +66,47 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
       {expanded && (
         <div id="mission-navigator-content" className="p-2 space-y-3">
           {/* Mission Presets */}
-          <div>
-            <div className="text-[9px] text-white/30 uppercase tracking-wide mb-1.5">
-              Quick Select
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {MISSION_PRESETS.map((preset) => {
-                const Icon = preset.icon;
-                const isActive = currentMission?.radius_nm === preset.radius;
-                return (
-                  <button
-                    key={preset.label}
-                    onClick={() => onPresetSelect(preset.radius)}
-                    className={`rounded px-2 py-1.5 transition-all group text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none flex items-center justify-between ${
-                      isActive 
-                        ? 'bg-hud-green/10 border border-hud-green/50 shadow-[0_0_10px_rgba(74,222,128,0.1)]' 
-                        : 'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-hud-green/30'
-                    }`}
-                    aria-label={`Select ${preset.label} preset`}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Icon size={12} className={isActive ? 'text-hud-green' : preset.color} aria-hidden="true" />
-                      <span className={`text-[10px] font-medium truncate ${isActive ? 'text-white' : 'text-white/80'}`}>
-                        {preset.label}
+          {isOperator ? (
+            <div>
+              <div className="text-[9px] text-white/30 uppercase tracking-wide mb-1.5">
+                Quick Select
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {MISSION_PRESETS.map((preset) => {
+                  const Icon = preset.icon;
+                  const isActive = currentMission?.radius_nm === preset.radius;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => onPresetSelect(preset.radius)}
+                      className={`rounded px-2 py-1.5 transition-all group text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none flex items-center justify-between ${
+                        isActive 
+                          ? 'bg-hud-green/10 border border-hud-green/50 shadow-[0_0_10px_rgba(74,222,128,0.1)]' 
+                          : 'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-hud-green/30'
+                      }`}
+                      aria-label={`Select ${preset.label} preset`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Icon size={12} className={isActive ? 'text-hud-green' : preset.color} aria-hidden="true" />
+                        <span className={`text-[10px] font-medium truncate ${isActive ? 'text-white' : 'text-white/80'}`}>
+                          {preset.label}
+                        </span>
+                      </div>
+                      <span className={`text-[9px] font-mono pl-1 shrink-0 ${isActive ? 'text-hud-green/80' : 'text-white/40'}`}>
+                        {preset.radius}nm
                       </span>
-                    </div>
-                    <span className={`text-[9px] font-mono pl-1 shrink-0 ${isActive ? 'text-hud-green/80' : 'text-white/40'}`}>
-                      {preset.radius}nm
-                    </span>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="px-2 py-1 bg-white/5 border border-white/10 rounded flex items-center gap-2">
+              <Lock size={10} className="text-white/30" />
+              <span className="text-[9px] text-white/30 font-bold tracking-wider uppercase">Mission Configuration: Operator Only</span>
+            </div>
+          )}
+
 
           {/* Saved Locations */}
           {savedMissions.length > 0 && (
@@ -122,14 +135,17 @@ export const MissionNavigator: React.FC<MissionNavigatorProps> = ({
                         {mission.lat.toFixed(2)}°, {mission.lon.toFixed(2)}° • {mission.radius_nm}nm
                       </span>
                     </button>
-                    <button
-                      onClick={() => onDeleteMission(mission.id)}
-                      className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 text-red-400/60 hover:text-red-400 hover:bg-white/5 transition-all p-2 rounded-r focus-visible:ring-1 focus-visible:ring-red-400 outline-none flex items-center justify-center"
-                      aria-label={`Delete mission ${mission.name}`}
-                    >
-                      <Trash2 size={12} aria-hidden="true" />
-                    </button>
+                    {isOperator && (
+                      <button
+                        onClick={() => onDeleteMission(mission.id)}
+                        className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 text-red-400/60 hover:text-red-400 hover:bg-white/5 transition-all p-2 rounded-r focus-visible:ring-1 focus-visible:ring-red-400 outline-none flex items-center justify-center"
+                        aria-label={`Delete mission ${mission.name}`}
+                      >
+                        <Trash2 size={12} aria-hidden="true" />
+                      </button>
+                    )}
                   </li>
+
                 ))}
               </ul>
             </div>

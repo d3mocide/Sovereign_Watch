@@ -4,7 +4,7 @@ from core.auth import require_role
 
 from core.database import db
 
-router = APIRouter(dependencies=[Depends(require_role("viewer"))])
+router = APIRouter(dependencies=[Depends(require_role("admin"))])
 
 logger = logging.getLogger("SovereignWatch.Stats")
 

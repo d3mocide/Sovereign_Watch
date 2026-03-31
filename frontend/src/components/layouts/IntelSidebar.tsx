@@ -13,8 +13,10 @@ import {
   FileText,
   Globe2,
   RefreshCw,
+  Lock,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
 /* intel style imports removed */
 
 export interface ActorEntry {
@@ -119,6 +121,8 @@ export function IntelSidebar({
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [timeWindow, setTimeWindow] = useState<24 | 48 | 72>(24);
+  const { hasRole } = useAuth();
+  const isOperator = hasRole('operator');
 
   const fetchActors = useCallback(
     async (bypassCache = false) => {
@@ -384,19 +388,23 @@ export function IntelSidebar({
         {onGenerateSitrep && (
           <button
             onClick={handleSitrep}
-            disabled={!actors.length}
+            disabled={!actors.length || !isOperator}
             className={`w-full group relative flex items-center justify-center gap-3 px-4 py-2 rounded-sm text-[10px] font-black tracking-[.4em] transition-all overflow-hidden ${
-              actors.length
+              actors.length && isOperator
                 ? "bg-hud-green/10 border border-hud-green/40 text-hud-green hover:bg-hud-green/20 hover:shadow-[0_0_20px_rgba(0,255,65,0.2)]"
-                : "bg-white/5 border border-white/10 text-white/20 cursor-not-allowed"
+                : "bg-white/5 border border-white/10 text-white/20 cursor-not-allowed opacity-50"
             }`}
           >
             <div className="absolute top-0 left-0 w-full h-[1px] bg-hud-green/30 group-hover:bg-hud-green/60 transition-all" />
-            <FileText
-              size={12}
-              className="group-hover:scale-110 transition-transform"
-            />
-            <span className="uppercase">Generate AI Sitrep</span>
+            {isOperator ? (
+              <FileText
+                size={12}
+                className="group-hover:scale-110 transition-transform"
+              />
+            ) : (
+              <Lock size={12} className="opacity-50" />
+            )}
+            <span className="uppercase">{isOperator ? "Generate AI Sitrep" : "SITREP Locked"}</span>
           </button>
         )}
       </div>

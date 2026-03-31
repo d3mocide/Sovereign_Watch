@@ -1,5 +1,7 @@
+import { useAuth } from '../../hooks/useAuth';
 import React from 'react';
-import { Crosshair, Save, Home, MapPin } from 'lucide-react';
+import { Crosshair, Save, Home, MapPin, Lock } from 'lucide-react';
+
 
 interface MapContextMenuProps {
   position: { x: number; y: number } | null;
@@ -18,6 +20,9 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
   onReturnHome,
   onClose,
 }) => {
+  const { hasRole } = useAuth();
+  const isOperator = hasRole('operator');
+
   if (!position || !coordinates) return null;
 
   const handleSetFocus = () => {
@@ -63,29 +68,39 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
 
           {/* Menu Items */}
           <div className="py-1">
-            <button
-              onClick={handleSetFocus}
-              className="w-full px-3 py-2 flex items-center gap-3 hover:bg-hud-green/10 transition-colors group text-left"
-            >
-              <Crosshair size={14} className="text-hud-green/60 group-hover:text-hud-green" />
-              <div>
-                <div className="text-xs text-white/90 group-hover:text-white font-medium">Set Focus Here</div>
-                <div className="text-[10px] text-white/40">Pivot surveillance to this area</div>
-              </div>
-            </button>
+            {isOperator ? (
+              <>
+                <button
+                  onClick={handleSetFocus}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-hud-green/10 transition-colors group text-left"
+                >
+                  <Crosshair size={14} className="text-hud-green/60 group-hover:text-hud-green" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Set Focus Here</div>
+                    <div className="text-[10px] text-white/40">Pivot surveillance to this area</div>
+                  </div>
+                </button>
 
-            <button
-              onClick={handleSaveLocation}
-              className="w-full px-3 py-2 flex items-center gap-3 hover:bg-cyan-500/10 transition-colors group text-left"
-            >
-              <Save size={14} className="text-cyan-400/60 group-hover:text-cyan-400" />
-              <div>
-                <div className="text-xs text-white/90 group-hover:text-white font-medium">Save Location As...</div>
-                <div className="text-[10px] text-white/40">Add to mission library</div>
-              </div>
-            </button>
+                <button
+                  onClick={handleSaveLocation}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-cyan-500/10 transition-colors group text-left"
+                >
+                  <Save size={14} className="text-cyan-400/60 group-hover:text-cyan-400" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Save Location As...</div>
+                    <div className="text-[10px] text-white/40">Add to mission library</div>
+                  </div>
+                </button>
+              </>
+            ) : (
+                <div className="px-3 py-2 flex items-center gap-2 opacity-50 select-none">
+                    <Lock size={12} className="text-hud-green/40" />
+                    <span className="text-[10px] font-bold tracking-widest text-white/30 uppercase">Modify Area: Operator Only</span>
+                </div>
+            )}
 
             <div className="border-t border-white/5 my-1" />
+
 
             <button
               onClick={handleReturnHome}

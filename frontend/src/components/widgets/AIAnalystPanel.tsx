@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, Copy, Check, Loader2, AlertTriangle, X, Settings, Activity } from 'lucide-react';
+import { BrainCircuit, Copy, Check, Loader2, AlertTriangle, X, Settings, Activity, Lock } from 'lucide-react';
 import { useAnalysis } from '../../hooks/useAnalysis';
 import { useAIConfig } from '../../hooks/useAIConfig';
+import { useAuth } from '../../hooks/useAuth';
 import { CoTEntity } from '../../types';
 
 interface AIAnalystPanelProps {
@@ -136,7 +137,11 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
 }) => {
   const { text, isStreaming, error, generatedAt, run, reset } = useAnalysis();
   const { config: aiConfig, isSaving, selectModel } = useAIConfig();
+  const { hasRole } = useAuth();
   const entityUid = entity?.uid;
+
+  const isOperator = hasRole('operator');
+  const isAdmin = hasRole('admin');
 
   const [lookback, setLookback] = useState(1);
   const [mode, setMode] = useState('tactical');
@@ -182,14 +187,16 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   useEffect(() => {
     // If the panel just opened and we have a trigger, or the trigger changed while open
     if (isOpen && entityUid && autoRunTrigger && (autoRunTrigger !== lastStateRef.current.autoRunTrigger || !lastStateRef.current.isOpen)) {
-      const sitrepContext = isSitrep ? entity?.detail?.sitrep_context : undefined;
-      run(entityUid, lookback, mode, sitrepContext);
+      if (isOperator) {
+        const sitrepContext = isSitrep ? entity?.detail?.sitrep_context : undefined;
+        run(entityUid, lookback, mode, sitrepContext);
+      }
     }
     lastStateRef.current = { entityUid, autoRunTrigger, isOpen };
-  }, [autoRunTrigger, isOpen, entityUid, lookback, mode, run, entity, isSitrep]);
+  }, [autoRunTrigger, isOpen, entityUid, lookback, mode, run, entity, isSitrep, isOperator]);
 
   const handleRun = () => {
-    if (!entity) return;
+    if (!entity || !isOperator) return;
     const sitrepContext = isSitrep ? entity.detail?.sitrep_context : undefined;
     run(entity.uid, lookback, mode, sitrepContext);
   };
@@ -299,13 +306,15 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5 relative z-10">
-            <button
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-1.5 rounded-sm transition-all ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
-              title="AI Engine Settings"
-            >
-              <Settings size={13} />
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-1.5 rounded-sm transition-all ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
+                title="AI Engine Settings"
+              >
+                <Settings size={13} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 hover:bg-red-500/10 rounded-sm text-white/30 hover:text-red-400 transition-all group"
@@ -408,11 +417,14 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
               ) : (
                 <button
                   onClick={handleRun}
-                  disabled={!entity}
-                  className={`group relative flex items-center justify-center h-9 px-6 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-20 disabled:grayscale`}
+                  disabled={!entity || !isOperator}
+                  className={`group relative flex items-center justify-center h-9 px-6 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <div className={`absolute top-0 left-0 w-full h-[1px] ${accentColor.replace('text-', 'bg-')} group-hover:animate-pulse opacity-50`} />
-                  <span className="text-[10px] font-black tracking-[.4em] uppercase">Run</span>
+                  {!isOperator && <Lock size={10} className="mr-2 opacity-50" />}
+                  <span className="text-[10px] font-black tracking-[.4em] uppercase">
+                    {isOperator ? 'Run' : 'Locked'}
+                  </span>
                 </button>
               )}
             </div>

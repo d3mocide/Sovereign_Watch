@@ -5,8 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import yaml
+from core.auth import require_role
 from core.database import db
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from sgp4.api import Satrec, jday
@@ -40,7 +41,7 @@ def _load_model_map() -> dict:
 
 _MODEL_MAP = _load_model_map()
 
-@router.post("/api/analyze/{uid}")
+@router.post("/api/analyze/{uid}", dependencies=[Depends(require_role("operator"))])
 async def analyze_track(
     request: Request, req: AnalyzeRequest, uid: str = Path(..., max_length=100)
 ):

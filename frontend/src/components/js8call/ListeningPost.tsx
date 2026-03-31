@@ -16,8 +16,10 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  Lock,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
 import {
   sdrWaterfallColor,
   WF_CMAPS,
@@ -123,6 +125,9 @@ export default function ListeningPost({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const { hasRole } = useAuth();
+  const isOperator = hasRole('operator');
 
   // State
   const [localFreq, setLocalFreq] = useState<number>(
@@ -371,6 +376,7 @@ export default function ListeningPost({
 
   const tune = useCallback(
     (freq: number, mode: KiwiMode) => {
+      if (!isOperator) return;
       if (!activeKiwiConfig || !bridgeConnected) return;
       const clamped = Math.max(0, Math.min(30000, freq));
       setLocalFreq(clamped);
@@ -443,15 +449,16 @@ export default function ListeningPost({
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest text-left">
                   Central Frequency
                 </span>
-                <div className="flex items-baseline justify-between bg-black/40 border border-[#1a2b36] rounded-md px-3 py-2.5 group hover:border-cyan-500/30 transition-all duration-300">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-cyan-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-                      {localFreq.toFixed(2)}
-                    </span>
-                    <span className="text-xl font-bold text-cyan-900 uppercase">
-                      kHz
-                    </span>
-                  </div>
+                    <div className="flex items-baseline justify-between bg-black/40 border border-[#1a2b36] rounded-md px-3 py-2.5 group hover:border-cyan-500/30 transition-all duration-300">
+                    <div className="flex items-baseline gap-2">
+                      {!isOperator && <Lock size={12} className="text-slate-600 mr-1" />}
+                      <span className="text-3xl font-bold text-cyan-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                        {localFreq.toFixed(2)}
+                      </span>
+                      <span className="text-xl font-bold text-cyan-900 uppercase">
+                        kHz
+                      </span>
+                    </div>
                   {activeKiwiConfig?.freq !== localFreq && (
                     <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
                       <Activity
@@ -471,10 +478,11 @@ export default function ListeningPost({
                 {[100, 10, 1, -100, -10, -1].map((delta) => (
                   <button
                     key={delta}
-                    onClick={() => step(delta)}
-                    className="py-1.5 bg-[#111d27] border border-[#1a2b36] rounded hover:bg-cyan-950/30 hover:border-cyan-500/50 transition-all active:scale-95 text-cyan-400 font-bold text-[10px]"
+                    onClick={() => isOperator && step(delta)}
+                    disabled={!isOperator}
+                    className="py-1.5 bg-[#111d27] border border-[#1a2b36] rounded hover:bg-cyan-950/30 hover:border-cyan-500/50 transition-all active:scale-95 text-cyan-400 font-bold text-[10px] disabled:opacity-20 disabled:cursor-not-allowed"
                   >
-                    {delta > 0 ? `+${delta}` : delta}
+                    {!isOperator ? <Lock size={10} className="mx-auto" /> : (delta > 0 ? `+${delta}` : delta)}
                   </button>
                 ))}
               </div>
@@ -492,12 +500,13 @@ export default function ListeningPost({
                     return (
                       <button
                         key={m}
-                        onClick={() => tune(localFreq, m)}
+                        onClick={() => isOperator && tune(localFreq, m)}
+                        disabled={!isOperator}
                         className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
                           localMode === m
                             ? "bg-emerald-600/20 border border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
                             : "bg-black/30 border border-[#1a2b36] text-slate-600 hover:text-slate-400"
-                        }`}
+                        } disabled:opacity-30 disabled:cursor-not-allowed`}
                       >
                         {info.label}
                       </button>
@@ -520,14 +529,15 @@ export default function ListeningPost({
                 return (
                   <button
                     key={b.label}
-                    onClick={() => tune(b.freq, localMode)}
+                    onClick={() => isOperator && tune(b.freq, localMode)}
+                    disabled={!isOperator}
                     className={`py-1.5 rounded text-[10px] uppercase transition-all ${
                       active
                         ? "bg-amber-500/20 border border-amber-500/50 text-amber-500"
                         : "bg-black/20 border border-[#1a2b36] text-slate-600 hover:bg-black/40"
-                    }`}
+                    } disabled:opacity-30 disabled:cursor-not-allowed`}
                   >
-                    {b.label}
+                    {!isOperator ? <Lock size={10} className="mx-auto" /> : b.label}
                   </button>
                 );
               })}
@@ -620,15 +630,15 @@ export default function ListeningPost({
             </button>
             <button
               onClick={() => {
-                if (bridgeConnected) {
+                if (isOperator && bridgeConnected) {
                   setIsDisconnecting(true);
                   sendAction({ action: "DISCONNECT_KIWI" });
                 }
               }}
-              disabled={isDisconnecting}
-              className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase transition-all shadow-[0_0_10px_rgba(244,63,94,0.1)] ${isDisconnecting ? "bg-rose-900/40 border-rose-900 text-rose-700 cursor-not-allowed" : "bg-rose-600/20 border border-rose-500 text-rose-300 hover:bg-rose-500 hover:text-white"}`}
+              disabled={isDisconnecting || !isOperator}
+              className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase transition-all shadow-[0_0_10px_rgba(244,63,94,0.1)] ${isDisconnecting ? "bg-rose-900/40 border-rose-900 text-rose-700 cursor-not-allowed" : "bg-rose-600/20 border border-rose-500 text-rose-300 hover:bg-rose-500 hover:text-white"} disabled:opacity-20 disabled:cursor-not-allowed`}
             >
-              {isDisconnecting ? "Stopping..." : "Stop"}
+              {!isOperator ? <Lock size={12} className="mx-auto" /> : (isDisconnecting ? "Stopping..." : "Stop")}
             </button>
           </div>
 
@@ -654,8 +664,8 @@ export default function ListeningPost({
 
         {/* Frequency Scale Overlay */}
         <div
-          className="absolute top-7 left-0 right-0 h-8 flex justify-between px-4 border-t border-cyan-500/20 bg-black/80 backdrop-blur-sm cursor-pointer z-20 pointer-events-auto"
-          onClick={handleScaleClick}
+          className={`absolute top-7 left-0 right-0 h-8 flex justify-between px-4 border-t border-cyan-500/20 bg-black/80 backdrop-blur-sm ${isOperator ? 'cursor-pointer' : 'cursor-not-allowed'} z-20 pointer-events-auto`}
+          onClick={(e) => isOperator && handleScaleClick(e)}
         >
           {/* Passband Indicator (Green Bar) */}
           {activeKiwiConfig && (
@@ -770,6 +780,7 @@ export default function ListeningPost({
               <div className="flex gap-1">
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = true;
                     setAgcOn(next);
                     if (activeKiwiConfig && bridgeConnected)
@@ -779,12 +790,14 @@ export default function ListeningPost({
                         man_gain: manGain,
                       });
                   }}
-                  className={`flex-1 py-1 rounded-l border text-[9px] font-bold transition-all ${agcOn ? "bg-cyan-600/20 border-cyan-500 text-cyan-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                  disabled={!isOperator}
+                  className={`flex-1 py-1 rounded-l border text-[9px] font-bold transition-all ${agcOn ? "bg-cyan-600/20 border-cyan-500 text-cyan-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                 >
-                  AGC
+                  {isOperator ? "AGC" : <Lock size={10} className="mx-auto" />}
                 </button>
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = false;
                     setAgcOn(next);
                     if (activeKiwiConfig && bridgeConnected)
@@ -794,9 +807,10 @@ export default function ListeningPost({
                         man_gain: manGain,
                       });
                   }}
-                  className={`flex-1 py-1 rounded-r border text-[9px] font-bold transition-all ${!agcOn ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                  disabled={!isOperator}
+                  className={`flex-1 py-1 rounded-r border text-[9px] font-bold transition-all ${!agcOn ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                 >
-                  MAN
+                  {isOperator ? "MAN" : <Lock size={10} className="mx-auto" />}
                 </button>
               </div>
               <input
@@ -804,13 +818,15 @@ export default function ListeningPost({
                 min={0}
                 max={120}
                 value={manGain}
+                disabled={!isOperator}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (!isOperator) return;
                   const val = parseInt(e.target.value);
                   setManGain(val);
                   if (activeKiwiConfig && bridgeConnected)
                     sendAction({ action: "SET_AGC", agc: agcOn, man_gain: val });
                 }}
-                className="w-full h-1 accent-cyan-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
+                className={`w-full h-1 accent-cyan-500 bg-[#1a2b36] rounded appearance-none ${isOperator ? 'cursor-pointer' : 'cursor-not-allowed opacity-20'}`}
               />
             </div>
 
@@ -829,7 +845,9 @@ export default function ListeningPost({
                 min={0}
                 max={100}
                 value={sql}
+                disabled={!isOperator}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (!isOperator) return;
                   const val = parseInt(e.target.value);
                   setSql(val);
                   if (activeKiwiConfig && bridgeConnected) {
@@ -841,7 +859,7 @@ export default function ListeningPost({
                     });
                   }
                 }}
-                className="w-full h-1 accent-indigo-500 bg-[#1a2b36] rounded appearance-none cursor-pointer"
+                className={`w-full h-1 accent-indigo-500 bg-[#1a2b36] rounded appearance-none ${isOperator ? 'cursor-pointer' : 'cursor-not-allowed opacity-20'}`}
               />
               <div className="flex justify-between items-end">
                 <span className="text-[9px] text-slate-600 uppercase">
@@ -907,6 +925,7 @@ export default function ListeningPost({
                 </span>
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = !nbEnabled;
                     setNbEnabled(next);
                     if (activeKiwiConfig && bridgeConnected)
@@ -917,9 +936,10 @@ export default function ListeningPost({
                         thresh_percent: nbThresh,
                       });
                   }}
-                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${nbEnabled ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                  disabled={!isOperator}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${nbEnabled ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                 >
-                  {nbEnabled ? "ON" : "OFF"}
+                  {isOperator ? (nbEnabled ? "ON" : "OFF") : <Lock size={10} />}
                 </button>
               </div>
               <div className="flex justify-between items-end">
@@ -989,17 +1009,19 @@ export default function ListeningPost({
                   <button
                     key={val}
                     onClick={() => {
+                      if (!isOperator) return;
                       setDeEmp(val);
                       if (activeKiwiConfig && bridgeConnected)
                         sendAction({ action: "SET_DE_EMP", de_emp: val });
                     }}
+                    disabled={!isOperator}
                     className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${
                       deEmp === val
                         ? "bg-cyan-600/20 border-cyan-500 text-cyan-300"
                         : "bg-black/20 border-[#1a2b36] text-slate-600 hover:text-slate-400"
-                    }`}
+                    } disabled:opacity-20`}
                   >
-                    {label}
+                    {isOperator ? label : <Lock size={10} className="mx-auto" />}
                   </button>
                 ))}
               </div>
@@ -1088,25 +1110,29 @@ export default function ListeningPost({
               <div className="flex gap-1">
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = !nrEnabled;
                     setNrEnabled(next);
                     if (activeKiwiConfig && bridgeConnected)
                       sendAction({ action: "SET_NR", enabled: next, param: 0 });
                   }}
-                  className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nrEnabled ? "bg-teal-600/20 border-teal-500 text-teal-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                  disabled={!isOperator}
+                  className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nrEnabled ? "bg-teal-600/20 border-teal-500 text-teal-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                 >
-                  NR {nrEnabled ? "ON" : "OFF"}
+                  {isOperator ? `NR ${nrEnabled ? "ON" : "OFF"}` : <Lock size={10} className="mx-auto" />}
                 </button>
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = !nfEnabled;
                     setNfEnabled(next);
                     if (activeKiwiConfig && bridgeConnected)
                       sendAction({ action: "SET_NF", enabled: next, param: 0 });
                   }}
-                  className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nfEnabled ? "bg-sky-600/20 border-sky-500 text-sky-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                  disabled={!isOperator}
+                  className={`flex-1 py-1 rounded border text-[9px] font-bold transition-all ${nfEnabled ? "bg-sky-600/20 border-sky-500 text-sky-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                 >
-                  NF {nfEnabled ? "ON" : "OFF"}
+                  {isOperator ? `NF ${nfEnabled ? "ON" : "OFF"}` : <Lock size={10} className="mx-auto" />}
                 </button>
               </div>
             </div>
@@ -1130,13 +1156,15 @@ export default function ListeningPost({
                   <button
                     key={db}
                     onClick={() => {
+                      if (!isOperator) return;
                       setRfAttn(db);
                       if (activeKiwiConfig && bridgeConnected)
                         sendAction({ action: "SET_RF_ATTN", db });
                     }}
-                    className={`flex-1 py-1 rounded border text-[10px] font-bold border-[#1a2b36] transition-all ${rfAttn === db ? "bg-amber-500/20 text-amber-400 border-amber-500/40" : "bg-black/20 text-slate-500 hover:bg-black/40"}`}
+                    disabled={!isOperator}
+                    className={`flex-1 py-1 rounded border text-[10px] font-bold border-[#1a2b36] transition-all ${rfAttn === db ? "bg-amber-500/20 text-amber-400 border-amber-500/40" : "bg-black/20 text-slate-500 hover:bg-black/40"} disabled:opacity-20 disabled:cursor-not-allowed`}
                   >
-                    {db}
+                    {!isOperator && rfAttn !== db ? <Lock size={10} className="mx-auto" /> : db}
                   </button>
                 ))}
               </div>
@@ -1161,17 +1189,19 @@ export default function ListeningPost({
                   <button
                     key={index}
                     onClick={() => {
+                      if (!isOperator) return;
                       setWfCmap(index);
                       if (activeKiwiConfig && bridgeConnected)
                         sendAction({ action: "SET_CMAP", index });
                     }}
+                    disabled={!isOperator}
                     className={`py-1 rounded border text-[9px] font-bold transition-all ${
                       wfCmap === index
                         ? "bg-emerald-600/20 border-emerald-500 text-emerald-300"
                         : "bg-black/20 border-[#1a2b36] text-slate-600 hover:text-slate-400"
-                    }`}
+                    } disabled:opacity-20`}
                   >
-                    {label}
+                    {isOperator ? label : <Lock size={10} className="mx-auto" />}
                   </button>
                 ))}
               </div>
@@ -1188,6 +1218,7 @@ export default function ListeningPost({
                 <div className="flex gap-1">
                   <button
                     onClick={() => {
+                      if (!isOperator) return;
                       setWfAperture(true);
                       if (activeKiwiConfig && bridgeConnected)
                         sendAction({
@@ -1197,12 +1228,14 @@ export default function ListeningPost({
                           param: 0,
                         });
                     }}
-                    className={`px-2 py-0.5 rounded-l border text-[9px] font-bold transition-all ${wfAperture ? "bg-cyan-600/20 border-cyan-500 text-cyan-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                    disabled={!isOperator}
+                    className={`px-2 py-0.5 rounded-l border text-[9px] font-bold transition-all ${wfAperture ? "bg-cyan-600/20 border-cyan-500 text-cyan-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                   >
-                    AUTO
+                    {isOperator ? "AUTO" : <Lock size={10} />}
                   </button>
                   <button
                     onClick={() => {
+                      if (!isOperator) return;
                       setWfAperture(false);
                       if (activeKiwiConfig && bridgeConnected)
                         sendAction({
@@ -1212,9 +1245,10 @@ export default function ListeningPost({
                           param: 0,
                         });
                     }}
-                    className={`px-2 py-0.5 rounded-r border text-[9px] font-bold transition-all ${!wfAperture ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"}`}
+                    disabled={!isOperator}
+                    className={`px-2 py-0.5 rounded-r border text-[9px] font-bold transition-all ${!wfAperture ? "bg-amber-600/20 border-amber-500 text-amber-300" : "bg-black/30 border-[#1a2b36] text-slate-600"} disabled:opacity-20`}
                   >
-                    MAN
+                    {isOperator ? "MAN" : <Lock size={10} />}
                   </button>
                 </div>
               </div>
@@ -1249,22 +1283,26 @@ export default function ListeningPost({
               <div className="flex gap-2">
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = Math.max(0, zoom - 1);
                     setZoom(next);
                     sendAction({ action: "SET_ZOOM", zoom: next });
                   }}
-                  className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-slate-400 hover:text-white hover:bg-black/60 transition-all flex items-center justify-center gap-1"
+                  disabled={!isOperator}
+                  className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-slate-400 hover:text-white hover:bg-black/60 transition-all flex items-center justify-center gap-1 disabled:opacity-20 disabled:cursor-not-allowed"
                 >
                   <ChevronDown className="w-3 h-3" />
                   OUT (-)
                 </button>
                 <button
                   onClick={() => {
+                    if (!isOperator) return;
                     const next = Math.min(10, zoom + 1);
                     setZoom(next);
                     sendAction({ action: "SET_ZOOM", zoom: next });
                   }}
-                  className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-900/20 transition-all flex items-center justify-center gap-1"
+                  disabled={!isOperator}
+                  className="flex-1 py-1.5 bg-black/40 border border-[#1a2b36] rounded text-[10px] font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-900/20 transition-all flex items-center justify-center gap-1 disabled:opacity-20 disabled:cursor-not-allowed"
                 >
                   <ChevronUp className="w-3 h-3" />
                   IN (+)
