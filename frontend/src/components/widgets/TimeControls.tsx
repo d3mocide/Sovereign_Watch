@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, X } from 'lucide-react';
 
 interface TimeControlsProps {
     isOpen: boolean;
@@ -27,7 +27,8 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
     onTogglePlay,
     onSeek,
     onSpeedChange,
-    onDurationChange
+    onDurationChange,
+    onClose,
 }) => {
     if (!isOpen) return null;
 
@@ -114,12 +115,21 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                         </div>
                     </div>
 
-                    {/* Right: Time Display */}
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_5px_#f59e0b]" />
-                        <span className="text-sm font-bold tabular-nums tracking-wider text-hud-green leading-none text-right min-w-[90px] drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
-                            {formatTime(currentTime)}
-                        </span>
+                    {/* Right: Time Display + Close */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_5px_#f59e0b]" />
+                            <span className="text-sm font-bold tabular-nums tracking-wider text-hud-green leading-none text-right min-w-[90px] drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
+                                {formatTime(currentTime)}
+                            </span>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            aria-label="Exit replay mode"
+                            className="w-6 h-6 flex items-center justify-center rounded text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+                        >
+                            <X size={12} />
+                        </button>
                     </div>
                 </div>
             </div>
