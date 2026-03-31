@@ -16,15 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      frontend:    ${{ steps.filter.outputs.frontend }}
-      api:         ${{ steps.filter.outputs.api }}
-      aviation:    ${{ steps.filter.outputs.aviation }}
-      maritime:    ${{ steps.filter.outputs.maritime }}
-      space-pulse: ${{ steps.filter.outputs.space-pulse }}
-      rf-pulse:    ${{ steps.filter.outputs.rf-pulse }}
-      infra-poller: ${{ steps.filter.outputs.infra-poller }}
-      gdelt-pulse: ${{ steps.filter.outputs.gdelt-pulse }}
-      js8call:     ${{ steps.filter.outputs.js8call }}
+      frontend:     ${{ steps.filter.outputs.frontend }}
+      api:          ${{ steps.filter.outputs.api }}
+      aviation:     ${{ steps.filter.outputs.aviation }}
+      maritime:     ${{ steps.filter.outputs.maritime }}
+      space-pulse:  ${{ steps.filter.outputs['space-pulse'] }}
+      rf-pulse:     ${{ steps.filter.outputs['rf-pulse'] }}
+      infra-poller: ${{ steps.filter.outputs['infra-poller'] }}
+      gdelt-pulse:  ${{ steps.filter.outputs['gdelt-pulse'] }}
+      js8call:      ${{ steps.filter.outputs.js8call }}
     steps:
       # Pin to immutable SHA to prevent supply-chain attacks via tag mutation.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
