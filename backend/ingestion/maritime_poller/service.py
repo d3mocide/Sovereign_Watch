@@ -93,7 +93,7 @@ class MaritimePollerService:
         self.redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
         self.pubsub = self.redis_client.pubsub()
         await self.pubsub.subscribe("navigation-updates")
-        logger.info(f"📡 Redis pub/sub subscribed to navigation-updates")
+        logger.info("📡 Redis pub/sub subscribed to navigation-updates")
 
         # Load active mission from Redis if exists
         await self.load_active_mission()
@@ -130,7 +130,7 @@ class MaritimePollerService:
     async def _schedule_bbox_reconnect(self):
         """Debounced helper: waits BBOX_DEBOUNCE_SECONDS, then signals a reconnect."""
         await asyncio.sleep(BBOX_DEBOUNCE_SECONDS)
-        logger.info(f"🔄 Bbox debounce elapsed — signalling AISStream reconnect")
+        logger.info("🔄 Bbox debounce elapsed — signalling AISStream reconnect")
         self.reconnect_event.set()
 
     async def navigation_listener(self):
@@ -246,13 +246,19 @@ class MaritimePollerService:
 
         cache = self.vessel_static_cache[mmsi]
 
-        if "Type" in msg: cache["type"] = msg["Type"]
-        elif "ShipType" in msg: cache["type"] = msg["ShipType"]
+        if "Type" in msg:
+            cache["type"] = msg["Type"]
+        elif "ShipType" in msg:
+            cache["type"] = msg["ShipType"]
 
-        if "ImoNumber" in msg: cache["imo"] = msg["ImoNumber"]
-        if "CallSign" in msg: cache["callsign"] = msg["CallSign"]
-        if "Name" in msg: cache["name"] = msg["Name"].strip()
-        elif "ShipName" in msg: cache["name"] = msg["ShipName"].strip()
+        if "ImoNumber" in msg:
+            cache["imo"] = msg["ImoNumber"]
+        if "CallSign" in msg:
+            cache["callsign"] = msg["CallSign"]
+        if "Name" in msg:
+            cache["name"] = msg["Name"].strip()
+        elif "ShipName" in msg:
+            cache["name"] = msg["ShipName"].strip()
 
         if "Dimension" in msg:
             dim = msg["Dimension"]
@@ -261,10 +267,14 @@ class MaritimePollerService:
             cache["dimension_c"] = dim.get("C", 0)
             cache["dimension_d"] = dim.get("D", 0)
 
-        if "MaximumStaticDraught" in msg: cache["draught"] = msg["MaximumStaticDraught"]
-        if "Destination" in msg: cache["destination"] = msg["Destination"].strip()
-        if "Eta" in msg: cache["eta"] = msg["Eta"]
-        if "FixType" in msg: cache["fix_type"] = msg["FixType"]
+        if "MaximumStaticDraught" in msg:
+            cache["draught"] = msg["MaximumStaticDraught"]
+        if "Destination" in msg:
+            cache["destination"] = msg["Destination"].strip()
+        if "Eta" in msg:
+            cache["eta"] = msg["Eta"]
+        if "FixType" in msg:
+            cache["fix_type"] = msg["FixType"]
 
         cache["last_seen"] = datetime.utcnow()
         name = cache.get("name", "Unknown")
@@ -496,7 +506,8 @@ class MaritimePollerService:
 
                         if self.reconnect_event.is_set():
                             logger.info("🔄 Reconnect signal received - closing current stream")
-                            for task in pending: task.cancel()
+                            for task in pending:
+                                task.cancel()
                             break
 
                         if message_task in done:

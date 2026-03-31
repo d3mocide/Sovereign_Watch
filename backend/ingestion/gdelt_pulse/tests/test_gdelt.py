@@ -5,7 +5,7 @@ import csv
 import io
 import json
 import zipfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 import asyncio
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -21,7 +21,7 @@ _tenacity_stub.wait_exponential = MagicMock(return_value=None)
 _tenacity_stub.stop_after_attempt = MagicMock(return_value=None)
 sys.modules.setdefault("tenacity", _tenacity_stub)
 
-from service import GDELTPulseService
+from service import GDELTPulseService  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

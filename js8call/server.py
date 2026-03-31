@@ -1256,16 +1256,19 @@ async def ws_js8(websocket: WebSocket) -> None:
                 for ws in list(_audio_ws_clients):
                     try:
                         asyncio.ensure_future(ws.close(code=1000, reason="SDR Disconnected"))
-                    except Exception: pass
+                    except Exception:
+                        pass
                 _audio_ws_clients.clear()
 
                 for ws in list(_waterfall_ws_clients):
                     try:
                         asyncio.ensure_future(ws.close(code=1000, reason="SDR Disconnected"))
-                    except Exception: pass
+                    except Exception:
+                        pass
                 _waterfall_ws_clients.clear()
 
                 # Terminate PulseAudio bridge to stop local system audio leak
+                global _pacat_proc  # noqa: PLW0603
                 if _pacat_proc and _pacat_proc.poll() is None:
                     logger.info("KIWI: Terminating pacat bridge process %d", _pacat_proc.pid)
                     _pacat_proc.terminate()

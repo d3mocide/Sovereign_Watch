@@ -36,9 +36,6 @@ import hashlib
 import logging
 import time
 from typing import Callable, Optional, Dict
-import struct
-import aiohttp
-
 try:
     import websockets
     import websockets.exceptions as _wse
