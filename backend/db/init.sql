@@ -68,10 +68,10 @@ $$;
 -- hours uncompressed out of 72), but the reduction in I/O contention is significant.
 SELECT add_compression_policy('tracks', INTERVAL '4 hours');
 
--- Add Retention Policy (Auto-delete data older than 72 hours)
--- Matches TRACK_HISTORY_MAX_HOURS=72 in the API config.
--- 1-day chunks → 3 chunks retained; retention job drops the oldest daily.
-SELECT add_retention_policy('tracks', INTERVAL '72 hours');
+-- Add Retention Policy (Auto-delete data older than 7 days)
+-- Matches GDELT event retention for accurate multi-INT correlation.
+-- 1-day chunks → 7 chunks retained; retention job drops the oldest daily.
+SELECT add_retention_policy('tracks', INTERVAL '7 days');
 
 -- Indices
 CREATE INDEX IF NOT EXISTS ix_tracks_geom ON tracks USING GIST (geom);
