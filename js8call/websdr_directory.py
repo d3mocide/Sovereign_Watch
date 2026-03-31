@@ -16,7 +16,7 @@ import logging
 import math
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -268,7 +268,6 @@ async def _fetch_rxtx_info(session) -> list[WebSDRNode]:
     """
     try:
         import aiohttp
-        from html.parser import HTMLParser
     except ImportError:
         return []
 

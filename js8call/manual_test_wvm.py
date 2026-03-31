@@ -21,8 +21,9 @@ async def main():
                     print(f"Got Binary Frame: length={len(frame)}, prefix={frame[:10]}")
                 else:
                     print(f"Got Text Frame: {frame[:100]}")
-    except Exception as e:
-        import traceback; traceback.print_exc()
+    except Exception:
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     asyncio.run(main())
