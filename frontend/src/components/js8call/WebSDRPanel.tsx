@@ -212,12 +212,14 @@ export default function WebSDRPanel({
             <button
               onClick={openInNewTab}
               title="Open in new tab"
+              aria-label="Open in new tab"
               className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onClose}
+              aria-label="Close WebSDR panel"
               className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -264,6 +266,7 @@ export default function WebSDRPanel({
           <button
             onClick={() => applyTune(freqKhz, mode)}
             title="Reload"
+            aria-label="Reload WebSDR panel"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
