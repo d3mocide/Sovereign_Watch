@@ -12,8 +12,14 @@ from test_stubs import install_common_test_stubs  # noqa: E402
 # Mock heavy dependencies before importing main
 install_common_test_stubs(include_psutil=True)
 
+from core.auth import get_current_user # noqa: E402
 from main import app  # noqa: E402
 
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+    yield
+    app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
 async def test_get_activity_stats_no_pool():

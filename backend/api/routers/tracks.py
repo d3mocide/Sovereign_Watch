@@ -12,11 +12,12 @@ from uvicorn.protocols.utils import ClientDisconnected
 import httpx
 import numpy as np
 from sgp4.api import Satrec, jday as sgp4_jday
-from core.auth import _decode_token, get_user_by_id
+from core.auth import _decode_token, get_user_by_id, require_role
 from core.database import db
 from core.config import settings
 from services.broadcast import broadcast_service
 from utils.sgp4_utils import teme_to_ecef, ecef_to_lla_vectorized
+from fastapi import Depends
 
 
 def _jday(dt: datetime):
@@ -25,6 +26,7 @@ def _jday(dt: datetime):
                      dt.second + dt.microsecond / 1e6)
 
 router = APIRouter()
+_viewer_auth = [Depends(require_role("viewer"))]
 logger = logging.getLogger("SovereignWatch.Tracks")
 
 @router.websocket("/api/tracks/live")
@@ -79,7 +81,7 @@ async def websocket_endpoint(
     finally:
         await broadcast_service.disconnect(websocket)
 
-@router.get("/api/tracks/history/{entity_id}")
+@router.get("/api/tracks/history/{entity_id}", dependencies=_viewer_auth)
 async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     """
     Get raw track points for a specific entity.
@@ -187,7 +189,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         logger.error(f"History query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/api/tracks/search")
+@router.get("/api/tracks/search", dependencies=_viewer_auth)
 async def search_tracks(q: str, limit: int = 10):
     """
     Search for entities by ID or Callsign (substring).
@@ -288,7 +290,7 @@ async def search_tracks(q: str, limit: int = 10):
         logger.error(f"Search query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/api/tracks/replay")
+@router.get("/api/tracks/replay", dependencies=_viewer_auth)
 async def replay_tracks(start: str, end: str, limit: int = 1000):
     """
     Get all track points within a time window for replay.
@@ -383,7 +385,7 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/api/tracks/flight-info/{entity_id}")
+@router.get("/api/tracks/flight-info/{entity_id}", dependencies=_viewer_auth)
 async def get_flight_info(entity_id: str):
     """
     Fetch the most recent departure/arrival airport for an aircraft from the

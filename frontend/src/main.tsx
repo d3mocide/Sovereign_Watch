@@ -9,6 +9,37 @@ const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardV
 
 const isStatsRoute = window.location.pathname === '/stats'
 
+import { getToken, logout } from './api/auth'
+
+const originalFetch = window.fetch
+window.fetch = async (...args) => {
+  const resource = args[0]
+  let config = args[1]
+  
+  // Attach token to internal API requests (except for auth routes which don't need it)
+  if (typeof resource === 'string' && resource.startsWith('/api/') && !resource.startsWith('/api/auth/')) {
+    const token = getToken()
+    if (token) {
+      config = config || {}
+      const headers = new Headers(config.headers || {})
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`)
+      }
+      config.headers = headers
+    }
+  }
+  
+  const response = await originalFetch(resource, config)
+  
+  // Cleanly handle expiration of tokens
+  if (response.status === 401 && getToken()) {
+    logout()
+    window.location.reload()
+  }
+  
+  return response
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>

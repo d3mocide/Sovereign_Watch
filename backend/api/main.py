@@ -190,7 +190,7 @@ app.include_router(system.router, dependencies=_viewer_auth)
 # /api/tracks/live cannot use Bearer headers (browser limitation).
 # WebSocket auth via query-param token is a planned follow-up.
 # TODO(security): add WS query-param token auth to tracks.router
-app.include_router(tracks.router, dependencies=_viewer_auth)
+app.include_router(tracks.router)
 
 app.include_router(metrics.router, dependencies=_viewer_auth)
 app.include_router(analysis.router, dependencies=_viewer_auth)

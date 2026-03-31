@@ -151,7 +151,7 @@ _ANON_USER = {
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
 ) -> dict[str, Any]:
     """
     Validate the Bearer token and return the authenticated user dict.
