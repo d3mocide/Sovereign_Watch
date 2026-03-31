@@ -18,7 +18,7 @@ import {
   Zap,
   Lock,
 } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   sdrWaterfallColor,

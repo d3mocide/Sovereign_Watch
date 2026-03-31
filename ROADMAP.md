@@ -18,7 +18,6 @@ These items are considered "Blocking" for a public or multi-user deployment of t
 
 | ID | Task Name | Component | Description |
 | :--- | :--- | :--- | :--- |
-| **Sec-01** | Authentication & RBAC | Backend | Implement JWT / OAuth2 for API and WebSocket gating (P0 Critical). |
 | **DevOps-01** | CI/CD Maturity | DevOps | Move from "Smoke" to Full Validation (Full Lint + All Tests + Build). |
 | **Fix-02** | Replay Mode Cleanup | Frontend | Finalize `TimeControls.tsx` wiring and `onClose` navigation (P1). |
 | **Fix-03** | Layer Polish | Frontend | Implement Satellite footprints (OrbitalMap) and infra hover tooltips. |
