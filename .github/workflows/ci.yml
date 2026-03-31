@@ -189,7 +189,7 @@ jobs:
   space-pulse:
     name: Space Pulse (Lint + Test)
     needs: changes
-    if: needs.changes.outputs.space-pulse == 'true'
+    if: needs.changes.outputs['space-pulse'] == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
