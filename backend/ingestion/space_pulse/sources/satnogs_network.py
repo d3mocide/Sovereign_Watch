@@ -154,10 +154,16 @@ class SatNOGSNetworkSource:
         if not norad_id:
             return None
 
-        # The SatNOGS Network API stores the observed downlink frequency as "frequency".
-        # "transmitter_downlink_low" is the catalogue expected value — use it only as a
-        # fallback when the observed field is absent (older API versions / missing data).
-        freq = obs.get("frequency") or obs.get("transmitter_downlink_low")
+        # The SatNOGS Network API stores the observed downlink frequency as
+        # "observation_frequency". Older API versions may use a legacy
+        # "frequency" field instead. "transmitter_downlink_low" is the catalogue
+        # expected value — use it only as a final fallback when the observed field
+        # is absent (older API versions / missing data).
+        freq = (
+            obs.get("observation_frequency")
+            or obs.get("frequency")
+            or obs.get("transmitter_downlink_low")
+        )
 
         return {
             "source":              "satnogs_network",

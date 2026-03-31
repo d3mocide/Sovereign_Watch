@@ -14,3 +14,8 @@ dependencies = [
     "websockets==16.0",
     "aiohttp==3.13.3",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.2",
+]

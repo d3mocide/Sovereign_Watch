@@ -58,7 +58,6 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 NDBC_LATEST_URL = "https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt"
 PEERINGDB_IXP_URL = "https://www.peeringdb.com/api/ix"
 PEERINGDB_FAC_URL = "https://www.peeringdb.com/api/fac"
-PEERINGDB_IXFAC_URL = "https://www.peeringdb.com/api/ixfac"
 
 POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
@@ -343,43 +342,29 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def parse_peeringdb_ixps(
-    ix_data: dict, fac_records: list[dict], ixfac_data: dict
-) -> list[dict]:
-    """Parse PeeringDB /api/ix and join with facilities to get coordinates.
+def parse_peeringdb_ixps(data: dict) -> list[dict]:
+    """Parse PeeringDB /api/ix response into a list of IXP dicts.
 
-    IXPs themselves don't have lat/lon; we must find which facility they are in.
+    Returns only records with a non-empty name and valid lat/lon coordinates
+    read directly from the IXP item (PeeringDB /api/ix includes these).
     """
-    # 1. Map fac_id -> (lat, lon)
-    fac_map = {f["fac_id"]: (f["lat"], f["lon"]) for f in fac_records}
-
-    # 2. Map ix_id -> fac_id (take the first one found)
-    ix_to_fac = {}
-    for item in ixfac_data.get("data", []):
-        try:
-            ix_id = int(item["ix_id"])
-            fac_id = int(item["fac_id"])
-            if ix_id not in ix_to_fac:
-                ix_to_fac[ix_id] = fac_id
-        except (KeyError, TypeError, ValueError):
-            continue
-
-    # 3. Build IXP records
     records = []
-    for item in ix_data.get("data", []):
+    for item in data.get("data", []):
         try:
             ixp_id = int(item["id"])
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
-
-            # Resolve location from facility mapping
-            fac_id = ix_to_fac.get(ixp_id)
-            if not fac_id or fac_id not in fac_map:
+            _lat = item.get("lat")
+            lat_raw = _lat if _lat is not None else item.get("latitude")
+            _lon = item.get("lon")
+            lon_raw = _lon if _lon is not None else item.get("longitude")
+            if lat_raw is None or lon_raw is None:
                 continue
-
-            lat, lon = fac_map[fac_id]
-
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
             records.append(
                 {
                     "ixp_id": ixp_id,
@@ -409,8 +394,10 @@ def parse_peeringdb_facilities(data: dict) -> list[dict]:
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
-            lat_raw = item.get("lat") or item.get("latitude")
-            lon_raw = item.get("lon") or item.get("longitude")
+            _lat = item.get("lat")
+            lat_raw = _lat if _lat is not None else item.get("latitude")
+            _lon = item.get("lon")
+            lon_raw = _lon if _lon is not None else item.get("longitude")
             if lat_raw is None or lon_raw is None:
                 continue
             lat = float(lat_raw)
@@ -434,6 +421,37 @@ def parse_peeringdb_facilities(data: dict) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             continue
     return records
+
+
+def parse_iss_position(data: dict) -> dict | None:
+    """Parse an open-notify ISS position API response.
+
+    Returns a dict with lat, lon, time, altitude_km, velocity_kms, or None
+    if the response is missing required fields or contains invalid values.
+    """
+    if data.get("message") != "success":
+        return None
+    pos = data.get("iss_position")
+    if not pos:
+        return None
+    try:
+        lat = float(pos["latitude"])
+        lon = float(pos["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return None
+    try:
+        t = datetime.fromtimestamp(int(data["timestamp"]), tz=UTC)
+    except (KeyError, TypeError, ValueError, OSError):
+        t = None
+    return {
+        "lat": lat,
+        "lon": lon,
+        "time": t,
+        "altitude_km": None,
+        "velocity_kms": None,
+    }
 
 
 def _upsert_peeringdb_ixps_sync(db_url: str, records: list[dict]) -> int:
@@ -989,12 +1007,9 @@ class InfraPollerService:
                                           cache_key="infra:raw_peeringdb_fac", max_retries=5)
             await asyncio.sleep(6)
 
-            # --- IXP to Facility Mapping ---
-            ixfac_data = await self.fetch_api(client, PEERINGDB_IXFAC_URL, "PeeringDB", 
-                                            cache_key="infra:raw_peeringdb_ixfac", max_retries=5)
 
         fac_records = parse_peeringdb_facilities(fac_data)
-        ixp_records = parse_peeringdb_ixps(ix_data, fac_records, ixfac_data)
+        ixp_records = parse_peeringdb_ixps(ix_data)
 
         if ixp_records:
             ixp_count = await asyncio.to_thread(
