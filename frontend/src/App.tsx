@@ -832,7 +832,7 @@ function AuthenticatedApp() {
 }
 
 function App() {
-  const { status: authStatus } = useAuth();
+  const { status: authStatus, hasRole } = useAuth();
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -867,7 +867,6 @@ function App() {
   }
 
   if (authStatus === 'authenticated') {
-    const { hasRole } = useAuth();
     const isStatsRoute = window.location.pathname === '/stats';
 
     if (isStatsRoute && hasRole('admin')) {

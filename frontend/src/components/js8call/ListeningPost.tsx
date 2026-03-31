@@ -18,7 +18,7 @@ import {
   Zap,
   Lock,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   sdrWaterfallColor,
@@ -374,23 +374,20 @@ export default function ListeningPost({
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const tune = useCallback(
-    (freq: number, mode: KiwiMode) => {
-      if (!isOperator) return;
-      if (!activeKiwiConfig || !bridgeConnected) return;
-      const clamped = Math.max(0, Math.min(30000, freq));
-      setLocalFreq(clamped);
-      setLocalMode(mode);
-      sendAction({
-        action: "SET_KIWI",
-        host: activeKiwiConfig.host,
-        port: activeKiwiConfig.port,
-        freq: clamped,
-        mode,
-      });
-    },
-    [activeKiwiConfig, bridgeConnected, sendAction],
-  );
+  const tune = (freq: number, mode: KiwiMode) => {
+    if (!isOperator) return;
+    if (!activeKiwiConfig || !bridgeConnected) return;
+    const clamped = Math.max(0, Math.min(30000, freq));
+    setLocalFreq(clamped);
+    setLocalMode(mode);
+    sendAction({
+      action: "SET_KIWI",
+      host: activeKiwiConfig.host,
+      port: activeKiwiConfig.port,
+      freq: clamped,
+      mode,
+    });
+  };
 
   const step = (delta: number) => tune(localFreq + delta, localMode);
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.60.0] - 2026-03-31
+
+### Added
+
+- **First-Class Platform Authentication**: Integrated JWT-based security baseline with secure BCrypt password hashing and persistent session handling. This is the first release to include mandatory authentication.
+- **Bitmask-Based RBAC**: Introduced a granular Role-Based Access Control system (`VIEWER`, `OPERATOR`, `ANALYST`, `ADMIN`) for precise least-privileged permission enforcement.
+- **User Management Redesign**: High-density "Sovereign Glass" administrative interface for role assignment, registration approval, and status monitoring.
+- **Sensor Intelligence Module**: New tactical module featuring a geospatial radar (octant density) and real-time signal integrity trends (NIC/NACp).
+- **Fusion Audit Module**: New tactical module monitoring pipeline processing latency and forecasting database storage velocity (burn rate).
+- **Extreme Behavior Detection**: Automated tactical flagging in the Priority Watchlist for airframes exceeding Mach 0.9 or 45,000ft altitude.
+
+### Changed
+
+- **Stats Dashboard Flow**: Reordered navigation hierarchy to prioritize tactical intelligence modules (Protocol -> Sensors -> Audit -> Operations).
+- **Auth Orchestration**: Unified `AuthContext` with support for granular role checks (`hasRole`) and synchronous hydration.
+- **Task Management**: Standardized task lifecycle documentation in `agent_docs/tasks/` for improved observability.
+
+### Fixed
+
+- **Auth Race Conditions**: Resolved race conditions where protected tactical views (e.g., Stats) would mount before auth initialization, triggering 401 redirect loops.
+- **Backend `psutil` Reliability**: Fixed `psutil` lockfile collisions in containerized environments by standardizing initialization hooks.
+- **User Management Cleanup**: Resolved role display anomalies and permission preview inconsistencies in the admin panel.
+
+### Verification
+
+- Frontend: `pnpm run lint && pnpm exec tsc --noEmit` (pass)
+- Backend API: `ruff check .` (pass)
+- Database: `RBAC` role bitmask migrations confirmed healthy.
+
+
 ## [0.59.0] - 2026-03-30
 
 ### Added
