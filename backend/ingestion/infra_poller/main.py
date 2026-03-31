@@ -355,8 +355,10 @@ def parse_peeringdb_ixps(data: dict) -> list[dict]:
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
-            lat_raw = item.get("lat") or item.get("latitude")
-            lon_raw = item.get("lon") or item.get("longitude")
+            _lat = item.get("lat")
+            lat_raw = _lat if _lat is not None else item.get("latitude")
+            _lon = item.get("lon")
+            lon_raw = _lon if _lon is not None else item.get("longitude")
             if lat_raw is None or lon_raw is None:
                 continue
             lat = float(lat_raw)
@@ -392,8 +394,10 @@ def parse_peeringdb_facilities(data: dict) -> list[dict]:
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
-            lat_raw = item.get("lat") or item.get("latitude")
-            lon_raw = item.get("lon") or item.get("longitude")
+            _lat = item.get("lat")
+            lat_raw = _lat if _lat is not None else item.get("latitude")
+            _lon = item.get("lon")
+            lon_raw = _lon if _lon is not None else item.get("longitude")
             if lat_raw is None or lon_raw is None:
                 continue
             lat = float(lat_raw)

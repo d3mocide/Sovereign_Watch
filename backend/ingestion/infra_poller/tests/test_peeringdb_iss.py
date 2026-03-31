@@ -61,6 +61,15 @@ SAMPLE_IXP_RESPONSE = {
             "lat": 10.0,
             "lon": 20.0,
         },
+        # Zero coordinates (e.g. Gulf of Guinea) — must NOT be skipped
+        {
+            "id": 6,
+            "name": "Null Island IXP",
+            "city": "Null Island",
+            "country": "XX",
+            "lat": 0.0,
+            "lon": 0.0,
+        },
     ]
 }
 
@@ -95,6 +104,15 @@ SAMPLE_FAC_RESPONSE = {
             "lat": None,
             "lon": None,
         },
+        # Zero coordinates — must NOT be skipped
+        {
+            "id": 103,
+            "name": "Zero Coord DC",
+            "city": "Null Island",
+            "country": "XX",
+            "lat": 0.0,
+            "lon": 0.0,
+        },
     ]
 }
 
@@ -110,8 +128,9 @@ def test_parse_ixps_returns_list():
 
 def test_parse_ixps_valid_count():
     result = parse_peeringdb_ixps(SAMPLE_IXP_RESPONSE)
-    # Records 3 (no coords), 4 (out-of-range), 5 (empty name) should be skipped
-    assert len(result) == 2
+    # Records 3 (no coords), 4 (out-of-range), 5 (empty name) should be skipped;
+    # record 6 (0.0, 0.0) is valid and must be included.
+    assert len(result) == 3
 
 
 def test_parse_ixps_ids():
@@ -179,6 +198,16 @@ def test_parse_ixps_skips_empty_name():
     assert 5 not in ixp_ids
 
 
+def test_parse_ixps_zero_coordinates_kept():
+    # 0.0 lat and 0.0 lon are valid coordinates — must not be treated as missing.
+    result = parse_peeringdb_ixps(SAMPLE_IXP_RESPONSE)
+    ixp_ids = [r["ixp_id"] for r in result]
+    assert 6 in ixp_ids
+    null_island = next(r for r in result if r["ixp_id"] == 6)
+    assert null_island["lat"] == 0.0
+    assert null_island["lon"] == 0.0
+
+
 # ---------------------------------------------------------------------------
 # parse_peeringdb_facilities
 # ---------------------------------------------------------------------------
@@ -190,8 +219,8 @@ def test_parse_fac_returns_list():
 
 def test_parse_fac_valid_count():
     result = parse_peeringdb_facilities(SAMPLE_FAC_RESPONSE)
-    # Record 102 has no coords — skipped
-    assert len(result) == 2
+    # Record 102 has no coords — skipped; record 103 (0.0, 0.0) is valid.
+    assert len(result) == 3
 
 
 def test_parse_fac_ids():
@@ -230,6 +259,16 @@ def test_parse_fac_skips_no_coords():
     result = parse_peeringdb_facilities(SAMPLE_FAC_RESPONSE)
     ids = [r["fac_id"] for r in result]
     assert 102 not in ids
+
+
+def test_parse_fac_zero_coordinates_kept():
+    # 0.0 lat and 0.0 lon are valid — must not be treated as missing.
+    result = parse_peeringdb_facilities(SAMPLE_FAC_RESPONSE)
+    ids = [r["fac_id"] for r in result]
+    assert 103 in ids
+    zero = next(r for r in result if r["fac_id"] == 103)
+    assert zero["lat"] == 0.0
+    assert zero["lon"] == 0.0
 
 
 def test_parse_fac_empty_data():
