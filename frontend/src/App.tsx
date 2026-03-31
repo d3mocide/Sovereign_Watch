@@ -48,20 +48,7 @@ interface IntelArticleContent {
   content: string;
 }
 
-function App() {
-  // ── Authentication gate ───────────────────────────────────────────────────
-  const { status: authStatus } = useAuth();
-
-  // null = not yet checked, true/false = result from /api/auth/setup-status
-  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (authStatus === 'unauthenticated') {
-      getSetupStatus()
-        .then(({ setup_required }) => setSetupRequired(setup_required))
-        .catch(() => setSetupRequired(false));
-    }
-  }, [authStatus]);
+function AuthenticatedApp() {
 
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
@@ -495,32 +482,6 @@ function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Show a full-screen loading spinner while checking stored credentials
-  if (authStatus === 'initialising') {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-        <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
-          Authenticating…
-        </div>
-      </div>
-    );
-  }
-
-  // Show login or first-run setup when unauthenticated
-  if (authStatus === 'unauthenticated') {
-    // Still waiting for setup-status check — reuse the existing loading screen
-    if (setupRequired === null) {
-      return (
-        <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
-          <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
-            Initialising…
-          </div>
-        </div>
-      );
-    }
-    return <LoginView isFirstSetup={setupRequired} />;
-  }
-
   return (
     <>
       {isTerminalOpen && (
@@ -866,6 +827,44 @@ function App() {
       />
     </>
   );
+}
+
+function App() {
+  const { status: authStatus } = useAuth();
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      getSetupStatus()
+        .then(({ setup_required }) => setSetupRequired(setup_required))
+        .catch(() => setSetupRequired(false));
+    }
+  }, [authStatus]);
+
+  if (authStatus === 'initialising') {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+        <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+          Authenticating…
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
+    if (setupRequired === null) {
+      return (
+        <div className="flex h-screen w-screen items-center justify-center bg-gray-950">
+          <div className="text-emerald-400 font-mono text-sm animate-pulse uppercase tracking-widest">
+            Initialising…
+          </div>
+        </div>
+      );
+    }
+    return <LoginView isFirstSetup={setupRequired} />;
+  }
+
+  return <AuthenticatedApp />;
 }
 
 export default App;
