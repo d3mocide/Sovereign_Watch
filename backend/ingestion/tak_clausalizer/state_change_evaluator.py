@@ -147,15 +147,16 @@ class StateChangeEvaluator:
 
         # 5. Altitude Change
         prev_alt = safe_float(prev_clause.adverbial_context.get("altitude"), default=0.0)
-        if self._detect_altitude_change(prev_alt, new_state.get("point", {}).get("hae", 0.0)):
-            alt_delta = abs(new_state.get("point", {}).get("hae", 0.0) - prev_alt)
+        new_alt = safe_float(new_state.get("point", {}).get("hae"), default=0.0)
+        if self._detect_altitude_change(prev_alt, new_alt):
+            alt_delta = abs(new_alt - prev_alt)
             events.append(
                 StateChangeEvent(
                     reason="ALTITUDE_CHANGE",
                     confidence=0.85,
                     details={
                         "previous_altitude": prev_alt,
-                        "new_altitude": new_state.get("point", {}).get("hae", 0.0),
+                        "new_altitude": new_alt,
                         "delta": alt_delta,
                         "threshold": self.ALTITUDE_CHANGE_M,
                     },
