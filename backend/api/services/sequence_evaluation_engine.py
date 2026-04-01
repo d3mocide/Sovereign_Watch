@@ -221,7 +221,13 @@ Based on this data, identify escalation patterns, risk indicators, and provide a
         for uid, clauses in list(uid_groups.items())[:target_count]:
             latest = clauses[-1]  # Most recent clause
             state_changes = [c.get("state_change_reason", "UNKNOWN") for c in clauses]
-            summary = f"{uid}: {len(clauses)} state-changes ({', '.join(set(state_changes))}) at {latest.get('locative_lat'):.2f}N, {latest.get('locative_lon'):.2f}W"
+            lat = latest.get("locative_lat")
+            lon = latest.get("locative_lon")
+            summary = (
+                f"{uid}: {len(clauses)} state-changes ({', '.join(set(state_changes))}) "
+                f"at {abs(lat):.2f}{'N' if lat >= 0 else 'S'}, "
+                f"{abs(lon):.2f}{'E' if lon >= 0 else 'W'}"
+            )
             summaries.append(summary)
 
         return "\n".join(summaries)
