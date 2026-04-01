@@ -132,7 +132,7 @@ export function useRegionalRisk(
 
     try {
       const response = await fetch(
-        `/api/ai_router/regional_risk?h3_region=${h3_region}&lookback_hours=${lookback_hours}`,
+        `/api/ai_router/regional_risk?h3_region=${encodeURIComponent(h3_region)}&lookback_hours=${encodeURIComponent(String(lookback_hours))}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
