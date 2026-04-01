@@ -60,10 +60,9 @@ export function useClausalChains(
       }
 
       const response = await fetch(`/api/ai_router/clausal-chains?${params.toString()}`, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
+          'Authorization': `Bearer ${sessionStorage.getItem('sw_token') || ''}`,
         },
       });
 
@@ -135,7 +134,7 @@ export function useRegionalRisk(
         `/api/ai_router/regional_risk?h3_region=${encodeURIComponent(h3_region)}&lookback_hours=${encodeURIComponent(String(lookback_hours))}`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
+            'Authorization': `Bearer ${sessionStorage.getItem('sw_token') || ''}`,
           },
         }
       );

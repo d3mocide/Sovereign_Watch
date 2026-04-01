@@ -6,6 +6,7 @@ Implements spatial-temporal alignment, sequence evaluation, and escalation detec
 import logging
 from typing import Dict, List, Optional
 
+import h3
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
@@ -344,7 +345,7 @@ async def get_regional_risk_heatmap(
         }
 
 
-@router.post("/clausal-chains")
+@router.get("/clausal-chains")
 async def get_clausal_chains(
     region: str = Query(...),
     lookback_hours: int = Query(24),
@@ -354,18 +355,41 @@ async def get_clausal_chains(
     Fetch clausal chains for a region within a time window.
 
     Returns serialized ClausalChain objects with full medial clause data.
+    The ``region`` parameter is an H3 cell ID; only clauses whose ``geom``
+    falls within that hex polygon are returned (PostGIS ST_Within + GIST index).
     """
     try:
+        # Build a WKT polygon from the H3 cell boundary so we can push the
+        # spatial filter down to PostGIS and use the GIST index.
+        try:
+            boundary = h3.cell_to_boundary(region)  # list of (lat, lon) tuples
+            # PostGIS WKT expects (lon lat) ordering
+            coords = [(lon, lat) for lat, lon in boundary]
+            # Close the ring by repeating the first vertex
+            coords.append(coords[0])
+            ring = ", ".join(f"{lon} {lat}" for lon, lat in coords)
+            wkt_polygon = f"POLYGON(({ring}))"
+        except Exception as h3_err:
+            logger.warning("Invalid H3 region '%s': %s – skipping spatial filter", region, h3_err)
+            wkt_polygon = None
+
         async with db.pool.acquire() as conn:
             # Query clausal_chains for the region and time window
             where_clauses = [
-                "time > now() - interval %s",
+                "time > now() - interval $1",
             ]
-            params = [f"{lookback_hours} hours"]
+            params: list = [f"{lookback_hours} hours"]
+            param_idx = 2
+
+            if wkt_polygon:
+                where_clauses.append(f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))")
+                params.append(wkt_polygon)
+                param_idx += 1
 
             if source:
-                where_clauses.append("source = %s")
+                where_clauses.append(f"source = ${param_idx}")
                 params.append(source)
+                param_idx += 1
 
             where_sql = " AND ".join(where_clauses)
 
