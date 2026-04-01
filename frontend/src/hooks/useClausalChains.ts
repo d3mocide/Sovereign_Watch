@@ -51,17 +51,20 @@ export function useClausalChains(
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      const response = await fetch('/api/clausal-chains', {
+      const params = new URLSearchParams({
+        region,
+        lookback_hours: lookback_hours.toString(),
+      });
+      if (source !== 'ALL') {
+        params.set('source', source);
+      }
+
+      const response = await fetch(`/api/ai_router/clausal-chains?${params.toString()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('sw_token') || ''}`,
+          'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
         },
-        body: JSON.stringify({
-          region,
-          lookback_hours,
-          source: source === 'ALL' ? undefined : source,
-        }),
       });
 
       if (!response.ok) {
