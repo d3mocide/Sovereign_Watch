@@ -41,6 +41,42 @@ def _load_model_map() -> dict:
 
 _MODEL_MAP = _load_model_map()
 
+
+def _infer_track_domain(uid: str, track_type: str) -> str:
+    """Infer operational domain for the selected target."""
+    normalized = (track_type or "").upper()
+    if uid.startswith("gdelt-"):
+        return "OSINT_EVENT"
+    if uid.startswith("SAT-") or "-K" in normalized:
+        return "ORBITAL"
+    if "-A" in normalized:
+        return "AIR"
+    if "-S" in normalized:
+        return "MARITIME"
+    if "-G" in normalized or "-T" in normalized:
+        return "INFRASTRUCTURE"
+    return "UNKNOWN"
+
+
+def _summarize_waypoints(waypoints: list) -> str:
+    """Build a compact telemetry summary for the model prompt."""
+    if not waypoints:
+        return "No waypoint telemetry available."
+
+    recent = waypoints[:5]
+    points = []
+    for idx, wp in enumerate(recent, start=1):
+        lat = wp.get("lat")
+        lon = wp.get("lon")
+        alt = wp.get("alt")
+        speed = wp.get("speed")
+        ts = wp.get("time")
+        points.append(
+            f"{idx}) lat={lat}, lon={lon}, alt={alt}, speed={speed}, time={ts}"
+        )
+
+    return "\n".join(points)
+
 @router.post("/api/analyze/{uid}", dependencies=[Depends(require_role("operator"))])
 async def analyze_track(
     request: Request, req: AnalyzeRequest, uid: str = Path(..., max_length=100)
@@ -227,21 +263,99 @@ async def analyze_track(
         except Exception:
             pass
 
+    mode_normalized = (req.mode or "tactical").strip().lower()
+    if mode_normalized not in {"tactical", "osint", "sar"}:
+        mode_normalized = "tactical"
+
     # --- 4. PERSONA & PROMPT ---
     if is_sitrep:
         persona = {
-            "sys": "Strategic Intelligence Director. Focus: Global Conflict Zones & Macro Trends.",
-            "inst": "Conduct a comprehensive Situation Report (SITREP). Categorize the active conflict zones, evaluate actor behavior, and assess overall regional stability. Use BOLD section headers."
+            "sys": (
+                "You are Sovereign Watch Strategic Intelligence Director. "
+                "You analyze conflict and infrastructure signals, not marketing/business analytics. "
+                "Use only provided evidence. If evidence is weak, explicitly say INSUFFICIENT DATA."
+            ),
+            "inst": (
+                "Conduct a comprehensive SITREP. Use sections: **Active Zones**, **Actor Behavior**, "
+                "**Escalation Signals**, **Confidence**. Keep it operational and concise."
+            ),
         }
         user_content = f"SITREP DATA BUFFER:\n{track_summary['meta']['sitrep_data']}\n\nINST: {persona['inst']}\nASSESS:"
     else:
-        persona = {"sys": "Tactical Analyst.", "inst": "Assess this specific target behavior."}
-        if uid.startswith("gdelt-"):
-            persona = {"sys": "Geopolitical Analyst.", "inst": "Assess news event implications."}
-        if is_hold:
+        persona_by_mode = {
+            "tactical": {
+                "sys": (
+                    "You are Sovereign Watch Tactical Intelligence Analyst. "
+                    "Domain is ISR/air/maritime/orbital/OSINT operations. "
+                    "Do not interpret identifiers as ads, campaigns, products, user segments, or e-commerce metadata. "
+                    "If telemetry is sparse, state INSUFFICIENT DATA and what is missing."
+                ),
+                "inst": (
+                    "Assess this target using only telemetry/intel context. "
+                    "Return sections: **Classification**, **Behavioral Assessment**, **Risk Signals**, **Confidence**."
+                ),
+            },
+            "osint": {
+                "sys": (
+                    "You are Sovereign Watch OSINT and Geopolitical Analyst. "
+                    "Focus on actor intent, information reliability, and escalation implications. "
+                    "Avoid generic business or marketing interpretations."
+                ),
+                "inst": (
+                    "Assess this target from an OSINT perspective using telemetry and correlated intel. "
+                    "Return sections: **Source/Context**, **Actor Intent Hypothesis**, **Regional Impact**, **Confidence**."
+                ),
+            },
+            "sar": {
+                "sys": (
+                    "You are Sovereign Watch Search-and-Rescue Analyst. "
+                    "Prioritize life safety, distress indicators, and operational recommendations. "
+                    "Do not speculate beyond provided evidence."
+                ),
+                "inst": (
+                    "Assess this target for SAR relevance. "
+                    "Return sections: **Distress Indicators**, **Operational Risk**, **Recommended Actions (Next 30-60 min)**, **Confidence**."
+                ),
+            },
+        }
+
+        persona = persona_by_mode[mode_normalized]
+
+        if uid.startswith("gdelt-") and mode_normalized != "sar":
             persona = {
-                "sys": "Tactical Flight Safety & Surveillance Analyst.", 
-                "inst": "Conduct an assessment of this AIRCRAFT HOLDING PATTERN. Evaluate for intent (Arrival Delay, Radio Failure, Emergency, or Intelligence Gathering). Use the provided track history to verify pattern stability."
+                "sys": (
+                    "You are Sovereign Watch Geopolitical Analyst for OSINT events. "
+                    "Avoid generic internet analytics framing; focus on actor intent, escalation, and regional implications."
+                ),
+                "inst": (
+                    "Assess this event with sections: **Event Context**, **Potential Impact**, "
+                    "**Escalation Risk**, **Confidence**."
+                ),
+            }
+
+        if is_hold and mode_normalized == "tactical":
+            persona = {
+                "sys": (
+                    "You are Tactical Flight Safety & Surveillance Analyst. "
+                    "Ground your conclusions in track geometry and timing; avoid speculative narratives."
+                ),
+                "inst": (
+                    "Assess this AIRCRAFT HOLDING PATTERN and evaluate likely intent "
+                    "(arrival delay, weather, comms issue, emergency, or surveillance). "
+                    "Use sections: **Pattern Evidence**, **Most Likely Explanation**, **Risk Signals**, **Confidence**."
+                ),
+            }
+        elif is_hold and mode_normalized == "sar":
+            persona = {
+                "sys": (
+                    "You are Aviation SAR Analyst. "
+                    "Assess whether a holding pattern may indicate distress, diversion, weather avoidance, or comms degradation."
+                ),
+                "inst": (
+                    "Assess this AIRCRAFT HOLDING PATTERN for SAR posture. "
+                    "Use sections: **Distress Evidence**, **Alternative Explanations**, "
+                    "**Recommended SAR Readiness Actions**, **Confidence**."
+                ),
             }
         
         meta = {}
@@ -254,8 +368,22 @@ async def analyze_track(
                     meta = {}
         
         label = meta.get('callsign', 'Unknown') if isinstance(meta, dict) else 'Unknown'
+        track_type = track_summary.get("type", "unknown") if track_summary else "unknown"
+        inferred_domain = _infer_track_domain(uid, track_type)
+        waypoint_brief = _summarize_waypoints(waypoints)
         prefix = "[HOLDING DETECTED] " if is_hold else ""
-        user_content = f"TARGET: {uid} | Label: {prefix}{label} | History: {track_summary['points'] if track_summary else 0} pts. {intel_context}\nINST: {persona['inst']}\nASSESS:"
+        user_content = (
+            f"TARGET: {uid}\n"
+            f"LABEL: {prefix}{label}\n"
+            f"MODE: {mode_normalized}\n"
+            f"INFERRED_DOMAIN: {inferred_domain}\n"
+            f"TRACK_TYPE: {track_type}\n"
+            f"HISTORY_POINTS: {track_summary['points'] if track_summary else 0}\n"
+            f"RECENT_WAYPOINTS:\n{waypoint_brief}\n"
+            f"{intel_context}\n"
+            f"INST: {persona['inst']}\n"
+            "ASSESS:"
+        )
 
     # --- 5. STREAMING ---
     active_model = AI_MODEL_DEFAULT

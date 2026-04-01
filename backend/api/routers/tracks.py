@@ -361,19 +361,48 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     # Satellite positions are deterministic (SGP4 from stored TLEs) and can be
     # recomputed on demand, so historical storage is not needed for replay.
     query = """
-        SELECT * FROM (
+        WITH bucketed AS (
             SELECT DISTINCT ON (entity_id, time_bucket($4::interval, time))
-                time_bucket($4::interval, time) AS time,
+                time_bucket($4::interval, time) AS bucket_time,
+                time,
                 entity_id, type, lat, lon, alt, speed, heading, meta
             FROM tracks
             WHERE time >= $1 AND time <= $2
             ORDER BY entity_id, time_bucket($4::interval, time), time DESC
-        ) s
-        -- ORDER BY time DESC so that LIMIT $3 retains the NEWEST rows rather
-        -- than the oldest.  Without this, a dense deployment with many entities
-        -- fills the row budget with the earliest portion of the window and the
-        -- most recent tracks are silently dropped.  The frontend re-sorts each
-        -- entity's history array ascending before binary-search playback.
+        ),
+        bucket_counts AS (
+            SELECT COUNT(DISTINCT bucket_time) AS total_buckets
+            FROM bucketed
+        ),
+        per_bucket_limited AS (
+            SELECT
+                b.time,
+                b.entity_id,
+                b.type,
+                b.lat,
+                b.lon,
+                b.alt,
+                b.speed,
+                b.heading,
+                b.meta,
+                ROW_NUMBER() OVER (
+                    PARTITION BY b.bucket_time
+                    ORDER BY b.time DESC
+                ) AS bucket_rank,
+                GREATEST(
+                    1,
+                    CEIL(
+                        $3::numeric /
+                        NULLIF((SELECT total_buckets FROM bucket_counts), 0)::numeric
+                    )::int
+                ) AS max_rows_per_bucket
+            FROM bucketed b
+        )
+        -- Keep rows balanced across all time buckets so replay covers the full
+        -- requested interval, not just the newest segment in dense deployments.
+        SELECT time, entity_id, type, lat, lon, alt, speed, heading, meta
+        FROM per_bucket_limited
+        WHERE bucket_rank <= max_rows_per_bucket
         ORDER BY time DESC
         LIMIT $3
     """

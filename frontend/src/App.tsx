@@ -1,5 +1,5 @@
 import type { FeatureCollection } from "geojson";
-import { ExternalLink, Loader2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Radar, X, XCircle } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getSetupStatus } from "./api/auth";
 import RadioTerminal from "./components/js8call/RadioTerminal";
@@ -51,6 +51,27 @@ interface IntelArticleContent {
 const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
 
 function AuthenticatedApp() {
+
+  type RegionalRiskResponse = {
+    h3_region_id: string;
+    risk_score: number;
+    narrative_summary: string;
+    anomalous_uids: string[];
+    escalation_indicators: string[];
+    confidence: number;
+    pattern_detected: boolean;
+    anomaly_count: number;
+  };
+
+  type RegionalRiskUiState = {
+    status: "loading" | "success" | "error";
+    h3Region: string;
+    lat: number;
+    lon: number;
+    result?: RegionalRiskResponse;
+    error?: string;
+    updatedAt: number;
+  };
 
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
@@ -123,6 +144,8 @@ function AuthenticatedApp() {
     replayTimeRef,
     loadReplayData,
     updateReplayFrame,
+    loadedPointCount,
+    loadedTrackCount,
   } = useReplayController();
 
   // ── Core entity worker ────────────────────────────────────────────────────
@@ -140,6 +163,7 @@ function AuthenticatedApp() {
     visualStateRef,
     prevCourseRef,
     alertedEmergencyRef,
+    streamConnectedRef,
   } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
 
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
@@ -159,6 +183,8 @@ function AuthenticatedApp() {
   const [intelArticleError, setIntelArticleError] = useState<string | null>(
     null,
   );
+  const [regionalRiskUi, setRegionalRiskUi] =
+    useState<RegionalRiskUiState | null>(null);
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -166,6 +192,8 @@ function AuthenticatedApp() {
       const now = Date.now();
       const STALE_THRESHOLD_AIR_MS = 120 * 1000;
       const STALE_THRESHOLD_SEA_MS = 300 * 1000;
+      const DISCONNECTED_GRACE_MS = 15 * 60 * 1000;
+      const streamConnected = streamConnectedRef.current;
 
       let air = 0,
         sea = 0,
@@ -174,9 +202,12 @@ function AuthenticatedApp() {
 
       entitiesRef.current.forEach((entity, uid) => {
         const isShip = entity.type?.includes("S");
-        const threshold = isShip
+        const baseThreshold = isShip
           ? STALE_THRESHOLD_SEA_MS
           : STALE_THRESHOLD_AIR_MS;
+        const threshold = streamConnected
+          ? baseThreshold
+          : Math.max(baseThreshold, DISCONNECTED_GRACE_MS);
         if (now - entity.lastSeen > threshold) {
           stale.push(uid);
         } else {
@@ -212,7 +243,7 @@ function AuthenticatedApp() {
 
     const timer = setInterval(maintenance, 1000);
     return () => clearInterval(timer);
-  }, [entitiesRef, satellitesRef, knownUidsRef, viewMode]);
+  }, [entitiesRef, satellitesRef, knownUidsRef, streamConnectedRef, viewMode]);
 
   // ── Infrastructure data ───────────────────────────────────────────────────
   const { cablesData, stationsData, outagesData, gdeltData, ixpData, facilityData } = useInfraData();
@@ -274,6 +305,166 @@ function AuthenticatedApp() {
       parseMissionHash().lon ??
       parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
   });
+
+  const handleAnalyzeRegionalRisk = useCallback(
+    async (h3Region: string, lat: number, lon: number) => {
+      const requestTimeoutMs = 15000;
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+
+      setRegionalRiskUi({
+        status: "loading",
+        h3Region,
+        lat,
+        lon,
+        updatedAt: Date.now(),
+      });
+
+      addEvent({
+        message: `AI_ROUTER: Evaluating regional risk for ${h3Region} @ ${lat.toFixed(3)}, ${lon.toFixed(3)}`,
+        type: "new",
+        entityType: "infra",
+      });
+
+      try {
+        const response = await fetch("/api/ai_router/evaluate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            h3_region: h3Region,
+            lookback_hours: 24,
+            include_gdelt: true,
+            include_tak: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(`AI router request failed (${response.status}): ${errorText}`);
+        }
+
+        const result = (await response.json()) as RegionalRiskResponse;
+        const riskPct = Math.round((result.risk_score ?? 0) * 100);
+
+        setRegionalRiskUi({
+          status: "success",
+          h3Region,
+          lat,
+          lon,
+          result,
+          updatedAt: Date.now(),
+        });
+
+        addEvent({
+          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | ${result.narrative_summary}`,
+          type: riskPct >= 70 ? "alert" : "new",
+          entityType: "infra",
+        });
+      } catch (error: unknown) {
+        const message =
+          error instanceof DOMException && error.name === "AbortError"
+            ? `Regional risk request timed out after ${requestTimeoutMs / 1000}s`
+            : error instanceof Error
+              ? error.message
+              : "Unknown regional risk error";
+
+        setRegionalRiskUi({
+          status: "error",
+          h3Region,
+          lat,
+          lon,
+          error: message,
+          updatedAt: Date.now(),
+        });
+
+        addEvent({
+          message: `AI_ROUTER ERROR: ${message}`,
+          type: "lost",
+          entityType: "infra",
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    },
+    [addEvent],
+  );
+
+  const hasRightSidebarContent =
+    !!(selectedEntity && (selectedEntity as any).type !== "sitrep") ||
+    (viewMode === "INTEL" &&
+      !(isAIAnalystOpen && selectedEntity?.type === "sitrep"));
+
+  const regionalRiskOverlay =
+    viewMode === "TACTICAL" || viewMode === "ORBITAL" ? (
+      <div
+        className="pointer-events-none absolute top-[74px] z-20 max-w-md"
+        style={{
+          right: hasRightSidebarContent ? 380 : 20,
+          transition: "right 0.3s ease-in-out",
+        }}
+      >
+        {regionalRiskUi && (
+          <div className="pointer-events-auto border border-cyan-400/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-cyan-300/90 font-semibold">
+                <Radar size={12} />
+                Regional Risk Analysis
+              </div>
+              <button
+                onClick={() => setRegionalRiskUi(null)}
+                className="text-white/40 hover:text-white/80 transition-colors"
+                aria-label="Dismiss regional risk panel"
+                title="Dismiss"
+              >
+                <X size={12} />
+              </button>
+            </div>
+
+            <div className="px-3 py-2 text-[11px] text-white/70 font-mono">
+              <div>{regionalRiskUi.h3Region}</div>
+              <div className="text-white/45">
+                {regionalRiskUi.lat.toFixed(3)}, {regionalRiskUi.lon.toFixed(3)}
+              </div>
+            </div>
+
+            {regionalRiskUi.status === "loading" ? (
+              <div className="flex items-center gap-2 px-3 pb-3 text-[11px] text-cyan-200">
+                <Loader2 size={13} className="animate-spin" />
+                Evaluating multi-INT signals...
+              </div>
+            ) : regionalRiskUi.status === "error" ? (
+              <div className="px-3 pb-3">
+                <div className="flex items-start gap-2 text-[11px] text-red-300">
+                  <XCircle size={13} className="mt-0.5 shrink-0" />
+                  <span>{regionalRiskUi.error}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 pb-3 space-y-2">
+                <div className="flex items-center gap-2 text-[11px] text-emerald-300">
+                  <CheckCircle2 size={13} className="shrink-0" />
+                  Completed
+                </div>
+                <div className="text-[11px] text-white/80">
+                  Risk: <span className="font-semibold text-amber-300">{Math.round((regionalRiskUi.result?.risk_score ?? 0) * 100)}%</span>
+                  <span className="text-white/50"> | anomalies: {regionalRiskUi.result?.anomaly_count ?? 0}</span>
+                </div>
+                <div className="text-[11px] text-white/70 leading-relaxed">
+                  {regionalRiskUi.result?.narrative_summary || "No narrative available."}
+                </div>
+                {(regionalRiskUi.result?.escalation_indicators?.length ?? 0) > 0 && (
+                  <div className="flex items-start gap-2 text-[10px] text-amber-200/90">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>{regionalRiskUi.result?.escalation_indicators.slice(0, 3).join(" | ")}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    ) : null;
 
   const obsLat = missionProps?.currentMission?.lat ?? 45.5152;
   const obsLon = missionProps?.currentMission?.lon ?? -122.6784;
@@ -589,7 +780,7 @@ function AuthenticatedApp() {
         rightSidebar={
           viewMode === "TACTICAL" ||
           viewMode === "ORBITAL" ||
-          viewMode === "INTEL" ? (
+          viewMode === "INTEL" ? hasRightSidebarContent ? (
             <div className="flex flex-col h-full gap-4">
               {selectedEntity && (selectedEntity as any).type !== "sitrep" ? (
                 <div className="flex-1 min-h-0 pointer-events-auto overflow-hidden flex flex-col">
@@ -642,7 +833,7 @@ function AuthenticatedApp() {
                 </div>
               ) : null}
             </div>
-          ) : null
+          ) : null : null
         }
       >
         {viewMode === "TACTICAL" ? (
@@ -653,6 +844,7 @@ function AuthenticatedApp() {
               onEvent={addEvent}
               selectedEntity={selectedEntity}
               onEntitySelect={handleEntitySelect}
+              onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
               missionArea={missionArea as any}
               onMapActionsReady={setMapActions}
               showVelocityVectors={showVelocityVectors}
@@ -695,6 +887,7 @@ function AuthenticatedApp() {
             />
 
             {articleViewerOverlay}
+            {regionalRiskOverlay}
 
             {replayMode && (
               <TimeControls
@@ -705,6 +898,8 @@ function AuthenticatedApp() {
                 endTime={replayRange.end}
                 playbackSpeed={playbackSpeed}
                 historyDuration={historyDuration}
+                loadedPointCount={loadedPointCount}
+                loadedTrackCount={loadedTrackCount}
                 onTogglePlay={() => setIsPlaying((p) => !p)}
                 onSeek={(t) => {
                   setReplayTime(t);
@@ -724,10 +919,12 @@ function AuthenticatedApp() {
             )}
           </>
         ) : viewMode === "ORBITAL" ? (
-          <OrbitalMap
+          <>
+            <OrbitalMap
             filters={orbitalFilters}
             globeMode={orbitalViewMode === "3D"}
             onEntitySelect={handleEntitySelect}
+            onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
             selectedEntity={selectedEntity}
             onCountsUpdate={
               setTrackCounts as unknown as (counts: {
@@ -766,7 +963,9 @@ function AuthenticatedApp() {
             onSatellitesRefReady={(ref) => {
               orbitalSatellitesRef.current = ref;
             }}
-          />
+            />
+            {regionalRiskOverlay}
+          </>
         ) : viewMode === "INTEL" ? (
           <div className="absolute inset-0 flex flex-col">
             <IntelGlobe

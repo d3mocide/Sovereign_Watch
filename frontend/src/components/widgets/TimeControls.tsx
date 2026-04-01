@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, X } from 'lucide-react';
 
 interface TimeControlsProps {
     isOpen: boolean;
@@ -9,6 +9,8 @@ interface TimeControlsProps {
     endTime: number;
     playbackSpeed: number;
     historyDuration: number; // hours
+    loadedPointCount?: number;
+    loadedTrackCount?: number;
     onTogglePlay: () => void;
     onSeek: (time: number) => void;
     onSpeedChange: (speed: number) => void;
@@ -24,18 +26,22 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
     endTime,
     playbackSpeed,
     historyDuration,
+    loadedPointCount = 0,
+    loadedTrackCount = 0,
     onTogglePlay,
     onSeek,
     onSpeedChange,
-    onDurationChange
+    onDurationChange,
+    onClose,
 }) => {
     if (!isOpen) return null;
 
     const progress = Math.max(0, Math.min(1, (currentTime - startTime) / (endTime - startTime)));
     const formatTime = (ts: number) => new Date(ts).toLocaleTimeString();
+    const isSampled = loadedPointCount >= 10000;
 
     return (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[500px] animate-in slide-in-from-top duration-300">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[640px] animate-in slide-in-from-top duration-300">
             <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-lg shadow-[0_4px_30px_rgba(0,0,0,0.5)] overflow-hidden">
                 
                 {/* Scrubber (Top Edge) */}
@@ -60,11 +66,11 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     />
                 </div>
 
-                {/* Compact Controls Row */}
-                <div className="flex items-center justify-between px-3 py-2">
+                {/* Controls Row */}
+                <div className="flex items-center justify-between px-4 py-2.5">
                     
                     {/* Left: Play/Pause + Speed */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                         <button 
                             onClick={onTogglePlay}
                             aria-label={isPlaying ? "Pause playback" : "Play playback"}
@@ -80,7 +86,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                                     onClick={() => onSpeedChange(speed)}
                                     aria-label={`Set playback speed to ${speed}x`}
                                     aria-pressed={playbackSpeed === speed}
-                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
+                                    className={`px-2 py-0.5 text-[9px] font-bold rounded min-w-[28px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         playbackSpeed === speed 
                                         ? 'bg-hud-green/20 text-hud-green shadow-[0_0_5px_rgba(0,255,65,0.3)] border border-hud-green/30' 
                                         : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
@@ -93,7 +99,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     </div>
 
                     {/* Center: Duration Selector */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                         <span className="text-[9px] text-white/40 font-bold tracking-wider">LOOKBACK:</span>
                         <div className="flex bg-black/40 rounded border border-white/10 p-0.5">
                             {[1, 6, 12, 24].map(hours => (
@@ -102,7 +108,7 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                                     onClick={() => onDurationChange(hours)}
                                     aria-label={`Set lookback duration to ${hours} hours`}
                                     aria-pressed={historyDuration === hours}
-                                    className={`px-1.5 py-0.5 text-[9px] font-bold rounded min-w-[24px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
+                                    className={`px-2 py-0.5 text-[9px] font-bold rounded min-w-[28px] transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${
                                         historyDuration === hours
                                         ? 'bg-amber-500/20 text-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.3)] border border-amber-500/30' 
                                         : 'text-white/40 hover:text-white/80 hover:bg-white/5 border border-transparent'
@@ -114,14 +120,37 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                         </div>
                     </div>
 
-                    {/* Right: Time Display */}
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_5px_#f59e0b]" />
-                        <span className="text-sm font-bold tabular-nums tracking-wider text-hud-green leading-none text-right min-w-[90px] drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
-                            {formatTime(currentTime)}
-                        </span>
+                    {/* Right: Time Display + Close */}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_5px_#f59e0b]" />
+                            <span className="text-sm font-bold tabular-nums tracking-wider text-hud-green leading-none text-right min-w-[90px] drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
+                                {formatTime(currentTime)}
+                            </span>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            aria-label="Exit replay mode"
+                            className="w-6 h-6 flex items-center justify-center rounded text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+                        >
+                            <X size={12} />
+                        </button>
                     </div>
                 </div>
+
+                {/* Density Strip */}
+                {loadedPointCount > 0 && (
+                    <div className="flex items-center justify-between px-4 pb-2">
+                        <span className="text-[8px] text-white/25 font-mono tabular-nums">
+                            {loadedTrackCount} tracks · {loadedPointCount.toLocaleString()} pts
+                        </span>
+                        {isSampled && (
+                            <span className="text-[8px] text-amber-400/60 font-bold tracking-widest">
+                                ⚠ SAMPLED
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

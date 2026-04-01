@@ -27,6 +27,22 @@ logger = logging.getLogger("SovereignWatch.SatNOGS")
 
 CACHE_TTL_TRANSMITTERS = 3600   # 1 hour — transmitter catalog changes rarely
 CACHE_TTL_OBSERVATIONS = 300    # 5 minutes — observations arrive hourly
+CACHE_TTL_STATIONS = 300        # 5 minutes — station availability changes frequently
+
+
+def _normalize_station_status(raw_status: object, online_flag: object) -> str:
+    """Normalize SatNOGS station availability labels for UI consistency."""
+    if isinstance(online_flag, bool):
+        return "online" if online_flag else "offline"
+
+    status = str(raw_status or "").strip().lower()
+    if status in {"online", "offline", "testing"}:
+        return status
+    if status in {"active", "up", "good"}:
+        return "online"
+    if status in {"down", "bad", "inactive"}:
+        return "offline"
+    return "unknown"
 
 
 @router.get("/transmitters")
@@ -212,9 +228,14 @@ async def verify_spectrum(norad_id: str):
 
 
 @router.get("/stations")
-async def get_stations():
+async def get_stations(
+    include_offline: bool = Query(
+        default=False,
+        description="Include offline stations in response",
+    ),
+):
     """Proxy the SatNOGS network stations API to bypass CORS and add caching."""
-    cache_key = "satnogs:stations:all"
+    cache_key = f"satnogs:stations:all:{include_offline}"
     if db.redis_client:
         cached = await db.redis_client.get(cache_key)
         if cached:
@@ -240,18 +261,25 @@ async def get_stations():
                 lat = s.get("lat")
                 lon = s.get("lng")
                 if lat is not None and lon is not None:
+                    normalized_status = _normalize_station_status(
+                        s.get("status"),
+                        s.get("online"),
+                    )
+                    if not include_offline and normalized_status == "offline":
+                        continue
+
                     stations.append({
                         "id": s.get("id"),
                         "name": s.get("name"),
-                        "status": s.get("status"),
+                        "status": normalized_status,
+                        "last_seen": s.get("last_seen"),
                         "lat": float(lat),
                         "lon": float(lon),
                         "altitude": float(s.get("alt") or 0)
                     })
                     
             if db.redis_client and stations:
-                # Cache for 24 hours (86400 seconds)
-                await db.redis_client.set(cache_key, json.dumps(stations, default=str), ex=86400)
+                await db.redis_client.set(cache_key, json.dumps(stations, default=str), ex=CACHE_TTL_STATIONS)
                 
             return stations
 

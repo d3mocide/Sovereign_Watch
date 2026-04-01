@@ -37,6 +37,7 @@ interface TacticalMapProps {
   }) => void;
   selectedEntity: CoTEntity | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
+  onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
   onMissionPropsReady?: (props: MissionProps) => void;
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
@@ -96,6 +97,7 @@ type InfraPickInfo = {
   coordinate?: [number, number];
   x?: number;
   y?: number;
+  layer?: { id?: string };
 };
 
 export function OrbitalMap({
@@ -104,6 +106,7 @@ export function OrbitalMap({
   onEvent,
   selectedEntity,
   onEntitySelect,
+  onAnalyzeRegionalRisk,
   onMapActionsReady,
   showVelocityVectors,
   showHistoryTails,
@@ -150,17 +153,31 @@ export function OrbitalMap({
     const obj = info?.object || null;
     if (obj) {
       const props = obj.properties || {};
-      const lat = obj.geometry?.type === 'Point' 
-        ? (obj.geometry.coordinates as [number, number])[1] 
-        : (obj.geometry?.coordinates as [number, number][])[0][1];
-      const lon = obj.geometry?.type === 'Point' 
-        ? (obj.geometry.coordinates as [number, number])[0] 
-        : (obj.geometry?.coordinates as [number, number][])[0][0];
+      const lat = obj.geometry?.type === 'Point'
+        ? (obj.geometry.coordinates as [number, number])[1]
+        : (obj.geometry?.coordinates as [number, number][])?.[0]?.[1] ?? 0;
+      const lon = obj.geometry?.type === 'Point'
+        ? (obj.geometry.coordinates as [number, number])[0]
+        : (obj.geometry?.coordinates as [number, number][])?.[0]?.[0] ?? 0;
+
+      // Determine entity type from the synthesized object type or the deck.gl layer id
+      const layerId = info?.layer?.id ?? '';
+      let entityType: string = 'infra';
+      let detailObj = obj;
+
+      if ((obj as any).type === 'outage') {
+        entityType = 'outage';
+      } else if (layerId.includes('ixp')) {
+        // Inject a layer discriminator so MapTooltip can render the IXP section
+        detailObj = { ...obj, properties: { ...(props as object), layer: 'ixp' } };
+      } else if (layerId.includes('fac')) {
+        detailObj = { ...obj, properties: { ...(props as object), layer: 'facility' } };
+      }
 
       const entity: CoTEntity = {
-        uid: (props as any).id || String((obj as any).id),
-        type: 'infra',
-        callsign: (props as any).name || 'Unknown Infra',
+        uid: (props as any).id || String((obj as any).id) || `infra-${Date.now()}`,
+        type: entityType,
+        callsign: (props as any).name || (props as any).name_long || 'Unknown Infra',
         lat,
         lon,
         altitude: 0,
@@ -169,13 +186,15 @@ export function OrbitalMap({
         lastSeen: Date.now(),
         uidHash: 0,
         trail: [],
-        detail: obj
+        detail: detailObj,
       };
       setHoveredEntity(entity);
       setHoverPosition({ x: info.x || 0, y: info.y || 0 });
     } else {
-      // Clear tooltip only if current hovered item is infra
-      setHoveredEntity(prev => (prev?.type === 'infra' ? null : prev));
+      // Clear tooltip only if current hovered item is infra-type
+      setHoveredEntity(prev =>
+        (prev?.type === 'infra' || prev?.type === 'outage') ? null : prev
+      );
     }
   }, []);
 
@@ -201,21 +220,6 @@ export function OrbitalMap({
     const id = setInterval(fetchSpaceWeather, 60_000); // refresh every 60 s
     return () => { cancelled = true; clearInterval(id); };
   }, [filters?.showAurora, filters?.showJamming]);
-
-  // GDELT conflict + tension events — always shown in orbital view (tone ≤ -2 only)
-  const [gdeltData, setGdeltData] = useState<any>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const fetch15min = async () => {
-      try {
-        const r = await fetch("/api/gdelt/events");
-        if (r.ok && !cancelled) setGdeltData(await r.json());
-      } catch { /* silently fail */ }
-    };
-    fetch15min();
-    const id = setInterval(fetch15min, 15 * 60_000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, []);
 
   // ---------------------------------------------------------------------------
   // Map base: adapter, style, refs, view state, hash sync (shared via useMapBase)
@@ -475,8 +479,6 @@ export function OrbitalMap({
     outagesData,
     auroraData,
     jammingData,
-    gdeltData,
-    gdeltToneThreshold: -2,
     setHoveredInfra: handleHoveredInfra as any,
     setSelectedInfra: (info: any) => {
       if (!info || !info.object) return;
@@ -698,6 +700,7 @@ export function OrbitalMap({
         onSetFocus={handleSetFocus}
         onSaveLocation={handleSaveLocation}
         onReturnHome={handleReturnHome}
+        onAnalyzeRegionalRisk={onAnalyzeRegionalRisk}
         onClose={() => {
           setContextMenuPos(null);
           setContextMenuCoords(null);

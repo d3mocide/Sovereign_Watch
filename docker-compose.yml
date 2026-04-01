@@ -66,6 +66,13 @@ services:
         || rpk topic alter-config orbital_raw \
           --set retention.ms=3600000 \
           --brokers sovereign-redpanda:9092
+
+        rpk topic create clausal_chains_state_changes \
+          --config retention.ms=259200000 \
+          --brokers sovereign-redpanda:9092 2>/dev/null \
+        || rpk topic alter-config clausal_chains_state_changes \
+          --set retention.ms=259200000 \
+          --brokers sovereign-redpanda:9092
     restart: "no"
 
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
@@ -229,6 +236,28 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # --- Processing: TAK Clausalizer (Delta Engine + State-Change Evaluator) ---
+  sovereign-tak-clausalizer:
+    build:
+      context: ./backend/ingestion/tak_clausalizer
+      dockerfile: Dockerfile
+    container_name: sovereign-tak-clausalizer
+    environment:
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - REDIS_HOST=sovereign-redis
+      - REDIS_PORT=6379
+      - DB_DSN=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+    networks:
+      - sovereign-net-backend
+    depends_on:
+      sovereign-redpanda:
+        condition: service_healthy
+      sovereign-redis:
+        condition: service_started
+      sovereign-timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
   # --- Persistence ---
   sovereign-timescaledb:
     image: timescale/timescaledb-ha:pg16
@@ -349,7 +378,7 @@ services:
     container_name: sovereign-frontend
     volumes:
       - ./frontend:/app
-      - sovereign-vol-frontend-node-modules:/app/node_modules # Prevent host from overwriting container node_modules
+      - sovereign-vol-frontend-node-modules:/app/node_modules
     networks:
       - sovereign-net-frontend
       - sovereign-net-backend

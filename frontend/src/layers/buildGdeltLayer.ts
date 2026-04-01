@@ -23,6 +23,11 @@ export interface GdeltPoint {
   timestamp?: string;
 }
 
+interface GdeltLabelDatum extends GdeltPoint {
+  labelText: string;
+  stackIndex: number;
+}
+
 /**
  * Returns a tone label string for a Goldstein tone score.
  * Used in hover/click tooltips.
@@ -33,6 +38,21 @@ export function gdeltToneLabel(tone: number): string {
   if (tone < 0) return "NEGATIVE";
   if (tone < 2) return "NEUTRAL";
   return "COOPERATIVE";
+}
+
+function gdeltQuadClassLabel(quadClass?: number): string {
+  switch (quadClass) {
+    case 1:
+      return "VERBAL COOP";
+    case 2:
+      return "MATERIAL COOP";
+    case 3:
+      return "VERBAL CONFLICT";
+    case 4:
+      return "MATERIAL CONFLICT";
+    default:
+      return "";
+  }
 }
 
 interface GdeltFeature {
@@ -85,6 +105,9 @@ export function buildGdeltLayer(
   onHover: (entity: any | null, pos: { x: number; y: number } | null) => void,
   onClick?: (event: GdeltPoint) => void,
 ): Layer[] {
+  const LABEL_BUCKET_DEGREES = 0.35;
+  const MAX_LABELS_PER_BUCKET = 2;
+
   const isReadableDomain = (value: string): boolean => {
     const domain = (value || "").trim();
     if (!domain) return false;
@@ -136,6 +159,59 @@ export function buildGdeltLayer(
     const noWww = raw.startsWith("www.") ? raw.slice(4) : raw;
     return noWww.length > 28 ? `${noWww.slice(0, 28)}...` : noWww;
   };
+
+  const getEventLabel = (point: GdeltPoint): string => {
+    const classLabel = gdeltQuadClassLabel(point.quad_class);
+    if (classLabel) return classLabel;
+    return formatDomainLabel(point.domain);
+  };
+
+  const labelCandidates = showDomainLabels
+    ? data.filter(
+        (d) => !!gdeltQuadClassLabel(d.quad_class) || isReadableDomain(d.domain),
+      )
+    : [];
+
+  // Reduce label collisions by grouping nearby points and showing only top-priority labels.
+  const labelBuckets = new Map<string, GdeltPoint[]>();
+  for (const point of labelCandidates) {
+    const latBucket = Math.round(point.lat / LABEL_BUCKET_DEGREES);
+    const lonBucket = Math.round(point.lon / LABEL_BUCKET_DEGREES);
+    const key = `${latBucket}:${lonBucket}`;
+    const bucket = labelBuckets.get(key);
+    if (bucket) {
+      bucket.push(point);
+    } else {
+      labelBuckets.set(key, [point]);
+    }
+  }
+
+  const labelData: GdeltLabelDatum[] = [];
+  const labelPriority = (point: GdeltPoint): number => {
+    const mentions = point.num_mentions ?? 0;
+    return Math.abs(point.goldstein) * 10 + mentions;
+  };
+
+  for (const bucket of labelBuckets.values()) {
+    const sorted = [...bucket].sort(
+      (a, b) => labelPriority(b) - labelPriority(a),
+    );
+    const shown = sorted.slice(0, MAX_LABELS_PER_BUCKET);
+    const hiddenCount = Math.max(0, sorted.length - shown.length);
+
+    shown.forEach((point, index) => {
+      const baseText = getEventLabel(point);
+      const labelText = index === 0 && hiddenCount > 0
+        ? `${baseText} +${hiddenCount}`
+        : baseText;
+
+      labelData.push({
+        ...point,
+        labelText,
+        stackIndex: index,
+      });
+    });
+  }
 
   return [
     // Outer glow ring
@@ -210,19 +286,16 @@ export function buildGdeltLayer(
       },
     }),
 
-    // Domain label (only shown when zoomed in enough — controlled by TextLayer size)
-    // Filtered to skip events with empty domains to avoid empty label boxes
+    // Event label (prefer semantic class, fallback to domain)
     new TextLayer<GdeltPoint>({
       id: `gdelt-labels-${globeMode ? "globe" : "merc"}`,
-      data: showDomainLabels
-        ? data.filter((d) => isReadableDomain(d.domain))
-        : [],
+      data: labelData,
       pickable: false,
       getPosition: (d) => [d.lon, d.lat, 0],
-      getText: (d) => formatDomainLabel(d.domain),
+      getText: (d) => d.labelText,
       getSize: 10,
       getColor: [245, 247, 250, 230],
-      getPixelOffset: [0, -18],
+      getPixelOffset: (d) => [0, -18 - d.stackIndex * 12],
       fontFamily: "monospace",
       fontWeight: 700,
       background: true,

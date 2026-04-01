@@ -7,6 +7,7 @@ import { InfraView } from "./sidebar-right/InfraView";
 import { JammingView } from "./sidebar-right/JammingView";
 import { JS8View } from "./sidebar-right/JS8View";
 import { RepeaterView } from "./sidebar-right/RepeaterView";
+import { SatnogsView } from "./sidebar-right/SatnogsView";
 import { SatelliteView } from "./sidebar-right/SatelliteView";
 import { ShipView } from "./sidebar-right/ShipView";
 import { TowerView } from "./sidebar-right/TowerView";
@@ -72,6 +73,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
   if (entity.type === "repeater") {
     return <RepeaterView key={entity.uid} {...baseProps} />;
+  }
+  if (entity.type === "satnogs") {
+    return <SatnogsView key={entity.uid} {...baseProps} />;
   }
   if (entity.type === "tower") {
     return <TowerView key={entity.uid} {...baseProps} />;

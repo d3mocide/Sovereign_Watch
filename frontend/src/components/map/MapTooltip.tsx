@@ -57,6 +57,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isRepeater = entity.type === "repeater";
   const isTower = entity.type === "tower";
   const isJS8 = entity.type === "js8";
+  const isSatnogs = entity.type === "satnogs";
   const isOrbital =
     entity.type === "a-s-K" ||
     (typeof entity.type === "string" && entity.type.indexOf("K") === 4);
@@ -94,6 +95,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
       ? "text-orange-400"
       : isJS8
         ? "text-emerald-400"
+        : isSatnogs
+          ? "text-teal-300"
         : isOrbital
           ? "text-purple-400"
           : isBuoy
@@ -124,6 +127,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
       ? "border-orange-400/50"
       : isJS8
         ? "border-emerald-400/50"
+        : isSatnogs
+          ? "border-teal-300/50"
         : isOrbital
           ? "border-purple-400/50"
           : isBuoy
@@ -154,6 +159,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
       ? Radio
       : isJS8
         ? Signal
+        : isSatnogs
+          ? Satellite
         : isOrbital
           ? Satellite
           : isBuoy
@@ -210,6 +217,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 ? "TOWER"
                 : isJS8
                   ? "JS8CALL"
+                  : isSatnogs
+                    ? "SATNOGS"
                   : isBuoy
                     ? "BUOY"
                     : isInfra
@@ -268,6 +277,57 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               className={`text-[10px] font-mono font-bold leading-tight ${holdSeverity.className}`}
             >
               {holdSeverity.label}
+            </span>
+          </div>
+        </div>
+      ) : isSatnogs ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              GROUND STATION
+            </span>
+            <span className="text-[10px] text-teal-300 font-mono font-bold leading-tight uppercase">
+              SATNOGS NODE
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              NODE ID
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.satnogs_id ?? "N/A")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              STATUS
+            </span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight uppercase">
+              {String(detailProps.status ?? "unknown")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LAT
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {entity.lat.toFixed(4)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LON
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {entity.lon.toFixed(4)}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ALTITUDE
+            </span>
+            <span className="text-[10px] text-teal-300 font-mono font-bold leading-tight">
+              {`${Math.round(Number(detailProps.altitude_m ?? entity.altitude ?? 0)).toLocaleString()} m`}
             </span>
           </div>
         </div>
@@ -788,6 +848,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
             <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
               {isJS8
                 ? "JS8CALL"
+                : isSatnogs
+                  ? "SATNOGS"
                 : isOrbital
                   ? "ORBITAL"
                   : isBuoy

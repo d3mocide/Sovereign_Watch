@@ -8,6 +8,13 @@ export interface WorkerProtocolOptions {
   watchedIcaosRef: MutableRefObject<Set<string>>;
   /** Called for every decoded entity update (both single and batched). */
   onEntityUpdate: (data: unknown) => void;
+  /** Optional callback to report websocket connection state transitions. */
+  onSocketStateChange?: (state: {
+    connected: boolean;
+    reason?: string;
+    code?: number;
+    attempt?: number;
+  }) => void;
 }
 
 /**
@@ -18,6 +25,7 @@ export function startWorkerProtocol({
   workerRef,
   watchedIcaosRef,
   onEntityUpdate,
+  onSocketStateChange,
 }: WorkerProtocolOptions): () => void {
   const worker = new Worker(
     new URL("../workers/tak.worker.ts", import.meta.url),
@@ -53,13 +61,31 @@ export function startWorkerProtocol({
 
   let ws: WebSocket | null = null;
   let reconnectAttempts = 0;
-  const maxReconnectAttempts = 10;
   const baseDelay = 1000;
   let reconnectTimeout: number | null = null;
+  let heartbeatInterval: number | null = null;
+  let lastMessageTs = Date.now();
   let isCleaningUp = false;
+
+  const clearReconnectTimeout = () => {
+    if (reconnectTimeout !== null) {
+      window.clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+  };
+
+  const clearHeartbeat = () => {
+    if (heartbeatInterval !== null) {
+      window.clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  };
 
   const connect = () => {
     if (isCleaningUp) return;
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+
+    clearReconnectTimeout();
 
     // Re-derive URL each time so a fresh token is used after reconnection.
     ws = new WebSocket(getWsUrl());
@@ -67,9 +93,29 @@ export function startWorkerProtocol({
 
     ws.onopen = () => {
       reconnectAttempts = 0;
+      lastMessageTs = Date.now();
+      clearHeartbeat();
+      heartbeatInterval = window.setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        // If stream goes stale (sleep/network edge cases), force reconnect.
+        if (Date.now() - lastMessageTs > 15000) {
+          ws.close(4000, "stale_connection");
+          return;
+        }
+
+        // Keep intermediaries/NAT mappings warm and exercise socket liveness.
+        try {
+          ws.send("ping");
+        } catch {
+          // onclose handles recovery
+        }
+      }, 5000);
+      onSocketStateChange?.({ connected: true, reason: "open" });
     };
 
     ws.onmessage = (event) => {
+      lastMessageTs = Date.now();
       if (workerRef.current) {
         workerRef.current.postMessage(
           { type: "decode_batch", payload: event.data },
@@ -82,21 +128,31 @@ export function startWorkerProtocol({
       // onclose handles reconnection
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (isCleaningUp) return;
-      if (reconnectAttempts < maxReconnectAttempts) {
-        const delay = Math.min(
-          baseDelay * Math.pow(2, reconnectAttempts),
-          30000,
-        );
-        reconnectAttempts++;
-        reconnectTimeout = window.setTimeout(connect, delay);
-      } else {
-        console.error(
-          "Max reconnection attempts reached. Please refresh the page.",
-        );
-      }
+      clearHeartbeat();
+
+      const reason = event.code === 4001 ? "auth_failed" : "close";
+      onSocketStateChange?.({
+        connected: false,
+        reason,
+        code: event.code,
+        attempt: reconnectAttempts,
+      });
+
+      // Keep trying forever with capped backoff; stream outages can outlast a fixed retry budget.
+      const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts), 30000);
+      reconnectAttempts++;
+      clearReconnectTimeout();
+      reconnectTimeout = window.setTimeout(connect, delay);
     };
+  };
+
+  const nudgeReconnect = () => {
+    if (isCleaningUp) return;
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    reconnectAttempts = 0;
+    connect();
   };
 
   // ── Watchlist polling ──────────────────────────────────────────────────────
@@ -116,12 +172,22 @@ export function startWorkerProtocol({
 
   syncWatchlist();
   const watchlistInterval = window.setInterval(syncWatchlist, 10_000);
+  window.addEventListener("online", nudgeReconnect);
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      nudgeReconnect();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   connect();
 
   return () => {
     isCleaningUp = true;
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    clearReconnectTimeout();
+    clearHeartbeat();
+    window.removeEventListener("online", nudgeReconnect);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     clearInterval(watchlistInterval);
     worker.terminate();
     workerRef.current = null;

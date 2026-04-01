@@ -288,6 +288,7 @@ export interface SatNOGSStation {
   id: number;
   name: string;
   status: string;
+  last_seen?: string | null;
   lat: number;
   lon: number;
   altitude: number;

@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.61.0] - 2026-03-31
+
+### Added
+
+- **Clausalizer Pipeline Monitoring Bar**: System Health widget now surfaces real-time clausalizer throughput and write freshness inline — `HEALTHY` / `STALE` / `ERROR` states with a compact activity bar and `Rows/5m` + last-write-age metadata.
+- **Clausalizer Stats Dashboard Tab**: Dedicated clausalizer tab in the Stats dashboard aggregating 5-minute health KPIs, source-split activity, timeline chart, and recent clause samples for operational debug visibility.
+- **Regional Risk Results Overlay**: Map overlay panel with explicit `loading` / `success` / `error` states, target region + coordinates, risk %, anomaly count, narrative summary, top-3 escalation indicators, and 15-second client-side abort timeout.
+- **Regional Risk Context Menu Action**: "Analyze Regional Risk" map right-click now fully wired end-to-end through `TacticalMap` and `OrbitalMap` to the `/api/ai_router/evaluate` backend.
+- **Regional Risk Dynamic Anchor**: Risk overlay repositions smoothly when the entity sidebar opens/closes, matching Space Weather HUD anchor behaviour.
+- **SatNOGS Hover Tooltip**: SatNOGS ground stations now respond to hover with a consistent `MapTooltip` card (icon, type label, header).
+- **AI Analyst Mode-Specific Prompts**: `tactical`, `osint`, and `sar` analysis modes now invoke genuinely distinct persona/framing templates — classification/behaviour/risk, source context/actor intent, and distress/SAR action respectively.
+- **Login Enter-Key Submit**: Login fields are now wrapped in a `<form>` with `onSubmit`, enabling Enter-key authentication without clicking the button.
+- **Replay Sample Density Strip**: Replay widget footer shows `N tracks · N,NNN pts` after load. An amber `⚠ SAMPLED` badge appears when the 10 K row cap was hit, indicating a representative sample.
+
+### Changed
+
+- **Replay Widget Width**: Widened from `w-[500px]` to `w-[640px]` with increased padding and button proportions to reduce cramped layout.
+- **GDELT Labels — Semantic Event Class**: Map labels now render quad-class text (`VERBAL COOP`, `MATERIAL COOP`, `VERBAL CONFLICT`, `MATERIAL CONFLICT`) instead of raw source domains.
+- **GDELT Label Deconfliction**: Spatial bucketing (`0.35°` cells, max 2 labels/bucket) with priority-sort by `|goldstein| × 10 + mentions`, stacked pixel offsets, and `+N` overflow indicator prevents unreadable overlaps in dense regions.
+- **GDELT Hidden in Orbital View**: GDELT layer removed from `OrbitalMap` (no per-view toggle yet); reduces visual noise in the orbital context.
+- **SatNOGS Status Normalisation**: Backend status field normalised; station cache TTL reduced to 5 minutes; frontend now fetches online-first with offline fallback.
+- **AI Analyst Prompting Hardened**: Domain classification helper (`AIR` / `MARITIME` / `ORBITAL` / `INFRASTRUCTURE` / `OSINT_EVENT`) and compact waypoint telemetry summary injected into all analysis prompts; `INSUFFICIENT DATA` enforced when evidence is thin.
+- **Config/Location Log Spam Reduced**: System heartbeat switched from `/api/config/location` to `/health`; mission-area polling lowered to 60 s (visibility-gated) with three-layer cache (in-flight dedup + 5 s in-memory + 60 s localStorage).
+- **User Management Glass Redesign**: Administrative panel updated to Sovereign Glass aesthetic — glassmorphism layers, HUD-green glows, monospaced accents, focus animations.
+- **RBAC Phase 3 — AI & Radio Gating**: AI Analyst `Run` button requires `operator`; JS8 TX input/button and KiwiSDR tuning controls require `operator`. Lock icons and tooltips displayed for unauthorised users.
+
+### Fixed
+
+- **Replay Window Newest-Bias**: Replaced global `ORDER BY time DESC LIMIT N` with a CTE pipeline that distributes rows across all time buckets (`ceil(limit/total_buckets)` cap per bucket), preventing newest intervals from crowding out the full requested window.
+- **ADS-B Full Reset on Stream Reconnect**: During WebSocket disconnect windows the stale-prune threshold is relaxed to 15 minutes (`DISCONNECTED_GRACE_MS`), preventing all aircraft from being evicted and re-populated on reconnect.
+- **Track Stream Auth Recovery**: `getToken()` now falls back to `sessionStorage` when in-memory token state is empty; `WorkerProtocol` reconnect loop is now indefinite with capped 30 s backoff (no retry budget exhaustion).
+- **AI Router `asyncpg` Interval Bindings**: Replaced `$1::interval` string parameters with `($1 * interval '1 hour')` integer bindings — eliminates `DataError: 'str' object has no attribute 'days'` in regional risk and clausal chain queries.
+- **AI Router Regional Risk Timeout**: LLM narrative step now wrapped in `asyncio.wait_for(timeout=8.0)` with heuristic fallback, preventing silent hangs when the model endpoint is slow or unavailable.
+- **Clausalizer Persistence Gap**: TAK clausalizer emitter now writes every emitted state-change clause directly to `clausal_chains` in TimescaleDB; `DB_DSN` env var added to compose service with db health dependency.
+- **Clausal Chains Endpoint**: Changed `POST` → `GET`; added H3-cell → PostGIS `ST_Within` spatial filter; fixed psycopg2 `%s` → asyncpg `$N` placeholders; frontend hook updated to match.
+- **Frontend `h3-js` Runtime Import**: Replaced default import with named `{ latLngToCell }` import, fixing blank-screen crash caused by incompatible export format.
+- **Frontend `node_modules` Volume**: Added named Docker volume `sovereign-vol-frontend-node-modules` mounted at `/app/node_modules` to prevent bind-mount override masking installed Vite/deps — resolves `Cannot find module vite/bin/vite.js` at runtime.
+- **Frontend `pnpm-lock.yaml` Frozen-Build Failure**: Regenerated lockfile to include `h3-js` in the importer section, restoring `--frozen-lockfile` Docker builds.
+- **TAK Clausalizer Docker Build**: Generated missing `uv.lock` for `sovereign-tak-clausalizer` (and `sovereign-gdelt-pulse`) — resolves `COPY uv.lock` build failure.
+- **TAK Clausalizer Runtime**: Fixed Dockerfile to use `UV_PROJECT_ENVIRONMENT=/opt/venv` with `uv run --no-sync` — resolves `ModuleNotFoundError: No module named 'aiokafka'` at container start.
+- **Stats Dashboard Auth**: `/api/stats/*` fully protected behind `require_role("admin")` at the router level; frontend `/stats` route gated within the authenticated branch.
+- **AI Router `POST /api/analyze/{uid}` Auth**: Restricted to `require_role("operator")` — prevents viewer-role LLM cost escalation.
+
+### Verification
+
+- Frontend: `pnpm run lint && pnpm run test` — 36/36 tests pass, lint clean.
+- Backend API: `uv tool run ruff check . && uv run python -m pytest` — 57/58 tests pass (1 pre-existing: `test_track_history_hours_exceeded`).
+
+---
+
 ## [0.60.0] - 2026-03-31
 
 ### Added

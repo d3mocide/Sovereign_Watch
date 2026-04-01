@@ -15,6 +15,8 @@ export function useReplayController() {
   const [replayEntities, setReplayEntities] = useState<Map<string, CoTEntity>>(
     new Map(),
   );
+  const [loadedPointCount, setLoadedPointCount] = useState(0);
+  const [loadedTrackCount, setLoadedTrackCount] = useState(0);
 
   const replayCacheRef = useRef<Map<string, CoTEntity[]>>(new Map());
   const lastReplayFrameRef = useRef<number>(0);
@@ -67,7 +69,10 @@ export function useReplayController() {
         const data = await res.json();
         console.log(`Loaded ${data.length} historical points`);
 
-        replayCacheRef.current = processReplayData(data);
+        const processed = processReplayData(data);
+        replayCacheRef.current = processed;
+        setLoadedPointCount(data.length);
+        setLoadedTrackCount(processed.size);
         setReplayRange({ start: start.getTime(), end: end.getTime() });
 
         // Sync ref to new start time so the rAF loop starts from the correct position.
@@ -143,5 +148,7 @@ export function useReplayController() {
     replayTimeRef,
     loadReplayData,
     updateReplayFrame,
+    loadedPointCount,
+    loadedTrackCount,
   };
 }

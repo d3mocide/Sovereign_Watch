@@ -9,6 +9,7 @@ from core.database import db
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
+    ai_router,
     analysis,
     auth,
     buoys,
@@ -207,6 +208,7 @@ app.include_router(stats.router)
 app.include_router(buoys.router, dependencies=_viewer_auth)
 app.include_router(maritime.router, dependencies=_viewer_auth)
 app.include_router(iss.router, dependencies=_viewer_auth)
+app.include_router(ai_router.router, dependencies=_viewer_auth)
 
 if __name__ == "__main__":
     import uvicorn

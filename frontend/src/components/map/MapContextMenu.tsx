@@ -1,7 +1,7 @@
 import { useAuth } from '../../hooks/useAuth';
 import React from 'react';
-import { Crosshair, Save, Home, MapPin, Lock } from 'lucide-react';
-
+import { Crosshair, Save, Home, MapPin, Lock, Zap } from 'lucide-react';
+import { latLngToCell } from 'h3-js';
 
 interface MapContextMenuProps {
   position: { x: number; y: number } | null;
@@ -9,6 +9,7 @@ interface MapContextMenuProps {
   onSetFocus: (lat: number, lon: number) => void;
   onSaveLocation: (lat: number, lon: number) => void;
   onReturnHome: () => void;
+  onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
   onClose: () => void;
 }
 
@@ -18,6 +19,7 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
   onSetFocus,
   onSaveLocation,
   onReturnHome,
+  onAnalyzeRegionalRisk,
   onClose,
 }) => {
   const { hasRole } = useAuth();
@@ -38,6 +40,14 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
   const handleReturnHome = () => {
     onReturnHome();
     onClose();
+  };
+
+  const handleAnalyzeRegionalRisk = () => {
+    if (onAnalyzeRegionalRisk) {
+      const h3Region = latLngToCell(coordinates.lat, coordinates.lon, 7);
+      onAnalyzeRegionalRisk(h3Region, coordinates.lat, coordinates.lon);
+      onClose();
+    }
   };
 
   return (
@@ -89,6 +99,17 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
                   <div>
                     <div className="text-xs text-white/90 group-hover:text-white font-medium">Save Location As...</div>
                     <div className="text-[10px] text-white/40">Add to mission library</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleAnalyzeRegionalRisk}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-amber-500/10 transition-colors group text-left"
+                >
+                  <Zap size={14} className="text-amber-400/60 group-hover:text-amber-400" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Analyze Regional Risk</div>
+                    <div className="text-[10px] text-white/40">AI multi-INT assessment for H3 region</div>
                   </div>
                 </button>
               </>

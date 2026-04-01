@@ -28,6 +28,13 @@ Each poller is a standalone microservice that ingests data from external sources
 | [Infra Poller Guide](./pollers/Infra.md)      | Internet outages + submarine cables | `sovereign-infra-poller` |
 | [RF Pulse Guide](./pollers/RF.md)             | RF repeaters + NOAA weather radio   | `sovereign-rf-pulse`     |
 
+### Intelligence Systems & AI
+
+| Document                                                | Description                                                       |
+| :------------------------------------------------------ | :---------------------------------------------------------------- |
+| [TAK Clausalizer & Threat Detection](./TAK_Clausalizer.md) | Autonomous 4-phase semantic state-change analysis system         |
+| [Regional Risk Analysis](./Regional_Risk_Analysis.md)   | Multi-INT regional threat assessment and AI router                |
+
 ### Architecture & Protocols
 
 | Document                                    | Description                                                       |
