@@ -55,7 +55,7 @@ export function useClausalChains(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
+          'Authorization': `Bearer ${sessionStorage.getItem('sw_token') || ''}`,
         },
         body: JSON.stringify({
           region,
