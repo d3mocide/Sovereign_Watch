@@ -51,7 +51,7 @@ class TakClausalizerService:
         self.batch_size = 100
         self.batch_timeout_s = 2.0
         self.message_batch: Dict = {}
-        self.last_flush_time = asyncio.get_event_loop().time()
+        self.last_flush_time: float = 0.0  # Set to running loop time in setup()
 
         # Statistics
         self.stats = {
@@ -88,6 +88,7 @@ class TakClausalizerService:
         # Connect clause emitter
         await self.emitter.connect()
 
+        self.last_flush_time = asyncio.get_event_loop().time()
         logger.info("TAK Clausalizer Service setup complete")
 
     async def shutdown(self):

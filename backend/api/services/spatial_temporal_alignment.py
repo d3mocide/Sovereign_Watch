@@ -4,9 +4,9 @@ Converts GDELT regional events to H3 parent cells and TAK tracks to child cells 
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import h3
 
@@ -26,6 +26,7 @@ class AlignedClause:
     narrative: Optional[str]
     h3_cell_micro: Optional[str]  # H3-9 for TAK
     h3_cell_macro: Optional[str]  # H3-7 for GDELT/regional
+    adverbial_context: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -132,6 +133,9 @@ class SpatialTemporalAlignment:
             if h3_macro != h3_region:
                 continue  # Skip traces outside region
 
+            raw_ctx = clause_dict.get("adverbial_context")
+            adverbial_context: Dict[str, Any] = dict(raw_ctx) if raw_ctx else {}
+
             clause = AlignedClause(
                 time=clause_time,
                 uid=clause_dict.get("uid", ""),
@@ -142,6 +146,7 @@ class SpatialTemporalAlignment:
                 narrative=clause_dict.get("narrative_summary"),
                 h3_cell_micro=h3_micro,
                 h3_cell_macro=h3_macro,
+                adverbial_context=adverbial_context,
             )
             tak_clauses.append(clause)
 

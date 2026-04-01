@@ -194,10 +194,6 @@ class StateChangeEvaluator:
             logger.warning(f"Error detecting H3 boundary cross: {e}")
             return False
 
-    def _detect_type_change(self, type1: str, type2: str) -> bool:
-        """Check if TAK type code changed."""
-        return type1 != type2
-
     def _detect_speed_transition(self, prev_speed: float, new_speed: float) -> bool:
         """Detect transition between stationary and moving."""
         prev_stationary = prev_speed < self.SPEED_STATIONARY_MS

@@ -380,6 +380,97 @@ class EscalationDetector:
 
         return anomalies
 
+    def detect_rendezvous(
+        self,
+        tak_clauses: List[Dict],
+        window_minutes: int = 30,
+    ) -> List[AnomalyMetric]:
+        """
+        Detect multi-entity rendezvous: two or more distinct UIDs converging
+        to the same H3-9 cell within ``window_minutes``.
+
+        A rendezvous is significant when multiple entities (from potentially
+        different sources) arrive at the same micro-cell in a short window —
+        a pattern associated with coordinated activity, handoffs, or assembly.
+
+        Args:
+            tak_clauses: List of TAK medial clauses (dict with 'uid',
+                         'locative_lat', 'locative_lon', 'time').
+            window_minutes: Look-back window for co-location (default 30 min).
+
+        Returns:
+            List of AnomalyMetrics, one per rendezvous cell detected.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        if not tak_clauses or len(tak_clauses) < 2:
+            return []
+
+        # Parse times and group latest clause per UID into H3-9 cells.
+        # We keep only the most-recent position for each UID so that a single
+        # entity loitering in a cell doesn't inflate the entity count.
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+
+        uid_latest: Dict[str, Dict] = {}
+        for clause in tak_clauses:
+            uid = clause.get("uid")
+            if not uid:
+                continue
+
+            raw_time = clause.get("time")
+            try:
+                if isinstance(raw_time, datetime):
+                    clause_time = raw_time if raw_time.tzinfo else raw_time.replace(tzinfo=timezone.utc)
+                else:
+                    ts = str(raw_time or "").replace("Z", "+00:00")
+                    clause_time = datetime.fromisoformat(ts)
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+            if clause_time < cutoff:
+                continue
+
+            # Keep the most recent observation per UID
+            prev = uid_latest.get(uid)
+            if prev is None or clause_time > prev["_time"]:
+                uid_latest[uid] = {**clause, "_time": clause_time}
+
+        # Group UIDs by H3-9 cell of their latest position
+        cell_uids: Dict[str, List[str]] = {}
+        for uid, clause in uid_latest.items():
+            lat = clause.get("locative_lat")
+            lon = clause.get("locative_lon")
+            if lat is None or lon is None:
+                continue
+            try:
+                cell = h3.latlng_to_cell(lat, lon, self.H3_ANOMALY_RES)
+            except Exception as exc:
+                logger.warning("H3 cell error for uid=%s: %s", uid, exc)
+                continue
+            cell_uids.setdefault(cell, []).append(uid)
+
+        anomalies: List[AnomalyMetric] = []
+        for cell, uids in cell_uids.items():
+            unique_uids = list(set(uids))
+            if len(unique_uids) < 2:
+                continue
+
+            # Score scales with the number of entities, saturating at 10+
+            score = min(len(unique_uids) / 10.0, 1.0)
+            anomalies.append(
+                AnomalyMetric(
+                    metric_type="rendezvous",
+                    score=score,
+                    affected_uids=unique_uids,
+                    description=(
+                        f"{len(unique_uids)} entities rendezvoused in H3 cell {cell} "
+                        f"within {window_minutes} min"
+                    ),
+                )
+            )
+
+        return anomalies
+
     def compute_risk_score(
         self,
         pattern_confidence: float,
