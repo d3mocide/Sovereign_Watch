@@ -235,10 +235,13 @@ class EscalationDetector:
         anomalies = []
 
         for clause in tak_clauses:
-            # Check if classification contains emergency code
-            classification = clause.get("detail", {}).get("classification", {})
-            squawk = classification.get("squawk", "")
+            # Prefer squawk from adverbial_context (current schema), fallback to detail.classification
+            adverbial_context = clause.get("adverbial_context", {}) or {}
+            squawk = adverbial_context.get("squawk")
 
+            if not squawk:
+                classification = clause.get("detail", {}).get("classification", {}) or {}
+                squawk = classification.get("squawk", "")
             if squawk in self.EMERGENCY_TRANSPONDER_CODES:
                 anomalies.append(
                     AnomalyMetric(
