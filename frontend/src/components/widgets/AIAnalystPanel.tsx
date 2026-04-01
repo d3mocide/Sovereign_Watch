@@ -21,6 +21,7 @@ const LOOKBACK_OPTIONS = [
   { label: '24 h', value: 24 },
   { label: '48 h', value: 48 },
   { label: '72 h', value: 72 },
+  { label: '7 d', value: 168 },
 ];
 
 const MODE_OPTIONS = [

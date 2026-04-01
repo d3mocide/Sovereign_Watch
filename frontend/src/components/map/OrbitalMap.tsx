@@ -37,6 +37,7 @@ interface TacticalMapProps {
   }) => void;
   selectedEntity: CoTEntity | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
+  onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
   onMissionPropsReady?: (props: MissionProps) => void;
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
@@ -104,6 +105,7 @@ export function OrbitalMap({
   onEvent,
   selectedEntity,
   onEntitySelect,
+  onAnalyzeRegionalRisk,
   onMapActionsReady,
   showVelocityVectors,
   showHistoryTails,
@@ -698,6 +700,7 @@ export function OrbitalMap({
         onSetFocus={handleSetFocus}
         onSaveLocation={handleSaveLocation}
         onReturnHome={handleReturnHome}
+        onAnalyzeRegionalRisk={onAnalyzeRegionalRisk}
         onClose={() => {
           setContextMenuPos(null);
           setContextMenuCoords(null);
