@@ -287,7 +287,7 @@ export function buildGdeltLayer(
     }),
 
     // Event label (prefer semantic class, fallback to domain)
-    new TextLayer<GdeltPoint>({
+    new TextLayer<GdeltLabelDatum>({
       id: `gdelt-labels-${globeMode ? "globe" : "merc"}`,
       data: labelData,
       pickable: false,

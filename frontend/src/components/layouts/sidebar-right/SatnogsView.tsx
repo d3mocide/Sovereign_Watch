@@ -87,7 +87,10 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
       </div>
 
       <div className="border border-t-0 border-teal-300/30 bg-black/50 backdrop-blur-md p-3 rounded-b-sm space-y-3">
-        <AnalysisWidget entity={entity} onOpenAnalystPanel={onOpenAnalystPanel} />
+        <AnalysisWidget
+          accentColor="text-teal-300"
+          onOpenPanel={onOpenAnalystPanel}
+        />
 
         <section className="space-y-2">
           <h3 className="text-[10px] text-white/50 font-bold uppercase tracking-wider">Tracking_Status</h3>
@@ -97,7 +100,7 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
           </div>
         </section>
 
-        <TimeTracked entity={entity} />
+        <TimeTracked lastSeen={entity.lastSeen} />
       </div>
     </div>
   );
