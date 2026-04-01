@@ -162,7 +162,8 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
             "uid": clause.uid,
             "locative_lat": clause.lat,
             "locative_lon": clause.lon,
-            "adverbial_context": {"course": 0.0},  # Placeholder
+            # Prefer actual adverbial_context from the clause if available; otherwise use the legacy placeholder
+            "adverbial_context": getattr(clause, "adverbial_context", None) or {"course": 0.0},
         }
         for clause in aligned.tak_clauses
     ]
