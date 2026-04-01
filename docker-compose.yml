@@ -66,6 +66,13 @@ services:
         || rpk topic alter-config orbital_raw \
           --set retention.ms=3600000 \
           --brokers sovereign-redpanda:9092
+
+        rpk topic create clausal_chains_state_changes \
+          --config retention.ms=259200000 \
+          --brokers sovereign-redpanda:9092 2>/dev/null \
+        || rpk topic alter-config clausal_chains_state_changes \
+          --set retention.ms=259200000 \
+          --brokers sovereign-redpanda:9092
     restart: "no"
 
   # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
@@ -220,6 +227,25 @@ services:
       # UTC hour (0-23) at which the weekly RadioReference SOAP fetch is allowed to run.
       # Set to -1 to disable (fetch immediately when interval elapses).
       - RF_RR_FETCH_HOUR=${RF_RR_FETCH_HOUR:-4}
+    networks:
+      - sovereign-net-backend
+    depends_on:
+      sovereign-redpanda:
+        condition: service_healthy
+      sovereign-redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # --- Processing: TAK Clausalizer (Delta Engine + State-Change Evaluator) ---
+  sovereign-tak-clausalizer:
+    build:
+      context: ./backend/ingestion/tak_clausalizer
+      dockerfile: Dockerfile
+    container_name: sovereign-tak-clausalizer
+    environment:
+      - KAFKA_BROKERS=sovereign-redpanda:9092
+      - REDIS_HOST=sovereign-redis
+      - REDIS_PORT=6379
     networks:
       - sovereign-net-backend
     depends_on:
