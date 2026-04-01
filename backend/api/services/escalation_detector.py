@@ -42,6 +42,10 @@ class EscalationDetector:
     CLUSTERING_DISTANCE_M = 2000.0  # 2 km radius
     EMERGENCY_TRANSPONDER_CODES = ["7700", "7600", "7500"]  # Aviation emergency codes
 
+    # Space weather & comms context
+    KP_INDEX_THRESHOLD = 6.0  # Kp >= 6 = significant geomagnetic storm
+    SATNOGS_SIGNAL_LOSS_DBM = -10.0  # Threshold for signal loss event
+
     def __init__(self):
         pass
 
@@ -247,12 +251,116 @@ class EscalationDetector:
 
         return anomalies
 
+    def detect_internet_outage_correlation(
+        self, outage_data: Optional[Dict]
+    ) -> AnomalyMetric:
+        """
+        Detect correlation between TAK movements and internet outages.
+
+        Args:
+            outage_data: Internet outage context (country, severity, etc.)
+
+        Returns:
+            AnomalyMetric with outage correlation score
+        """
+        if not outage_data:
+            return AnomalyMetric(
+                metric_type="internet_outage",
+                score=0.0,
+                affected_uids=[],
+                description="No internet outage data",
+            )
+
+        severity = outage_data.get("severity", 0.0)
+        country = outage_data.get("country_code", "UNKNOWN")
+        asn_name = outage_data.get("asn_name", "")
+
+        return AnomalyMetric(
+            metric_type="internet_outage",
+            score=severity,  # Use actual severity as score
+            affected_uids=[],
+            description=f"Internet outage in {country} ({asn_name}): severity={severity:.2f}",
+        )
+
+    def detect_space_weather_anomaly(
+        self, kp_index: Optional[float]
+    ) -> AnomalyMetric:
+        """
+        Detect space weather events that could explain GPS/comms anomalies.
+
+        Args:
+            kp_index: Kp-index value (0-9)
+
+        Returns:
+            AnomalyMetric with space weather impact
+        """
+        if kp_index is None or kp_index < self.KP_INDEX_THRESHOLD:
+            return AnomalyMetric(
+                metric_type="space_weather",
+                score=0.0,
+                affected_uids=[],
+                description="Normal space weather conditions",
+            )
+
+        # Higher Kp index = higher likelihood of GPS/comms degradation
+        normalized_score = min(kp_index / 9.0, 1.0)  # Normalize to 0-1
+
+        categories = {
+            6: "G1 - Minor Geomagnetic Storm",
+            7: "G2 - Moderate Geomagnetic Storm",
+            8: "G3 - Strong Geomagnetic Storm",
+            9: "G4/G5 - Severe/Extreme Geomagnetic Storm",
+        }
+        category = categories.get(int(kp_index), "Extreme Storm")
+
+        return AnomalyMetric(
+            metric_type="space_weather",
+            score=normalized_score,
+            affected_uids=[],
+            description=f"Space weather: {category} (Kp={kp_index:.1f})",
+        )
+
+    def detect_satnogs_signal_loss(
+        self, signal_events: Optional[List[Dict]]
+    ) -> List[AnomalyMetric]:
+        """
+        Detect satellite signal loss events (potential jamming/orbital anomaly).
+
+        Args:
+            signal_events: SatNOGS observation data
+
+        Returns:
+            List of AnomalyMetrics for signal loss events
+        """
+        anomalies = []
+
+        if not signal_events:
+            return anomalies
+
+        for event in signal_events:
+            signal_strength = event.get("signal_strength")
+            norad_id = event.get("norad_id")
+            station = event.get("ground_station_name", "Unknown")
+
+            if signal_strength and signal_strength < self.SATNOGS_SIGNAL_LOSS_DBM:
+                anomalies.append(
+                    AnomalyMetric(
+                        metric_type="satellite_signal_loss",
+                        score=min(abs(signal_strength) / 100.0, 1.0),  # Normalize
+                        affected_uids=[f"SAT-{norad_id}"],
+                        description=f"Signal loss for satellite {norad_id} at {station}: {signal_strength:.1f} dBm",
+                    )
+                )
+
+        return anomalies
+
     def compute_risk_score(
         self,
         pattern_confidence: float,
         anomaly_score: float,
         alignment_score: float,
         anomaly_count: int = 0,
+        context_anomalies: Optional[List[AnomalyMetric]] = None,
     ) -> float:
         """
         Compute composite risk score from pattern matching and anomalies.
@@ -262,6 +370,7 @@ class EscalationDetector:
             anomaly_score: TAK behavioral anomaly score (0.0 - 1.0)
             alignment_score: Spatial-temporal alignment score (0.0 - 1.0)
             anomaly_count: Number of distinct anomalies detected
+            context_anomalies: Optional list of contextual anomalies (outages, space weather)
 
         Returns:
             Composite risk score (0.0 - 1.0)
@@ -279,6 +388,19 @@ class EscalationDetector:
             + anomaly_weight * anomaly_score * anomaly_multiplier
             + alignment_weight * alignment_score
         )
+
+        # Apply contextual dampening or boosting
+        if context_anomalies:
+            context_score = sum(a.score for a in context_anomalies) / len(
+                context_anomalies
+            )
+            # If strong context (e.g., major outage), slightly boost TAK anomaly confidence
+            # If space weather explains behavior, slightly lower risk (likely false positive)
+            for anomaly in context_anomalies:
+                if anomaly.metric_type == "space_weather" and anomaly.score > 0.5:
+                    risk *= 0.9  # 10% dampening for expected behavior during storms
+                elif anomaly.metric_type == "internet_outage" and anomaly.score > 0.7:
+                    risk *= 1.1  # 10% boost for unusual movement during major outages
 
         # Normalize to 0.0 - 1.0
         return min(risk, 1.0)

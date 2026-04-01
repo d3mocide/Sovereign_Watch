@@ -673,3 +673,122 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- TABLE: internet_outages (IODA - Internet Outage Detection and Analysis)
+-- Stores regional internet outages for correlation with TAK movement anomalies.
+-- Persisted (previously only in Redis) to enable multi-day correlation.
+CREATE TABLE IF NOT EXISTS internet_outages (
+    time                TIMESTAMPTZ NOT NULL,
+    country_code        VARCHAR(2),
+    asn                 INTEGER,
+    severity            DOUBLE PRECISION,  -- 0.0-1.0, intensity of outage
+    affected_nets       INTEGER,  -- Number of affected networks
+    asn_name            TEXT,
+    geom                GEOMETRY(POINT, 4326)  -- Country centroid (approximate)
+);
+
+SELECT create_hypertable('internet_outages', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('internet_outages', INTERVAL '7 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS ix_internet_outages_country_time
+    ON internet_outages (country_code, time DESC);
+
+CREATE INDEX IF NOT EXISTS ix_internet_outages_severity_time
+    ON internet_outages (severity DESC, time DESC);
+
+CREATE INDEX IF NOT EXISTS ix_internet_outages_geom
+    ON internet_outages USING GIST (geom);
+
+-- TABLE: satnogs_signal_events (SatNOGS Signal Intelligence)
+-- Ground station observations of satellite signal strength/loss.
+-- Correlates with TAK space asset tracking and comms anomalies.
+CREATE TABLE IF NOT EXISTS satnogs_signal_events (
+    time                TIMESTAMPTZ NOT NULL,
+    norad_id            INTEGER NOT NULL,
+    ground_station_id   INTEGER,
+    ground_station_name TEXT,
+    signal_strength     DOUBLE PRECISION,  -- dBm or relative strength
+    observation_start   TIMESTAMPTZ,
+    observation_end     TIMESTAMPTZ,
+    frequency           DOUBLE PRECISION,  -- Hz
+    modulation          TEXT,
+    confidence          DOUBLE PRECISION DEFAULT 0.8  -- 0.0-1.0
+);
+
+SELECT create_hypertable('satnogs_signal_events', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('satnogs_signal_events', INTERVAL '30 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS ix_satnogs_signal_norad_time
+    ON satnogs_signal_events (norad_id, time DESC);
+
+CREATE INDEX IF NOT EXISTS ix_satnogs_signal_strength_time
+    ON satnogs_signal_events (signal_strength, time DESC);
+
+CREATE INDEX IF NOT EXISTS ix_satnogs_signal_station_time
+    ON satnogs_signal_events (ground_station_id, time DESC);
+
+-- TABLE: space_weather_context (Enhanced Kp-index Context)
+-- Stores aurora/space weather alongside jamming detection for correlation.
+-- Helps explain GPS/comms anomalies in TAK data.
+CREATE TABLE IF NOT EXISTS space_weather_context (
+    time                TIMESTAMPTZ NOT NULL,
+    kp_index            DOUBLE PRECISION,
+    kp_category         TEXT,  -- 'quiet'|'unsettled'|'active'|'minor_storm'|'major_storm'|'severe_storm'|'extreme_storm'
+    dst_index           DOUBLE PRECISION,  -- Disturbance Storm Time
+    f10_7               DOUBLE PRECISION,  -- Solar flux
+    explanation         TEXT  -- Free-text aurora forecast
+);
+
+SELECT create_hypertable('space_weather_context', 'time', if_not_exists => TRUE, chunk_time_interval => INTERVAL '1 day');
+SELECT add_retention_policy('space_weather_context', INTERVAL '30 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS ix_space_weather_kp_category
+    ON space_weather_context (kp_category, time DESC);
+
+CREATE INDEX IF NOT EXISTS ix_space_weather_time
+    ON space_weather_context (time DESC);
+
+-- VIEW: clausal_chains_enriched (correlate with contextual data)
+-- Joins clausal chains with internet outages, space weather, and SatNOGS observations.
+-- Used by AI Router for enhanced multi-INT correlation.
+CREATE OR REPLACE VIEW clausal_chains_enriched AS
+SELECT
+    cc.time,
+    cc.uid,
+    cc.source,
+    cc.predicate_type,
+    cc.state_change_reason,
+    cc.narrative_summary,
+    cc.locative_lat,
+    cc.locative_lon,
+    -- Internet outage context
+    io.country_code AS outage_country,
+    io.severity AS outage_severity,
+    io.asn_name AS outage_asn,
+    -- Space weather context
+    swc.kp_index,
+    swc.kp_category,
+    swc.dst_index,
+    -- SatNOGS context (for space asset tracking)
+    CASE
+        WHEN cc.source = 'TAK_ADSB' THEN NULL
+        ELSE array_agg(DISTINCT sse.ground_station_name ORDER BY sse.ground_station_name)
+    END AS satnogs_stations,
+    CASE
+        WHEN cc.source = 'TAK_ADSB' THEN NULL
+        ELSE array_agg(DISTINCT sse.signal_strength ORDER BY sse.signal_strength DESC)
+    END AS signal_strengths
+FROM clausal_chains cc
+LEFT JOIN internet_outages io
+    ON cc.time >= io.time - INTERVAL '2 hours'
+    AND cc.time <= io.time + INTERVAL '2 hours'
+LEFT JOIN space_weather_context swc
+    ON cc.time >= swc.time - INTERVAL '1 hour'
+    AND cc.time <= swc.time + INTERVAL '1 hour'
+LEFT JOIN satnogs_signal_events sse
+    ON cc.time >= sse.time - INTERVAL '1 hour'
+    AND cc.time <= sse.time + INTERVAL '1 hour'
+GROUP BY cc.uid, cc.time, cc.source, cc.predicate_type, cc.state_change_reason,
+         cc.narrative_summary, cc.locative_lat, cc.locative_lon,
+         io.country_code, io.severity, io.asn_name,
+         swc.kp_index, swc.kp_category, swc.dst_index;

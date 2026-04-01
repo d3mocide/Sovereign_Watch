@@ -64,7 +64,7 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     alignment_engine = SpatialTemporalAlignment()
     escalation_detector = EscalationDetector()
 
-    # Fetch clausal chains from database
+    # Fetch clausal chains and context data from database
     pool = get_pool()
     async with pool.acquire() as conn:
         # Query clausal_chains for TAK and GDELT data
@@ -97,6 +97,46 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
             """
             rows = await conn.fetch(tak_query, window)
             tak_events = [dict(row) for row in rows]
+
+        # Fetch context data for multi-INT correlation
+        # Internet outages (most recent in window)
+        outage_data = None
+        outage_query = """
+            SELECT time, country_code, severity, asn_name, affected_nets
+            FROM internet_outages
+            WHERE time > now() - interval %s
+            ORDER BY severity DESC, time DESC
+            LIMIT 1
+        """
+        outage_row = await conn.fetchrow(outage_query, window)
+        if outage_row:
+            outage_data = dict(outage_row)
+
+        # Space weather context (most significant event in window)
+        space_weather_data = None
+        space_weather_query = """
+            SELECT time, kp_index, kp_category, dst_index, explanation
+            FROM space_weather_context
+            WHERE time > now() - interval %s
+            ORDER BY kp_index DESC, time DESC
+            LIMIT 1
+        """
+        space_weather_row = await conn.fetchrow(space_weather_query, window)
+        if space_weather_row:
+            space_weather_data = dict(space_weather_row)
+
+        # SatNOGS signal events (any signal loss detected)
+        signal_events = []
+        signal_query = """
+            SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
+            FROM satnogs_signal_events
+            WHERE time > now() - interval %s
+              AND signal_strength < %s
+            ORDER BY signal_strength ASC, time DESC
+            LIMIT 10
+        """
+        signal_rows = await conn.fetch(signal_query, window, -10.0)
+        signal_events = [dict(row) for row in signal_rows]
 
     # Align clauses spatially/temporally
     aligned = await alignment_engine.align_clauses(
@@ -141,12 +181,37 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         anomalous_uids.extend(anomaly.affected_uids)
     anomalous_uids = list(set(anomalous_uids))
 
-    # Compute composite risk score
+    # Detect contextual anomalies (multi-INT correlation)
+    context_anomalies = []
+
+    # Internet outage correlation
+    if outage_data:
+        outage_anomaly = escalation_detector.detect_internet_outage_correlation(outage_data)
+        context_anomalies.append(outage_anomaly)
+        logger.info(f"Detected internet outage: {outage_anomaly.description}")
+
+    # Space weather correlation
+    if space_weather_data:
+        space_weather_anomaly = escalation_detector.detect_space_weather_anomaly(
+            space_weather_data.get("kp_index")
+        )
+        context_anomalies.append(space_weather_anomaly)
+        logger.info(f"Space weather context: {space_weather_anomaly.description}")
+
+    # Satellite signal loss detection
+    if signal_events:
+        signal_anomalies = escalation_detector.detect_satnogs_signal_loss(signal_events)
+        context_anomalies.extend(signal_anomalies)
+        for anomaly in signal_anomalies:
+            logger.info(f"Detected signal loss: {anomaly.description}")
+
+    # Compute composite risk score with context-aware dampening/boosting
     risk_score = escalation_detector.compute_risk_score(
         pattern_confidence=pattern_confidence,
         anomaly_score=anomaly_score,
         alignment_score=aligned.alignment_score,
         anomaly_count=len(all_anomalies),
+        context_anomalies=context_anomalies if context_anomalies else None,
     )
 
     # Build narrative summaries for LLM
@@ -204,6 +269,15 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         escalation_indicators.append("Directional anomalies detected")
     if emergency_anomalies:
         escalation_indicators.append("Emergency transponders activated")
+
+    # Context-based indicators
+    for ctx_anomaly in context_anomalies:
+        if ctx_anomaly.metric_type == "internet_outage" and ctx_anomaly.score > 0.5:
+            escalation_indicators.append(f"Internet outage detected (severity: {ctx_anomaly.score:.2f})")
+        elif ctx_anomaly.metric_type == "space_weather" and ctx_anomaly.score > 0.5:
+            escalation_indicators.append(f"Space weather event (Kp: {ctx_anomaly.description})")
+        elif ctx_anomaly.metric_type == "satellite_signal_loss":
+            escalation_indicators.append(f"Satellite signal loss detected ({ctx_anomaly.affected_uids[0] if ctx_anomaly.affected_uids else 'unknown'})")
 
     # Trigger Tier 3 escalation if risk is very high
     if risk_score > 0.8:
