@@ -182,10 +182,18 @@ class TakClausalizerService:
         # Step 1: Query previous state from Redis
         prev_clause = await self.delta_engine.get_previous_state(uid)
 
-        # Step 2: Filter GPS jitter
+        # Step 2: Validate and extract GPS coordinates
+        # Treat missing or non-numeric lat/lon as a hard failure – silently
+        # defaulting to 0.0 would create bogus tracks at the (0, 0) null island.
         point = message.get("point", {})
-        new_lat = safe_float(point.get("lat"))
-        new_lon = safe_float(point.get("lon"))
+        raw_lat = point.get("lat")
+        raw_lon = point.get("lon")
+        new_lat = safe_float(raw_lat)
+        new_lon = safe_float(raw_lon)
+        if new_lat is None or new_lon is None:
+            logger.warning("Dropping message for uid=%s: missing or invalid lat/lon (lat=%r, lon=%r)", uid, raw_lat, raw_lon)
+            self.stats["errors"] += 1
+            return
 
         if self.delta_engine.should_filter_as_jitter(
             uid, new_lat, new_lon, prev_clause, ce, le

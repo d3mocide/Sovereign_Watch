@@ -92,8 +92,31 @@ class ClauseEmitter:
             }
 
             # Build medial clause (JSON)
+            # Prefer the observation timestamp from the TAK message so that
+            # ordering and correlation are accurate during backfill/replay.
+            # Only fall back to the current wall-clock time when the message
+            # carries no parseable timestamp.
+            raw_event_time = new_state.get("time")
+            _MIN_TS_S = 946_684_800.0   # 2000-01-01 UTC
+            _MAX_TS_S = 4_102_444_800.0  # 2100-01-01 UTC
+            try:
+                if isinstance(raw_event_time, (int, float)):
+                    # TAK COT time is typically milliseconds since epoch.
+                    # Detect seconds vs ms: values > _MAX_TS_S are almost certainly ms.
+                    ts_s = raw_event_time / 1000 if raw_event_time > _MAX_TS_S else raw_event_time
+                    if not (_MIN_TS_S <= ts_s <= _MAX_TS_S):
+                        raise ValueError(f"timestamp {ts_s} outside plausible range")
+                    event_ts = datetime.fromtimestamp(ts_s, tz=timezone.utc).isoformat()
+                elif isinstance(raw_event_time, str) and raw_event_time:
+                    # Accept ISO strings as-is (normalise 'Z' suffix)
+                    event_ts = raw_event_time.replace("Z", "+00:00")
+                else:
+                    raise ValueError("no usable time field")
+            except (TypeError, ValueError, OSError):
+                event_ts = datetime.now(timezone.utc).isoformat()
+
             clause = {
-                "time": datetime.now(timezone.utc).isoformat(),
+                "time": event_ts,
                 "uid": uid,
                 "source": source,
                 "predicate_type": new_type,

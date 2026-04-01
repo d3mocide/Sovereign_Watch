@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai_router", tags=["AI Router"])
 
+# Lookback hour boundaries for mapping to alignment engine keys
+_HOURS_IN_DAY = 24
+_HOURS_IN_WEEK = 168
+
+# Maximum concurrent DB evaluations for the heatmap endpoint
+_HEATMAP_MAX_CONCURRENCY = 4
+
 
 class EvaluationRequest(BaseModel):
     """Request for regional escalation evaluation."""
@@ -30,6 +37,9 @@ class EvaluationRequest(BaseModel):
     lookback_hours: int = 24
     include_gdelt: bool = True
     include_tak: bool = True
+    # When True the LLM narrative step is skipped (used internally for heatmaps
+    # to avoid fanning out N LLM calls per heatmap request).
+    lightweight: bool = False
 
 
 class RiskAssessmentResponse(BaseModel):
@@ -43,6 +53,24 @@ class RiskAssessmentResponse(BaseModel):
     confidence: float
     pattern_detected: bool
     anomaly_count: int
+
+
+def _h3_cell_to_wkt(h3_cell: str) -> Optional[str]:
+    """Convert an H3 cell ID to a WKT POLYGON string suitable for PostGIS.
+
+    Returns ``None`` when the cell ID is invalid so callers can skip the
+    spatial filter rather than raising an exception.
+    """
+    try:
+        boundary = h3.cell_to_boundary(h3_cell)  # list of (lat, lon) tuples
+        # PostGIS WKT expects (lon lat) ordering; close the ring
+        coords = [(lon, lat) for lat, lon in boundary]
+        coords.append(coords[0])
+        ring = ", ".join(f"{lon} {lat}" for lon, lat in coords)
+        return f"POLYGON(({ring}))"
+    except Exception as exc:
+        logger.warning("Invalid H3 cell '%s': %s", h3_cell, exc)
+        return None
 
 
 @router.post("/evaluate")
@@ -70,32 +98,59 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         # Query clausal_chains for TAK and GDELT data
         window = f"{request.lookback_hours} hours"
 
-        # GDELT events
+        # Build spatial filter from H3 cell using the GIST index on clausal_chains.geom
+        wkt_polygon = _h3_cell_to_wkt(request.h3_region)
+
+        # GDELT events – filtered to the H3 region when possible
         gdelt_events = []
         if request.include_gdelt:
-            gdelt_query = """
-                SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
-                       state_change_reason, narrative_summary, adverbial_context
-                FROM clausal_chains
-                WHERE source = 'GDELT'
-                  AND time > now() - interval %s
-                ORDER BY time DESC
-            """
-            rows = await conn.fetch(gdelt_query, window)
+            if wkt_polygon:
+                gdelt_query = """
+                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
+                           state_change_reason, narrative_summary, adverbial_context
+                    FROM clausal_chains
+                    WHERE source = 'GDELT'
+                      AND time > now() - interval $1
+                      AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                    ORDER BY time DESC
+                """
+                rows = await conn.fetch(gdelt_query, window, wkt_polygon)
+            else:
+                gdelt_query = """
+                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
+                           state_change_reason, narrative_summary, adverbial_context
+                    FROM clausal_chains
+                    WHERE source = 'GDELT'
+                      AND time > now() - interval $1
+                    ORDER BY time DESC
+                """
+                rows = await conn.fetch(gdelt_query, window)
             gdelt_events = [dict(row) for row in rows]
 
-        # TAK events
+        # TAK events – filtered to the H3 region when possible
         tak_events = []
         if request.include_tak:
-            tak_query = """
-                SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
-                       state_change_reason, narrative_summary, adverbial_context
-                FROM clausal_chains
-                WHERE source IN ('TAK_ADSB', 'TAK_AIS')
-                  AND time > now() - interval %s
-                ORDER BY time DESC
-            """
-            rows = await conn.fetch(tak_query, window)
+            if wkt_polygon:
+                tak_query = """
+                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
+                           state_change_reason, narrative_summary, adverbial_context
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - interval $1
+                      AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                    ORDER BY time DESC
+                """
+                rows = await conn.fetch(tak_query, window, wkt_polygon)
+            else:
+                tak_query = """
+                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
+                           state_change_reason, narrative_summary, adverbial_context
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - interval $1
+                    ORDER BY time DESC
+                """
+                rows = await conn.fetch(tak_query, window)
             tak_events = [dict(row) for row in rows]
 
         # Fetch context data for multi-INT correlation
@@ -104,7 +159,7 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         outage_query = """
             SELECT time, country_code, severity, asn_name, affected_nets
             FROM internet_outages
-            WHERE time > now() - interval %s
+            WHERE time > now() - interval $1
             ORDER BY severity DESC, time DESC
             LIMIT 1
         """
@@ -117,7 +172,7 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         space_weather_query = """
             SELECT time, kp_index, kp_category, dst_index, explanation
             FROM space_weather_context
-            WHERE time > now() - interval %s
+            WHERE time > now() - interval $1
             ORDER BY kp_index DESC, time DESC
             LIMIT 1
         """
@@ -130,20 +185,30 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         signal_query = """
             SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
             FROM satnogs_signal_events
-            WHERE time > now() - interval %s
-              AND signal_strength < %s
+            WHERE time > now() - interval $1
+              AND signal_strength < $2
             ORDER BY signal_strength ASC, time DESC
             LIMIT 10
         """
         signal_rows = await conn.fetch(signal_query, window, -10.0)
         signal_events = [dict(row) for row in signal_rows]
 
+    # Map lookback_hours to one of the keys that SpatialTemporalAlignment.LOOKBACK_WINDOWS
+    # recognises.  Passing an unsupported value (e.g. '168h') silently fell back to '24h',
+    # making the 7-day option ineffective.
+    if request.lookback_hours <= _HOURS_IN_DAY:
+        lookback_window_key = "24h"
+    elif request.lookback_hours <= _HOURS_IN_WEEK:
+        lookback_window_key = "7d"
+    else:
+        lookback_window_key = "30d"
+
     # Align clauses spatially/temporally
     aligned = await alignment_engine.align_clauses(
         h3_region=request.h3_region,
         clausal_chains=tak_events,
         gdelt_events=gdelt_events,
-        lookback_window=f"{request.lookback_hours}h",
+        lookback_window=lookback_window_key,
     )
 
     # Detect escalation patterns in GDELT
@@ -229,11 +294,13 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         ]
     )
 
-    # Initialize LLM-based sequence evaluation if risk is elevated
+    # Initialize LLM-based sequence evaluation if risk is elevated.
+    # Lightweight mode (used by the heatmap endpoint) skips the LLM call to
+    # avoid fanning out expensive model requests per heatmap cell.
     narrative_summary = "No significant escalation detected"
     confidence = 0.5
 
-    if risk_score > 0.3:
+    if risk_score > 0.3 and not request.lightweight:
         try:
             # Initialize LiteLLM config (minimal for now)
             litellm_config = {
@@ -308,27 +375,43 @@ async def get_regional_risk_heatmap(
     Get risk heatmap for a region and surrounding cells.
 
     Returns risk scores for the region and adjacent H3 cells.
+    Cells are evaluated concurrently (max 4 parallel) in lightweight mode to
+    avoid cascading LLM calls.
     """
-    try:
-        import h3
+    import asyncio
 
+    try:
         # Get neighbors of the region
         neighbors = h3.grid_ring(h3_region, 1)
-        all_cells = [h3_region] + neighbors
+        all_cells = [h3_region] + list(neighbors)
 
-        # Evaluate each cell
+        # Use a semaphore so at most 4 cells are evaluated concurrently.
+        # Each evaluation hits the DB; unbounded parallelism would overwhelm the pool.
+        sem = asyncio.Semaphore(_HEATMAP_MAX_CONCURRENCY)
+
+        async def _eval_cell(cell: str) -> tuple:
+            async with sem:
+                req = EvaluationRequest(
+                    h3_region=cell,
+                    lookback_hours=lookback_hours,
+                    lightweight=True,  # skip LLM per-cell; avoids N×LLM fan-out
+                )
+                assessment = await evaluate_regional_escalation(req)
+                return cell, {
+                    "risk_score": assessment.risk_score,
+                    "confidence": assessment.confidence,
+                    "anomaly_count": assessment.anomaly_count,
+                }
+
+        results = await asyncio.gather(*[_eval_cell(c) for c in all_cells], return_exceptions=True)
+
         heatmap = {}
-        for cell in all_cells:
-            request = EvaluationRequest(
-                h3_region=cell,
-                lookback_hours=lookback_hours,
-            )
-            assessment = await evaluate_regional_escalation(request)
-            heatmap[cell] = {
-                "risk_score": assessment.risk_score,
-                "confidence": assessment.confidence,
-                "anomaly_count": assessment.anomaly_count,
-            }
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Heatmap cell evaluation failed: %s", result)
+                continue
+            cell, data = result
+            heatmap[cell] = data
 
         return {
             "center_region": h3_region,

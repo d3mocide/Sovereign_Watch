@@ -120,7 +120,9 @@ class EscalationDetector:
 
         Args:
             tak_clauses: List of TAK medial clauses
-            h3_cell: Optional H3 cell to query (if None, analyzes all)
+            h3_cell: Optional H3 macro cell (resolution <= H3_ANOMALY_RES).
+                     When provided, only clauses whose position maps to a
+                     child/descendant of this cell are considered.
 
         Returns:
             AnomalyMetric quantifying clustering anomaly
@@ -133,7 +135,18 @@ class EscalationDetector:
                 description="No TAK data",
             )
 
-        # Group by H3 cell
+        # Pre-compute the parent cell for fast child-membership checks when a
+        # region filter is requested.
+        filter_parent: Optional[str] = None
+        filter_res: Optional[int] = None
+        if h3_cell:
+            try:
+                filter_res = h3.get_resolution(h3_cell)
+                filter_parent = h3_cell
+            except Exception as exc:
+                logger.warning("Invalid h3_cell '%s' for concentration filter: %s", h3_cell, exc)
+
+        # Group by H3 cell (at anomaly resolution), optionally filtered to h3_cell region
         cell_clusters: Dict[str, List[str]] = {}
         for clause in tak_clauses:
             lat = clause.get("locative_lat")
@@ -145,6 +158,16 @@ class EscalationDetector:
 
             try:
                 cell = h3.latlng_to_cell(lat, lon, self.H3_ANOMALY_RES)
+
+                # Apply spatial filter: skip clauses outside the requested region
+                if filter_parent is not None and filter_res is not None:
+                    try:
+                        parent_at_filter_res = h3.cell_to_parent(cell, filter_res)
+                        if parent_at_filter_res != filter_parent:
+                            continue
+                    except Exception:
+                        continue
+
                 if cell not in cell_clusters:
                     cell_clusters[cell] = []
                 cell_clusters[cell].append(uid)

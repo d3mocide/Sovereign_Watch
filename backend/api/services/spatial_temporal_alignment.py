@@ -164,9 +164,20 @@ class SpatialTemporalAlignment:
         except (ValueError, TypeError):
             return datetime.now(timezone.utc)
 
-    def _parse_clause_time(self, iso_time_str: str) -> datetime:
-        """Parse ISO 8601 timestamp from clausal_chains table."""
+    def _parse_clause_time(self, time_val) -> datetime:
+        """Parse timestamp from clausal_chains table.
+
+        Accepts either a ``datetime`` object (returned by asyncpg DB queries)
+        or an ISO 8601 string.  Returns a timezone-aware UTC datetime; falls
+        back to ``datetime.now(UTC)`` only when parsing fails completely.
+        """
         try:
+            if isinstance(time_val, datetime):
+                # asyncpg returns timezone-aware datetimes; ensure UTC.
+                if time_val.tzinfo is None:
+                    return time_val.replace(tzinfo=timezone.utc)
+                return time_val
+            iso_time_str = str(time_val)
             # Handle ISO format with or without timezone
             if iso_time_str.endswith("Z"):
                 iso_time_str = iso_time_str[:-1] + "+00:00"
