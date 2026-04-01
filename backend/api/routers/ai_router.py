@@ -15,7 +15,7 @@ from services.sequence_evaluation_engine import (
     SequenceEvaluationEngine,
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
-from core.database import get_pool
+from core.database import db
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,7 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     escalation_detector = EscalationDetector()
 
     # Fetch clausal chains and context data from database
-    pool = get_pool()
-    async with pool.acquire() as conn:
+    async with db.pool.acquire() as conn:
         # Query clausal_chains for TAK and GDELT data
         window = f"{request.lookback_hours} hours"
 
@@ -356,8 +355,7 @@ async def get_clausal_chains(
     Returns serialized ClausalChain objects with full medial clause data.
     """
     try:
-        pool = get_pool()
-        async with pool.acquire() as conn:
+        async with db.pool.acquire() as conn:
             # Query clausal_chains for the region and time window
             where_clauses = [
                 "time > now() - interval %s",
