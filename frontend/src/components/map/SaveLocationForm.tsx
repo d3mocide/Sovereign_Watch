@@ -41,7 +41,7 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
       <div className="bg-gradient-to-r from-hud-green/20 to-transparent p-3 border-b border-hud-green/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MapPin size={16} className="text-hud-green" />
+            <MapPin size={16} className="text-hud-green" aria-hidden="true" />
             <h3 className="text-sm font-bold text-hud-green uppercase tracking-wider">
               Save Location
             </h3>
@@ -49,9 +49,10 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
           <button
             onClick={onCancel}
             aria-label="Close"
+            title="Close"
             className="text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none rounded-sm"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -108,24 +109,26 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
                 <button 
                   type="button"
                   aria-label="Increase radius"
+                  title="Increase radius"
                   onClick={() => {
                     const val = parseInt(radius) || 0;
                     if (val < 250) setRadius((val + 1).toString());
                   }}
                   className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 >
-                    <ChevronUp size={10} />
+                    <ChevronUp size={10} aria-hidden="true" />
                 </button>
                 <button 
                   type="button"
                   aria-label="Decrease radius"
+                  title="Decrease radius"
                   onClick={() => {
                       const val = parseInt(radius) || 0;
                       if (val > 10) setRadius((val - 1).toString());
                   }}
                   className="flex-1 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-sm border border-white/10 hover:border-hud-green/50 text-white/50 hover:text-hud-green transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 >
-                    <ChevronDown size={10} />
+                    <ChevronDown size={10} aria-hidden="true" />
                 </button>
             </div>
           </div>
