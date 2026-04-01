@@ -132,12 +132,15 @@ export function buildClausalChainLayer(
   for (const chain of clausalChains) {
     for (const clause of chain.clauses) {
       if (clause.state_change_reason) {
+        const rawConfidence = clause.adverbial_context.confidence ?? 0.8;
+        const confidence = Math.max(0, Math.min(1, rawConfidence));
+
         iconData.push({
           position: [clause.locative_lon, clause.locative_lat],
           uid: chain.uid,
           reason: clause.state_change_reason,
           predicate_type: chain.predicate_type,
-          confidence: clause.adverbial_context.confidence || 0.8,
+          confidence,
         });
       }
     }
