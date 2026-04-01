@@ -91,4 +91,28 @@ export interface ProtocolIntelligence {
   watchlist: ProtocolWatchlistEntry[];
 }
 
-export type TabName = 'protocol' | 'operations' | 'sensors' | 'audit';
+export interface ClausalizerTimelinePoint {
+  time: string;
+  counts: Record<string, number>;
+}
+
+export interface ClausalizerLatestEntry {
+  time: string | null;
+  uid: string;
+  source: string;
+  state_change_reason: string | null;
+  predicate_type: string | null;
+}
+
+export interface ClausalizerMetrics {
+  health: {
+    rows_5m: Record<string, number>;
+    rows_5m_total: number;
+    last_write_at: string | null;
+  };
+  totals: Record<string, number>;
+  timeline: ClausalizerTimelinePoint[];
+  latest: ClausalizerLatestEntry[];
+}
+
+export type TabName = 'protocol' | 'operations' | 'sensors' | 'audit' | 'clausalizer';

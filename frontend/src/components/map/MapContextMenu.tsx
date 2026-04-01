@@ -1,7 +1,7 @@
 import { useAuth } from '../../hooks/useAuth';
 import React from 'react';
 import { Crosshair, Save, Home, MapPin, Lock, Zap } from 'lucide-react';
-import h3 from 'h3-js';
+import { latLngToCell } from 'h3-js';
 
 interface MapContextMenuProps {
   position: { x: number; y: number } | null;
@@ -44,7 +44,7 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
 
   const handleAnalyzeRegionalRisk = () => {
     if (onAnalyzeRegionalRisk) {
-      const h3Region = h3.latLngToCell(coordinates.lat, coordinates.lon, 7);
+      const h3Region = latLngToCell(coordinates.lat, coordinates.lon, 7);
       onAnalyzeRegionalRisk(h3Region, coordinates.lat, coordinates.lon);
       onClose();
     }

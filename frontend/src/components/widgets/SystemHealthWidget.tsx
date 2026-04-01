@@ -30,6 +30,14 @@ interface PollerHealth {
   stale_after_s: number | null;
 }
 
+interface ClausalizerWidgetMetrics {
+  status: string;
+  health?: {
+    rows_5m_total: number;
+    last_write_at: string | null;
+  };
+}
+
 interface SystemHealthWidgetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -123,6 +131,9 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
   const [pollers, setPollers] = useState<PollerHealth[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [clausalizerMetrics, setClausalizerMetrics] =
+    useState<ClausalizerWidgetMetrics | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
   const [prevOpen, setPrevOpen] = useState(isOpen);
 
   if (isOpen && !prevOpen) {
@@ -138,22 +149,37 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
 
     let mounted = true;
 
-    fetch("/api/config/poller-health")
-      .then((res) => res.json())
-      .then((data: PollerHealth[]) => {
+    Promise.all([
+      fetch("/api/config/poller-health"),
+      fetch("/api/stats/clausalizer?hours=1"),
+    ])
+      .then(async ([pollerRes, clausalizerRes]) => {
+        const pollerData: PollerHealth[] = pollerRes.ok ? await pollerRes.json() : [];
+        const clausalizerData: ClausalizerWidgetMetrics | null = clausalizerRes.ok
+          ? await clausalizerRes.json()
+          : null;
+
         if (mounted) {
-          setPollers(data);
+          setPollers(pollerData);
+          setClausalizerMetrics(clausalizerData);
           setLoading(false);
         }
       })
       .catch((err) => {
-        console.error("Failed to fetch poller health:", err);
+        console.error("Failed to fetch system health widget data:", err);
         if (mounted) setLoading(false);
       });
 
     return () => {
       mounted = false;
     };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setNowTs(Date.now());
+    const timer = setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => clearInterval(timer);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -164,6 +190,23 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
     acc[p.group].push(p);
     return acc;
   }, {});
+
+  const lastWriteMs = clausalizerMetrics?.health?.last_write_at
+    ? Date.parse(clausalizerMetrics.health.last_write_at)
+    : NaN;
+  const minutesSinceWrite = Number.isNaN(lastWriteMs)
+    ? null
+    : Math.max(0, Math.floor((nowTs - lastWriteMs) / 60000));
+  const rows5mTotal = clausalizerMetrics?.health?.rows_5m_total ?? 0;
+  const activityPercent = Math.min(100, rows5mTotal);
+  const clausalizerStatus: PollerStatus =
+    minutesSinceWrite === null
+      ? "unknown"
+      : minutesSinceWrite <= 5
+        ? "healthy"
+        : minutesSinceWrite <= 15
+          ? "stale"
+          : "error";
 
   return (
     <div
@@ -270,6 +313,43 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
                       </div>
                     </div>
                   ))}
+                  {groupName.toUpperCase() === "ANALYSIS" && (
+                    <div className="rounded bg-white/5 border border-white/5 px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <StatusIcon status={clausalizerStatus} />
+                          <span className="text-[10px] font-bold tracking-wider text-white/80 font-mono uppercase">
+                            CLAUSALIZER FLOW
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[9px] font-bold tracking-widest font-mono uppercase ${statusColor(clausalizerStatus)}`}
+                        >
+                          {statusLabel(clausalizerStatus)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-white/10 rounded overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            clausalizerStatus === "healthy"
+                              ? "bg-hud-green"
+                              : clausalizerStatus === "stale"
+                                ? "bg-amber-500"
+                                : "bg-red-500"
+                          }`}
+                          style={{ width: `${activityPercent}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[8px] text-white/40 font-mono tracking-wider uppercase">
+                        <span>Rows/5m: {rows5mTotal}</span>
+                        <span>
+                          {minutesSinceWrite === null
+                            ? "No writes"
+                            : `${minutesSinceWrite}m since write`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))

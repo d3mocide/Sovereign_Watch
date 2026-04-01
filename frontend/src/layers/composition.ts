@@ -250,7 +250,13 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredInfra,
       setSelectedInfra,
     ),
-    getSatNOGSLayer(satnogsStations || [], !!filters?.showSatNOGS),
+    getSatNOGSLayer(
+      satnogsStations || [],
+      !!filters?.showSatNOGS,
+      setHoveredEntity,
+      setHoverPosition,
+      onEntitySelect,
+    ),
     // Jamming zones sit above infra but below entity chevrons
     ...buildJammingLayer(
       jammingData,

@@ -246,6 +246,7 @@ services:
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379
+      - DB_DSN=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
     networks:
       - sovereign-net-backend
     depends_on:
@@ -253,6 +254,8 @@ services:
         condition: service_healthy
       sovereign-redis:
         condition: service_started
+      sovereign-timescaledb:
+        condition: service_healthy
     restart: unless-stopped
 
   # --- Persistence ---
@@ -375,7 +378,7 @@ services:
     container_name: sovereign-frontend
     volumes:
       - ./frontend:/app
-      - sovereign-vol-frontend-node-modules:/app/node_modules # Prevent host from overwriting container node_modules
+      - sovereign-vol-frontend-node-modules:/app/node_modules
     networks:
       - sovereign-net-frontend
       - sovereign-net-backend

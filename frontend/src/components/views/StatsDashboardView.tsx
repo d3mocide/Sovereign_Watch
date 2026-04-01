@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Terminal, Settings, ShieldAlert, Download, Cpu, Activity, Zap } from 'lucide-react';
+import { Bell, Terminal, Settings, ShieldAlert, Download, Cpu, Activity, Zap, FileSearch } from 'lucide-react';
 import {
   fetchSystemMetrics,
   fetchRecentLogs,
@@ -10,12 +10,13 @@ import {
 import type { 
   PollerHealth, ActivityData, TakBreakdown, TakMetrics, 
   TakBreakdownResponse, LogEntry, TabName, ThroughputData,
-  SensorMetrics, FusionMetrics, ProtocolIntelligence 
+  SensorMetrics, FusionMetrics, ProtocolIntelligence, ClausalizerMetrics
 } from '../stats/types';
 import ProtocolTab from '../stats/ProtocolTab';
 import OperationsTab from '../stats/OperationsTab';
 import SensorIntelligenceTab from '../stats/SensorIntelligenceTab';
 import FusionAuditTab from '../stats/FusionAuditTab';
+import ClausalizerTab from '../stats/ClausalizerTab';
 import PollerHealthSidebar from '../stats/PollerHealthSidebar';
 import LogBar from '../stats/LogBar';
 
@@ -37,12 +38,13 @@ export default function StatsDashboardView() {
   const [sensorMetrics, setSensorMetrics] = useState<SensorMetrics | null>(null);
   const [fusionMetrics, setFusionMetrics] = useState<FusionMetrics | null>(null);
   const [protocolIntel, setProtocolIntel] = useState<ProtocolIntelligence | null>(null);
+  const [clausalizerMetrics, setClausalizerMetrics] = useState<ClausalizerMetrics | null>(null);
 
   // Heavy stats: poller health, activity, TAK breakdown, and Intelligence (30 s)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [healthRes, activityRes, takRes, throughputRes, sensorRes, fusionRes, intelRes] = await Promise.all([
+        const [healthRes, activityRes, takRes, throughputRes, sensorRes, fusionRes, intelRes, clausalizerRes] = await Promise.all([
           fetch('/api/config/poller-health'),
           fetch('/api/stats/activity?hours=24'),
           fetch('/api/stats/tak-breakdown'),
@@ -50,6 +52,7 @@ export default function StatsDashboardView() {
           fetch('/api/stats/sensors'),
           fetch('/api/stats/fusion'),
           fetch('/api/stats/protocol-intelligence'),
+          fetch('/api/stats/clausalizer?hours=24'),
         ]);
 
         if (healthRes.ok) setHealthData(await healthRes.json());
@@ -63,6 +66,7 @@ export default function StatsDashboardView() {
         if (sensorRes.ok) { const j = await sensorRes.json(); if (j.status === 'ok') setSensorMetrics(j); }
         if (fusionRes.ok) { const j = await fusionRes.json(); if (j.status === 'ok') setFusionMetrics(j); }
         if (intelRes.ok) { const j = await intelRes.json(); if (j.status === 'ok') setProtocolIntel(j); }
+        if (clausalizerRes.ok) { const j = await clausalizerRes.json(); if (j.status === 'ok') setClausalizerMetrics(j); }
       } catch (e) {
         console.error('Dashboard fetch error:', e);
       } finally {
@@ -136,6 +140,7 @@ export default function StatsDashboardView() {
       case 'operations':  return <OperationsTab systemMetrics={systemMetrics} logs={logs} backupStatus={backupStatus} healthData={healthData} throughputData={throughputData} />;
       case 'sensors':     return <SensorIntelligenceTab metrics={sensorMetrics} loading={loading} />;
       case 'audit':       return <FusionAuditTab metrics={fusionMetrics} loading={loading} />;
+      case 'clausalizer': return <ClausalizerTab metrics={clausalizerMetrics} loading={loading} />;
     }
   };
 
@@ -143,6 +148,7 @@ export default function StatsDashboardView() {
     { id: 'protocol',    label: 'PROTOCOL',    icon: <ShieldAlert size={16} /> },
     { id: 'sensors',     label: 'SENSORS',     icon: <Activity size={16} /> },
     { id: 'audit',       label: 'FUSION AUDIT', icon: <Zap size={16} /> },
+    { id: 'clausalizer', label: 'CLAUSALIZER', icon: <FileSearch size={16} /> },
     { id: 'operations',  label: 'OPERATIONS',  icon: <Cpu size={16} /> },
   ];
 

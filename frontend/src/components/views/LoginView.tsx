@@ -18,7 +18,7 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -85,7 +85,7 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
           {/* Top accent line */}
           <div className="h-px bg-gradient-to-r from-transparent via-hud-green/50 to-transparent rounded-t" />
 
-          <div className="px-6 pt-5 pb-6 space-y-4">
+          <form className="px-6 pt-5 pb-6 space-y-4" onSubmit={handleSubmit}>
 
             {/* First-run badge */}
             {isFirstSetup && (
@@ -183,7 +183,6 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
             <button
               type="submit"
               disabled={loading}
-              onClick={handleSubmit}
               className="w-full bg-hud-green text-black font-black py-2.5 rounded
                          text-[11px] uppercase tracking-[0.25em]
                          transition-all duration-200
@@ -196,7 +195,7 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
                   ? 'Create Account & Login'
                   : 'Authenticate'}
             </button>
-          </div>
+          </form>
 
           {/* Bottom accent line */}
           <div className="h-px bg-gradient-to-r from-transparent via-white/8 to-transparent rounded-b" />

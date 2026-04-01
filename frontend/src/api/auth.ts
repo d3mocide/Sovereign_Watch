@@ -44,6 +44,17 @@ export interface UserUpdate {
 let _token: string | null = null;
 
 export function getToken(): string | null {
+  if (_token) return _token;
+  // Recover token from session storage if in-memory state was reset.
+  try {
+    const stored = sessionStorage.getItem('sw_token');
+    if (stored) {
+      _token = stored;
+      return _token;
+    }
+  } catch {
+    // ignore environments where sessionStorage is unavailable
+  }
   return _token;
 }
 

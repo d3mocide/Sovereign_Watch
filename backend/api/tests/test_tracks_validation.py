@@ -13,6 +13,7 @@ from test_stubs import install_common_test_stubs  # noqa: E402
 install_common_test_stubs(include_psutil=True)
 
 from core.auth import get_current_user # noqa: E402
+from core.config import settings  # noqa: E402
 from main import app  # noqa: E402
 
 @pytest.fixture(autouse=True)
@@ -28,8 +29,8 @@ async def test_track_history_limit_exceeded():
     """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Default limit is 1000. Request 1001.
-        response = await client.get("/api/tracks/history/test-entity?limit=1001")
+        over_limit = settings.TRACK_HISTORY_MAX_LIMIT + 1
+        response = await client.get(f"/api/tracks/history/test-entity?limit={over_limit}")
         assert response.status_code == 400
         assert "Limit exceeds maximum allowed" in response.json()["detail"]
 
@@ -40,8 +41,8 @@ async def test_track_history_hours_exceeded():
     """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Default hours is 72. Request 73.
-        response = await client.get("/api/tracks/history/test-entity?hours=73")
+        over_hours = settings.TRACK_HISTORY_MAX_HOURS + 1
+        response = await client.get(f"/api/tracks/history/test-entity?hours={over_hours}")
         assert response.status_code == 400
         assert "Hours exceeds maximum allowed" in response.json()["detail"]
 

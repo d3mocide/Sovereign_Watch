@@ -58,6 +58,7 @@ interface UseEntityWorkerReturn {
   prevCourseRef: MutableRefObject<Map<string, number>>;
   alertedEmergencyRef: MutableRefObject<Map<string, string>>;
   watchedIcaosRef: MutableRefObject<Set<string>>;
+  streamConnectedRef: MutableRefObject<boolean>;
 }
 
 export function useEntityWorker({
@@ -73,6 +74,8 @@ export function useEntityWorker({
   const alertedEmergencyRef = useRef<Map<string, string>>(new Map());
   const workerRef = useRef<Worker | null>(null);
   const watchedIcaosRef = useRef<Set<string>>(new Set());
+  const streamConnectedRef = useRef<boolean>(true);
+  const lastStreamStateRef = useRef<boolean>(true);
 
   useEffect(() => {
     const processEntityUpdate = (updateData: unknown) => {
@@ -505,6 +508,27 @@ export function useEntityWorker({
       workerRef,
       watchedIcaosRef,
       onEntityUpdate: processEntityUpdate,
+      onSocketStateChange: (state) => {
+        streamConnectedRef.current = state.connected;
+
+        if (lastStreamStateRef.current !== state.connected) {
+          lastStreamStateRef.current = state.connected;
+          if (!state.connected) {
+            onEvent?.({
+              type: "alert",
+              message:
+                state.reason === "auth_failed"
+                  ? "TRACK STREAM AUTH FAILED — re-authenticating..."
+                  : "TRACK STREAM DISCONNECTED — reconnecting...",
+            });
+          } else {
+            onEvent?.({
+              type: "new",
+              message: "TRACK STREAM RECONNECTED",
+            });
+          }
+        }
+      },
     });
   }, [onEvent]);
 
@@ -517,5 +541,6 @@ export function useEntityWorker({
     prevCourseRef,
     alertedEmergencyRef,
     watchedIcaosRef,
+    streamConnectedRef,
   };
 }

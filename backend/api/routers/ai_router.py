@@ -3,6 +3,7 @@ AI Router: Orchestrates multi-INT fusion for autonomous threat detection.
 Implements spatial-temporal alignment, sequence evaluation, and escalation detection.
 """
 
+import asyncio
 import logging
 from typing import Dict, List, Optional
 
@@ -28,6 +29,43 @@ _HOURS_IN_WEEK = 168
 
 # Maximum concurrent DB evaluations for the heatmap endpoint
 _HEATMAP_MAX_CONCURRENCY = 4
+
+# Keep UI interactions responsive even if the model endpoint is slow/unreachable.
+_LLM_EVAL_TIMEOUT_SECONDS = 8.0
+_GDELT_SPATIAL_RADIUS_M = 250_000.0
+
+
+def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
+    """Derive a lightweight conflict-intensity score from raw GDELT events.
+
+    This provides a non-zero geopolitical baseline in regions with sustained
+    conflict-coded GDELT activity, even when TAK anomalies are currently quiet.
+    """
+    if not gdelt_events:
+        return 0.0
+
+    total = len(gdelt_events)
+    conflict_events = 0
+    material_conflict_events = 0
+    tone_values: List[float] = []
+
+    for event in gdelt_events:
+        quad_class = event.get("quad_class")
+        if quad_class in (3, 4):
+            conflict_events += 1
+        if quad_class == 4:
+            material_conflict_events += 1
+
+        tone = event.get("tone")
+        if isinstance(tone, (int, float)):
+            tone_values.append(float(tone))
+
+    conflict_ratio = conflict_events / total
+    material_ratio = material_conflict_events / total
+    avg_tone = (sum(tone_values) / len(tone_values)) if tone_values else 0.0
+    hostility = max(0.0, min(1.0, (-avg_tone) / 10.0))
+
+    return min(1.0, 0.6 * conflict_ratio + 0.3 * material_ratio + 0.1 * hostility)
 
 
 class EvaluationRequest(BaseModel):
@@ -96,35 +134,59 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     # Fetch clausal chains and context data from database
     async with db.pool.acquire() as conn:
         # Query clausal_chains for TAK and GDELT data
-        window = f"{request.lookback_hours} hours"
+        lookback_hours = request.lookback_hours
 
         # Build spatial filter from H3 cell using the GIST index on clausal_chains.geom
         wkt_polygon = _h3_cell_to_wkt(request.h3_region)
 
-        # GDELT events – filtered to the H3 region when possible
+        # GDELT events – sourced from gdelt_events with aliases expected by
+        # SpatialTemporalAlignment (event_latitude/event_longitude/event_date).
         gdelt_events = []
         if request.include_gdelt:
             if wkt_polygon:
                 gdelt_query = """
-                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
-                           state_change_reason, narrative_summary, adverbial_context
-                    FROM clausal_chains
-                    WHERE source = 'GDELT'
-                      AND time > now() - interval $1
-                      AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                    SELECT
+                        event_id AS event_id_cnty,
+                        to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
+                        lat AS event_latitude,
+                        lon AS event_longitude,
+                        event_code,
+                        headline AS event_text,
+                        quad_class,
+                        tone,
+                        goldstein
+                    FROM gdelt_events
+                    WHERE time > now() - ($1 * interval '1 hour')
+                      AND ST_DWithin(
+                        geom::geography,
+                        ST_Centroid(ST_GeomFromText($2, 4326))::geography,
+                        $3
+                      )
                     ORDER BY time DESC
                 """
-                rows = await conn.fetch(gdelt_query, window, wkt_polygon)
+                rows = await conn.fetch(
+                    gdelt_query,
+                    lookback_hours,
+                    wkt_polygon,
+                    _GDELT_SPATIAL_RADIUS_M,
+                )
             else:
                 gdelt_query = """
-                    SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
-                           state_change_reason, narrative_summary, adverbial_context
-                    FROM clausal_chains
-                    WHERE source = 'GDELT'
-                      AND time > now() - interval $1
+                    SELECT
+                        event_id AS event_id_cnty,
+                        to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
+                        lat AS event_latitude,
+                        lon AS event_longitude,
+                        event_code,
+                        headline AS event_text,
+                        quad_class,
+                        tone,
+                        goldstein
+                    FROM gdelt_events
+                    WHERE time > now() - ($1 * interval '1 hour')
                     ORDER BY time DESC
                 """
-                rows = await conn.fetch(gdelt_query, window)
+                rows = await conn.fetch(gdelt_query, lookback_hours)
             gdelt_events = [dict(row) for row in rows]
 
         # TAK events – filtered to the H3 region when possible
@@ -136,34 +198,45 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
                            state_change_reason, narrative_summary, adverbial_context
                     FROM clausal_chains
                     WHERE source IN ('TAK_ADSB', 'TAK_AIS')
-                      AND time > now() - interval $1
+                      AND time > now() - ($1 * interval '1 hour')
                       AND ST_Within(geom, ST_GeomFromText($2, 4326))
                     ORDER BY time DESC
                 """
-                rows = await conn.fetch(tak_query, window, wkt_polygon)
+                rows = await conn.fetch(tak_query, lookback_hours, wkt_polygon)
             else:
                 tak_query = """
                     SELECT time, uid, source, predicate_type, locative_lat, locative_lon,
                            state_change_reason, narrative_summary, adverbial_context
                     FROM clausal_chains
                     WHERE source IN ('TAK_ADSB', 'TAK_AIS')
-                      AND time > now() - interval $1
+                      AND time > now() - ($1 * interval '1 hour')
                     ORDER BY time DESC
                 """
-                rows = await conn.fetch(tak_query, window)
+                rows = await conn.fetch(tak_query, lookback_hours)
             tak_events = [dict(row) for row in rows]
 
         # Fetch context data for multi-INT correlation
         # Internet outages (most recent in window)
         outage_data = None
-        outage_query = """
-            SELECT time, country_code, severity, asn_name, affected_nets
-            FROM internet_outages
-            WHERE time > now() - interval $1
-            ORDER BY severity DESC, time DESC
-            LIMIT 1
-        """
-        outage_row = await conn.fetchrow(outage_query, window)
+        if wkt_polygon:
+            outage_query = """
+                SELECT time, country_code, severity, asn_name, affected_nets
+                FROM internet_outages
+                WHERE time > now() - ($1 * interval '1 hour')
+                  AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                ORDER BY severity DESC, time DESC
+                LIMIT 1
+            """
+            outage_row = await conn.fetchrow(outage_query, lookback_hours, wkt_polygon)
+        else:
+            outage_query = """
+                SELECT time, country_code, severity, asn_name, affected_nets
+                FROM internet_outages
+                WHERE time > now() - ($1 * interval '1 hour')
+                ORDER BY severity DESC, time DESC
+                LIMIT 1
+            """
+            outage_row = await conn.fetchrow(outage_query, lookback_hours)
         if outage_row:
             outage_data = dict(outage_row)
 
@@ -172,11 +245,11 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         space_weather_query = """
             SELECT time, kp_index, kp_category, dst_index, explanation
             FROM space_weather_context
-            WHERE time > now() - interval $1
+            WHERE time > now() - ($1 * interval '1 hour')
             ORDER BY kp_index DESC, time DESC
             LIMIT 1
         """
-        space_weather_row = await conn.fetchrow(space_weather_query, window)
+        space_weather_row = await conn.fetchrow(space_weather_query, lookback_hours)
         if space_weather_row:
             space_weather_data = dict(space_weather_row)
 
@@ -185,13 +258,15 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         signal_query = """
             SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
             FROM satnogs_signal_events
-            WHERE time > now() - interval $1
+            WHERE time > now() - ($1 * interval '1 hour')
               AND signal_strength < $2
             ORDER BY signal_strength ASC, time DESC
             LIMIT 10
         """
-        signal_rows = await conn.fetch(signal_query, window, -10.0)
+        signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
         signal_events = [dict(row) for row in signal_rows]
+
+    gdelt_conflict_score = _compute_gdelt_conflict_score(gdelt_events)
 
     # Map lookback_hours to one of the keys that SpatialTemporalAlignment.LOOKBACK_WINDOWS
     # recognises.  Passing an unsupported value (e.g. '168h') silently fell back to '24h',
@@ -241,9 +316,10 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     emergency_anomalies = escalation_detector.detect_emergency_transponders(tak_dicts)
 
     all_anomalies = [clustering_anomaly] + directional_anomalies + emergency_anomalies
+    active_anomalies = [a for a in all_anomalies if a.score > 0.0]
     anomaly_score = max([a.score for a in all_anomalies], default=0.0)
     anomalous_uids = []
-    for anomaly in all_anomalies:
+    for anomaly in active_anomalies:
         anomalous_uids.extend(anomaly.affected_uids)
     anomalous_uids = list(set(anomalous_uids))
 
@@ -271,12 +347,16 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         for anomaly in signal_anomalies:
             logger.info(f"Detected signal loss: {anomaly.description}")
 
+    # Use the stronger of sequence-pattern confidence and raw conflict intensity
+    # so conflict-heavy GDELT windows can contribute even without exact pattern matches.
+    pattern_input = max(pattern_confidence, gdelt_conflict_score)
+
     # Compute composite risk score with context-aware dampening/boosting
     risk_score = escalation_detector.compute_risk_score(
-        pattern_confidence=pattern_confidence,
+        pattern_confidence=pattern_input,
         anomaly_score=anomaly_score,
         alignment_score=aligned.alignment_score,
-        anomaly_count=len(all_anomalies),
+        anomaly_count=len(active_anomalies),
         context_anomalies=context_anomalies if context_anomalies else None,
     )
 
@@ -311,11 +391,14 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
             evaluation_engine = SequenceEvaluationEngine(litellm_config)
 
             # Call LLM for detailed analysis
-            assessment: RiskAssessment = await evaluation_engine.evaluate_escalation(
-                h3_region=request.h3_region,
-                gdelt_summary=gdelt_summary,
-                tak_summary=tak_summary,
-                anomalous_uids=anomalous_uids,
+            assessment: RiskAssessment = await asyncio.wait_for(
+                evaluation_engine.evaluate_escalation(
+                    h3_region=request.h3_region,
+                    gdelt_summary=gdelt_summary,
+                    tak_summary=tak_summary,
+                    anomalous_uids=anomalous_uids,
+                ),
+                timeout=_LLM_EVAL_TIMEOUT_SECONDS,
             )
 
             narrative_summary = assessment.narrative_summary
@@ -324,6 +407,11 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
             if confidence > 0.7:
                 risk_score = assessment.risk_score
 
+        except TimeoutError:
+            logger.warning(
+                "LLM evaluation timed out after %.1fs, using heuristic scoring",
+                _LLM_EVAL_TIMEOUT_SECONDS,
+            )
         except Exception as e:
             logger.warning(f"LLM evaluation failed, using heuristic scoring: {e}")
 
@@ -331,6 +419,8 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     escalation_indicators = []
     if pattern_match:
         escalation_indicators.append("GDELT pattern matched")
+    elif gdelt_conflict_score >= 0.25:
+        escalation_indicators.append("GDELT conflict intensity elevated")
     if clustering_anomaly.score > 0.5:
         escalation_indicators.append("Entity clustering detected")
     if directional_anomalies:
@@ -362,7 +452,7 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         escalation_indicators=escalation_indicators,
         confidence=confidence,
         pattern_detected=pattern_match is not None,
-        anomaly_count=len(all_anomalies),
+        anomaly_count=len(active_anomalies),
     )
 
 
@@ -459,9 +549,9 @@ async def get_clausal_chains(
         async with db.pool.acquire() as conn:
             # Query clausal_chains for the region and time window
             where_clauses = [
-                "time > now() - interval $1",
+                "time > now() - ($1 * interval '1 hour')",
             ]
-            params: list = [f"{lookback_hours} hours"]
+            params: list = [lookback_hours]
             param_idx = 2
 
             if wkt_polygon:

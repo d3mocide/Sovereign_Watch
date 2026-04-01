@@ -5,9 +5,11 @@ Ensures TAK Protobuf schema compatibility for downstream consumption.
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
+import asyncpg
 from aiokafka import AIOKafkaProducer
 
 from delta_engine import MedialClause
@@ -24,6 +26,8 @@ class ClauseEmitter:
         self.kafka_brokers = kafka_brokers
         self.topic_name = topic_name
         self.producer: Optional[AIOKafkaProducer] = None
+        self.db_dsn = os.getenv("DB_DSN")
+        self.db_pool: Optional[asyncpg.Pool] = None
 
     async def connect(self):
         """Connect to Kafka broker."""
@@ -31,10 +35,18 @@ class ClauseEmitter:
         await self.producer.start()
         logger.info(f"ClauseEmitter connected to {self.kafka_brokers}, topic={self.topic_name}")
 
+        if self.db_dsn:
+            self.db_pool = await asyncpg.create_pool(dsn=self.db_dsn, min_size=1, max_size=5)
+            logger.info("ClauseEmitter connected to TimescaleDB")
+        else:
+            logger.warning("DB_DSN not set; clausal_chains persistence disabled")
+
     async def disconnect(self):
         """Disconnect from Kafka broker."""
         if self.producer:
             await self.producer.stop()
+        if self.db_pool:
+            await self.db_pool.close()
 
     async def emit_state_change(
         self,
@@ -137,6 +149,9 @@ class ClauseEmitter:
                 key=uid.encode("utf-8"),
             )
 
+            if self.db_pool:
+                await self._persist_clause(clause)
+
             logger.debug(
                 f"Emitted state-change for {uid}: {primary_reason} (confidence={adverbial_context['confidence']:.2f})"
             )
@@ -145,3 +160,53 @@ class ClauseEmitter:
         except Exception as e:
             logger.error(f"Error emitting state-change for {uid}: {e}")
             return False
+
+    async def _persist_clause(self, clause: dict) -> None:
+        """Persist emitted clause into clausal_chains for AI Router queries."""
+        if not self.db_pool:
+            return
+
+        event_time = clause.get("time")
+        if isinstance(event_time, str):
+            event_time = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+
+        query = """
+            INSERT INTO clausal_chains (
+                time,
+                uid,
+                source,
+                predicate_type,
+                locative_lat,
+                locative_lon,
+                locative_hae,
+                state_change_reason,
+                adverbial_context,
+                narrative_summary
+            )
+            VALUES (
+                $1::timestamptz,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9::jsonb,
+                NULL
+            )
+        """
+
+        async with self.db_pool.acquire() as conn:
+            await conn.execute(
+                query,
+                event_time,
+                clause["uid"],
+                clause["source"],
+                clause["predicate_type"],
+                clause["locative_lat"],
+                clause["locative_lon"],
+                clause["locative_hae"],
+                clause["state_change_reason"],
+                json.dumps(clause["adverbial_context"]),
+            )

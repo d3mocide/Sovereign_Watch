@@ -22,9 +22,18 @@ export function useSatNOGS(enabled: boolean): UseSatNOGSResult {
     const fetchStations = async () => {
       setLoading(true);
       try {
-        const resp = await fetch("/api/satnogs/stations");
+        const resp = await fetch("/api/satnogs/stations?include_offline=false");
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        let data = await resp.json();
+
+        // If no online stations are currently reported, fall back to full inventory.
+        if (Array.isArray(data) && data.length === 0) {
+          const fallbackResp = await fetch("/api/satnogs/stations?include_offline=true");
+          if (fallbackResp.ok) {
+            data = await fallbackResp.json();
+          }
+        }
+
         if (!cancelled) {
           stationsRef.current = data;
         }

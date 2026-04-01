@@ -372,3 +372,157 @@ async def get_throughput_stats():
     except Exception as e:
         logger.error(f"Failed to fetch throughput stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/stats/clausalizer")
+async def get_clausalizer_stats(hours: int = 24):
+    """
+    Clausalizer observability endpoint.
+
+    Returns:
+    - health KPIs (rows_5m, last_write_at)
+    - per-source totals over requested window
+    - 1-minute activity timeline by source
+    - latest emitted clauses sample
+    """
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    hours = max(1, min(hours, 72))
+
+    query_rows_5m = """
+        WITH events AS (
+            SELECT time, source
+            FROM clausal_chains
+            UNION ALL
+            SELECT time, 'GDELT'::text AS source
+            FROM gdelt_events
+        )
+        SELECT source, COUNT(*) AS row_count
+        FROM events
+        WHERE time > NOW() - INTERVAL '5 minutes'
+        GROUP BY source
+        ORDER BY source
+    """
+
+    query_last_write = """
+        SELECT MAX(time) AS last_write_at
+        FROM (
+            SELECT time FROM clausal_chains
+            UNION ALL
+            SELECT time FROM gdelt_events
+        ) events
+    """
+
+    query_totals = """
+        WITH events AS (
+            SELECT time, source
+            FROM clausal_chains
+            WHERE time > NOW() - ($1 * interval '1 hour')
+            UNION ALL
+            SELECT time, 'GDELT'::text AS source
+            FROM gdelt_events
+            WHERE time > NOW() - ($1 * interval '1 hour')
+        )
+        SELECT source, COUNT(*) AS row_count
+        FROM events
+        GROUP BY source
+        ORDER BY source
+    """
+
+    query_timeline = """
+        WITH events AS (
+            SELECT time, source
+            FROM clausal_chains
+            WHERE time > NOW() - ($1 * interval '1 hour')
+            UNION ALL
+            SELECT time, 'GDELT'::text AS source
+            FROM gdelt_events
+            WHERE time > NOW() - ($1 * interval '1 hour')
+        )
+        SELECT time_bucket('1 minute', time) AS bucket, source, COUNT(*) AS row_count
+        FROM events
+        GROUP BY bucket, source
+        ORDER BY bucket ASC, source ASC
+    """
+
+    query_latest = """
+        WITH events AS (
+            SELECT
+                time,
+                uid,
+                source,
+                state_change_reason,
+                predicate_type
+            FROM clausal_chains
+            UNION ALL
+            SELECT
+                time,
+                event_id::text AS uid,
+                'GDELT'::text AS source,
+                event_code::text AS state_change_reason,
+                event_root_code::text AS predicate_type
+            FROM gdelt_events
+        )
+        SELECT time, uid, source, state_change_reason, predicate_type
+        FROM events
+        ORDER BY time DESC
+        LIMIT 20
+    """
+
+    try:
+        async with db.pool.acquire() as conn:
+            rows_5m_records = await conn.fetch(query_rows_5m)
+            last_write_record = await conn.fetchrow(query_last_write)
+            totals_records = await conn.fetch(query_totals, float(hours))
+            timeline_records = await conn.fetch(query_timeline, float(hours))
+            latest_records = await conn.fetch(query_latest)
+
+        rows_5m = {r["source"]: int(r["row_count"]) for r in rows_5m_records}
+        totals = {r["source"]: int(r["row_count"]) for r in totals_records}
+
+        timeline_map = {}
+        for r in timeline_records:
+            bucket = r["bucket"].isoformat()
+            source = r["source"]
+            count = int(r["row_count"])
+            if bucket not in timeline_map:
+                timeline_map[bucket] = {}
+            timeline_map[bucket][source] = count
+
+        timeline = [
+            {"time": bucket, "counts": counts}
+            for bucket, counts in sorted(timeline_map.items(), key=lambda kv: kv[0])
+        ]
+
+        latest = [
+            {
+                "time": r["time"].isoformat() if r["time"] else None,
+                "uid": r["uid"],
+                "source": r["source"],
+                "state_change_reason": r["state_change_reason"],
+                "predicate_type": r["predicate_type"],
+            }
+            for r in latest_records
+        ]
+
+        return {
+            "status": "ok",
+            "hours": hours,
+            "health": {
+                "rows_5m": rows_5m,
+                "rows_5m_total": sum(rows_5m.values()),
+                "last_write_at": (
+                    last_write_record["last_write_at"].isoformat()
+                    if last_write_record and last_write_record["last_write_at"]
+                    else None
+                ),
+            },
+            "totals": totals,
+            "timeline": timeline,
+            "latest": latest,
+        }
+
+    except Exception as e:
+        logger.error(f"Clausalizer stats error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

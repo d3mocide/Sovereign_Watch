@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { getMissionArea } from '../api/missionArea';
 
 export interface SystemHealth {
     latency: number;
@@ -18,8 +17,11 @@ export const useSystemHealth = (intervalMs = 5000) => {
         const checkHealth = async () => {
             const start = performance.now();
             try {
-                // Use mission area fetch as a lightweight heartbeat
-                await getMissionArea();
+                // Keep heartbeat separate from mission-area polling to avoid noisy config logs.
+                const response = await fetch('/health', { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error('Health check failed');
+                }
                 const end = performance.now();
                 const latency = Math.round(end - start);
                 

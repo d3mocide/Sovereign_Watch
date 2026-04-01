@@ -4,6 +4,8 @@ import { useMissionLocations } from "./useMissionLocations";
 import { setMissionArea, getMissionArea } from "../api/missionArea";
 import { calculateZoom } from "../utils/map/geoUtils";
 
+const DEFAULT_MISSION_SYNC_INTERVAL_MS = 60000;
+
 interface UseMissionAreaOptions {
   flyTo?: (lat: number, lon: number, zoom?: number) => void;
   currentMissionRef: React.MutableRefObject<{
@@ -217,8 +219,22 @@ export function useMissionArea({
       }
     };
     loadActiveMission();
-    // Poll every 2 seconds for external updates
-    const timer = setInterval(loadActiveMission, 2000);
+    const pollIntervalMs = Number.parseInt(
+      import.meta.env.VITE_MISSION_SYNC_INTERVAL_MS || `${DEFAULT_MISSION_SYNC_INTERVAL_MS}`,
+      10,
+    );
+
+    if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
+      return () => {};
+    }
+
+    // Poll only while tab is visible to reduce background log noise.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadActiveMission();
+      }
+    }, pollIntervalMs);
+
     return () => clearInterval(timer);
      
   }, []);

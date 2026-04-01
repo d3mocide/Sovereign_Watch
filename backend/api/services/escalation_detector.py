@@ -401,7 +401,7 @@ class EscalationDetector:
         Returns:
             Composite risk score (0.0 - 1.0)
         """
-        # Weighted combination
+        # Weighted combination of primary signal sources.
         pattern_weight = 0.4
         anomaly_weight = 0.35
         alignment_weight = 0.25
@@ -417,9 +417,14 @@ class EscalationDetector:
 
         # Apply contextual dampening or boosting
         if context_anomalies:
-            context_score = sum(a.score for a in context_anomalies) / len(
-                context_anomalies
-            )
+            active_context = [a for a in context_anomalies if a.score > 0.0]
+            if active_context:
+                context_score = sum(a.score for a in active_context) / len(active_context)
+                # Blend in contextual score so context-only risk is non-zero when warranted.
+                # This keeps context supportive (not dominant) while avoiding hard zeroes.
+                context_weight = 0.2
+                risk = (1.0 - context_weight) * risk + context_weight * context_score
+
             # If strong context (e.g., major outage), slightly boost TAK anomaly confidence
             # If space weather explains behavior, slightly lower risk (likely false positive)
             for anomaly in context_anomalies:
