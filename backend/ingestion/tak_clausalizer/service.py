@@ -34,7 +34,9 @@ class TakClausalizerService:
 
         # Configuration from environment
         self.kafka_brokers = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
-        self.redis_url = f"redis://{os.getenv('REDIS_HOST', 'sovereign-redis')}:6379"
+        redis_host = os.getenv("REDIS_HOST", "sovereign-redis")
+        redis_port = os.getenv("REDIS_PORT", "6379")
+        self.redis_url = f"redis://{redis_host}:{redis_port}"
         self.input_topics = ["adsb_raw", "ais_raw"]
         self.output_topic = "clausal_chains_state_changes"
 
