@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getToken } from "../api/auth";
 import type { ISSPosition } from "../types";
 
 const WS_PATH = "/ws/infrastructure/iss-stream";
@@ -29,7 +30,9 @@ interface UseISSTrackerResult {
 
 function buildWsUrl(): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}${WS_PATH}`;
+  const base = `${proto}//${window.location.host}${WS_PATH}`;
+  const token = getToken();
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
 export const useISSTracker = ({
