@@ -257,6 +257,7 @@ export function UserManagementPanel() {
                   value={u.role}
                   disabled={u.id === currentUser?.id}
                   onChange={(e) => handleRoleChange(u.id, e.target.value as 'viewer' | 'operator' | 'admin')}
+                  aria-label={`Role for user ${u.username}`}
                   className={`text-[9px] font-bold border rounded px-1.5 py-0.5 focus:outline-none transition-all cursor-pointer disabled:cursor-default uppercase tracking-widest border-current ${ROLE_COLORS[u.role]} bg-transparent`}
                 >
                   <option value="viewer" className="bg-slate-950">Viewer</option>
@@ -268,13 +269,14 @@ export function UserManagementPanel() {
                 <button
                   onClick={() => handleToggleActive(u)}
                   disabled={u.id === currentUser?.id}
-                  title={u.is_active ? 'Deactivate user' : 'Activate user'}
-                  className="p-1.5 bg-white/5 hover:bg-white/10 rounded text-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  title={u.is_active ? `Deactivate user ${u.username}` : `Activate user ${u.username}`}
+                  aria-label={u.is_active ? `Deactivate user ${u.username}` : `Activate user ${u.username}`}
+                  className="p-1.5 bg-white/5 hover:bg-white/10 rounded text-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                 >
                   {u.is_active ? (
-                    <UserCheck size={12} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.4)]" />
+                    <UserCheck size={12} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.4)]" aria-hidden="true" />
                   ) : (
-                    <UserX size={12} className="text-alert-red" />
+                    <UserX size={12} className="text-alert-red" aria-hidden="true" />
                   )}
                 </button>
               </div>

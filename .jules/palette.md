@@ -55,3 +55,7 @@
 ## 2024-03-29 - Missing ARIA label on mute button
 **Learning:** Found a missing `aria-label` on the audio volume toggle button in `ListeningPost.tsx`. Icon-only buttons handling critical state changes (like muting audio) are particularly important targets for screen reader accessibility to avoid silent states.
 **Action:** Always verify icon-only interactive controls (like mute buttons) have state-descriptive `aria-label` and `title` attributes.
+
+## 2024-05-15 - UserManagementPanel Select Accessibility
+**Learning:** Dense lists with inline controls (like a dropdown to select a user's role) often lack visual space for a `<label>` element. Without a label, screen readers announce "combo box" without context, confusing the user about whose role they are modifying.
+**Action:** When a `<select>` or similar input lacks a corresponding explicit `<label>`, always inject a dynamic `aria-label` (e.g., `aria-label={"Role for user " + username}`) to provide exact contextual identity to assistive technologies.
