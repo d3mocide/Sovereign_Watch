@@ -255,6 +255,7 @@ export function UserManagementPanel() {
                 {/* Role selector */}
                 <select
                   value={u.role}
+                  aria-label={"Role for user " + u.username}
                   disabled={u.id === currentUser?.id}
                   onChange={(e) => handleRoleChange(u.id, e.target.value as 'viewer' | 'operator' | 'admin')}
                   className={`text-[9px] font-bold border rounded px-1.5 py-0.5 focus:outline-none transition-all cursor-pointer disabled:cursor-default uppercase tracking-widest border-current ${ROLE_COLORS[u.role]} bg-transparent`}
