@@ -20,8 +20,13 @@ logger = logging.getLogger("SovereignWatch.System")
 # ---------------------------------------------------------------------------
 MODELS_YAML_PATH = os.getenv("MODELS_YAML_PATH", "/app/models.yaml")
 
+_CACHED_MODELS = None
 
 def load_ai_models():
+    global _CACHED_MODELS
+    if _CACHED_MODELS is not None:
+        return _CACHED_MODELS
+
     try:
         with open(MODELS_YAML_PATH, "r") as f:
             data = yaml.safe_load(f)
@@ -34,11 +39,12 @@ def load_ai_models():
                         if isinstance(val, str) and val.startswith("os.environ/"):
                             env_var = val.split("/", 1)[1]
                             model[key] = os.getenv(env_var, val)
+                _CACHED_MODELS = models
                 return models
     except Exception as e:
         logger.error(f"Failed to load {MODELS_YAML_PATH}: {e}")
     # Fallback default
-    return [
+    _CACHED_MODELS = [
         {
             "id": "deep-reasoner",
             "label": "Claude 3.5 Sonnet",
@@ -58,6 +64,7 @@ def load_ai_models():
             "local": True,
         },
     ]
+    return _CACHED_MODELS
 
 
 AVAILABLE_AI_MODELS = load_ai_models()
@@ -154,7 +161,6 @@ async def get_ai_config():
         logger.error(f"Failed to get AI model config: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    # Reload dynamically per request so changes to YAML take effect without restart
     available_models = load_ai_models()
 
     return {
