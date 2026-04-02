@@ -34,27 +34,27 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
                 className={user.role === 'admin' ? 'text-red-400' : 'text-hud-green'}
               />
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-black tracking-widest text-white uppercase italic">
-                {user.username}
-              </span>
-              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] w-fit px-1.5 py-0.5 rounded mt-0.5 ${
-                user.role === 'admin'
-                  ? 'text-red-400 bg-red-950/60 border border-red-800/40'
-                  : user.role === 'operator'
-                    ? 'text-amber-400 bg-amber-950/60 border border-amber-800/40'
-                    : 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/40'
-              }`}>
-                {user.role}
-              </span>
-            </div>
+            <span className="text-xs font-black tracking-widest text-white uppercase italic">
+              {user.username}
+            </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X size={14} />
-          </button>
+          <div className="flex items-center gap-3">
+            <span className={`text-[8px] font-bold uppercase tracking-[0.2em] px-1.5 py-0.5 rounded ${
+              user.role === 'admin'
+                ? 'text-red-400 bg-red-950/60 border border-red-800/40'
+                : user.role === 'operator'
+                  ? 'text-amber-400 bg-amber-950/60 border border-amber-800/40'
+                  : 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/40'
+            }`}>
+              {user.role}
+            </span>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
