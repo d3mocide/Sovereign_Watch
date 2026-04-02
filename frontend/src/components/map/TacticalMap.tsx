@@ -6,6 +6,7 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -636,6 +637,13 @@ export function TacticalMap({
     handleReturnHome,
   } = missionArea;
 
+  const h3RiskResolution = useMemo(() => {
+    const z = viewState.zoom;
+    if (z < 5) return 4;
+    if (z > 13) return 9;
+    return 6;
+  }, [viewState.zoom]);
+
   useAnimationLoop({
     entitiesRef,
     satellitesRef,
@@ -739,6 +747,7 @@ export function TacticalMap({
         : undefined,
     historySegmentsRef,
     holdingPatternData,
+    h3RiskResolution,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

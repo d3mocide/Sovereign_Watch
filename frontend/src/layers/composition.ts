@@ -16,6 +16,7 @@ import { buildAuroraLayer } from "./buildAuroraLayer";
 import { buildEntityLayers } from "./buildEntityLayers";
 import { buildGdeltLayer } from "./buildGdeltLayer";
 import { buildH3CoverageLayer } from "./buildH3CoverageLayer";
+import { buildH3RiskLayer } from "./buildH3RiskLayer";
 import { buildHoldingPatternLayer } from "./buildHoldingPatternLayer";
 import { buildInfraLayers } from "./buildInfraLayers";
 import { buildISSLayer } from "./buildISSLayer";
@@ -30,6 +31,7 @@ import { getSatNOGSLayer } from "./SatNOGSLayer";
 
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
+import type { H3RiskCellData } from "../api/h3Risk";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -37,6 +39,7 @@ interface LayerCompositionOptions {
   js8Stations: JS8Station[];
   rfSites: RFSite[];
   h3Cells: H3CellData[];
+  h3RiskCells?: H3RiskCellData[];
   cablesData: FeatureCollection | null;
   stationsData: FeatureCollection | null;
   outagesData: FeatureCollection | null;
@@ -97,6 +100,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     js8Stations,
     rfSites,
     h3Cells,
+    h3RiskCells = [],
     cablesData,
     stationsData,
     outagesData,
@@ -238,6 +242,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
 
   return [
     ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
+    ...buildH3RiskLayer(h3RiskCells, !!filters?.showH3Risk),
     getTerminatorLayer(!!filters?.showTerminator),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),

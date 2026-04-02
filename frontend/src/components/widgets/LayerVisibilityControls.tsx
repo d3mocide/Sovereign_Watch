@@ -1097,6 +1097,40 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
+
+                {/* H3 Risk Heat-Map */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showH3Risk ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircle
+                      size={10}
+                      className={
+                        filters.showH3Risk ? "text-red-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showH3Risk ? "text-red-400/80" : "text-white/30"}`}
+                    >
+                      RISK GRID
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showH3Risk}
+                    onChange={(e) =>
+                      handleSubFilterChange("showH3Risk", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showH3Risk ? "bg-red-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showH3Risk ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
               </div>
             )}
           </div>

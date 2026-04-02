@@ -46,6 +46,7 @@ const DEFAULT_FILTERS: MapFilters = {
   cableOpacity: 0.6,
   showConstellation_Starlink: false,
   showH3Coverage: false,
+  showH3Risk: false,
   showAurora: false,
   showJamming: true,
   showGdelt: false,
