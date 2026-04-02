@@ -13,7 +13,7 @@ import websockets.exceptions
 from aiokafka import AIOKafkaProducer
 
 from classification import classify_vessel
-from utils import calculate_bboxes, calculate_distance_nm
+from utils import calculate_bboxes, calculate_distance_nm, AIS_HEADING_NOT_AVAILABLE
 
 # Configure Logging
 logging.basicConfig(
@@ -33,11 +33,6 @@ REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}"
 CENTER_LAT = float(os.getenv("CENTER_LAT", "45.5152"))
 CENTER_LON = float(os.getenv("CENTER_LON", "-122.6784"))
 COVERAGE_RADIUS_NM = int(os.getenv("COVERAGE_RADIUS_NM", "150"))
-
-
-# BUG-019: 511 is the AIS "not available" sentinel for TrueHeading per ITU-R M.1371.
-# Define as a named constant so usage sites are self-documenting.
-AIS_HEADING_NOT_AVAILABLE = 511
 
 
 # AISStream Reconnection Stability Constants
@@ -304,6 +299,10 @@ class MaritimePollerService:
             dim_c = cached.get("dimension_c", 0)
             dim_d = cached.get("dimension_d", 0)
 
+            true_heading = msg.get("TrueHeading")
+            if true_heading is None:
+                true_heading = AIS_HEADING_NOT_AVAILABLE
+
             tak_event = {
                 "uid": str(mmsi),
                 "type": "a-f-S-C-M",
@@ -322,7 +321,7 @@ class MaritimePollerService:
                     "track": {
                         "course": msg.get("Cog", 0),
                         "speed": msg.get("Sog", 0) * 0.514444,
-                        "heading": msg.get("TrueHeading", AIS_HEADING_NOT_AVAILABLE)
+                        "heading": true_heading
                     },
                     "contact": {
                         "callsign": name
@@ -374,6 +373,10 @@ class MaritimePollerService:
             dim_c = cached.get("dimension_c", 0)
             dim_d = cached.get("dimension_d", 0)
 
+            true_heading = msg.get("TrueHeading")
+            if true_heading is None:
+                true_heading = AIS_HEADING_NOT_AVAILABLE
+
             tak_event = {
                 "uid": str(mmsi),
                 "type": "a-f-S-C-M",  # Sea - Contact - Maritime
@@ -392,7 +395,7 @@ class MaritimePollerService:
                     "track": {
                         "course": msg.get("Cog", 0),
                         "speed": msg.get("Sog", 0) * 0.514444,  # knots to m/s
-                        "heading": msg.get("TrueHeading", AIS_HEADING_NOT_AVAILABLE)
+                        "heading": true_heading
                     },
                     "contact": {
                         "callsign": name

@@ -1,6 +1,10 @@
 import math
 from typing import List
 
+# AIS "not available" sentinels per ITU-R M.1371.
+# 511 is the AIS "not available" sentinel for TrueHeading.
+AIS_HEADING_NOT_AVAILABLE = 511
+
 def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate the great circle distance between two points in nautical miles."""
     R = 3440.065  # Earth radius in nautical miles
