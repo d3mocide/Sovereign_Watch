@@ -12,10 +12,11 @@ import json
 import logging
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from uvicorn.protocols.utils import ClientDisconnected
 
+from core.auth import authenticate_websocket
 from core.config import settings
 from core.database import db
 
@@ -88,10 +89,16 @@ async def get_iss_track(points: int = 720):
 
 
 @router.websocket("/ws/infrastructure/iss-stream")
-async def iss_websocket(websocket: WebSocket):
+async def iss_websocket(
+    websocket: WebSocket,
+    token: str | None = Query(default=None),
+):
     """Stream live ISS position updates (~5s cadence) via Redis pub/sub."""
-    await websocket.accept()
-    logger.info("ISS WebSocket client connected")
+    user = await authenticate_websocket(websocket, token)
+    if user is None:
+        return
+
+    logger.info(f"ISS WebSocket client connected: {user.get('username', user.get('id', 'unknown'))}")
 
     redis_url = f"redis://{settings.REDIS_HOST}:6379"
     pubsub_client: aioredis.Redis | None = None

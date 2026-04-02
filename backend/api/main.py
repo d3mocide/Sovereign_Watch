@@ -187,10 +187,7 @@ app.include_router(auth.router)
 # protected by the viewer gate.
 app.include_router(system.router, dependencies=_viewer_auth)
 
-# tracks router: HTTP endpoints are protected, but the WebSocket at
-# /api/tracks/live cannot use Bearer headers (browser limitation).
-# WebSocket auth via query-param token is a planned follow-up.
-# TODO(security): add WS query-param token auth to tracks.router
+# tracks router: handles its own auth for WebSocket endpoints via query-param tokens.
 app.include_router(tracks.router)
 
 app.include_router(metrics.router, dependencies=_viewer_auth)

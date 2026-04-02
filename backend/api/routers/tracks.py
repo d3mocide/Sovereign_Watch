@@ -12,7 +12,7 @@ from uvicorn.protocols.utils import ClientDisconnected
 import httpx
 import numpy as np
 from sgp4.api import Satrec, jday as sgp4_jday
-from core.auth import _decode_token, get_user_by_id, require_role
+from core.auth import authenticate_websocket, require_role
 from core.database import db
 from core.config import settings
 from services.broadcast import broadcast_service
@@ -36,35 +36,13 @@ async def websocket_endpoint(
 ):
     # Authenticate before accepting the connection so unauthenticated callers
     # receive a proper close code rather than an HTTP 401 (which browsers can't
-    # read from a WS handshake).  We must call accept() first to be able to
-    # send a close frame; if auth fails we close with 4001 and return.
-    await websocket.accept()
+    # read from a WS handshake).
+    user = await authenticate_websocket(websocket, token)
+    if user is None:
+        return
 
-    if settings.AUTH_ENABLED:
-        if not token:
-            await websocket.close(code=4001, reason="Authentication required")
-            return
-        try:
-            payload = _decode_token(token)
-            user_id_raw = payload.get("sub")
-            user_id = int(user_id_raw) if user_id_raw is not None else None
-        except Exception:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-
-        user = await get_user_by_id(user_id) if user_id is not None else None
-        if user is None or not user.get("is_active"):
-            await websocket.close(code=4001, reason="User not found or inactive")
-            return
-        if payload.get("pwv", 0) != user.get("password_version", 0):
-            await websocket.close(code=4001, reason="Token invalidated")
-            return
-
-        client_id = f"api-client-{uuid.uuid4().hex[:8]}"
-        log_user = user.get("username", user_id)
-    else:
-        client_id = f"api-client-{uuid.uuid4().hex[:8]}"
-        log_user = "anonymous"
+    client_id = f"api-client-{uuid.uuid4().hex[:8]}"
+    log_user = user.get("username", user.get("id", "unknown"))
 
     # Register with Broadcast Service
     await broadcast_service.connect(websocket)

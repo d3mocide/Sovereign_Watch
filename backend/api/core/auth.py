@@ -17,7 +17,7 @@ from typing import Any
 
 from core.config import settings
 from core.database import db
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, WebSocket
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -150,24 +150,12 @@ _ANON_USER = {
 }
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
-) -> dict[str, Any]:
+async def authenticate_token(token: str) -> dict[str, Any]:
     """
-    Validate the Bearer token and return the authenticated user dict.
-    When AUTH_ENABLED=false all requests are treated as an admin (dev mode).
+    Decodes a JWT token, fetches the user, and validates activity and version.
+    Used by both HTTP and WebSocket auth paths.
     """
-    if not settings.AUTH_ENABLED:
-        return _ANON_USER
-
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    payload = _decode_token(credentials.credentials)
+    payload = _decode_token(token)
     user_id_str: str | None = payload.get("sub")
     if user_id_str is None:
         raise HTTPException(
@@ -191,6 +179,7 @@ async def get_current_user(
             detail="User not found or inactive",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     # Verify the password-version claim matches the DB.  A mismatch means the
     # password was changed after this token was issued — force re-login.
     if payload.get("pwv", 0) != user.get("password_version", 0):
@@ -200,6 +189,51 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+) -> dict[str, Any]:
+    """
+    Validate the Bearer token and return the authenticated user dict.
+    When AUTH_ENABLED=false all requests are treated as an admin (dev mode).
+    """
+    if not settings.AUTH_ENABLED:
+        return _ANON_USER
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await authenticate_token(credentials.credentials)
+
+
+async def authenticate_websocket(websocket: WebSocket, token: str | None) -> dict[str, Any] | None:
+    """
+    Authenticates a WebSocket connection using a query-param token.
+    Accepts the connection first so it can send a proper close code on failure.
+    Returns the user dict if successful, or None (after closing) on failure.
+    """
+    await websocket.accept()
+
+    if not settings.AUTH_ENABLED:
+        return _ANON_USER
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return None
+
+    try:
+        return await authenticate_token(token)
+    except HTTPException as e:
+        await websocket.close(code=4001, reason=e.detail)
+        return None
+    except Exception:
+        await websocket.close(code=4001, reason="Invalid token")
+        return None
 
 
 def require_role(minimum_role: str):
