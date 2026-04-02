@@ -142,7 +142,8 @@ export const LayerVisibilityControls: React.FC<
           className="absolute inset-0 h-full w-full cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           onClick={() => setShowLayers(!showLayers)}
           aria-expanded={showLayers}
-          aria-label="Toggle Map Layers"
+          title={showLayers ? "Collapse Map Layers" : "Expand Map Layers"}
+          aria-label={showLayers ? "Collapse Map Layers" : "Expand Map Layers"}
         />
         <div className="relative flex items-center gap-2 pointer-events-none">
           <Layers size={13} className="text-cyan-400" aria-hidden="true" />
@@ -163,8 +164,8 @@ export const LayerVisibilityControls: React.FC<
                     ? "bg-emerald-400/10 text-emerald-400 border border-emerald-400/30"
                     : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
                 }`}
-                title="Toggle Amateur Radio Repeaters"
-                aria-label="Toggle Amateur Radio Repeaters"
+                title={filters.showRepeaters ? "Hide Amateur Radio Repeaters" : "Show Amateur Radio Repeaters"}
+                aria-label={filters.showRepeaters ? "Hide Amateur Radio Repeaters" : "Show Amateur Radio Repeaters"}
                 aria-pressed={!!filters.showRepeaters}
               >
                 <Radio size={12} aria-hidden="true" />
@@ -179,8 +180,8 @@ export const LayerVisibilityControls: React.FC<
                     ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/30"
                     : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
                 }`}
-                title="Toggle Global Network"
-                aria-label="Toggle Global Network"
+                title={infraIsOn ? "Hide Global Network" : "Show Global Network"}
+                aria-label={infraIsOn ? "Hide Global Network" : "Show Global Network"}
                 aria-pressed={infraIsOn}
               >
                 <Network size={12} aria-hidden="true" />
@@ -195,8 +196,8 @@ export const LayerVisibilityControls: React.FC<
                     ? "bg-purple-400/10 text-purple-400 border border-purple-400/30"
                     : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
                 }`}
-                title="Toggle Environmental Layers"
-                aria-label="Toggle Environmental Layers"
+                title={environmentalIsOn ? "Hide Environmental Layers" : "Show Environmental Layers"}
+                aria-label={environmentalIsOn ? "Hide Environmental Layers" : "Show Environmental Layers"}
                 aria-pressed={environmentalIsOn}
               >
                 <Sparkles size={12} aria-hidden="true" />
@@ -211,8 +212,8 @@ export const LayerVisibilityControls: React.FC<
                     ? "bg-amber-400/10 text-amber-400 border border-amber-400/30"
                     : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
                 }`}
-                title="Toggle Hazards Layers"
-                aria-label="Toggle Hazards Layers"
+                title={hazardsIsOn ? "Hide Hazards Layers" : "Show Hazards Layers"}
+                aria-label={hazardsIsOn ? "Hide Hazards Layers" : "Show Hazards Layers"}
                 aria-pressed={hazardsIsOn}
               >
                 <AlertCircle size={12} aria-hidden="true" />
@@ -251,6 +252,8 @@ export const LayerVisibilityControls: React.FC<
                   setRfExpanded(!rfExpanded);
                 }}
                 aria-expanded={rfExpanded}
+                title={rfExpanded ? "Collapse RF Infrastructure" : "Expand RF Infrastructure"}
+                aria-label={rfExpanded ? "Collapse RF Infrastructure" : "Expand RF Infrastructure"}
               >
                 <div className="flex items-center gap-3">
                   <Radio
@@ -285,7 +288,8 @@ export const LayerVisibilityControls: React.FC<
                   e.stopPropagation();
                   onFilterChange("showRepeaters", !filters.showRepeaters);
                 }}
-                aria-label="Toggle RF Infrastructure"
+                title={filters.showRepeaters ? "Hide RF Infrastructure" : "Show RF Infrastructure"}
+                aria-label={filters.showRepeaters ? "Hide RF Infrastructure" : "Show RF Infrastructure"}
                 aria-pressed={!!filters.showRepeaters}
               >
                 <input
@@ -487,6 +491,8 @@ export const LayerVisibilityControls: React.FC<
                   setInfraExpanded(!infraExpanded);
                 }}
                 aria-expanded={infraExpanded}
+                title={infraExpanded ? "Collapse Global Network" : "Expand Global Network"}
+                aria-label={infraExpanded ? "Collapse Global Network" : "Expand Global Network"}
               >
                 <div className="flex items-center gap-3">
                   <Network
@@ -520,7 +526,8 @@ export const LayerVisibilityControls: React.FC<
                   e.stopPropagation();
                   toggleInfra();
                 }}
-                aria-label="Toggle Global Network"
+                title={infraIsOn ? "Hide Global Network" : "Show Global Network"}
+                aria-label={infraIsOn ? "Hide Global Network" : "Show Global Network"}
                 aria-pressed={infraIsOn}
               >
                 <input
@@ -832,6 +839,8 @@ export const LayerVisibilityControls: React.FC<
                   setEnvironmentalExpanded(!environmentalExpanded);
                 }}
                 aria-expanded={environmentalExpanded}
+                title={environmentalExpanded ? "Collapse Environmental" : "Expand Environmental"}
+                aria-label={environmentalExpanded ? "Collapse Environmental" : "Expand Environmental"}
               >
                 <div className="flex items-center gap-3">
                   <Sparkles
@@ -867,7 +876,8 @@ export const LayerVisibilityControls: React.FC<
                   e.stopPropagation();
                   toggleEnvironmental();
                 }}
-                aria-label="Toggle Environmental Layers"
+                title={environmentalIsOn ? "Hide Environmental Layers" : "Show Environmental Layers"}
+                aria-label={environmentalIsOn ? "Hide Environmental Layers" : "Show Environmental Layers"}
                 aria-pressed={environmentalIsOn}
               >
                 <input
@@ -972,6 +982,8 @@ export const LayerVisibilityControls: React.FC<
                   setHazardsExpanded(!hazardsExpanded);
                 }}
                 aria-expanded={hazardsExpanded}
+                title={hazardsExpanded ? "Collapse Hazards" : "Expand Hazards"}
+                aria-label={hazardsExpanded ? "Collapse Hazards" : "Expand Hazards"}
               >
                 <div className="flex items-center gap-3">
                   <Globe
@@ -1005,7 +1017,8 @@ export const LayerVisibilityControls: React.FC<
                   e.stopPropagation();
                   toggleHazards();
                 }}
-                aria-label="Toggle Hazards Layers"
+                title={hazardsIsOn ? "Hide Hazards Layers" : "Show Hazards Layers"}
+                aria-label={hazardsIsOn ? "Hide Hazards Layers" : "Show Hazards Layers"}
                 aria-pressed={hazardsIsOn}
               >
                 <input
