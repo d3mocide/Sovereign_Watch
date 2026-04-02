@@ -164,7 +164,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
         <div className="relative group z-50 widget-panel">
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search size={13} className="text-cyan-400" />
+                    <Search size={13} className="text-cyan-400" aria-hidden="true" />
                 </div>
                 <input
                     type="text"
@@ -178,9 +178,10 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                     <button
                         onClick={() => setQuery('')}
                         aria-label="Clear search"
+                        title="Clear search"
                         className="absolute inset-y-0 right-0 pr-2 flex items-center text-white/20 hover:text-white/60 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                     >
-                        <X size={14} />
+                        <X size={14} aria-hidden="true" />
                     </button>
                 )}
             </div>
