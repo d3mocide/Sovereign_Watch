@@ -164,7 +164,7 @@ async def get_passes(
                 t += timedelta(seconds=step_seconds)
                 continue
 
-            r_ecef = teme_to_ecef(np.array(r), jd, fr)
+            r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
             point = {
@@ -354,9 +354,9 @@ async def get_groundtrack(
         jd, fr = _jday_from_datetime(t)
         e, r, _ = satrec.sgp4(jd, fr)
         if e == 0:
-            r_ecef = teme_to_ecef(np.array(r), jd, fr)
+            r_ecef = teme_to_ecef(r, jd, fr)
             # ecef_to_lla_vectorized needs (N, 3)
-            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
             points.append({
                 "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "lat": round(float(lat_arr[0]), 5),
