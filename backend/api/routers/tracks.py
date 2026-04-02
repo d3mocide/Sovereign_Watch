@@ -445,6 +445,15 @@ async def get_flight_info(entity_id: str):
     empty = {"departure": None, "arrival": None, "callsign": None,
              "first_seen": None, "last_seen": None}
 
+    cache_key = f"flight_info:{entity_id.lower()}"
+    if db.redis_client:
+        try:
+            cached = await db.redis_client.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception as e:
+            logger.warning(f"Failed to read from Redis for {entity_id}: {e}")
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await (
@@ -458,17 +467,28 @@ async def get_flight_info(entity_id: str):
 
         flights = resp.json()
         if not flights:
+            # We cache empty results briefly to avoid hammering the API
+            if db.redis_client:
+                await db.redis_client.setex(cache_key, 300, json.dumps(empty))
             return empty
 
         # Return the most recently completed flight
         latest = max(flights, key=lambda f: f.get("lastSeen") or 0)
-        return {
+        result = {
             "departure": latest.get("estDepartureAirport"),
             "arrival": latest.get("estArrivalAirport"),
             "callsign": (latest.get("callsign") or "").strip() or None,
             "first_seen": latest.get("firstSeen"),
             "last_seen": latest.get("lastSeen"),
         }
+
+        if db.redis_client:
+            try:
+                await db.redis_client.setex(cache_key, 3600, json.dumps(result))
+            except Exception as e:
+                logger.warning(f"Failed to write to Redis for {entity_id}: {e}")
+
+        return result
     except Exception as e:
         logger.warning(f"OpenSky flights API error for {entity_id}: {e}")
         return empty
