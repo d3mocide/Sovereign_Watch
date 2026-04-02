@@ -32,3 +32,7 @@
 **Vulnerability:** The `/api/watchlist` POST endpoint lacked rate limiting, allowing unauthenticated attackers to potentially flood the Redis backend (`zadd`) with excessive requests, causing DoS or resource exhaustion.
 **Learning:** Even internal or non-sensitive configuration endpoints that write to the database/cache must be protected with rate limiting to prevent abuse and ensure service availability.
 **Prevention:** Always apply rate limiting to endpoints that perform write operations, especially those accessible without authentication.
+## 2024-05-25 - Fix arbitrary argument injection in subprocess.run
+**Vulnerability:** Command Injection / Arbitrary Argument Injection
+**Learning:** `backend/scripts/backup_timescale.py` used subprocess.run with command-line flags dynamically constructed from environment variables (e.g. `DB_HOST`, `DB_PORT`). Passing arbitrary user-controlled inputs as command line flags (like `--host`) to command line utilities via `subprocess` poses an arbitrary argument injection vulnerability.
+**Prevention:** Rather than using CLI flags like `--host`, always use established standard environment variables (e.g., `PGHOST`, `PGUSER`, `PGPASSWORD`) for configuration to pass arguments to tools such as `pg_dump` when invoking them using `subprocess`.

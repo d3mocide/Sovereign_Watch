@@ -124,13 +124,13 @@ def run_backup(keep: int = 7) -> None:
 
     env = os.environ.copy()
     env["PGPASSWORD"] = DB_PASSWORD
+    env["PGHOST"] = DB_HOST
+    env["PGPORT"] = DB_PORT
+    env["PGUSER"] = DB_USER
+    env["PGDATABASE"] = DB_NAME
 
     cmd = [
         "pg_dump",
-        "--host", DB_HOST,
-        "--port", DB_PORT,
-        "--username", DB_USER,
-        "--dbname", DB_NAME,
         "--format", "custom",
         "--compress", "9",
         "--file", str(dest),
@@ -210,7 +210,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.backup_dir:
-        global BACKUP_DIR  # noqa: PLW0603
         BACKUP_DIR = Path(args.backup_dir)
 
     run_backup(keep=args.keep)
