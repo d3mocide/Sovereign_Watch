@@ -192,9 +192,9 @@ async def analyze_track(
                             jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second)
                             e, r, v = satrec.sgp4(jd, fr)
                             if e == 0:
-                                r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                                lat, lon, alt = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
-                                pts.append({"lat": lat[0], "lon": lon[0], "alt": alt[0]*1000, "time": t.isoformat()})
+                                r_ecef = teme_to_ecef(r, jd, fr)
+                                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
+                                pts.append({"lat": lat_arr[0], "lon": lon_arr[0], "alt": alt_arr[0]*1000, "time": t.isoformat()})
                         if pts:
                             track_summary = {
                                 "points": len(pts), 

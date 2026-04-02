@@ -140,8 +140,8 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
             jd, fr = _jday(t)
             e, r, v = satrec.sgp4(jd, fr)
             if e == 0:
-                r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                r_ecef = teme_to_ecef(r, jd, fr)
+                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
 
                 # Heading: bearing from 1 second ago to now
                 t_prev = t - timedelta(seconds=1)
@@ -149,8 +149,8 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
                 e2, r2, _ = satrec.sgp4(jd2, fr2)
                 heading = 0.0
                 if e2 == 0:
-                    r2_ecef = teme_to_ecef(np.array(r2), jd2, fr2)
-                    la2, lo2, _ = ecef_to_lla_vectorized(r2_ecef.reshape(1, 3))
+                    r2_ecef = teme_to_ecef(r2, jd2, fr2)
+                    la2, lo2, _ = ecef_to_lla_vectorized(np.array(r2_ecef).reshape(1, 3))
                     dlat = float(lat_arr[0]) - float(la2[0])
                     dlon = float(lon_arr[0]) - float(lo2[0])
                     heading = math.degrees(
@@ -269,8 +269,8 @@ async def search_tracks(q: str, limit: int = 10):
                 jd, fr = _jday(now)
                 e, r, _ = satrec.sgp4(jd, fr)
                 if e == 0:
-                    r_ecef = teme_to_ecef(np.array(r), jd, fr)
-                    la, lo, _ = ecef_to_lla_vectorized(r_ecef.reshape(1, 3))
+                    r_ecef = teme_to_ecef(r, jd, fr)
+                    la, lo, _ = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
                     lat = round(float(la[0]), 5)
                     lon = round(float(lo[0]), 5)
             except Exception:

@@ -9,19 +9,19 @@ import math
 import numpy as np
 
 
-def teme_to_ecef(r_teme: np.ndarray, jd: float, fr: float) -> np.ndarray:
+def teme_to_ecef(r_teme: tuple[float, float, float], jd: float, fr: float) -> tuple[float, float, float]:
     """
     Rotate a single TEME position vector (km) to ECEF using GMST.
 
     Parameters
     ----------
-    r_teme : (3,) ndarray
+    r_teme : (x, y, z) tuple
     jd     : Julian date (integer part)
     fr     : Julian date (fractional part)
 
     Returns
     -------
-    (3,) ndarray in ECEF km
+    (x, y, z) tuple in ECEF km
     """
     d = (jd - 2451545.0) + fr
     gmst = (18.697374558 + 24.06570982441908 * d) % 24.0
@@ -31,11 +31,11 @@ def teme_to_ecef(r_teme: np.ndarray, jd: float, fr: float) -> np.ndarray:
     sin_t = math.sin(theta)
 
     x, y, z = r_teme
-    return np.array([
+    return (
         x * cos_t + y * sin_t,
         -x * sin_t + y * cos_t,
         z,
-    ])
+    )
 
 
 
@@ -100,8 +100,8 @@ def geodetic_to_ecef(lat_deg: float, lon_deg: float, alt_km: float = 0.0) -> np.
 
 
 def ecef_to_topocentric(
-    obs_ecef: np.ndarray,
-    sat_ecef: np.ndarray,
+    obs_ecef: tuple[float, float, float] | np.ndarray,
+    sat_ecef: tuple[float, float, float] | np.ndarray,
     obs_lat_deg: float,
     obs_lon_deg: float,
 ) -> tuple[float, float, float]:
@@ -120,8 +120,11 @@ def ecef_to_topocentric(
     (azimuth_deg, elevation_deg, slant_range_km)
     """
     # Range vector from observer to satellite
-    diff = sat_ecef - obs_ecef
-    slant_range_km = float(np.linalg.norm(diff))
+    dx = sat_ecef[0] - obs_ecef[0]
+    dy = sat_ecef[1] - obs_ecef[1]
+    dz = sat_ecef[2] - obs_ecef[2]
+
+    slant_range_km = math.sqrt(dx**2 + dy**2 + dz**2)
 
     lat = math.radians(obs_lat_deg)
     lon = math.radians(obs_lon_deg)
@@ -135,13 +138,9 @@ def ecef_to_topocentric(
     sin_lon = math.sin(lon)
     cos_lon = math.cos(lon)
 
-    east  = np.array([-sin_lon,               cos_lon,              0.0])
-    north = np.array([-sin_lat * cos_lon, -sin_lat * sin_lon,  cos_lat])
-    up    = np.array([ cos_lat * cos_lon,  cos_lat * sin_lon,  sin_lat])
-
-    e = float(np.dot(diff, east))
-    n = float(np.dot(diff, north))
-    u = float(np.dot(diff, up))
+    e = dx * (-sin_lon) + dy * cos_lon
+    n = dx * (-sin_lat * cos_lon) + dy * (-sin_lat * sin_lon) + dz * cos_lat
+    u = dx * (cos_lat * cos_lon) + dy * (cos_lat * sin_lon) + dz * sin_lat
 
     elevation_rad = math.atan2(u, math.sqrt(e ** 2 + n ** 2))
     azimuth_rad   = math.atan2(e, n)  # measured from North, clockwise
