@@ -29,6 +29,7 @@ dependencies = [
     "python-multipart==0.0.22",
     "psutil==6.1.1",
     "h3==4.4.2",
+    "redisvl>=0.3.0",
 ]
 
 [dependency-groups]

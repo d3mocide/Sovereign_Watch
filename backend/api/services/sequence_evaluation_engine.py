@@ -5,10 +5,13 @@ Implements zero-shot prompting for topological narrative analysis and escalation
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import httpx
+
+from services.semantic_cache import get_semantic_cache
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +140,15 @@ Based on this data, identify escalation patterns, risk indicators, and provide a
         return prompt
 
     async def _call_litellm(self, user_prompt: str) -> str:
-        """Call LiteLLM API (local Ollama or cloud)."""
+        """Call LiteLLM API (local Ollama or cloud), with semantic cache look-aside."""
+        redis_url = os.getenv("REDIS_URL", "redis://sovereign-redis:6379")
+        sem_cache = await get_semantic_cache(redis_url)
+
+        cached = await sem_cache.check(user_prompt)
+        if cached is not None:
+            logger.info("SemanticCache hit — skipping LLM call")
+            return cached
+
         payload = {
             "model": self.model_name,
             "messages": [
@@ -164,7 +175,10 @@ Based on this data, identify escalation patterns, risk indicators, and provide a
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                result_text = data["choices"][0]["message"]["content"]
+
+            await sem_cache.store(user_prompt, result_text)
+            return result_text
         except Exception as e:
             logger.error(f"LiteLLM API error: {e}")
             raise

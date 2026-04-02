@@ -346,6 +346,25 @@ class EscalationDetector:
             description=f"Space weather: {category} (Kp={kp_index:.1f})",
         )
 
+    @staticmethod
+    def should_suppress_signal_loss(suppression_payload: dict | None) -> bool:
+        """
+        Return True when the Redis suppress_signal_loss key is active.
+
+        The key is set by SpaceWeatherSource._poll_noaa_scales() whenever
+        R-scale >= R3 (Radio Blackout) or G-scale >= G3 (Geomagnetic Storm).
+        These events cause widespread satellite signal degradation that would
+        otherwise trigger false-positive jamming/interference alerts.
+
+        Args:
+            suppression_payload: Decoded JSON from Redis key
+              ``space_weather:suppress_signal_loss``, or None if the key is
+              absent (TTL expired → no active suppression).
+        """
+        if not suppression_payload:
+            return False
+        return bool(suppression_payload.get("active", False))
+
     def detect_satnogs_signal_loss(
         self, signal_events: Optional[List[Dict]]
     ) -> List[AnomalyMetric]:

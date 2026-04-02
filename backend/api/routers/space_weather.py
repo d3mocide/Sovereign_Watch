@@ -5,6 +5,7 @@ Endpoints:
   GET /api/space-weather/kp        — current Kp value + 24-hour history
   GET /api/space-weather/aurora    — auroral oval GeoJSON (NOAA 1-hour forecast)
   GET /api/space-weather/status    — quick summary (kp, storm_level, aurora_active)
+  GET /api/space-weather/alerts    — NOAA R/S/G scale levels + signal-loss suppression state
 """
 
 import json
@@ -124,4 +125,42 @@ async def get_space_weather_status():
         }
     except Exception as e:
         logger.error("Failed to get space weather status: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/space-weather/alerts")
+async def get_space_weather_alerts():
+    """
+    Returns current NOAA Space Weather Scale levels (R/S/G) and the active
+    signal-loss suppression state written by SpaceWeatherSource._poll_noaa_scales().
+
+    Response:
+      {
+        "scales": { "0": { "R": {...}, "S": {...}, "G": {...} }, ... } | null,
+        "suppression": {
+          "active": true,
+          "reason": "R3 Radio Blackout",
+          "r_scale": "R3",
+          "g_scale": "G0",
+          "expires_at": "...",
+          "set_at": "..."
+        } | null,
+        "fetched_at": "..."
+      }
+    """
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        scales_raw      = await db.redis_client.get("space_weather:noaa_scales")
+        suppression_raw = await db.redis_client.get("space_weather:suppress_signal_loss")
+
+        from datetime import datetime, UTC
+        return {
+            "scales":      json.loads(scales_raw)      if scales_raw      else None,
+            "suppression": json.loads(suppression_raw) if suppression_raw else None,
+            "fetched_at":  datetime.now(UTC).isoformat(),
+        }
+    except Exception as e:
+        logger.error("Failed to fetch space weather alerts: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
