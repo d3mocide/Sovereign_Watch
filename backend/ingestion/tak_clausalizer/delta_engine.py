@@ -5,12 +5,11 @@ Queries Redis for previous state, calculates Haversine distance, filters GPS jit
 
 import json
 import logging
-import time
 from typing import Any, Dict, Optional
 
 import redis.asyncio as redis
 
-from utils import haversine_m, safe_float
+from utils import haversine_m
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +146,10 @@ class DeltaEngine:
         # Calculate Haversine distance
         distance_m = haversine_m(prev_clause.lat, prev_clause.lon, new_lat, new_lon)
 
-        # GPS error bound
-        error_bound = ce + le
+        # GPS error bound — always enforce the minimum spatial bypass threshold
+        # so that movements smaller than SPATIAL_BYPASS_M are filtered even
+        # when the message carries no GPS error estimates (ce=0, le=0).
+        error_bound = max(ce + le, self.SPATIAL_BYPASS_M)
 
         # If distance < error_bound, it's within GPS uncertainty → jitter
         if distance_m < error_bound:

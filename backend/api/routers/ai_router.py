@@ -314,8 +314,14 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     )
     directional_anomalies = escalation_detector.detect_directional_anomalies(tak_dicts)
     emergency_anomalies = escalation_detector.detect_emergency_transponders(tak_dicts)
+    rendezvous_anomalies = escalation_detector.detect_rendezvous(tak_dicts)
 
-    all_anomalies = [clustering_anomaly] + directional_anomalies + emergency_anomalies
+    all_anomalies = (
+        [clustering_anomaly]
+        + directional_anomalies
+        + emergency_anomalies
+        + rendezvous_anomalies
+    )
     active_anomalies = [a for a in all_anomalies if a.score > 0.0]
     anomaly_score = max([a.score for a in all_anomalies], default=0.0)
     anomalous_uids = []
@@ -427,6 +433,9 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         escalation_indicators.append("Directional anomalies detected")
     if emergency_anomalies:
         escalation_indicators.append("Emergency transponders activated")
+    if rendezvous_anomalies:
+        total_rendezvous = sum(len(a.affected_uids) for a in rendezvous_anomalies)
+        escalation_indicators.append(f"Multi-entity rendezvous detected ({total_rendezvous} entities)")
 
     # Context-based indicators
     for ctx_anomaly in context_anomalies:
