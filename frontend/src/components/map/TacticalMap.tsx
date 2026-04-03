@@ -125,6 +125,8 @@ interface TacticalMapProps {
   gdeltData?: FeatureCollection | null;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
+  /** Active NWS alerts GeoJSON (environmental overlay) */
+  nwsAlertsData?: FeatureCollection | null;
   /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
   ixpData?: FeatureCollection | null;
   /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
@@ -199,6 +201,7 @@ export function TacticalMap({
   onBoundsChange,
   gdeltData: propGdeltData,
   buoyData,
+  nwsAlertsData,
   ixpData,
   facilityData,
   issPosition,
@@ -242,7 +245,9 @@ export function TacticalMap({
 
       const props = obj.properties || {};
       const isOutage =
-        props.entity_type === "outage" || props.severity !== undefined;
+        props.entity_type === "outage" || obj.type === "outage";
+      const isNwsAlert =
+        props.event !== undefined || props.headline !== undefined;
       const isTower = obj.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
       const isISS = props.entity_type === "iss";
@@ -250,6 +255,8 @@ export function TacticalMap({
         ? "buoy"
         : isTower
           ? "tower"
+          : isNwsAlert
+            ? "nws_alert"
           : isOutage
             ? "outage"
             : isISS
@@ -262,6 +269,8 @@ export function TacticalMap({
         type: entityType,
         callsign: String(
           props.buoy_id ||
+            props.event ||
+            props.headline ||
             props.name ||
             props.region ||
             props.fcc_id ||
@@ -289,7 +298,8 @@ export function TacticalMap({
         prev?.type === "infra" ||
         prev?.type === "outage" ||
         prev?.type === "tower" ||
-        prev?.type === "buoy"
+        prev?.type === "buoy" ||
+        prev?.type === "nws_alert"
           ? null
           : prev,
       );
@@ -639,9 +649,13 @@ export function TacticalMap({
 
   const h3RiskResolution = useMemo(() => {
     const z = viewState.zoom;
+    // Tactical map: keep midsize cells through common mission zooms,
+    // then increase detail only at deeper local zoom levels.
     if (z < 5) return 4;
-    if (z > 13) return 9;
-    return 6;
+    if (z < 15) return 6;
+    if (z < 17) return 7;
+    if (z < 19) return 8;
+    return 9;
   }, [viewState.zoom]);
 
   useAnimationLoop({
@@ -673,6 +687,10 @@ export function TacticalMap({
       if (!isInfraPickInfo(info) || !info.object) return;
 
       const props = info.object.properties || {};
+      const isOutage =
+        props.entity_type === "outage" || info.object.type === "outage";
+      const isNwsAlert =
+        props.event !== undefined || props.headline !== undefined;
       const isTower =
         info.object.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
@@ -681,15 +699,21 @@ export function TacticalMap({
         ? "buoy"
         : isTower
           ? "tower"
+          : isNwsAlert
+            ? "nws_alert"
+          : isOutage
+            ? "outage"
           : isISS
             ? "iss"
             : "infra";
       const callsign = String(
         props.buoy_id ||
+          props.event ||
+          props.headline ||
           props.name ||
           props.region ||
           props.fcc_id ||
-          (props.entity_type === "outage"
+          (isOutage
             ? "INTERNET OUTAGE"
             : isTower
               ? "FCC TOWER"
@@ -737,6 +761,7 @@ export function TacticalMap({
     jammingData,
     gdeltData,
     buoyData,
+    nwsAlertsData,
     ixpData,
     facilityData,
     issPosition,

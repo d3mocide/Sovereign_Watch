@@ -63,6 +63,8 @@ interface UseAnimationLoopOptions {
   jammingData?: any;
   /** GDELT v2 geolocated news events GeoJSON (from /api/gdelt/events) */
   gdeltData?: any;
+  /** Active NWS alerts GeoJSON (from /api/infra/nws-alerts) */
+  nwsAlertsData?: FeatureCollection | null;
   /** Minimum tone threshold for GDELT; default -Infinity (all events) */
   gdeltToneThreshold?: number;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
@@ -150,6 +152,7 @@ export function useAnimationLoop({
   auroraData,
   jammingData,
   gdeltData,
+  nwsAlertsData,
   gdeltToneThreshold,
   buoyData,
   ixpData,
@@ -234,6 +237,9 @@ export function useAnimationLoop({
 
   const gdeltDataRef = useRef(gdeltData);
   gdeltDataRef.current = gdeltData;
+
+  const nwsAlertsDataRef = useRef(nwsAlertsData);
+  nwsAlertsDataRef.current = nwsAlertsData;
 
   const gdeltToneThresholdRef = useRef(gdeltToneThreshold);
   gdeltToneThresholdRef.current = gdeltToneThreshold;
@@ -628,6 +634,7 @@ export function useAnimationLoop({
         auroraData: auroraDataRef.current,
         jammingData: jammingDataRef.current,
         gdeltData: gdeltDataRef.current,
+        nwsAlertsData: nwsAlertsDataRef.current ?? null,
         gdeltToneThreshold: gdeltToneThresholdRef.current,
         buoyData: buoyDataRef.current ?? null,
         ixpData: ixpDataRef.current ?? null,

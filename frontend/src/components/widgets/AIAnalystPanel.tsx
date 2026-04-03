@@ -221,7 +221,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
     if (isOpen && entityUid && autoRunTrigger && (autoRunTrigger !== lastStateRef.current.autoRunTrigger || !lastStateRef.current.isOpen)) {
       if (isOperator) {
         const sitrepContext = isSitrep ? entity?.detail?.sitrep_context : undefined;
-        run(entityUid, lookback, mode, sitrepContext, isSitrep);
+        run(entityUid, lookback, mode, sitrepContext, isSitrep, entity);
       }
     }
     lastStateRef.current = { entityUid, autoRunTrigger, isOpen };
@@ -230,7 +230,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   const handleRun = () => {
     if (!entity || !isOperator) return;
     const sitrepContext = isSitrep ? entity.detail?.sitrep_context : undefined;
-    run(entity.uid, lookback, mode, sitrepContext, isSitrep);
+    run(entity.uid, lookback, mode, sitrepContext, isSitrep, entity);
   };
 
   const handleCopy = () => {

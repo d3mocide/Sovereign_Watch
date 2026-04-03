@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  CloudRain,
   Globe,
   Layers,
   Network,
@@ -40,6 +41,9 @@ export const LayerVisibilityControls: React.FC<
   const [environmentalExpanded, setEnvironmentalExpanded] = useState(() => {
     return localStorage.getItem("ui_enviro_expanded") === "true";
   });
+  const [analysisExpanded, setAnalysisExpanded] = useState(() => {
+    return localStorage.getItem("ui_analysis_expanded") === "true";
+  });
   const [hazardsExpanded, setHazardsExpanded] = useState(() => {
     return localStorage.getItem("ui_hazards_expanded") === "true";
   });
@@ -57,6 +61,9 @@ export const LayerVisibilityControls: React.FC<
   useEffect(() => {
     localStorage.setItem("ui_enviro_expanded", String(environmentalExpanded));
   }, [environmentalExpanded]);
+  useEffect(() => {
+    localStorage.setItem("ui_analysis_expanded", String(analysisExpanded));
+  }, [analysisExpanded]);
   useEffect(() => {
     localStorage.setItem("ui_hazards_expanded", String(hazardsExpanded));
   }, [hazardsExpanded]);
@@ -79,7 +86,10 @@ export const LayerVisibilityControls: React.FC<
       filters.showISS === true);
 
   const environmentalIsOn =
-    !!filters && (!!filters.showAurora || !!filters.showBuoys);
+    !!filters &&
+    (!!filters.showAurora || !!filters.showBuoys || !!filters.showNWSAlerts);
+
+  const analysisIsOn = !!filters && !!filters.showH3Risk;
 
   const hazardsIsOn =
     !!filters &&
@@ -114,9 +124,11 @@ export const LayerVisibilityControls: React.FC<
     if (environmentalIsOn) {
       onFilterChange("showAurora", false);
       onFilterChange("showBuoys", false);
+      onFilterChange("showNWSAlerts", false);
     } else {
       onFilterChange("showAurora", getFilterPref("showAurora", true));
       onFilterChange("showBuoys", getFilterPref("showBuoys", true));
+      onFilterChange("showNWSAlerts", getFilterPref("showNWSAlerts", true));
     }
   };
 
@@ -132,6 +144,11 @@ export const LayerVisibilityControls: React.FC<
         getFilterPref("showHoldingPatterns", true),
       );
     }
+  };
+
+  const toggleAnalysis = () => {
+    if (!onFilterChange || !filters) return;
+    onFilterChange("showH3Risk", !filters.showH3Risk);
   };
 
   return (
@@ -201,6 +218,22 @@ export const LayerVisibilityControls: React.FC<
                 aria-pressed={environmentalIsOn}
               >
                 <Sparkles size={12} aria-hidden="true" />
+              </button>
+              <button
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  toggleAnalysis();
+                }}
+                className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-red-400 outline-none ${
+                  analysisIsOn
+                    ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                    : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"
+                }`}
+                title={analysisIsOn ? "Hide Risk Grid" : "Show Risk Grid"}
+                aria-label={analysisIsOn ? "Hide Risk Grid" : "Show Risk Grid"}
+                aria-pressed={analysisIsOn}
+              >
+                <AlertCircle size={12} aria-hidden="true" />
               </button>
               <button
                 onClick={(e: React.MouseEvent) => {
@@ -966,6 +999,148 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
+
+                {/* NWS Alerts */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showNWSAlerts ? "border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <CloudRain
+                      size={10}
+                      className={
+                        filters.showNWSAlerts
+                          ? "text-amber-400"
+                          : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showNWSAlerts ? "text-amber-400/80" : "text-amber-400/30"}`}
+                    >
+                      NWS ALERTS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showNWSAlerts}
+                    onChange={(e) =>
+                      handleSubFilterChange("showNWSAlerts", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showNWSAlerts ? "bg-amber-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showNWSAlerts ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Analysis */}
+          <div className="flex flex-col gap-1">
+            <div
+              className={`group flex items-center justify-between rounded border transition-all ${analysisIsOn ? "border-red-500/30 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
+            >
+              <button
+                className="flex flex-1 items-center justify-between p-2 cursor-pointer text-left focus-visible:ring-1 focus-visible:ring-hud-green outline-none w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAnalysisExpanded(!analysisExpanded);
+                }}
+                aria-expanded={analysisExpanded}
+                title={analysisExpanded ? "Collapse Analysis" : "Expand Analysis"}
+                aria-label={analysisExpanded ? "Collapse Analysis" : "Expand Analysis"}
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle
+                    size={14}
+                    className={analysisIsOn ? "text-red-400" : "text-white/20"}
+                    aria-hidden="true"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-mono-sm font-bold tracking-wider uppercase text-white/90">
+                      Analysis
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className="w-4 flex justify-center transition-transform duration-200 shrink-0"
+                  style={{
+                    transform: analysisExpanded ? "rotate(90deg)" : "none",
+                  }}
+                >
+                  <ChevronRight
+                    size={14}
+                    className="text-white/40"
+                    aria-hidden="true"
+                  />
+                </div>
+              </button>
+
+              <button
+                className="border-l border-white/10 p-2 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleAnalysis();
+                }}
+                title={analysisIsOn ? "Hide Analysis Layers" : "Show Analysis Layers"}
+                aria-label={analysisIsOn ? "Hide Analysis Layers" : "Show Analysis Layers"}
+                aria-pressed={analysisIsOn}
+              >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={analysisIsOn}
+                  onChange={() => toggleAnalysis()}
+                  tabIndex={-1}
+                />
+                <div
+                  className={`h-3 w-6 cursor-pointer rounded-full transition-colors relative ${analysisIsOn ? "bg-red-500" : "bg-white/10 hover:bg-white/20"}`}
+                >
+                  <div
+                    className={`absolute top-0.5 h-2 w-2 rounded-full bg-black transition-all ${analysisIsOn ? "left-3.5" : "left-0.5"}`}
+                  />
+                </div>
+              </button>
+            </div>
+
+            {analysisExpanded && (
+              <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showH3Risk ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircle
+                      size={10}
+                      className={
+                        filters.showH3Risk ? "text-red-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showH3Risk ? "text-red-400/80" : "text-white/30"}`}
+                    >
+                      RISK GRID
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showH3Risk}
+                    onChange={(e) =>
+                      handleSubFilterChange("showH3Risk", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showH3Risk ? "bg-red-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showH3Risk ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
               </div>
             )}
           </div>
@@ -1111,39 +1286,6 @@ export const LayerVisibilityControls: React.FC<
                   </div>
                 </label>
 
-                {/* H3 Risk Heat-Map */}
-                <label
-                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showH3Risk ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <AlertCircle
-                      size={10}
-                      className={
-                        filters.showH3Risk ? "text-red-400" : "text-white/20"
-                      }
-                    />
-                    <span
-                      className={`text-[9px] font-bold tracking-wide ${filters.showH3Risk ? "text-red-400/80" : "text-white/30"}`}
-                    >
-                      RISK GRID
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={!!filters.showH3Risk}
-                    onChange={(e) =>
-                      handleSubFilterChange("showH3Risk", e.target.checked)
-                    }
-                  />
-                  <div
-                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showH3Risk ? "bg-red-400/80" : "bg-white/10"}`}
-                  >
-                    <div
-                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showH3Risk ? "left-2.5" : "left-0.5"}`}
-                    />
-                  </div>
-                </label>
               </div>
             )}
           </div>

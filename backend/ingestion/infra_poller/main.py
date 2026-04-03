@@ -1113,7 +1113,9 @@ class InfraPollerService:
             "User-Agent": NWS_USER_AGENT,
             "Accept": "application/geo+json",
         }
-        params = {"status": "actual", "limit": "500"}
+        # /alerts/active already scopes to active alerts; weather.gov rejects
+        # unsupported query params like limit with HTTP 400.
+        params = {"status": "actual"}
 
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
             async with client.get(NWS_ALERTS_URL, params=params) as resp:

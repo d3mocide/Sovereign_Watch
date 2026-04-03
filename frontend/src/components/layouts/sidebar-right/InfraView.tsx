@@ -1,4 +1,13 @@
-import { Crosshair, Layers, Network, Satellite, Signal, Waves, X } from "lucide-react";
+import {
+  CloudRain,
+  Crosshair,
+  Layers,
+  Network,
+  Satellite,
+  Signal,
+  Waves,
+  X,
+} from "lucide-react";
 import React from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { TimeTracked } from "../TimeTracked";
@@ -16,9 +25,13 @@ export const InfraView: React.FC<BaseViewProps> = ({
   const isIXP = props.layer === "ixp";
   const isFacility = props.layer === "facility";
   const isBuoy = props.buoy_id !== undefined;
+  const isNwsAlert =
+    entity.type === "nws_alert" ||
+    props.event !== undefined ||
+    props.headline !== undefined;
   const isISS = entity.type === "iss" || props.entity_type === "iss";
   const isOutage =
-    !isISS && (
+    !isISS && !isNwsAlert && (
       props.entity_type === "outage" ||
       props.id?.includes("outage") ||
       props.severity !== undefined
@@ -29,6 +42,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
     ? "text-blue-400"
     : isISS
       ? "text-yellow-400"
+      : isNwsAlert
+        ? "text-amber-300"
       : isOutage
         ? severity > 50
           ? "text-red-400"
@@ -38,6 +53,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
     ? "border-blue-400/30"
     : isISS
       ? "border-yellow-400/30"
+      : isNwsAlert
+        ? "border-amber-400/30"
       : isFacility
         ? "border-purple-400/30"
         : isOutage
@@ -49,6 +66,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
     ? "from-blue-400/20 to-blue-400/5"
     : isISS
       ? "from-yellow-400/20 to-yellow-400/5"
+      : isNwsAlert
+        ? "from-amber-400/20 to-amber-400/5"
       : isOutage
         ? severity > 50
           ? "from-red-400/20 to-red-400/5"
@@ -58,6 +77,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
     ? "text-blue-300 drop-shadow-[0_0_8px_rgba(96,165,250,0.8)]"
     : isISS
       ? "text-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]"
+      : isNwsAlert
+        ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
       : isFacility
         ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
         : isOutage
@@ -79,6 +100,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 <Waves size={14} className={accentColor} />
               ) : isISS ? (
                 <Satellite size={14} className={accentColor} />
+              ) : isNwsAlert ? (
+                <CloudRain size={14} className={accentColor} />
               ) : isIXP ? (
                 <Network size={14} className={accentColor} />
               ) : isFacility ? (
@@ -93,6 +116,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
                   ? "OCEAN_BUOY"
                   : isISS
                     ? "ORBITAL_PLATFORM"
+                    : isNwsAlert
+                      ? "NWS_ALERT"
                     : isIXP
                       ? "INTERNET_EXCHANGE"
                       : isFacility
@@ -114,6 +139,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
                   ? "OCEANOGRAPHIC_BUOY"
                   : isISS
                     ? "INTL_SPACE_STATION"
+                    : isNwsAlert
+                      ? "WEATHER_HAZARD"
                     : isIXP
                       ? "PEERINGDB_NODE"
                       : isFacility
@@ -133,6 +160,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
                         ? "Location:"
                         : isISS
                           ? "Orbit:"
+                        : isNwsAlert
+                          ? "Severity:"
                         : isOutage
                           ? "Impact:"
                           : isStation
@@ -142,6 +171,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
                     <span className="text-white/80">
                       {isISS
                         ? "LEO_ORBIT"
+                        : isNwsAlert
+                          ? String(props.severity || "UNKNOWN")
                         : String(
                           props.region ||
                             props.country ||
@@ -155,6 +186,22 @@ export const InfraView: React.FC<BaseViewProps> = ({
                       <span className="text-white/30 w-16">Severity:</span>
                       <span className={accentColor}>{severity}%</span>
                     </div>
+                  )}
+                  {isNwsAlert && (
+                    <>
+                      <div className="flex gap-2">
+                        <span className="text-white/30 w-16">Urgency:</span>
+                        <span className="text-white/80 uppercase">
+                          {String(props.urgency || "UNKNOWN")}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-white/30 w-16">Area:</span>
+                        <span className="text-white/80 truncate" title={String(props.areaDesc || "UNSPECIFIED")}>
+                          {String(props.areaDesc || "UNSPECIFIED")}
+                        </span>
+                      </div>
+                    </>
                   )}
                   {!isStation && props.rfs && !isOutage && (
                     <div className="flex gap-2">
@@ -205,10 +252,49 @@ export const InfraView: React.FC<BaseViewProps> = ({
             <h3
               className={`text-[10px] ${isOutage ? "text-amber-400" : "text-white/50"} font-bold uppercase tracking-wider`}
             >
-              {isOutage ? "Outage_Report" : "Infrastructure_Specs"}
+              {isNwsAlert
+                ? "NWS_Alert_Details"
+                : isOutage
+                  ? "Outage_Report"
+                  : "Infrastructure_Specs"}
             </h3>
             <div className="space-y-1 text-mono-xs font-medium">
-              {isOutage ? (
+              {isNwsAlert ? (
+                <>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">EVENT:</span>
+                    <span className="text-amber-300 font-bold uppercase">
+                      {String(props.event || props.headline || "NWS ALERT")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">SEVERITY:</span>
+                    <span className="text-amber-300 font-bold uppercase">
+                      {String(props.severity || "UNKNOWN")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">URGENCY:</span>
+                    <span className="text-white/80 font-bold uppercase">
+                      {String(props.urgency || "UNKNOWN")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">CERTAINTY:</span>
+                    <span className="text-white/80 font-bold uppercase">
+                      {String(props.certainty || "UNKNOWN")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">EXPIRES:</span>
+                    <span className="text-hud-green tabular-nums">
+                      {props.expires
+                        ? new Date(String(props.expires)).toLocaleString()
+                        : "N/A"}
+                    </span>
+                  </div>
+                </>
+              ) : isOutage ? (
                 <>
                   <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
                     <span className="text-white/30">SEVERITY:</span>
@@ -421,7 +507,7 @@ export const InfraView: React.FC<BaseViewProps> = ({
         </div>
         <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 border-t border-white/5">
           <span>
-            SRC: <span className={isISS ? "text-yellow-400/70" : "text-cyan-400/70"}>
+            SRC: <span className={isISS ? "text-yellow-400/70" : isNwsAlert ? "text-amber-400/70" : "text-cyan-400/70"}>
               {isISS ? "Space_Pulse" : "INFRA_Poller"}
             </span>
           </span>

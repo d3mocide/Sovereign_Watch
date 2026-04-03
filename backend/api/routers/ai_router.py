@@ -4,6 +4,7 @@ Implements spatial-temporal alignment, sequence evaluation, and escalation detec
 """
 
 import asyncio
+import json
 import logging
 from typing import Dict, List, Optional
 
@@ -698,6 +699,19 @@ class DomainAnalysisResponse(BaseModel):
     context_snapshot: Dict
 
 
+def _coerce_context_map(value: object) -> Dict:
+    """Normalize adverbial_context payloads from DB into a dict."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
 @router.post("/analyze/air")
 async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisResponse:
     """
@@ -745,7 +759,8 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     # Emergency squawk detection
     emergency_squawks = [
         r for r in adsb_rows
-        if (r.get("adverbial_context") or {}).get("squawk") in ("7700", "7600", "7500")
+        if _coerce_context_map(r.get("adverbial_context")).get("squawk")
+        in ("7700", "7600", "7500")
     ]
     if emergency_squawks:
         indicators.append(f"Emergency squawk codes active: {len(emergency_squawks)} aircraft")

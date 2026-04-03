@@ -125,6 +125,9 @@ export const useInfraData = () => {
     null,
   );
   const [gdeltData, setGdeltData] = useState<FeatureCollection | null>(null);
+  const [nwsAlertsData, setNwsAlertsData] = useState<FeatureCollection | null>(
+    null,
+  );
   const [ixpData, setIxpData] = useState<FeatureCollection | null>(null);
   const [facilityData, setFacilityData] = useState<FeatureCollection | null>(null);
 
@@ -192,6 +195,21 @@ export const useInfraData = () => {
       }
     };
 
+    const fetchNwsAlerts = async () => {
+      try {
+        const res = await fetch("/api/infra/nws-alerts");
+        const data: unknown = await res.json();
+        if (isFeatureCollection(data)) {
+          setNwsAlertsData(data);
+        } else {
+          setNwsAlertsData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("NWS alerts fetch failed, using fallback:", err);
+        setNwsAlertsData(fallbackEmpty);
+      }
+    };
+
     const fetchPeeringDB = async () => {
       if (peeringdbFetchedRef.current) return;
       try {
@@ -214,6 +232,7 @@ export const useInfraData = () => {
       fetchStations();
       fetchOutages();
       fetchGdelt();
+      fetchNwsAlerts();
       fetchPeeringDB();
     };
 
@@ -223,6 +242,8 @@ export const useInfraData = () => {
     const outageInterval = setInterval(fetchOutages, 10 * 60 * 1000);
     // Refresh GDELT every 15 minutes
     const gdeltInterval = setInterval(fetchGdelt, 15 * 60 * 1000);
+    // Refresh NWS active alerts every 5 minutes (poller updates every 10 minutes)
+    const nwsInterval = setInterval(fetchNwsAlerts, 5 * 60 * 1000);
     // Refresh PeeringDB once every 24 hours (matches poller cadence)
     const peeringdbInterval = setInterval(
       () => {
@@ -234,9 +255,18 @@ export const useInfraData = () => {
     return () => {
       clearInterval(outageInterval);
       clearInterval(gdeltInterval);
+      clearInterval(nwsInterval);
       clearInterval(peeringdbInterval);
     };
   }, []);
 
-  return { cablesData, stationsData, outagesData, gdeltData, ixpData, facilityData };
+  return {
+    cablesData,
+    stationsData,
+    outagesData,
+    gdeltData,
+    nwsAlertsData,
+    ixpData,
+    facilityData,
+  };
 };

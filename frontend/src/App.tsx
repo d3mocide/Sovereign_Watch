@@ -110,7 +110,7 @@ function AuthenticatedApp() {
     tacticalFilters,
     activeServices,
     rfParams,
-  } = useAppFilters(addEvent);
+  } = useAppFilters(addEvent, viewMode);
 
   // ── Entity selection ──────────────────────────────────────────────────────
   const {
@@ -246,7 +246,15 @@ function AuthenticatedApp() {
   }, [entitiesRef, satellitesRef, knownUidsRef, streamConnectedRef, viewMode]);
 
   // ── Infrastructure data ───────────────────────────────────────────────────
-  const { cablesData, stationsData, outagesData, gdeltData, ixpData, facilityData } = useInfraData();
+  const {
+    cablesData,
+    stationsData,
+    outagesData,
+    gdeltData,
+    nwsAlertsData,
+    ixpData,
+    facilityData,
+  } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] =
     useState<FeatureCollection | null>(null);
 
@@ -696,6 +704,10 @@ function AuthenticatedApp() {
             onToggleHistoryTails={handleHistoryTailsToggle}
             showTerminator={showTerminator}
             onToggleTerminator={handleTerminatorToggle}
+            showH3Risk={filters.showH3Risk as boolean}
+            onToggleH3Risk={() =>
+              handleFilterChange("showH3Risk", !(filters.showH3Risk as boolean))
+            }
             onToggleReplay={() => {
               if (replayMode) setReplayMode(false);
               else loadReplayData();
@@ -879,6 +891,7 @@ function AuthenticatedApp() {
               towersData={towers}
               onBoundsChange={setMapBounds}
               gdeltData={gdeltData}
+              nwsAlertsData={nwsAlertsData}
               buoyData={buoyData}
               ixpData={ixpData}
               facilityData={facilityData}
@@ -971,6 +984,7 @@ function AuthenticatedApp() {
             <IntelGlobe
               gdeltData={gdeltData as FeatureCollection | null}
               worldCountriesData={worldCountriesData}
+              filters={filters as any}
               onEntitySelect={handleEntitySelect}
             />
             {articleViewerOverlay}

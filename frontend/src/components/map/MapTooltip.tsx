@@ -1,4 +1,5 @@
 import {
+  CloudRain,
   Crosshair,
   Layers,
   Network,
@@ -65,6 +66,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isIXP = entity.type === "infra" && detailProps.layer === "ixp";
   const isFacility = entity.type === "infra" && detailProps.layer === "facility";
   const isISS = entity.type === "iss";
+  const isNwsAlert = entity.type === "nws_alert";
   const isOutage = entity.type === "outage";
   const isHold = entity.type === "hold";
   const isGdelt = entity.type === "gdelt";
@@ -109,6 +111,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   ? "text-purple-400"
                   : isISS
                     ? "text-yellow-400"
+                    : isNwsAlert
+                      ? "text-amber-300"
                     : isInfra
                       ? "text-cyan-400"
                       : isHold
@@ -141,6 +145,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   ? "border-purple-400/50"
                   : isISS
                     ? "border-yellow-400/50"
+                    : isNwsAlert
+                      ? "border-amber-400/60"
                     : isInfra
                       ? "border-cyan-400/50"
                       : isHold
@@ -173,6 +179,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                   ? Layers
                   : isISS
                     ? Satellite
+                    : isNwsAlert
+                      ? CloudRain
                     : isInfra
                       ? Network
                       : isOutage
@@ -221,6 +229,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "SATNOGS"
                   : isBuoy
                     ? "BUOY"
+                    : isNwsAlert
+                      ? "NWS"
                     : isInfra
                       ? "UNDERSEA"
                       : isOutage
@@ -619,6 +629,54 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               {detailProps.timestamp
                 ? new Date(String(detailProps.timestamp)).toLocaleTimeString()
                 : "—"}
+            </span>
+          </div>
+        </div>
+      ) : isNwsAlert ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              WEATHER HAZARD
+            </span>
+            <span className="text-[10px] text-amber-300 font-mono font-bold leading-tight uppercase">
+              {String(detailProps.event || detailProps.headline || "NWS ALERT")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SEVERITY
+            </span>
+            <span className="text-[10px] text-amber-300 font-mono font-bold leading-tight uppercase">
+              {String(detailProps.severity || "UNKNOWN")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              URGENCY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
+              {String(detailProps.urgency || "UNKNOWN")}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              AREA
+            </span>
+            <span
+              className="text-[10px] text-white/90 font-mono font-bold leading-tight truncate block"
+              title={String(detailProps.areaDesc || "UNSPECIFIED")}
+            >
+              {String(detailProps.areaDesc || "UNSPECIFIED")}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              EXPIRES
+            </span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight">
+              {detailProps.expires
+                ? new Date(String(detailProps.expires)).toLocaleString()
+                : "N/A"}
             </span>
           </div>
         </div>

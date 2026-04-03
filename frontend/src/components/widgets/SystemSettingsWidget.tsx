@@ -70,7 +70,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
                 <span
                   className={`text-[9px] font-bold tracking-wide ${filters.showH3Coverage === true ? "text-hud-green/80" : "text-white/40"}`}
                 >
-                  H3 POLLER MESH
+                  H3 POLLER MESH (DEBUG)
                 </span>
               </div>
               <input

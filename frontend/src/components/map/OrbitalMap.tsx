@@ -22,6 +22,8 @@ import { useMapCamera } from "../../hooks/useMapCamera";
 import { getCompensatedCenter } from "../../utils/map/geoUtils";
 import { StarField } from "./StarField";
 
+const ORBITAL_H3_RISK_RESOLUTION = 4;
+
 // DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
 // so that useControl is always called within the correct react-map-gl endpoint context.
 
@@ -153,19 +155,32 @@ export function OrbitalMap({
     const obj = info?.object || null;
     if (obj) {
       const props = obj.properties || {};
-      const lat = obj.geometry?.type === 'Point'
-        ? (obj.geometry.coordinates as [number, number])[1]
-        : (obj.geometry?.coordinates as [number, number][])?.[0]?.[1] ?? 0;
-      const lon = obj.geometry?.type === 'Point'
-        ? (obj.geometry.coordinates as [number, number])[0]
-        : (obj.geometry?.coordinates as [number, number][])?.[0]?.[0] ?? 0;
+      let lat = 0;
+      let lon = 0;
+      if (info.coordinate) {
+        [lon, lat] = info.coordinate;
+      } else {
+        const geom = obj.geometry;
+        if (geom?.type === "Point") {
+          [lon, lat] = geom.coordinates as [number, number];
+        } else if (geom?.type === "LineString") {
+          [lon, lat] = (geom.coordinates as [number, number][])[0];
+        } else if (geom?.type === "Polygon") {
+          [lon, lat] = (geom.coordinates as [number, number][][])[0][0];
+        } else if (geom?.type === "MultiPolygon") {
+          [lon, lat] = (geom.coordinates as [number, number][][][])[0][0][0];
+        }
+      }
 
       // Determine entity type from the synthesized object type or the deck.gl layer id
       const layerId = info?.layer?.id ?? '';
       let entityType: string = 'infra';
       let detailObj = obj;
+      const isNwsAlert = (props as any).event != null || (props as any).headline != null;
 
-      if ((obj as any).type === 'outage') {
+      if (isNwsAlert) {
+        entityType = 'nws_alert';
+      } else if ((obj as any).type === 'outage') {
         entityType = 'outage';
       } else if (layerId.includes('ixp')) {
         // Inject a layer discriminator so MapTooltip can render the IXP section
@@ -177,7 +192,12 @@ export function OrbitalMap({
       const entity: CoTEntity = {
         uid: (props as any).id || String((obj as any).id) || `infra-${Date.now()}`,
         type: entityType,
-        callsign: (props as any).name || (props as any).name_long || 'Unknown Infra',
+        callsign:
+          (props as any).event ||
+          (props as any).headline ||
+          (props as any).name ||
+          (props as any).name_long ||
+          'Unknown Infra',
         lat,
         lon,
         altitude: 0,
@@ -193,7 +213,7 @@ export function OrbitalMap({
     } else {
       // Clear tooltip only if current hovered item is infra-type
       setHoveredEntity(prev =>
-        (prev?.type === 'infra' || prev?.type === 'outage') ? null : prev
+        (prev?.type === 'infra' || prev?.type === 'outage' || prev?.type === 'nws_alert') ? null : prev
       );
     }
   }, []);
@@ -483,15 +503,39 @@ export function OrbitalMap({
     setSelectedInfra: (info: any) => {
       if (!info || !info.object) return;
 
+      const props = info.object.properties || {};
+      const isNwsAlert = props.event != null || props.headline != null;
+      const isOutage = props.entity_type === 'outage' || info.object.type === 'outage';
+
+      let lat = info.coordinate?.[1] || 0;
+      let lon = info.coordinate?.[0] || 0;
+      if (!info.coordinate && info.object.geometry) {
+        const geom = info.object.geometry;
+        if (geom.type === 'Point') {
+          [lon, lat] = geom.coordinates as [number, number];
+        } else if (geom.type === 'LineString') {
+          [lon, lat] = (geom.coordinates as [number, number][])[0] || [0, 0];
+        } else if (geom.type === 'Polygon') {
+          [lon, lat] = (geom.coordinates as [number, number][][])[0]?.[0] || [0, 0];
+        } else if (geom.type === 'MultiPolygon') {
+          [lon, lat] = (geom.coordinates as [number, number][][][])[0]?.[0]?.[0] || [0, 0];
+        }
+      }
+
       const infraEntity: CoTEntity = {
         uid: String(info.object.properties?.id || `infra-${Date.now()}`),
-        lat: info.coordinate?.[1] || 0,
-        lon: info.coordinate?.[0] || 0,
+        lat,
+        lon,
         altitude: 0,
-        type: 'infra',
+        type: isNwsAlert ? 'nws_alert' : (isOutage ? 'outage' : 'infra'),
         course: 0,
         speed: 0,
-        callsign: String(info.object.properties?.name || 'INFRA'),
+        callsign: String(
+          info.object.properties?.event ||
+            info.object.properties?.headline ||
+            info.object.properties?.name ||
+            'INFRA',
+        ),
         lastSeen: Date.now(),
         trail: [],
         uidHash: 0,
@@ -516,6 +560,7 @@ export function OrbitalMap({
     observerRef,
     worldCountriesData,
     satnogsStationsRef,
+    h3RiskResolution: ORBITAL_H3_RISK_RESOLUTION,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { streamAnalysis } from '../api/analysis';
+import { runDomainAnalysis, streamAnalysis } from '../api/analysis';
+import type { CoTEntity } from '../types';
 
 export type AnalysisState = {
   text: string;
@@ -9,7 +10,14 @@ export type AnalysisState = {
 };
 
 export type UseAnalysisReturn = AnalysisState & {
-  run: (uid: string, lookbackHours: number, mode?: string, sitrepContext?: any, isSitrep?: boolean) => Promise<void>;
+  run: (
+    uid: string,
+    lookbackHours: number,
+    mode?: string,
+    sitrepContext?: any,
+    isSitrep?: boolean,
+    entity?: CoTEntity | null,
+  ) => Promise<void>;
   reset: () => void;
 };
 
@@ -35,7 +43,14 @@ export function useAnalysis(): UseAnalysisReturn {
     setState(INITIAL_STATE);
   }, []);
 
-  const run = useCallback(async (uid: string, lookbackHours: number, mode: string = 'tactical', sitrepContext?: any, isSitrep: boolean = false) => {
+  const run = useCallback(async (
+    uid: string,
+    lookbackHours: number,
+    mode: string = 'tactical',
+    sitrepContext?: any,
+    isSitrep: boolean = false,
+    entity?: CoTEntity | null,
+  ) => {
     // Cancel any in-flight stream first
     readerRef.current?.cancel().catch(() => undefined);
     readerRef.current = null;
@@ -43,6 +58,25 @@ export function useAnalysis(): UseAnalysisReturn {
     setState({ text: '', isStreaming: true, error: null, generatedAt: null });
 
     try {
+      // Use domain personas for air/sea/orbital CoT entities.
+      if (!isSitrep && entity) {
+        try {
+          const domainText = await runDomainAnalysis(entity, lookbackHours);
+          if (domainText) {
+            setState({
+              text: domainText,
+              isStreaming: false,
+              error: null,
+              generatedAt: new Date(),
+            });
+            return;
+          }
+        } catch (domainErr) {
+          // Keep analyst UX resilient if domain endpoints are unavailable.
+          console.warn('Domain analysis failed; falling back to legacy analyzer.', domainErr);
+        }
+      }
+
       const reader = await streamAnalysis(uid, lookbackHours, mode, sitrepContext, isSitrep);
       readerRef.current = reader;
 

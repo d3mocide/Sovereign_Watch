@@ -17,6 +17,8 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchH3Risk, type H3RiskCellData } from "../../api/h3Risk";
+import { buildH3RiskLayer } from "../../layers/buildH3RiskLayer";
 import {
   buildCountryHeatLayer,
   type ActorEntry,
@@ -24,6 +26,7 @@ import {
 import { buildGdeltArcLayer } from "../../layers/buildGdeltArcLayer";
 import { buildGdeltLayer, type GdeltPoint } from "../../layers/buildGdeltLayer";
 import type { CoTEntity } from "../../types";
+import type { MapFilters } from "../../types";
 import { resolveMapStyle, type MapStyleKey } from "./intelMapStyles";
 import { MapControls } from "./MapControls";
 import MapLibreAdapter from "./MapLibreAdapter";
@@ -31,16 +34,19 @@ import { StarField } from "./StarField";
 
 const SPIN_DEG_PER_SEC = 3;
 const SPIN_RESUME_DELAY_MS = 1000;
+const INTEL_H3_RISK_RESOLUTION = 4;
 
 interface IntelGlobeProps {
   gdeltData: FeatureCollection | null;
   worldCountriesData: FeatureCollection | null;
+  filters?: MapFilters;
   onEntitySelect: (entity: CoTEntity | null) => void;
 }
 
 export function IntelGlobe({
   gdeltData,
   worldCountriesData,
+  filters,
   onEntitySelect,
 }: IntelGlobeProps) {
   const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>("dark");
@@ -72,6 +78,7 @@ export function IntelGlobe({
 
   // Actors for country heat layer
   const [actors, setActors] = useState<ActorEntry[]>([]);
+  const [h3RiskCells, setH3RiskCells] = useState<H3RiskCellData[]>([]);
 
   // animTick drives pulse animations
   const animTickRef = useRef(0);
@@ -85,6 +92,12 @@ export function IntelGlobe({
 
   const gdeltDataRef = useRef(gdeltData);
   gdeltDataRef.current = gdeltData;
+
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const h3RiskCellsRef = useRef(h3RiskCells);
+  h3RiskCellsRef.current = h3RiskCells;
 
   const globeModeRef = useRef(globeMode);
   globeModeRef.current = globeMode;
@@ -106,6 +119,27 @@ export function IntelGlobe({
     const interval = setInterval(fetchActors, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch H3 risk cells at a globe-friendly coarse resolution.
+  useEffect(() => {
+    if (!filters?.showH3Risk) {
+      setH3RiskCells([]);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      const cells = await fetchH3Risk(INTEL_H3_RISK_RESOLUTION);
+      if (!cancelled) setH3RiskCells(cells);
+    };
+
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [filters?.showH3Risk]);
 
   const handleHover = useCallback(() => {}, []);
 
@@ -176,6 +210,10 @@ export function IntelGlobe({
       if (overlayRef.current) {
         overlayRef.current.setProps({
           layers: [
+            ...buildH3RiskLayer(
+              h3RiskCellsRef.current,
+              !!filtersRef.current?.showH3Risk,
+            ),
             ...buildCountryHeatLayer(
               worldCountriesDataRef.current as any,
               actorsRef.current,

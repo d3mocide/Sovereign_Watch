@@ -45,6 +45,8 @@ BACKOFF_INITIAL_DELAY_SECONDS = 5.0
 BACKOFF_MAX_DELAY_SECONDS = 300.0
 BACKOFF_FACTOR = 2.0
 CONNECTION_STABILITY_THRESHOLD_SECONDS = 60.0 # Time connected to reset backoff
+NO_DATA_TIMEOUT_SECONDS = 300.0
+NO_DATA_ERROR_CODE = "no_data_timeout"
 
 
 class MaritimePollerService:
@@ -73,6 +75,56 @@ class MaritimePollerService:
 
         # Throttle Redis heartbeat writes (at most once per 30s)
         self._last_heartbeat: float = 0.0
+
+        # Track raw AIS frame activity to detect silent upstream stalls.
+        self.last_data_received_at: Optional[float] = None
+
+    async def _write_heartbeat(self, now_ts: Optional[float] = None):
+        """Update maritime heartbeat in Redis, throttled to avoid write spam."""
+        if now_ts is None:
+            now_ts = time.time()
+
+        if now_ts - self._last_heartbeat < 30:
+            return
+
+        self._last_heartbeat = now_ts
+        try:
+            await self.redis_client.set("maritime:last_message_at", str(now_ts), ex=300)
+        except Exception:
+            pass
+
+    async def _record_no_data_timeout(self, idle_seconds: float):
+        """Persist a structured no-data error so health APIs can distinguish silence vs crashes."""
+        try:
+            await self.redis_client.set(
+                "poller:maritime:last_error",
+                json.dumps(
+                    {
+                        "ts": time.time(),
+                        "code": NO_DATA_ERROR_CODE,
+                        "msg": (
+                            "No AIS frames received for "
+                            f"{int(idle_seconds)}s; reconnecting with cooldown"
+                        ),
+                    }
+                ),
+                ex=86400,
+            )
+        except Exception:
+            pass
+
+    async def _clear_no_data_error(self):
+        """Clear the no-data error once AIS traffic resumes."""
+        try:
+            raw = await self.redis_client.get("poller:maritime:last_error")
+            if not raw:
+                return
+
+            parsed = json.loads(raw)
+            if parsed.get("code") == NO_DATA_ERROR_CODE:
+                await self.redis_client.delete("poller:maritime:last_error")
+        except Exception:
+            pass
 
     async def setup(self):
         """Initialize Kafka producer and Redis client."""
@@ -487,6 +539,7 @@ class MaritimePollerService:
                     continue
 
                 self.connection_start_time = datetime.utcnow()
+                self.last_data_received_at = time.time()
                 self.reconnect_event.clear()
 
                 # Inner message loop
@@ -528,32 +581,27 @@ class MaritimePollerService:
                             message = message_task.result()
                             data = json.loads(message)
                             msg_type = data.get("MessageType")
+                            now_ts = time.time()
+                            self.last_data_received_at = now_ts
+                            await self._clear_no_data_error()
 
                             if msg_type == "PositionReport":
                                 tak_event = self.transform_to_tak(data)
                                 if tak_event:
                                     await self.publish_tak_event(tak_event)
-                                    now_ts = time.time()
-                                    if now_ts - self._last_heartbeat >= 30:
-                                        self._last_heartbeat = now_ts
-                                        try:
-                                            await self.redis_client.set(
-                                                "maritime:last_message_at",
-                                                str(now_ts),
-                                                ex=300,
-                                            )
-                                        except Exception:
-                                            pass
+                                    await self._write_heartbeat(now_ts)
                             elif msg_type == "StandardClassBPositionReport":
                                 tak_event = self.handle_class_b_position(data)
                                 if tak_event:
                                     await self.publish_tak_event(tak_event)
+                                    await self._write_heartbeat(now_ts)
                             elif msg_type == "ShipStaticData":
                                 meta = data.get("MetaData", {})
                                 mmsi = meta.get("MMSI")
                                 msg_data = data.get("Message", {}).get("ShipStaticData", {})
                                 if mmsi and msg_data:
                                     self.handle_static_data(mmsi, msg_data)
+                                    await self._write_heartbeat(now_ts)
                             elif msg_type == "StaticDataReport":
                                 meta = data.get("MetaData", {})
                                 mmsi = meta.get("MMSI")
@@ -563,6 +611,7 @@ class MaritimePollerService:
                                         self.handle_static_data(mmsi, msg_data["ReportA"])
                                     if "ReportB" in msg_data:
                                         self.handle_static_data(mmsi, msg_data["ReportB"])
+                                    await self._write_heartbeat(now_ts)
                             else:
                                 # AISStream sends error/status frames without a MessageType
                                 # (e.g. rate-limit notices). Log them so they're visible.
@@ -576,6 +625,23 @@ class MaritimePollerService:
                             # already handles keepalives. Cancel reconnect_task.
                             # Do NOT cancel message_task so it can be reused on the next loop.
                             reconnect_task.cancel()
+
+                            # Connected-but-silent stream: emit explicit no-data state
+                            # and force a cooldown reconnect to recover automatically.
+                            last_seen = self.last_data_received_at
+                            if last_seen is not None:
+                                idle_for = time.time() - last_seen
+                                if idle_for >= NO_DATA_TIMEOUT_SECONDS:
+                                    logger.warning(
+                                        "⚠️ No AIS frames for %.0fs; reconnecting with backoff",
+                                        idle_for,
+                                    )
+                                    await self._record_no_data_timeout(idle_for)
+                                    self.reconnect_attempts += 1
+                                    if message_task and not message_task.done():
+                                        message_task.cancel()
+                                        message_task = None
+                                    break
 
                     except websockets.exceptions.ConnectionClosed:
                         logger.warning("🌊 AISStream connection closed by server")

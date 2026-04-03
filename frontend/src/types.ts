@@ -281,6 +281,7 @@ export interface MapFilters {
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
+  showNWSAlerts?: boolean;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 

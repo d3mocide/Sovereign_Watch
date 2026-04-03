@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.63.0] - 2026-04-03
+
+### Added
+
+- **Space Weather Alert Suppression**: Added NOAA scale-driven suppression for SatNOGS signal-loss escalation to prevent false positives during severe space weather.
+- **NOAA Scale Polling in Space Weather Source**: `SpaceWeatherSource` now polls NOAA scales (`R/S/G`) every 15 minutes.
+- **Suppression State Keying**: Writes `space_weather:suppress_signal_loss` to Redis with a 70-minute TTL when `R >= 3` or `G >= 3`.
+- **Suppression-Aware Escalation Logic**: `EscalationDetector` now includes `should_suppress_signal_loss()` and AI escalation output carries suppression context.
+- **Space Weather Alerts API**: New `GET /api/space-weather/alerts` endpoint exposing current NOAA scales and suppression state.
+- **Domain Agent Endpoint — Air**: New `POST /analyze/air` (Air Intelligence Officer persona) for H3-region air risk assessment using ADS-B, emergency squawks (`7700/7600/7500`), NWS alerts, and Kp-derived GPS degradation risk.
+- **Domain Agent Endpoint — Sea**: New `POST /analyze/sea` (Maritime Domain Awareness Specialist persona) for H3-region maritime risk using AIS, NDBC wave heights, and outage-to-cable correlations.
+- **Domain Agent Endpoint — Orbital**: New `POST /analyze/orbital` (Space Weather / Orbital Analyst persona) for H3-region orbital risk using Kp, NOAA scales, SatNOGS signal loss, and suppression state.
+- **Structured Domain Analysis Response**: All domain agents now return `DomainAnalysisResponse` with `narrative`, `risk_score`, `indicators[]`, and `context_snapshot`.
+- **H3 Composite Risk API**: New `GET /api/h3/risk` endpoint for composite risk scoring across active H3 cells.
+- **H3 Risk Persistence**: Added TimescaleDB `h3_risk_scores` hypertable snapshot persistence for historical analysis.
+- **NWS Alerts Polling**: Infrastructure poller now pulls active NWS weather alerts every 10 minutes and stores:
+- `nws:alerts:active` (full GeoJSON)
+- `nws:alerts:summary` (compact severity summary)
+- **Tactical NWS Alert Layer + Sidebar State**: Added Environmental toggle-driven NWS alert polygon rendering in Tactical map with dedicated weather tooltip + right-sidebar detail state (`nws_alert`).
+- **IODA-Cable Correlation Enrichment**: Outage features now include `nearby_cable_landings` when landings are within 300 km.
+- **Dashboard Tactical CRIT RISK Overlay (tactical-first)**: Added critical-only H3 risk rendering in Dashboard Tactical Overview with tuned readability at fixed resolution `4`.
+
+### Changed
+
+- **Signal-Loss Escalation Behavior**: AI router now suppresses SatNOGS signal-loss detection during active severe NOAA events and logs explicit suppression reasons.
+- **H3 Risk Computation Contract**: Composite score formalized as `C = 0.6 * Density_norm + 0.4 * Sentiment_norm`.
+- **H3 Risk Caching**: `/api/h3/risk` now uses Redis caching with a 30-second TTL.
+- **Dashboard Tactical Risk Rendering**: Iterated from dense overlays to critical-only, larger, hex-only tactical visualization to improve operator readability.
+- **NWS Layer Scope**: Kept NWS weather alert overlay Tactical-only (removed Orbital wiring) for cleaner orbital operational context.
+
+### Fixed
+
+- **False-Positive Satellite Signal-Loss Alerts**: Prevented noisy SatNOGS signal-loss escalations when outages align with major radio blackout / geomagnetic storm conditions.
+- **Tactical 2D NWS Hover Picking**: Resolved 2D hover inconsistency by raising NWS layer pick order above infra fills and normalizing NWS entity routing to weather-specific tooltip/sidebar rendering.
+
+### Verification
+
+- Frontend: `pnpm run lint && pnpm run test` (pass, 36/36 tests).
+- Backend/API + poller verification: completed during feature implementation sessions for these changes.
+
 ## [0.62.0] - 2026-04-03
 
 ### Added

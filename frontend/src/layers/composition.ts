@@ -23,6 +23,7 @@ import { buildISSLayer } from "./buildISSLayer";
 import { buildJammingLayer } from "./buildJammingLayer";
 import { buildJS8Layers } from "./buildJS8Layers";
 import { buildNDBCLayer } from "./buildNDBCLayer";
+import { buildNWSAlertsLayer } from "./buildWeatherAlertsLayer";
 import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
@@ -67,6 +68,8 @@ interface LayerCompositionOptions {
   jammingData?: any;
   /** GDELT v2 geolocated news events GeoJSON */
   gdeltData?: any;
+  /** Active NWS weather alerts GeoJSON */
+  nwsAlertsData?: FeatureCollection | null;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
   buoyData?: FeatureCollection | null;
   /** PeeringDB Internet Exchange Points GeoJSON (Initiative B) */
@@ -125,6 +128,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     auroraData,
     jammingData,
     gdeltData,
+    nwsAlertsData,
     gdeltToneThreshold,
     buoyData,
     ixpData,
@@ -247,6 +251,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
     ...infraLayers,
+    // Keep NWS above infra so polygon picking is not masked by infra fills in 2D.
+    ...buildNWSAlertsLayer(
+      nwsAlertsData ?? null,
+      !!filters?.showNWSAlerts,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
+    ),
     // NDBC Ocean Buoys — Maritime Layer Group (Z-order 8–11)
     ...buildNDBCLayer(
       buoyData ?? null,

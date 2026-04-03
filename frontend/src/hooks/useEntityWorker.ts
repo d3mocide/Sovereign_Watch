@@ -11,6 +11,127 @@ import {
 import { getSmoothedTrail } from "../utils/trailSmoothing";
 import { startWorkerProtocol } from "../workers/WorkerProtocol";
 
+const SEA_ENTITY_CACHE_KEY = "tracks:sea:recent";
+const SEA_ENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const SEA_ENTITY_CACHE_WRITE_INTERVAL_MS = 10 * 1000;
+
+type CachedSeaEntity = {
+  uid: string;
+  lat: number;
+  lon: number;
+  altitude: number;
+  type: string;
+  course: number;
+  speed: number;
+  vspeed?: number;
+  callsign: string;
+  time?: number;
+  lastSourceTime?: number;
+  lastSeen: number;
+  trail: TrailPoint[];
+  raw?: string;
+  classification?: EntityClassification;
+  vesselClassification?: import("../types").VesselClassification;
+};
+
+function isSeaEntity(entity: CoTEntity): boolean {
+  return !!entity.type?.includes("S") || !!entity.vesselClassification;
+}
+
+function buildSeaSnapshot(entities: Map<string, CoTEntity>): CachedSeaEntity[] {
+  const out: CachedSeaEntity[] = [];
+  entities.forEach((entity) => {
+    if (!isSeaEntity(entity)) return;
+    out.push({
+      uid: entity.uid,
+      lat: entity.lat,
+      lon: entity.lon,
+      altitude: entity.altitude || 0,
+      type: entity.type || "a-n-S",
+      course: entity.course || 0,
+      speed: entity.speed || 0,
+      vspeed: entity.vspeed,
+      callsign: entity.callsign || entity.uid,
+      time: entity.time,
+      lastSourceTime: entity.lastSourceTime,
+      lastSeen: entity.lastSeen,
+      trail: (entity.trail || []).slice(-40),
+      raw: entity.raw,
+      classification: entity.classification,
+      vesselClassification: entity.vesselClassification,
+    });
+  });
+  return out;
+}
+
+function writeSeaSnapshot(entities: Map<string, CoTEntity>): void {
+  try {
+    const payload = {
+      savedAt: Date.now(),
+      entities: buildSeaSnapshot(entities),
+    };
+    localStorage.setItem(SEA_ENTITY_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore browser storage failures.
+  }
+}
+
+function restoreSeaSnapshot(
+  entitiesRef: MutableRefObject<Map<string, CoTEntity>>,
+  knownUidsRef: MutableRefObject<Set<string>>,
+): number {
+  try {
+    const raw = localStorage.getItem(SEA_ENTITY_CACHE_KEY);
+    if (!raw) return 0;
+
+    const parsed = JSON.parse(raw) as {
+      savedAt?: number;
+      entities?: CachedSeaEntity[];
+    };
+
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > SEA_ENTITY_CACHE_TTL_MS) {
+      localStorage.removeItem(SEA_ENTITY_CACHE_KEY);
+      return 0;
+    }
+
+    const cached = Array.isArray(parsed.entities) ? parsed.entities : [];
+    let restored = 0;
+    for (const c of cached) {
+      if (!c?.uid) continue;
+      if (entitiesRef.current.has(c.uid)) continue;
+
+      const revived: CoTEntity = {
+        uid: c.uid,
+        lat: c.lat,
+        lon: c.lon,
+        altitude: c.altitude || 0,
+        type: c.type || "a-n-S",
+        course: c.course || 0,
+        speed: c.speed || 0,
+        vspeed: c.vspeed,
+        callsign: c.callsign || c.uid,
+        time: c.time,
+        lastSourceTime: c.lastSourceTime,
+        // Give restored targets a fresh grace window after browser refresh.
+        lastSeen: Date.now(),
+        trail: Array.isArray(c.trail) ? c.trail : [],
+        smoothedTrail: undefined,
+        uidHash: uidToHash(c.uid),
+        raw: c.raw,
+        classification: c.classification,
+        vesselClassification: c.vesselClassification,
+      };
+
+      entitiesRef.current.set(c.uid, revived);
+      knownUidsRef.current.add(c.uid);
+      restored += 1;
+    }
+    return restored;
+  } catch {
+    return 0;
+  }
+}
+
 interface DecodedCotEvent {
   uid: string;
   lat: number;
@@ -76,8 +197,18 @@ export function useEntityWorker({
   const watchedIcaosRef = useRef<Set<string>>(new Set());
   const streamConnectedRef = useRef<boolean>(true);
   const lastStreamStateRef = useRef<boolean>(true);
+  const lastSeaCacheWriteRef = useRef<number>(0);
 
   useEffect(() => {
+    const restoredSea = restoreSeaSnapshot(entitiesRef, knownUidsRef);
+    if (restoredSea > 0) {
+      onEvent?.({
+        type: "new",
+        message: `MARITIME CACHE RESTORED — ${restoredSea} track${restoredSea === 1 ? "" : "s"}`,
+        entityType: "sea",
+      });
+    }
+
     const processEntityUpdate = (updateData: unknown) => {
       const entity = (updateData as { cotEvent?: DecodedCotEvent }).cotEvent;
       if (!entity?.uid) return;
@@ -345,6 +476,17 @@ export function useEntityWorker({
           vesselClassification || existingEntity?.vesselClassification,
       } as CoTEntity);
 
+      if (isShip) {
+        const nowMs = Date.now();
+        if (
+          nowMs - lastSeaCacheWriteRef.current >=
+          SEA_ENTITY_CACHE_WRITE_INTERVAL_MS
+        ) {
+          writeSeaSnapshot(entitiesRef.current);
+          lastSeaCacheWriteRef.current = nowMs;
+        }
+      }
+
       const stored = entitiesRef.current.get(entity.uid)!;
       if (stored.uidHash == null || stored.uidHash === 0) {
         stored.uidHash = uidToHash(entity.uid);
@@ -504,7 +646,7 @@ export function useEntityWorker({
       }
     };
 
-    return startWorkerProtocol({
+    const cleanupProtocol = startWorkerProtocol({
       workerRef,
       watchedIcaosRef,
       onEntityUpdate: processEntityUpdate,
@@ -530,6 +672,11 @@ export function useEntityWorker({
         }
       },
     });
+
+    return () => {
+      writeSeaSnapshot(entitiesRef.current);
+      cleanupProtocol();
+    };
   }, [onEvent]);
 
   return {

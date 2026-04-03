@@ -1,8 +1,10 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { cellToBoundary } from "h3-js";
+import { fetchH3Risk } from "../../api/h3Risk";
 import { CoTEntity } from "../../types";
-import { calculateZoom } from "../../utils/map/geoUtils";
+import { calculateZoom, getDistanceMeters } from "../../utils/map/geoUtils";
 
 const DARK_MAP_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -57,6 +59,8 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   satellitesRef,
   rfSites,
 }) => {
+  const DASHBOARD_RISK_CRITICAL_THRESHOLD = 0.72;
+  const [h3RiskFeatures, setH3RiskFeatures] = useState<GeoJSON.Feature[]>([]);
   const [jammingFeatures, setJammingFeatures] = useState<GeoJSON.Feature[]>([]);
   const [holdingFeatures, setHoldingFeatures] = useState<GeoJSON.Feature[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +96,41 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
         source: "mission-circle",
         paint: { "fill-color": "#00ff41", "fill-opacity": 0.05 },
       });
+
+      map.addSource("h3-risk", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "h3-risk-fill",
+        type: "fill",
+        source: "h3-risk",
+        paint: {
+          "fill-color": [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["get", "risk_score"], 0],
+            0.72,
+            "#ff9f1c",
+            0.85,
+            "#ff5f3d",
+            1,
+            "#ff3246",
+          ],
+          "fill-opacity": 0.4,
+        },
+      });
+      map.addLayer({
+        id: "h3-risk-line",
+        type: "line",
+        source: "h3-risk",
+        paint: {
+          "line-color": "#ffd1d8",
+          "line-opacity": 0.6,
+          "line-width": 1.4,
+        },
+      });
+
       map.addLayer({
         id: "mission-border",
         type: "line",
@@ -276,6 +315,74 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   useEffect(() => {
     let cancelled = false;
 
+    // Use a fixed medium/coarse tactical resolution to balance readability and locality.
+    const resolution = 4;
+
+    const toPolygon = (cell: string): [number, number][] => {
+      const boundary = cellToBoundary(cell) as [number, number][];
+      const ring = boundary.map(([lat, lon]) => [lon, lat] as [number, number]);
+      if (ring.length === 0) return ring;
+
+      const [firstLon, firstLat] = ring[0];
+      const [lastLon, lastLat] = ring[ring.length - 1];
+      if (firstLon !== lastLon || firstLat !== lastLat) {
+        ring.push([firstLon, firstLat]);
+      }
+      return ring;
+    };
+
+    const fetchRiskOverlay = async () => {
+      try {
+        const cells = await fetchH3Risk(resolution);
+        if (cancelled) return;
+
+        const radiusMeters = mission.radius_nm * 1852 * 1.25;
+        const criticalCells = cells
+          .filter(
+            (c) =>
+              c.risk_score >= DASHBOARD_RISK_CRITICAL_THRESHOLD &&
+              getDistanceMeters(mission.lat, mission.lon, c.lat, c.lon) <=
+              radiusMeters,
+          )
+          .sort((a, b) => b.risk_score - a.risk_score)
+          .slice(0, 300);
+
+        const features = criticalCells
+          .map((c) => {
+            const polygon = toPolygon(c.cell);
+            if (polygon.length < 4) return null;
+            return {
+              type: "Feature" as const,
+              geometry: {
+                type: "Polygon" as const,
+                coordinates: [polygon],
+              },
+              properties: {
+                risk_score: c.risk_score,
+              },
+            };
+          })
+          .filter((feature): feature is NonNullable<typeof feature> => !!feature);
+
+        setH3RiskFeatures(features as GeoJSON.Feature[]);
+      } catch {
+        if (!cancelled) {
+          setH3RiskFeatures([]);
+        }
+      }
+    };
+
+    fetchRiskOverlay();
+    const id = setInterval(fetchRiskOverlay, 90_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [mission.lat, mission.lon, mission.radius_nm]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const fetchHazardOverlays = async () => {
       try {
         const [jammingResp, holdingResp] = await Promise.all([
@@ -365,7 +472,20 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       type: "FeatureCollection",
       features: holdingFeatures,
     });
-  }, [entitiesRef, satellitesRef, rfSites, jammingFeatures, holdingFeatures]);
+    (map.getSource("h3-risk") as maplibregl.GeoJSONSource | undefined)?.setData(
+      {
+        type: "FeatureCollection",
+        features: h3RiskFeatures,
+      },
+    );
+  }, [
+    entitiesRef,
+    satellitesRef,
+    rfSites,
+    jammingFeatures,
+    holdingFeatures,
+    h3RiskFeatures,
+  ]);
 
   useEffect(() => {
     const t0 = setTimeout(updateLayers, 1500);
@@ -404,6 +524,13 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           <span className="text-[8px] text-white/55 tabular-nums">
             {holdingFeatures.length}
             {criticalHolds > 0 ? ` (${criticalHolds}C)` : ""}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-300" />
+          <span className="text-[8px] font-bold text-red-200">CRIT RISK</span>
+          <span className="text-[8px] text-white/55 tabular-nums">
+            {h3RiskFeatures.length}
           </span>
         </div>
       </div>
