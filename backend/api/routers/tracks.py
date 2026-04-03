@@ -22,12 +22,15 @@ from fastapi import Depends
 
 def _jday(dt: datetime):
     """Return (jd, fr) tuple from a UTC datetime for SGP4."""
-    return sgp4_jday(dt.year, dt.month, dt.day, dt.hour, dt.minute,
-                     dt.second + dt.microsecond / 1e6)
+    return sgp4_jday(
+        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond / 1e6
+    )
+
 
 router = APIRouter()
 _viewer_auth = [Depends(require_role("viewer"))]
 logger = logging.getLogger("SovereignWatch.Tracks")
+
 
 @router.websocket("/api/tracks/live")
 async def websocket_endpoint(
@@ -59,6 +62,7 @@ async def websocket_endpoint(
     finally:
         await broadcast_service.disconnect(websocket)
 
+
 @router.get("/api/tracks/history/{entity_id}", dependencies=_viewer_auth)
 async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     """
@@ -67,20 +71,19 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
     if limit > settings.TRACK_HISTORY_MAX_LIMIT:
         raise HTTPException(
             status_code=400,
-            detail=f"Limit exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_LIMIT})"
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_LIMIT})",
         )
 
     if hours > settings.TRACK_HISTORY_MAX_HOURS:
         raise HTTPException(
             status_code=400,
-            detail=f"Hours exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_HOURS})"
+            detail=f"Hours exceeds maximum allowed ({settings.TRACK_HISTORY_MAX_HOURS})",
         )
 
     # BUG-007: Reject zero or negative values which would produce nonsensical queries
     if limit <= 0 or hours <= 0:
         raise HTTPException(
-            status_code=400,
-            detail="limit and hours must be positive integers"
+            status_code=400, detail="limit and hours must be positive integers"
         )
 
     if not db.pool:
@@ -119,7 +122,9 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
             e, r, v = satrec.sgp4(jd, fr)
             if e == 0:
                 r_ecef = teme_to_ecef(r, jd, fr)
-                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
+                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
+                    np.array(r_ecef).reshape(1, 3)
+                )
 
                 # Heading: bearing from 1 second ago to now
                 t_prev = t - timedelta(seconds=1)
@@ -128,25 +133,34 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
                 heading = 0.0
                 if e2 == 0:
                     r2_ecef = teme_to_ecef(r2, jd2, fr2)
-                    la2, lo2, _ = ecef_to_lla_vectorized(np.array(r2_ecef).reshape(1, 3))
+                    la2, lo2, _ = ecef_to_lla_vectorized(
+                        np.array(r2_ecef).reshape(1, 3)
+                    )
                     dlat = float(lat_arr[0]) - float(la2[0])
                     dlon = float(lon_arr[0]) - float(lo2[0])
-                    heading = math.degrees(
-                        math.atan2(
-                            dlon * math.cos(math.radians(float(lat_arr[0]))),
-                            dlat,
+                    heading = (
+                        math.degrees(
+                            math.atan2(
+                                dlon * math.cos(math.radians(float(lat_arr[0]))),
+                                dlat,
+                            )
                         )
-                    ) % 360.0
+                        % 360.0
+                    )
 
-                results.append({
-                    "time": t,
-                    "lat": round(float(lat_arr[0]), 5),
-                    "lon": round(float(lon_arr[0]), 5),
-                    "alt": round(float(alt_arr[0]) * 1000.0, 1),   # km → m
-                    "speed": round(float(np.linalg.norm(v)) * 1000.0, 2),  # km/s → m/s
-                    "heading": round(heading, 2),
-                    "meta": None,
-                })
+                results.append(
+                    {
+                        "time": t,
+                        "lat": round(float(lat_arr[0]), 5),
+                        "lon": round(float(lon_arr[0]), 5),
+                        "alt": round(float(alt_arr[0]) * 1000.0, 1),  # km → m
+                        "speed": round(
+                            float(np.linalg.norm(v)) * 1000.0, 2
+                        ),  # km/s → m/s
+                        "heading": round(heading, 2),
+                        "meta": None,
+                    }
+                )
             t -= timedelta(seconds=step_seconds)
 
         return results  # already ordered DESC (newest first)
@@ -167,6 +181,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         logger.error(f"History query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.get("/api/tracks/search", dependencies=_viewer_auth)
 async def search_tracks(q: str, limit: int = 10):
     """
@@ -176,20 +191,14 @@ async def search_tracks(q: str, limit: int = 10):
     if limit > settings.TRACK_SEARCH_MAX_LIMIT:
         raise HTTPException(
             status_code=400,
-            detail=f"Limit exceeds maximum allowed ({settings.TRACK_SEARCH_MAX_LIMIT})"
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_SEARCH_MAX_LIMIT})",
         )
 
     if limit <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="limit must be a positive integer"
-        )
+        raise HTTPException(status_code=400, detail="limit must be a positive integer")
 
     if len(q) > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="Query string is too long"
-        )
+        raise HTTPException(status_code=400, detail="Query string is too long")
 
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
@@ -223,19 +232,19 @@ async def search_tracks(q: str, limit: int = 10):
 
         for row in tracks_rows:
             d = dict(row)
-            meta_json = d.get('meta')
+            meta_json = d.get("meta")
             if meta_json:
                 try:
                     meta = json.loads(meta_json)
-                    d['callsign'] = meta.get('callsign')
-                    d['classification'] = meta.get('classification')
+                    d["callsign"] = meta.get("callsign")
+                    d["classification"] = meta.get("classification")
                 except Exception:
-                    d['callsign'] = None
-                    d['classification'] = None
+                    d["callsign"] = None
+                    d["classification"] = None
             else:
-                d['callsign'] = None
-                d['classification'] = None
-            d.pop('meta', None)
+                d["callsign"] = None
+                d["classification"] = None
+            d.pop("meta", None)
             results.append(d)
 
         # For each matched satellite compute its current position via SGP4
@@ -253,20 +262,23 @@ async def search_tracks(q: str, limit: int = 10):
                     lon = round(float(lo[0]), 5)
             except Exception:
                 pass
-            results.append({
-                "entity_id": f"SAT-{row['norad_id']}",
-                "type": "a-s-K",
-                "last_seen": now,
-                "lat": lat,
-                "lon": lon,
-                "callsign": row["name"],
-                "classification": None,
-            })
+            results.append(
+                {
+                    "entity_id": f"SAT-{row['norad_id']}",
+                    "type": "a-s-K",
+                    "last_seen": now,
+                    "lat": lat,
+                    "lon": lon,
+                    "callsign": row["name"],
+                    "classification": None,
+                }
+            )
 
         return results
     except Exception as e:
         logger.error(f"Search query failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/api/tracks/replay", dependencies=_viewer_auth)
 async def replay_tracks(start: str, end: str, limit: int = 1000):
@@ -277,33 +289,32 @@ async def replay_tracks(start: str, end: str, limit: int = 1000):
     if limit > settings.TRACK_REPLAY_MAX_LIMIT:
         raise HTTPException(
             status_code=400,
-            detail=f"Limit exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_LIMIT})"
+            detail=f"Limit exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_LIMIT})",
         )
 
     # NEW-004: Mirror the BUG-007 lower-bound guard from the history endpoint.
     # limit=0 silently returns 0 rows; negative values may cause asyncpg errors.
     if limit <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="limit must be a positive integer"
-        )
+        raise HTTPException(status_code=400, detail="limit must be a positive integer")
 
     try:
         # Pydantic/FastAPI handles some ISO parsing, but we need robust handling
-        dt_start = datetime.fromisoformat(start.replace('Z', '+00:00'))
-        dt_end = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        dt_start = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        dt_end = datetime.fromisoformat(end.replace("Z", "+00:00"))
 
         # Validate time window
         duration_hours = (dt_end - dt_start).total_seconds() / 3600
         # BUG-006: A negative duration means dt_end < dt_start. Without this check
         # the value is always < MAX_HOURS so the window guard is silently bypassed.
         if dt_end <= dt_start:
-            logger.warning(f"Replay request rejected: end ({dt_end}) is not after start ({dt_start})")
+            logger.warning(
+                f"Replay request rejected: end ({dt_end}) is not after start ({dt_start})"
+            )
             raise HTTPException(status_code=400, detail="end must be after start")
         if duration_hours > settings.TRACK_REPLAY_MAX_HOURS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Time range exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_HOURS} hours)"
+                detail=f"Time range exceeds maximum allowed ({settings.TRACK_REPLAY_MAX_HOURS} hours)",
             )
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid ISO8601 timestamp format")
@@ -407,8 +418,13 @@ async def get_flight_info(entity_id: str):
     """
     # Satellites and non-ICAO24 entities are not supported
     if entity_id.startswith("SAT-") or entity_id.startswith("infra-"):
-        return {"departure": None, "arrival": None, "callsign": None,
-                "first_seen": None, "last_seen": None}
+        return {
+            "departure": None,
+            "arrival": None,
+            "callsign": None,
+            "first_seen": None,
+            "last_seen": None,
+        }
 
     end_ts = int(time_module.time())
     begin_ts = end_ts - 7 * 24 * 3600  # 7-day lookback
@@ -420,8 +436,13 @@ async def get_flight_info(entity_id: str):
     params = {"icao24": entity_id.lower(), "begin": begin_ts, "end": end_ts}
     auth = (client_id, client_secret) if client_id and client_secret else None
 
-    empty = {"departure": None, "arrival": None, "callsign": None,
-             "first_seen": None, "last_seen": None}
+    empty = {
+        "departure": None,
+        "arrival": None,
+        "callsign": None,
+        "first_seen": None,
+        "last_seen": None,
+    }
 
     cache_key = f"flight_info:{entity_id.lower()}"
     if db.redis_client:
@@ -436,11 +457,13 @@ async def get_flight_info(entity_id: str):
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await (
                 client.get(url, params=params, auth=auth)
-                if auth else
-                client.get(url, params=params)
+                if auth
+                else client.get(url, params=params)
             )
         if resp.status_code != 200:
-            logger.debug(f"OpenSky flights API returned {resp.status_code} for {entity_id}")
+            logger.debug(
+                f"OpenSky flights API returned {resp.status_code} for {entity_id}"
+            )
             return empty
 
         flights = resp.json()

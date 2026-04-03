@@ -181,7 +181,9 @@ async def _get_kafka_lag() -> dict | None:
 
         total_lag = sum(topics.values())
         severity = (
-            "ok" if total_lag < LAG_AMBER else ("amber" if total_lag < LAG_RED else "red")
+            "ok"
+            if total_lag < LAG_AMBER
+            else ("amber" if total_lag < LAG_RED else "red")
         )
         return {
             GROUP_ID: {"total_lag": total_lag, "severity": severity, "topics": topics}

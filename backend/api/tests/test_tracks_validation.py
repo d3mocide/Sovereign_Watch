@@ -1,4 +1,3 @@
-
 import pytest
 import os
 import sys
@@ -12,15 +11,22 @@ from test_stubs import install_common_test_stubs  # noqa: E402
 # not installed (asyncpg, redis, aiokafka, litellm) never need to be resolved.
 install_common_test_stubs(include_psutil=True)
 
-from core.auth import get_current_user # noqa: E402
+from core.auth import get_current_user  # noqa: E402
 from core.config import settings  # noqa: E402
 from main import app  # noqa: E402
 
+
 @pytest.fixture(autouse=True)
 def override_auth():
-    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": 1,
+        "username": "admin",
+        "role": "admin",
+        "is_active": True,
+    }
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.mark.asyncio
 async def test_track_history_limit_exceeded():
@@ -30,9 +36,12 @@ async def test_track_history_limit_exceeded():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         over_limit = settings.TRACK_HISTORY_MAX_LIMIT + 1
-        response = await client.get(f"/api/tracks/history/test-entity?limit={over_limit}")
+        response = await client.get(
+            f"/api/tracks/history/test-entity?limit={over_limit}"
+        )
         assert response.status_code == 400
         assert "Limit exceeds maximum allowed" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_track_history_hours_exceeded():
@@ -42,9 +51,12 @@ async def test_track_history_hours_exceeded():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         over_hours = settings.TRACK_HISTORY_MAX_HOURS + 1
-        response = await client.get(f"/api/tracks/history/test-entity?hours={over_hours}")
+        response = await client.get(
+            f"/api/tracks/history/test-entity?hours={over_hours}"
+        )
         assert response.status_code == 400
         assert "Hours exceeds maximum allowed" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_track_history_valid_request():
@@ -57,7 +69,9 @@ async def test_track_history_valid_request():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Valid request: limit=100, hours=24
-        response = await client.get("/api/tracks/history/test-entity?limit=100&hours=24")
+        response = await client.get(
+            "/api/tracks/history/test-entity?limit=100&hours=24"
+        )
 
         # We expect 503 because db.pool is None in this test environment without full startup
         # But crucially, it is NOT 400.
@@ -77,6 +91,7 @@ async def test_search_tracks_limit_exceeded():
         assert response.status_code == 400
         assert "Limit exceeds maximum allowed" in response.json()["detail"]
 
+
 @pytest.mark.asyncio
 async def test_search_tracks_negative_limit():
     """
@@ -87,6 +102,7 @@ async def test_search_tracks_negative_limit():
         response = await client.get("/api/tracks/search?q=test&limit=0")
         assert response.status_code == 400
         assert "limit must be a positive integer" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_search_tracks_long_query():
@@ -99,6 +115,7 @@ async def test_search_tracks_long_query():
         response = await client.get(f"/api/tracks/search?q={long_query}")
         assert response.status_code == 400
         assert "Query string is too long" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_search_tracks_valid_request():

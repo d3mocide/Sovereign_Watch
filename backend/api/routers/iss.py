@@ -36,7 +36,9 @@ async def get_iss_position():
     try:
         data = await db.redis_client.get(_REDIS_LATEST_KEY)
         if not data:
-            raise HTTPException(status_code=503, detail="ISS position not yet available")
+            raise HTTPException(
+                status_code=503, detail="ISS position not yet available"
+            )
         return json.loads(data)
     except HTTPException:
         raise
@@ -98,7 +100,9 @@ async def iss_websocket(
     if user is None:
         return
 
-    logger.info(f"ISS WebSocket client connected: {user.get('username', user.get('id', 'unknown'))}")
+    logger.info(
+        f"ISS WebSocket client connected: {user.get('username', user.get('id', 'unknown'))}"
+    )
 
     redis_url = f"redis://{settings.REDIS_HOST}:6379"
     pubsub_client: aioredis.Redis | None = None
@@ -118,13 +122,23 @@ async def iss_websocket(
             if message["type"] == "message":
                 try:
                     await websocket.send_text(message["data"])
-                except (WebSocketDisconnect, ConnectionClosedOK, ConnectionClosedError, ClientDisconnected):
+                except (
+                    WebSocketDisconnect,
+                    ConnectionClosedOK,
+                    ConnectionClosedError,
+                    ClientDisconnected,
+                ):
                     break
                 except Exception as e:
                     logger.error("ISS WS send error: %s", e)
                     break
 
-    except (WebSocketDisconnect, ConnectionClosedOK, ConnectionClosedError, ClientDisconnected):
+    except (
+        WebSocketDisconnect,
+        ConnectionClosedOK,
+        ConnectionClosedError,
+        ClientDisconnected,
+    ):
         pass
     except asyncio.CancelledError:
         pass

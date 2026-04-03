@@ -1,4 +1,3 @@
-
 import pytest
 import os
 import sys
@@ -13,14 +12,21 @@ from test_stubs import install_common_test_stubs  # noqa: E402
 # not installed (asyncpg, redis, aiokafka, litellm) never need to be resolved.
 install_common_test_stubs(include_psutil=True)
 
-from core.auth import get_current_user # noqa: E402
+from core.auth import get_current_user  # noqa: E402
 from main import app  # noqa: E402
+
 
 @pytest.fixture(autouse=True)
 def override_auth():
-    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": 1,
+        "username": "admin",
+        "role": "admin",
+        "is_active": True,
+    }
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.mark.asyncio
 async def test_replay_limit_exceeded():
@@ -37,6 +43,7 @@ async def test_replay_limit_exceeded():
         assert response.status_code == 400
         assert "Limit exceeds maximum allowed" in response.json()["detail"]
 
+
 @pytest.mark.asyncio
 async def test_replay_time_window_exceeded():
     """
@@ -52,6 +59,7 @@ async def test_replay_time_window_exceeded():
         response = await client.get("/api/tracks/replay", params=params)
         assert response.status_code == 400
         assert "Time range exceeds maximum allowed" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_replay_valid_request():
@@ -73,6 +81,7 @@ async def test_replay_valid_request():
         assert response.status_code == 503
         assert "Database not ready" in response.json()["detail"]
 
+
 @pytest.mark.asyncio
 async def test_replay_negative_duration():
     """
@@ -88,6 +97,7 @@ async def test_replay_negative_duration():
         response = await client.get("/api/tracks/replay", params=params)
         assert response.status_code == 400
         assert "end must be after start" in response.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_replay_zero_duration():

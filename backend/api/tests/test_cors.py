@@ -1,4 +1,3 @@
-
 import pytest
 import os
 import sys
@@ -14,6 +13,7 @@ install_common_test_stubs()
 
 from main import app  # noqa: E402
 
+
 @pytest.mark.asyncio
 async def test_cors_allowed_origin():
     """
@@ -21,13 +21,17 @@ async def test_cors_allowed_origin():
     """
     transport = ASGITransport(app=app)
     # Read origins from environment or fallback to default to match main.py logic
-    allowed_list = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")]
+    allowed_list = [
+        origin.strip()
+        for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    ]
     test_origin = allowed_list[0]
-    
+
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/health", headers={"Origin": test_origin})
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == test_origin
+
 
 @pytest.mark.asyncio
 async def test_cors_disallowed_origin():

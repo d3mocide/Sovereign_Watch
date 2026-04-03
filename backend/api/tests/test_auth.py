@@ -178,7 +178,13 @@ async def test_first_setup_creates_admin():
     """first-setup works when no users exist (atomic INSERT returns a row)."""
     transport = ASGITransport(app=app)
 
-    row_dict = {"id": 1, "username": "newadmin", "role": "admin", "is_active": True, "created_at": None}
+    row_dict = {
+        "id": 1,
+        "username": "newadmin",
+        "role": "admin",
+        "is_active": True,
+        "created_at": None,
+    }
 
     mock_conn = MagicMock()
     # Atomic INSERT … WHERE NOT EXISTS returns the new row when table was empty

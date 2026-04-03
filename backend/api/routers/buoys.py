@@ -29,7 +29,7 @@ async def get_buoys_latest(
     max_lat: float = Query(default=90.0, ge=-90.0, le=90.0),
     min_lon: float = Query(default=-180.0, ge=-180.0, le=180.0),
     max_lon: float = Query(default=180.0, ge=-180.0, le=180.0),
-    limit:   int   = Query(default=2000, ge=1, le=5000),
+    limit: int = Query(default=2000, ge=1, le=5000),
 ):
     """Return the latest NDBC buoy observation per station within a bounding box.
 
@@ -37,10 +37,7 @@ async def get_buoys_latest(
     Falls back to a live DB query when bbox restricts the viewport.
     """
     global_bbox = (
-        min_lat <= -89.9
-        and max_lat >= 89.9
-        and min_lon <= -179.9
-        and max_lon >= 179.9
+        min_lat <= -89.9 and max_lat >= 89.9 and min_lon <= -179.9 and max_lon >= 179.9
     )
 
     # Fast-path: full-world view → serve Redis cache written by the poller

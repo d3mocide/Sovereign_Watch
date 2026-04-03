@@ -7,6 +7,7 @@ GET /api/orbital/passes
 GET /api/orbital/groundtrack/{norad_id}
     Returns the sub-satellite ground track for one orbit.
 """
+
 import json
 import logging
 from datetime import datetime, timezone, timedelta
@@ -34,9 +35,12 @@ PASSES_CACHE_TTL = 300  # 5 minutes
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _jday_from_datetime(dt: datetime):
     """Return (jd, fr) tuple from a UTC datetime."""
-    return jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond / 1e6)
+    return jday(
+        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond / 1e6
+    )
 
 
 async def _load_satellites(
@@ -76,16 +80,28 @@ async def _load_satellites(
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/passes")
 async def get_passes(
     lat: float = Query(..., description="Observer latitude (degrees)"),
     lon: float = Query(..., description="Observer longitude (degrees)"),
     hours: int = Query(6, ge=1, le=48, description="Prediction window in hours"),
-    min_elevation: float = Query(10.0, ge=0.0, le=90.0, description="Minimum AOS elevation (degrees)"),
-    norad_ids: Optional[str] = Query(None, description="Comma-separated NORAD IDs to filter"),
-    category: Optional[str] = Query(None, description="Satellite category to filter (e.g. gps, weather, comms, intel)"),
-    constellation: Optional[str] = Query(None, description="Constellation to filter (e.g. Starlink, OneWeb, Iridium)"),
-    limit: Optional[int] = Query(None, ge=1, le=500, description="Max passes to return (sorted by AOS)"),
+    min_elevation: float = Query(
+        10.0, ge=0.0, le=90.0, description="Minimum AOS elevation (degrees)"
+    ),
+    norad_ids: Optional[str] = Query(
+        None, description="Comma-separated NORAD IDs to filter"
+    ),
+    category: Optional[str] = Query(
+        None,
+        description="Satellite category to filter (e.g. gps, weather, comms, intel)",
+    ),
+    constellation: Optional[str] = Query(
+        None, description="Constellation to filter (e.g. Starlink, OneWeb, Iridium)"
+    ),
+    limit: Optional[int] = Query(
+        None, ge=1, le=500, description="Max passes to return (sorted by AOS)"
+    ),
 ):
     """
     Predict upcoming satellite passes for an observer location.
@@ -120,7 +136,12 @@ async def get_passes(
     # (gps, weather, intel) but we hard-reject comms unless a specific NORAD ID
     # list or constellation is also supplied.
     PASS_HEAVY_CATEGORIES = {"comms"}
-    if category and category.lower() in PASS_HEAVY_CATEGORIES and not norad_ids and not constellation:
+    if (
+        category
+        and category.lower() in PASS_HEAVY_CATEGORIES
+        and not norad_ids
+        and not constellation
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -135,7 +156,6 @@ async def get_passes(
 
     if not satellites:
         return []
-
 
     obs_ecef = geodetic_to_ecef(lat, lon)
     now = datetime.now(timezone.utc)
@@ -194,23 +214,29 @@ async def get_passes(
                         los_p = current_pass_points[-1]
 
                         # Compute duration
-                        aos_dt = datetime.strptime(aos_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-                        los_dt = datetime.strptime(los_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                        aos_dt = datetime.strptime(
+                            aos_p["t"], "%Y-%m-%dT%H:%M:%SZ"
+                        ).replace(tzinfo=timezone.utc)
+                        los_dt = datetime.strptime(
+                            los_p["t"], "%Y-%m-%dT%H:%M:%SZ"
+                        ).replace(tzinfo=timezone.utc)
                         duration = int((los_dt - aos_dt).total_seconds())
 
-                        passes.append({
-                            "norad_id": sat["norad_id"],
-                            "name": sat["name"] or sat["norad_id"],
-                            "category": sat["category"],
-                            "aos": aos_p["t"],
-                            "tca": tca_point["t"] if tca_point else aos_p["t"],
-                            "los": los_p["t"],
-                            "max_elevation": round(tca_el, 2),
-                            "aos_azimuth": aos_p["az"],
-                            "los_azimuth": los_p["az"],
-                            "duration_seconds": duration,
-                            "points": current_pass_points,
-                        })
+                        passes.append(
+                            {
+                                "norad_id": sat["norad_id"],
+                                "name": sat["name"] or sat["norad_id"],
+                                "category": sat["category"],
+                                "aos": aos_p["t"],
+                                "tca": tca_point["t"] if tca_point else aos_p["t"],
+                                "los": los_p["t"],
+                                "max_elevation": round(tca_el, 2),
+                                "aos_azimuth": aos_p["az"],
+                                "los_azimuth": los_p["az"],
+                                "duration_seconds": duration,
+                                "points": current_pass_points,
+                            }
+                        )
                     current_pass_points = []
                     tca_el = -999.0
                     tca_point = None
@@ -221,22 +247,28 @@ async def get_passes(
         if in_pass and current_pass_points:
             aos_p = current_pass_points[0]
             los_p = current_pass_points[-1]
-            aos_dt = datetime.strptime(aos_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-            los_dt = datetime.strptime(los_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            aos_dt = datetime.strptime(aos_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+            los_dt = datetime.strptime(los_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
             duration = int((los_dt - aos_dt).total_seconds())
-            passes.append({
-                "norad_id": sat["norad_id"],
-                "name": sat["name"] or sat["norad_id"],
-                "category": sat["category"],
-                "aos": aos_p["t"],
-                "tca": tca_point["t"] if tca_point else aos_p["t"],
-                "los": los_p["t"],
-                "max_elevation": round(tca_el, 2),
-                "aos_azimuth": aos_p["az"],
-                "los_azimuth": los_p["az"],
-                "duration_seconds": duration,
-                "points": current_pass_points,
-            })
+            passes.append(
+                {
+                    "norad_id": sat["norad_id"],
+                    "name": sat["name"] or sat["norad_id"],
+                    "category": sat["category"],
+                    "aos": aos_p["t"],
+                    "tca": tca_point["t"] if tca_point else aos_p["t"],
+                    "los": los_p["t"],
+                    "max_elevation": round(tca_el, 2),
+                    "aos_azimuth": aos_p["az"],
+                    "los_azimuth": los_p["az"],
+                    "duration_seconds": duration,
+                    "points": current_pass_points,
+                }
+            )
 
     passes.sort(key=lambda p: p["aos"])
 
@@ -281,12 +313,12 @@ async def get_stats():
         total += n
 
     return {
-        "gps":    counts.get("gps", 0),
+        "gps": counts.get("gps", 0),
         "weather": counts.get("weather", 0),
-        "comms":  counts.get("comms", 0),
-        "intel":  counts.get("intel", 0),
-        "other":  counts.get("other", 0),
-        "total":  total,
+        "comms": counts.get("comms", 0),
+        "intel": counts.get("intel", 0),
+        "other": counts.get("other", 0),
+        "total": total,
     }
 
 
@@ -323,7 +355,9 @@ async def get_constellation_stats():
 @router.get("/groundtrack/{norad_id}")
 async def get_groundtrack(
     norad_id: str,
-    minutes: int = Query(90, ge=1, le=1440, description="Propagation window in minutes"),
+    minutes: int = Query(
+        90, ge=1, le=1440, description="Propagation window in minutes"
+    ),
     step_seconds: int = Query(30, ge=5, le=300, description="Time step in seconds"),
 ):
     """
@@ -337,7 +371,9 @@ async def get_groundtrack(
 
     satellites = await _load_satellites(pool, [norad_id])
     if not satellites:
-        raise HTTPException(status_code=404, detail=f"No TLE found for NORAD ID {norad_id}")
+        raise HTTPException(
+            status_code=404, detail=f"No TLE found for NORAD ID {norad_id}"
+        )
 
     sat = satellites[0]
     try:
@@ -356,13 +392,17 @@ async def get_groundtrack(
         if e == 0:
             r_ecef = teme_to_ecef(r, jd, fr)
             # ecef_to_lla_vectorized needs (N, 3)
-            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
-            points.append({
-                "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "lat": round(float(lat_arr[0]), 5),
-                "lon": round(float(lon_arr[0]), 5),
-                "alt_km": round(float(alt_arr[0]), 3),
-            })
+            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
+                np.array(r_ecef).reshape(1, 3)
+            )
+            points.append(
+                {
+                    "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "lat": round(float(lat_arr[0]), 5),
+                    "lon": round(float(lon_arr[0]), 5),
+                    "alt_km": round(float(alt_arr[0]), 3),
+                }
+            )
         t += timedelta(seconds=step_seconds)
 
     return points

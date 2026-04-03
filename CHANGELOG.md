@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.62.0] - 2026-04-03
+
+### Added
+
+- **Unified AI Persona Framework**: Centralized all 7 operational modes (Tactical, OSINT, SAR, SITREP, GDELT, and HOLD) into a single, disciplined persona map in `AIService`.
+- **Strategic Intelligence Routing**: Implemented explicit SITREP routing to ensure global reports always use the "Strategic Director" persona (`### ACTIVE ZONES`, etc.), even when analyzing OSINT sources.
+- **Defensive Persona Gating**: Personas now include mandatory 'Negative Constraints' that forbid the use of `##` headers or asterisk bullets, enforcing absolute HUD layout stability.
+- **SITREP Context Enrichment**: Added high-density metadata support for collective intelligence events in SITREP prompts.
+
+### Changed
+
+- **AI HUD Rendering V2**: Upgraded the `AIAnalystPanel` with an aggressive 'Slash-and-Burn' regex pre-processor to catch and repair collapsed AI output, missing newlines, and split bold tags.
+- **Header-Agnostic UI**: Refactored the frontend `AnalysisFormatter` to detect and style any `### [ALL CAPS]` header dynamically, improving future feature compatibility.
+- **Bullet-First Hierarchy**: Standardized all AI reporting on dash-bullets (`- `) to eliminate character-range collisions in regex processing.
+
+### Fixed
+
+- **Analysis HUD 'Wall of Text'**: Resolved a severe regression where AI reports would render as unformatted blocks of text by enforcing strict newline insertion for headers and bullets.
+- **Regex Character Range Bug**: Fixed a critical frontend regex error (`[*-•]`) that was causing random character splitting and text fragmentation.
+- **Broken Bold-Tag Healing**: Implemented automatic 'token healing' for bold identifiers that were accidentally split across lines by the LLM stream.
+- **SITREP Ingestion Mode Leak**: Fixed a bug where SITREPs would accidentally use OSINT headers if the model was analyzing news sources.
+
 ## [0.61.0] - 2026-03-31
 
 ### Added

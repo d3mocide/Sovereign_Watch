@@ -28,22 +28,24 @@ async def get_rf_sites(
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database connection not available")
 
-    conditions = ["ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)"]
+    conditions = [
+        "ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)"
+    ]
     params = [lat, lon, radius_m]
 
     if services:
-        conditions.append(f"service = ANY(${len(params)+1}::text[])")
+        conditions.append(f"service = ANY(${len(params) + 1}::text[])")
         params.append(services)
 
     if modes:
-        conditions.append(f"modes && ${len(params)+1}::text[]")
+        conditions.append(f"modes && ${len(params) + 1}::text[]")
         params.append(modes)
 
     if emcomm_only:
         conditions.append("array_length(emcomm_flags, 1) > 0")
 
     if source:
-        conditions.append(f"source = ${len(params)+1}")
+        conditions.append(f"source = ${len(params) + 1}")
         params.append(source)
 
     where = " AND ".join(conditions)
@@ -69,15 +71,15 @@ async def get_rf_sites(
         d = dict(r)
         # Parse JSONB fields if necessary, but asyncpg often returns strings for JSONB if not configured,
         # or dict if json codec is set.
-        if isinstance(d.get('meta'), str):
-            d['meta'] = json.loads(d['meta'])
+        if isinstance(d.get("meta"), str):
+            d["meta"] = json.loads(d["meta"])
 
         # Ensure UUID and DateTime are serializable
-        d['id'] = str(d['id'])
-        if d.get('fetched_at'):
-            d['fetched_at'] = d['fetched_at'].isoformat()
-        if d.get('updated_at'):
-            d['updated_at'] = d['updated_at'].isoformat()
+        d["id"] = str(d["id"])
+        if d.get("fetched_at"):
+            d["fetched_at"] = d["fetched_at"].isoformat()
+        if d.get("updated_at"):
+            d["updated_at"] = d["updated_at"].isoformat()
 
         results.append(d)
 
@@ -93,7 +95,7 @@ async def get_rf_sites(
 async def repeaters_alias(
     lat: float = Query(...),
     lon: float = Query(...),
-    radius: float = Query(default=75.0)
+    radius: float = Query(default=75.0),
 ):
     """Alias for backwards compatibility. Converts miles to NM."""
     radius_nm = radius * 0.868976

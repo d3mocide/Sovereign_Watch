@@ -52,7 +52,9 @@ logger = logging.getLogger("SovereignWatch.Auth")
 # ---------------------------------------------------------------------------
 
 
-@router.post("/login", response_model=TokenResponse, summary="Obtain a JWT access token")
+@router.post(
+    "/login", response_model=TokenResponse, summary="Obtain a JWT access token"
+)
 async def login(request: Request, body: LoginRequest):
     """Authenticate with username + password; returns a Bearer token."""
     await check_rate_limit(f"login:{request.client.host}", limit=10, window=60)
@@ -81,12 +83,18 @@ async def login(request: Request, body: LoginRequest):
     # NOTE: role and pwv (password version) are embedded in the token for
     # informational/revocation purposes only.  All authorization decisions use
     # the role fetched live from the database via get_current_user.
-    token = create_access_token({
-        "sub": str(user["id"]),
-        "role": user["role"],
-        "pwv": user.get("password_version", 0),
-    })
-    logger.info("User '%s' authenticated successfully from %s", body.username, request.client.host)
+    token = create_access_token(
+        {
+            "sub": str(user["id"]),
+            "role": user["role"],
+            "pwv": user.get("password_version", 0),
+        }
+    )
+    logger.info(
+        "User '%s' authenticated successfully from %s",
+        body.username,
+        request.client.host,
+    )
     return TokenResponse(
         access_token=token,
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
@@ -326,7 +334,5 @@ async def deactivate_user(
             )
 
     async with db.pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET is_active = FALSE WHERE id = $1", user_id
-        )
+        await conn.execute("UPDATE users SET is_active = FALSE WHERE id = $1", user_id)
     logger.info("Admin deactivated user id=%s", user_id)

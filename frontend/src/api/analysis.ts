@@ -7,6 +7,7 @@ export interface AnalyzeRequest {
   lookback_hours: number;
   mode: string;
   sitrep_context?: any;
+  is_sitrep?: boolean;
 }
 
 /**
@@ -18,7 +19,8 @@ export async function streamAnalysis(
   uid: string,
   lookbackHours: number,
   mode: string = 'tactical',
-  sitrepContext?: any
+  sitrepContext?: any,
+  isSitrep: boolean = false
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const response = await fetch(`/api/analyze/${encodeURIComponent(uid)}`, {
     method: 'POST',
@@ -27,7 +29,8 @@ export async function streamAnalysis(
       uid, 
       lookback_hours: lookbackHours, 
       mode,
-      sitrep_context: sitrepContext
+      sitrep_context: sitrepContext,
+      is_sitrep: isSitrep
     } satisfies AnalyzeRequest),
   });
 

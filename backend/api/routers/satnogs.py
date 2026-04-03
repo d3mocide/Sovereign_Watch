@@ -25,9 +25,9 @@ from core.database import db
 router = APIRouter(prefix="/api/satnogs", tags=["satnogs"])
 logger = logging.getLogger("SovereignWatch.SatNOGS")
 
-CACHE_TTL_TRANSMITTERS = 3600   # 1 hour — transmitter catalog changes rarely
-CACHE_TTL_OBSERVATIONS = 300    # 5 minutes — observations arrive hourly
-CACHE_TTL_STATIONS = 300        # 5 minutes — station availability changes frequently
+CACHE_TTL_TRANSMITTERS = 3600  # 1 hour — transmitter catalog changes rarely
+CACHE_TTL_OBSERVATIONS = 300  # 5 minutes — observations arrive hourly
+CACHE_TTL_STATIONS = 300  # 5 minutes — station availability changes frequently
 
 
 def _normalize_station_status(raw_status: object, online_flag: object) -> str:
@@ -47,9 +47,15 @@ def _normalize_station_status(raw_status: object, online_flag: object) -> str:
 
 @router.get("/transmitters")
 async def get_transmitters(
-    norad_id: str | None = Query(default=None, description="Filter by NORAD catalog ID"),
-    mode: str | None = Query(default=None, description="Filter by modulation mode (FM, BPSK, CW, …)"),
-    alive_only: bool = Query(default=True, description="Only return transmitters marked alive by SatNOGS"),
+    norad_id: str | None = Query(
+        default=None, description="Filter by NORAD catalog ID"
+    ),
+    mode: str | None = Query(
+        default=None, description="Filter by modulation mode (FM, BPSK, CW, …)"
+    ),
+    alive_only: bool = Query(
+        default=True, description="Only return transmitters marked alive by SatNOGS"
+    ),
     limit: int = Query(default=500, ge=1, le=5000),
 ):
     """Return the SatNOGS transmitter catalog (satellite expected frequencies)."""
@@ -92,15 +98,23 @@ async def get_transmitters(
 
     result = [dict(r) for r in rows]
     if db.redis_client:
-        await db.redis_client.set(cache_key, json.dumps(result, default=str), ex=CACHE_TTL_TRANSMITTERS)
+        await db.redis_client.set(
+            cache_key, json.dumps(result, default=str), ex=CACHE_TTL_TRANSMITTERS
+        )
     return result
 
 
 @router.get("/observations")
 async def get_observations(
-    norad_id: str | None = Query(default=None, description="Filter by NORAD catalog ID"),
-    ground_station_id: int | None = Query(default=None, description="Filter by ground station ID"),
-    hours: int = Query(default=24, ge=1, le=720, description="Look-back window in hours"),
+    norad_id: str | None = Query(
+        default=None, description="Filter by NORAD catalog ID"
+    ),
+    ground_station_id: int | None = Query(
+        default=None, description="Filter by ground station ID"
+    ),
+    hours: int = Query(
+        default=24, ge=1, le=720, description="Look-back window in hours"
+    ),
     limit: int = Query(default=200, ge=1, le=2000),
 ):
     """Return recent SatNOGS ground-station observations."""
@@ -142,7 +156,9 @@ async def get_observations(
 
     result = [dict(r) for r in rows]
     if db.redis_client:
-        await db.redis_client.set(cache_key, json.dumps(result, default=str), ex=CACHE_TTL_OBSERVATIONS)
+        await db.redis_client.set(
+            cache_key, json.dumps(result, default=str), ex=CACHE_TTL_OBSERVATIONS
+        )
     return result
 
 
@@ -202,13 +218,19 @@ async def verify_spectrum(norad_id: str):
             for tx in transmitters:
                 dl = tx.get("downlink_low")
                 if dl and abs(obs_freq - dl) <= FREQ_TOLERANCE_HZ:
-                    match = {"uuid": tx["uuid"], "description": tx["description"], "expected_hz": dl}
+                    match = {
+                        "uuid": tx["uuid"],
+                        "description": tx["description"],
+                        "expected_hz": dl,
+                    }
                     break
-        verified.append({
-            **obs,
-            "frequency_match": match,
-            "anomaly": obs_freq is not None and match is None,
-        })
+        verified.append(
+            {
+                **obs,
+                "frequency_match": match,
+                "anomaly": obs_freq is not None and match is None,
+            }
+        )
 
     result = {
         "norad_id": norad_id,
@@ -223,7 +245,9 @@ async def verify_spectrum(norad_id: str):
     }
 
     if db.redis_client:
-        await db.redis_client.set(cache_key, json.dumps(result, default=str), ex=CACHE_TTL_OBSERVATIONS)
+        await db.redis_client.set(
+            cache_key, json.dumps(result, default=str), ex=CACHE_TTL_OBSERVATIONS
+        )
     return result
 
 
@@ -249,12 +273,12 @@ async def get_stations(
         async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
             resp = await client.get("https://network.satnogs.org/api/stations/")
             resp.raise_for_status()
-            
+
             # The API might return paginated results or a flat list. Usually it's a flat list.
             data = resp.json()
             if isinstance(data, dict) and "results" in data:
                 data = data["results"]
-                
+
             # Filter and simplify fields to minimize payload
             stations = []
             for s in data:
@@ -268,21 +292,27 @@ async def get_stations(
                     if not include_offline and normalized_status == "offline":
                         continue
 
-                    stations.append({
-                        "id": s.get("id"),
-                        "name": s.get("name"),
-                        "status": normalized_status,
-                        "last_seen": s.get("last_seen"),
-                        "lat": float(lat),
-                        "lon": float(lon),
-                        "altitude": float(s.get("alt") or 0)
-                    })
-                    
+                    stations.append(
+                        {
+                            "id": s.get("id"),
+                            "name": s.get("name"),
+                            "status": normalized_status,
+                            "last_seen": s.get("last_seen"),
+                            "lat": float(lat),
+                            "lon": float(lon),
+                            "altitude": float(s.get("alt") or 0),
+                        }
+                    )
+
             if db.redis_client and stations:
-                await db.redis_client.set(cache_key, json.dumps(stations, default=str), ex=CACHE_TTL_STATIONS)
-                
+                await db.redis_client.set(
+                    cache_key, json.dumps(stations, default=str), ex=CACHE_TTL_STATIONS
+                )
+
             return stations
 
     except Exception as e:
         logger.error(f"Failed to fetch SatNOGS stations: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch upstream SatNOGS network stations")
+        raise HTTPException(
+            status_code=502, detail="Failed to fetch upstream SatNOGS network stations"
+        )

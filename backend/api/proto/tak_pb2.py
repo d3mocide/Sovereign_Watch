@@ -4,53 +4,50 @@
 # source: tak.proto
 # Protobuf Python Version: 5.29.0
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    5,
-    29,
-    0,
-    '',
-    'tak.proto'
+    _runtime_version.Domain.PUBLIC, 5, 29, 0, "", "tak.proto"
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-
-
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ttak.proto\x12\ttak.proto\"3\n\nTakMessage\x12%\n\x08\x63otEvent\x18\x01 \x01(\x0b\x32\x13.tak.proto.CotEvent\"\xcd\x01\n\x08\x43otEvent\x12\x0b\n\x03uid\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\r\n\x05start\x18\x03 \x01(\x04\x12\r\n\x05stale\x18\x04 \x01(\x04\x12\x0c\n\x04time\x18\x05 \x01(\x04\x12\x0b\n\x03how\x18\x06 \x01(\t\x12\x0b\n\x03lat\x18\x07 \x01(\x01\x12\x0b\n\x03lon\x18\x08 \x01(\x01\x12\x0b\n\x03hae\x18\t \x01(\x01\x12\n\n\x02\x63\x65\x18\n \x01(\x01\x12\n\n\x02le\x18\x0b \x01(\x01\x12!\n\x06\x64\x65tail\x18\x0c \x01(\x0b\x32\x11.tak.proto.Detail\x12\x0b\n\x03raw\x18\r \x01(\t\"\xef\x03\n\x06\x44\x65tail\x12#\n\x07\x63ontact\x18\x01 \x01(\x0b\x32\x12.tak.proto.Contact\x12\x1f\n\x05track\x18\x02 \x01(\x0b\x32\x10.tak.proto.Track\x12\x1f\n\x05group\x18\x03 \x01(\x0b\x32\x10.tak.proto.Group\x12!\n\x06status\x18\x04 \x01(\x0b\x32\x11.tak.proto.Status\x12\x37\n\x11precisionLocation\x18\x05 \x01(\x0b\x32\x1c.tak.proto.PrecisionLocation\x12\x31\n\x0e\x63lassification\x18\x06 \x01(\x0b\x32\x19.tak.proto.Classification\x12=\n\x14vesselClassification\x18\x07 \x01(\x0b\x32\x1f.tak.proto.VesselClassification\x12\x10\n\x08\x63\x61tegory\x18\x08 \x01(\t\x12\x15\n\rconstellation\x18\t \x01(\t\x12\x12\n\nperiod_min\x18\n \x01(\x01\x12\x17\n\x0finclination_deg\x18\x0b \x01(\x01\x12\x14\n\x0c\x65\x63\x63\x65ntricity\x18\x0c \x01(\x01\x12\x31\n\x0einternetOutage\x18\r \x01(\x0b\x32\x19.tak.proto.InternetOutage\x12\x11\n\txmlDetail\x18\x64 \x01(\t\"-\n\x07\x43ontact\x12\x10\n\x08\x63\x61llsign\x18\x01 \x01(\t\x12\x10\n\x08\x65ndpoint\x18\x02 \x01(\t\"E\n\x05Track\x12\x0e\n\x06\x63ourse\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\x12\r\n\x05slope\x18\x03 \x01(\x01\x12\x0e\n\x06vspeed\x18\x04 \x01(\x01\"#\n\x05Group\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t\",\n\x06Status\x12\x0f\n\x07\x62\x61ttery\x18\x01 \x01(\r\x12\x11\n\treadiness\x18\x02 \x01(\x08\"8\n\x11PrecisionLocation\x12\x13\n\x0bgeopointsrc\x18\x01 \x01(\t\x12\x0e\n\x06\x61ltsrc\x18\x02 \x01(\t\"\xf9\x01\n\x0e\x43lassification\x12\x13\n\x0b\x61\x66\x66iliation\x18\x01 \x01(\t\x12\x10\n\x08platform\x18\x02 \x01(\t\x12\x12\n\nsize_class\x18\x03 \x01(\t\x12\x11\n\ticao_type\x18\x04 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x10\n\x08\x64\x62_flags\x18\x06 \x01(\r\x12\x10\n\x08operator\x18\x07 \x01(\t\x12\x14\n\x0cregistration\x18\x08 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\t \x01(\t\x12\x0e\n\x06squawk\x18\n \x01(\t\x12\x11\n\temergency\x18\x0b \x01(\t\x12\x15\n\rconstellation\x18\x0c \x01(\t\"\xed\x01\n\x14VesselClassification\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x11\n\tship_type\x18\x02 \x01(\r\x12\x12\n\nnav_status\x18\x03 \x01(\r\x12\x11\n\thazardous\x18\x04 \x01(\x08\x12\x14\n\x0cstation_type\x18\x05 \x01(\t\x12\x10\n\x08\x66lag_mid\x18\x06 \x01(\r\x12\x0b\n\x03imo\x18\x07 \x01(\r\x12\x10\n\x08\x63\x61llsign\x18\x08 \x01(\t\x12\x13\n\x0b\x64\x65stination\x18\t \x01(\t\x12\x0f\n\x07\x64raught\x18\n \x01(\x02\x12\x0e\n\x06length\x18\x0b \x01(\x02\x12\x0c\n\x04\x62\x65\x61m\x18\x0c \x01(\x02\"\\\n\x0eInternetOutage\x12\x14\n\x0c\x63ountry_code\x18\x01 \x01(\t\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x10\n\x08severity\x18\x03 \x01(\x01\x12\x12\n\ndatasource\x18\x04 \x01(\tb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\ttak.proto\x12\ttak.proto"3\n\nTakMessage\x12%\n\x08\x63otEvent\x18\x01 \x01(\x0b\x32\x13.tak.proto.CotEvent"\xcd\x01\n\x08\x43otEvent\x12\x0b\n\x03uid\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\r\n\x05start\x18\x03 \x01(\x04\x12\r\n\x05stale\x18\x04 \x01(\x04\x12\x0c\n\x04time\x18\x05 \x01(\x04\x12\x0b\n\x03how\x18\x06 \x01(\t\x12\x0b\n\x03lat\x18\x07 \x01(\x01\x12\x0b\n\x03lon\x18\x08 \x01(\x01\x12\x0b\n\x03hae\x18\t \x01(\x01\x12\n\n\x02\x63\x65\x18\n \x01(\x01\x12\n\n\x02le\x18\x0b \x01(\x01\x12!\n\x06\x64\x65tail\x18\x0c \x01(\x0b\x32\x11.tak.proto.Detail\x12\x0b\n\x03raw\x18\r \x01(\t"\xef\x03\n\x06\x44\x65tail\x12#\n\x07\x63ontact\x18\x01 \x01(\x0b\x32\x12.tak.proto.Contact\x12\x1f\n\x05track\x18\x02 \x01(\x0b\x32\x10.tak.proto.Track\x12\x1f\n\x05group\x18\x03 \x01(\x0b\x32\x10.tak.proto.Group\x12!\n\x06status\x18\x04 \x01(\x0b\x32\x11.tak.proto.Status\x12\x37\n\x11precisionLocation\x18\x05 \x01(\x0b\x32\x1c.tak.proto.PrecisionLocation\x12\x31\n\x0e\x63lassification\x18\x06 \x01(\x0b\x32\x19.tak.proto.Classification\x12=\n\x14vesselClassification\x18\x07 \x01(\x0b\x32\x1f.tak.proto.VesselClassification\x12\x10\n\x08\x63\x61tegory\x18\x08 \x01(\t\x12\x15\n\rconstellation\x18\t \x01(\t\x12\x12\n\nperiod_min\x18\n \x01(\x01\x12\x17\n\x0finclination_deg\x18\x0b \x01(\x01\x12\x14\n\x0c\x65\x63\x63\x65ntricity\x18\x0c \x01(\x01\x12\x31\n\x0einternetOutage\x18\r \x01(\x0b\x32\x19.tak.proto.InternetOutage\x12\x11\n\txmlDetail\x18\x64 \x01(\t"-\n\x07\x43ontact\x12\x10\n\x08\x63\x61llsign\x18\x01 \x01(\t\x12\x10\n\x08\x65ndpoint\x18\x02 \x01(\t"E\n\x05Track\x12\x0e\n\x06\x63ourse\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\x12\r\n\x05slope\x18\x03 \x01(\x01\x12\x0e\n\x06vspeed\x18\x04 \x01(\x01"#\n\x05Group\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t",\n\x06Status\x12\x0f\n\x07\x62\x61ttery\x18\x01 \x01(\r\x12\x11\n\treadiness\x18\x02 \x01(\x08"8\n\x11PrecisionLocation\x12\x13\n\x0bgeopointsrc\x18\x01 \x01(\t\x12\x0e\n\x06\x61ltsrc\x18\x02 \x01(\t"\xf9\x01\n\x0e\x43lassification\x12\x13\n\x0b\x61\x66\x66iliation\x18\x01 \x01(\t\x12\x10\n\x08platform\x18\x02 \x01(\t\x12\x12\n\nsize_class\x18\x03 \x01(\t\x12\x11\n\ticao_type\x18\x04 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x10\n\x08\x64\x62_flags\x18\x06 \x01(\r\x12\x10\n\x08operator\x18\x07 \x01(\t\x12\x14\n\x0cregistration\x18\x08 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\t \x01(\t\x12\x0e\n\x06squawk\x18\n \x01(\t\x12\x11\n\temergency\x18\x0b \x01(\t\x12\x15\n\rconstellation\x18\x0c \x01(\t"\xed\x01\n\x14VesselClassification\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x11\n\tship_type\x18\x02 \x01(\r\x12\x12\n\nnav_status\x18\x03 \x01(\r\x12\x11\n\thazardous\x18\x04 \x01(\x08\x12\x14\n\x0cstation_type\x18\x05 \x01(\t\x12\x10\n\x08\x66lag_mid\x18\x06 \x01(\r\x12\x0b\n\x03imo\x18\x07 \x01(\r\x12\x10\n\x08\x63\x61llsign\x18\x08 \x01(\t\x12\x13\n\x0b\x64\x65stination\x18\t \x01(\t\x12\x0f\n\x07\x64raught\x18\n \x01(\x02\x12\x0e\n\x06length\x18\x0b \x01(\x02\x12\x0c\n\x04\x62\x65\x61m\x18\x0c \x01(\x02"\\\n\x0eInternetOutage\x12\x14\n\x0c\x63ountry_code\x18\x01 \x01(\t\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x10\n\x08severity\x18\x03 \x01(\x01\x12\x12\n\ndatasource\x18\x04 \x01(\tb\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tak_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "tak_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  DESCRIPTOR._loaded_options = None
-  _globals['_TAKMESSAGE']._serialized_start=24
-  _globals['_TAKMESSAGE']._serialized_end=75
-  _globals['_COTEVENT']._serialized_start=78
-  _globals['_COTEVENT']._serialized_end=283
-  _globals['_DETAIL']._serialized_start=286
-  _globals['_DETAIL']._serialized_end=781
-  _globals['_CONTACT']._serialized_start=783
-  _globals['_CONTACT']._serialized_end=828
-  _globals['_TRACK']._serialized_start=830
-  _globals['_TRACK']._serialized_end=899
-  _globals['_GROUP']._serialized_start=901
-  _globals['_GROUP']._serialized_end=936
-  _globals['_STATUS']._serialized_start=938
-  _globals['_STATUS']._serialized_end=982
-  _globals['_PRECISIONLOCATION']._serialized_start=984
-  _globals['_PRECISIONLOCATION']._serialized_end=1040
-  _globals['_CLASSIFICATION']._serialized_start=1043
-  _globals['_CLASSIFICATION']._serialized_end=1292
-  _globals['_VESSELCLASSIFICATION']._serialized_start=1295
-  _globals['_VESSELCLASSIFICATION']._serialized_end=1532
-  _globals['_INTERNETOUTAGE']._serialized_start=1534
-  _globals['_INTERNETOUTAGE']._serialized_end=1626
+    DESCRIPTOR._loaded_options = None
+    _globals["_TAKMESSAGE"]._serialized_start = 24
+    _globals["_TAKMESSAGE"]._serialized_end = 75
+    _globals["_COTEVENT"]._serialized_start = 78
+    _globals["_COTEVENT"]._serialized_end = 283
+    _globals["_DETAIL"]._serialized_start = 286
+    _globals["_DETAIL"]._serialized_end = 781
+    _globals["_CONTACT"]._serialized_start = 783
+    _globals["_CONTACT"]._serialized_end = 828
+    _globals["_TRACK"]._serialized_start = 830
+    _globals["_TRACK"]._serialized_end = 899
+    _globals["_GROUP"]._serialized_start = 901
+    _globals["_GROUP"]._serialized_end = 936
+    _globals["_STATUS"]._serialized_start = 938
+    _globals["_STATUS"]._serialized_end = 982
+    _globals["_PRECISIONLOCATION"]._serialized_start = 984
+    _globals["_PRECISIONLOCATION"]._serialized_end = 1040
+    _globals["_CLASSIFICATION"]._serialized_start = 1043
+    _globals["_CLASSIFICATION"]._serialized_end = 1292
+    _globals["_VESSELCLASSIFICATION"]._serialized_start = 1295
+    _globals["_VESSELCLASSIFICATION"]._serialized_end = 1532
+    _globals["_INTERNETOUTAGE"]._serialized_start = 1534
+    _globals["_INTERNETOUTAGE"]._serialized_end = 1626
 # @@protoc_insertion_point(module_scope)

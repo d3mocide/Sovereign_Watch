@@ -5,6 +5,7 @@ from proto.tak_pb2 import TakMessage
 
 logger = logging.getLogger("SovereignWatch.TAK")
 
+
 def to_epoch(val):
     if val is None:
         return 0
@@ -13,11 +14,12 @@ def to_epoch(val):
     if isinstance(val, str):
         try:
             # Simple ISO check (Python 3.11+)
-            dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
             return int(dt.timestamp() * 1000)
         except ValueError:
             pass
     return 0
+
 
 def to_float(val, default=0.0):
     if val is None:
@@ -26,6 +28,7 @@ def to_float(val, default=0.0):
         return float(val)
     except (ValueError, TypeError):
         return default
+
 
 def transform_to_proto(data: dict) -> bytes:
     """
@@ -85,7 +88,9 @@ def transform_to_proto(data: dict) -> bytes:
         cls = cot.detail.classification
         cls.affiliation = str(src_class.get("affiliation", ""))
         cls.platform = str(src_class.get("platform", ""))
-        cls.size_class = str(src_class.get("size", "")) # size in JSON, size_class in Proto
+        cls.size_class = str(
+            src_class.get("size", "")
+        )  # size in JSON, size_class in Proto
         cls.icao_type = str(src_class.get("icaoType", ""))
         cls.category = str(src_class.get("category", ""))
         cls.db_flags = int(src_class.get("dbFlags") or 0)
@@ -117,6 +122,6 @@ def transform_to_proto(data: dict) -> bytes:
     payload = tak_msg.SerializeToString()
 
     # Magic Bytes (0xbf 0x01 0xbf)
-    magic = bytes([0xbf, 0x01, 0xbf])
+    magic = bytes([0xBF, 0x01, 0xBF])
 
     return magic + payload

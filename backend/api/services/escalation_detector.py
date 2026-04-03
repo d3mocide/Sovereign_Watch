@@ -3,6 +3,7 @@ Escalation Detector: Identifies prototypical escalation patterns and anomalies.
 Cross-references GDELT event sequences with TAK behavioral anomalies.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -80,7 +81,9 @@ class EscalationDetector:
 
         return best_match, best_confidence
 
-    def _match_pattern(self, event_codes: List[str], pattern: List[str]) -> Tuple[float, List[int]]:
+    def _match_pattern(
+        self, event_codes: List[str], pattern: List[str]
+    ) -> Tuple[float, List[int]]:
         """
         Match event sequence against pattern (allowing gaps).
 
@@ -144,7 +147,9 @@ class EscalationDetector:
                 filter_res = h3.get_resolution(h3_cell)
                 filter_parent = h3_cell
             except Exception as exc:
-                logger.warning("Invalid h3_cell '%s' for concentration filter: %s", h3_cell, exc)
+                logger.warning(
+                    "Invalid h3_cell '%s' for concentration filter: %s", h3_cell, exc
+                )
 
         # Group by H3 cell (at anomaly resolution), optionally filtered to h3_cell region
         cell_clusters: Dict[str, List[str]] = {}
@@ -234,8 +239,17 @@ class EscalationDetector:
             recent = trace[-1]
             prev = trace[-2]
 
-            prev_course = prev.get("adverbial_context", {}).get("course", 0.0)
-            curr_course = recent.get("adverbial_context", {}).get("course", 0.0)
+            def _get_ctx(c: Dict) -> Dict:
+                raw = c.get("adverbial_context") or {}
+                if isinstance(raw, str):
+                    try:
+                        return json.loads(raw)
+                    except (json.JSONDecodeError, TypeError):
+                        return {}
+                return raw
+
+            prev_course = _get_ctx(prev).get("course", 0.0)
+            curr_course = _get_ctx(recent).get("course", 0.0)
 
             delta = abs(curr_course - prev_course)
             if delta > 180:
@@ -253,17 +267,29 @@ class EscalationDetector:
 
         return anomalies
 
-    def detect_emergency_transponders(self, tak_clauses: List[Dict]) -> List[AnomalyMetric]:
+    def detect_emergency_transponders(
+        self, tak_clauses: List[Dict]
+    ) -> List[AnomalyMetric]:
         """Detect aviation emergency transponder codes (7700, 7600, 7500)."""
         anomalies = []
 
         for clause in tak_clauses:
             # Prefer squawk from adverbial_context (current schema), fallback to detail.classification
-            adverbial_context = clause.get("adverbial_context", {}) or {}
+            raw_ctx = clause.get("adverbial_context") or {}
+            if isinstance(raw_ctx, str):
+                try:
+                    adverbial_context = json.loads(raw_ctx)
+                except (json.JSONDecodeError, TypeError):
+                    adverbial_context = {}
+            else:
+                adverbial_context = raw_ctx
+
             squawk = adverbial_context.get("squawk")
 
             if not squawk:
-                classification = clause.get("detail", {}).get("classification", {}) or {}
+                classification = (
+                    clause.get("detail", {}).get("classification", {}) or {}
+                )
                 squawk = classification.get("squawk", "")
             if squawk in self.EMERGENCY_TRANSPONDER_CODES:
                 anomalies.append(
@@ -308,9 +334,7 @@ class EscalationDetector:
             description=f"Internet outage in {country} ({asn_name}): severity={severity:.2f}",
         )
 
-    def detect_space_weather_anomaly(
-        self, kp_index: Optional[float]
-    ) -> AnomalyMetric:
+    def detect_space_weather_anomaly(self, kp_index: Optional[float]) -> AnomalyMetric:
         """
         Detect space weather events that could explain GPS/comms anomalies.
 
@@ -399,6 +423,101 @@ class EscalationDetector:
 
         return anomalies
 
+    def detect_rendezvous(
+        self,
+        tak_clauses: List[Dict],
+        window_minutes: int = 30,
+    ) -> List[AnomalyMetric]:
+        """
+        Detect multi-entity rendezvous: two or more distinct UIDs converging
+        to the same H3-9 cell within ``window_minutes``.
+
+        A rendezvous is significant when multiple entities (from potentially
+        different sources) arrive at the same micro-cell in a short window —
+        a pattern associated with coordinated activity, handoffs, or assembly.
+
+        Args:
+            tak_clauses: List of TAK medial clauses (dict with 'uid',
+                         'locative_lat', 'locative_lon', 'time').
+            window_minutes: Look-back window for co-location (default 30 min).
+
+        Returns:
+            List of AnomalyMetrics, one per rendezvous cell detected.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        if not tak_clauses or len(tak_clauses) < 2:
+            return []
+
+        # Parse times and group latest clause per UID into H3-9 cells.
+        # We keep only the most-recent position for each UID so that a single
+        # entity loitering in a cell doesn't inflate the entity count.
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+
+        uid_latest: Dict[str, Dict] = {}
+        for clause in tak_clauses:
+            uid = clause.get("uid")
+            if not uid:
+                continue
+
+            raw_time = clause.get("time")
+            try:
+                if isinstance(raw_time, datetime):
+                    clause_time = (
+                        raw_time
+                        if raw_time.tzinfo
+                        else raw_time.replace(tzinfo=timezone.utc)
+                    )
+                else:
+                    ts = str(raw_time or "").replace("Z", "+00:00")
+                    clause_time = datetime.fromisoformat(ts)
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+            if clause_time < cutoff:
+                continue
+
+            # Keep the most recent observation per UID
+            prev = uid_latest.get(uid)
+            if prev is None or clause_time > prev["_time"]:
+                uid_latest[uid] = {**clause, "_time": clause_time}
+
+        # Group UIDs by H3-9 cell of their latest position
+        cell_uids: Dict[str, List[str]] = {}
+        for uid, clause in uid_latest.items():
+            lat = clause.get("locative_lat")
+            lon = clause.get("locative_lon")
+            if lat is None or lon is None:
+                continue
+            try:
+                cell = h3.latlng_to_cell(lat, lon, self.H3_ANOMALY_RES)
+            except Exception as exc:
+                logger.warning("H3 cell error for uid=%s: %s", uid, exc)
+                continue
+            cell_uids.setdefault(cell, []).append(uid)
+
+        anomalies: List[AnomalyMetric] = []
+        for cell, uids in cell_uids.items():
+            unique_uids = list(set(uids))
+            if len(unique_uids) < 2:
+                continue
+
+            # Score scales with the number of entities, saturating at 10+
+            score = min(len(unique_uids) / 10.0, 1.0)
+            anomalies.append(
+                AnomalyMetric(
+                    metric_type="rendezvous",
+                    score=score,
+                    affected_uids=unique_uids,
+                    description=(
+                        f"{len(unique_uids)} entities rendezvoused in H3 cell {cell} "
+                        f"within {window_minutes} min"
+                    ),
+                )
+            )
+
+        return anomalies
+
     def compute_risk_score(
         self,
         pattern_confidence: float,
@@ -438,7 +557,9 @@ class EscalationDetector:
         if context_anomalies:
             active_context = [a for a in context_anomalies if a.score > 0.0]
             if active_context:
-                context_score = sum(a.score for a in active_context) / len(active_context)
+                context_score = sum(a.score for a in active_context) / len(
+                    active_context
+                )
                 # Blend in contextual score so context-only risk is non-zero when warranted.
                 # This keeps context supportive (not dominant) while avoiding hard zeroes.
                 context_weight = 0.2

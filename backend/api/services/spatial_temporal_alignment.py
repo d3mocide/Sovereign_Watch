@@ -3,10 +3,11 @@ Spatial-Temporal Alignment Engine: Maps and aligns clausal chains across spatial
 Converts GDELT regional events to H3 parent cells and TAK tracks to child cells for fusion.
 """
 
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import h3
 
@@ -26,6 +27,7 @@ class AlignedClause:
     narrative: Optional[str]
     h3_cell_micro: Optional[str]  # H3-9 for TAK
     h3_cell_macro: Optional[str]  # H3-7 for GDELT/regional
+    adverbial_context: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -132,6 +134,16 @@ class SpatialTemporalAlignment:
             if h3_macro != h3_region:
                 continue  # Skip traces outside region
 
+            raw_ctx = clause_dict.get("adverbial_context")
+            adverbial_context: Dict[str, Any] = {}
+            if isinstance(raw_ctx, dict):
+                adverbial_context = raw_ctx
+            elif isinstance(raw_ctx, str):
+                try:
+                    adverbial_context = json.loads(raw_ctx)
+                except Exception:
+                    adverbial_context = {}
+
             clause = AlignedClause(
                 time=clause_time,
                 uid=clause_dict.get("uid", ""),
@@ -142,6 +154,7 @@ class SpatialTemporalAlignment:
                 narrative=clause_dict.get("narrative_summary"),
                 h3_cell_micro=h3_micro,
                 h3_cell_macro=h3_macro,
+                adverbial_context=adverbial_context,
             )
             tak_clauses.append(clause)
 
@@ -209,7 +222,9 @@ class SpatialTemporalAlignment:
 
         # Simple scoring: count temporal overlaps
         overlap_count = 0
-        max_time_delta = timedelta(hours=2)  # Events within 2 hours count as overlapping
+        max_time_delta = timedelta(
+            hours=2
+        )  # Events within 2 hours count as overlapping
 
         for gdelt in gdelt_clauses:
             for tak in tak_clauses:
