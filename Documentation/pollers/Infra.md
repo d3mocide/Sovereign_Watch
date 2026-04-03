@@ -19,6 +19,25 @@ Unlike the aviation and maritime pollers, the Infra Poller does **not** publish 
 
 ## Data Sources
 
+### NWS Atmospheric Alerts
+
+| Feed | URL | Auth Required |
+| :--- | :--- | :--- |
+| **NWS Active Alerts** | `api.weather.gov/alerts/active` | No |
+
+The NWS poller fetches all **active weather alerts** from the National Weather Service every 10 minutes. Only `status=actual` alerts are retrieved (up to 500 per poll).
+
+The full GeoJSON alert collection is written to Redis with a 11-minute TTL. A lightweight summary is also written for fast HUD queries:
+
+| Key | Contents | TTL |
+| :--- | :--- | :--- |
+| `nws:alerts:active` | GeoJSON FeatureCollection of all active NWS alerts | 11 minutes |
+| `nws:alerts:summary` | `{count, severe_count, extreme_count, fetched_at}` | 11 minutes |
+
+The Sea and Air domain agents check `nws:alerts:summary` to incorporate weather severity into their risk assessments.
+
+---
+
 ### Internet Outages — IODA
 
 | Feed | URL | Auth Required |
@@ -45,11 +64,12 @@ Sovereign Watch uses IODA's **overall composite score** for each country. Scores
 
 ## Polling Rates
 
-| Data Type | Interval | Redis Key |
-| :--- | :--- | :--- |
-| Internet outages (IODA) | Every **30 minutes** | `infra:outages` |
-| Submarine cable routes | Every **24 hours** | `infra:cables` |
-| Landing station locations | Every **24 hours** | `infra:stations` |
+| Data Type | Interval | Env Variable | Redis Key |
+| :--- | :--- | :--- | :--- |
+| NWS weather alerts | Every **10 minutes** | `POLL_INTERVAL_NWS_MINUTES` | `nws:alerts:active` |
+| Internet outages (IODA) | Every **30 minutes** | — | `infra:outages` |
+| Submarine cable routes | Every **7 days** | — | `infra:cables` |
+| Landing station locations | Every **7 days** | — | `infra:stations` |
 
 The poller runs a simple `while True` loop sleeping 60 seconds between checks; actual fetches only fire when their respective interval has elapsed since the last successful fetch.
 
@@ -75,22 +95,46 @@ IODA provides country codes but not coordinates. The poller uses **Nominatim** (
 
 Geocoded coordinates are **in-memory cached** for the lifetime of the container to minimize Nominatim requests.
 
+### IODA ↔ Submarine Cable Landing Correlation
+
+After building the outage feature list, the poller loads the current `infra:stations` GeoJSON from Redis and computes the **haversine distance** from each outage country centroid to every known cable landing point. Any landing points within **300 km** are attached to the outage feature:
+
+```json
+{
+  "properties": {
+    "country_code": "EG",
+    "severity": 61.2,
+    "nearby_cable_landings": ["Alexandria (Egypt)", "Port Said (Egypt)", "Suez (Egypt)"]
+  }
+}
+```
+
+This allows the Sea domain agent (and human analysts) to immediately correlate internet disruptions with potential submarine cable events. Up to 10 nearby landing point names are included per outage.
+
 ---
 
 ## Data Flow
 
 ```
+NWS Alerts API (every 10 min)
+    ↓  (HTTPS REST GeoJSON)
+_fetch_nws_alerts()
+    ↓
+Redis: nws:alerts:active    →  domain agents / future HUD widgets
+Redis: nws:alerts:summary
+
 IODA API (every 30 min)
     ↓  (HTTPS REST JSON)
-fetch_internet_outages()
+_fetch_internet_outages()
     ↓  (filter score < 1000; log-normalize severity)
 geocode_region()  →  Nominatim (with in-memory cache)
-    ↓  (GeoJSON FeatureCollection)
+    ↓  correlate with infra:stations (haversine ≤300 km)
+    ↓  (GeoJSON FeatureCollection + nearby_cable_landings[])
 Redis: infra:outages  →  GET /api/infra/outages
 
-Submarine Cable Map API (every 24 h)
+Submarine Cable Map API (every 7 days)
     ↓  (HTTPS REST GeoJSON)
-fetch_cables_and_stations()
+_fetch_cables_and_stations()
     ↓
 Redis: infra:cables    →  GET /api/infra/cables
 Redis: infra:stations  →  GET /api/infra/stations
@@ -103,13 +147,11 @@ Redis: infra:stations  →  GET /api/infra/stations
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `REDIS_URL` | `redis://sovereign-redis:6379/0` | Full Redis connection URL |
+| `POLL_INTERVAL_NWS_MINUTES` | `10` | NWS alert fetch interval in minutes |
+| `POLL_INTERVAL_NDBC_MINUTES` | `15` | NDBC buoy observation fetch interval |
+| `POLL_INTERVAL_PEERINGDB_HOURS` | `24` | PeeringDB IXP/facility sync interval |
 
-The polling intervals are hardcoded constants in `main.py`:
-
-| Constant | Value |
-| :--- | :--- |
-| `POLL_INTERVAL_IODA_MINUTES` | `30` |
-| `POLL_INTERVAL_CABLES_HOURS` | `24` |
+The IODA and cable intervals are fixed constants in `main.py` (`POLL_INTERVAL_IODA_MINUTES = 30`, `POLL_INTERVAL_CABLES_DAYS = 7`).
 
 ---
 

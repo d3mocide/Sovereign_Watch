@@ -73,6 +73,39 @@ The AI Analyst supports multiple personas to focus on different tactical aspects
 
 ---
 
+## Domain Agent Endpoints
+
+Three autonomous domain agents provide multi-INT assessments without requiring a specific entity UID. They operate over an H3 region and a lookback window.
+
+| Endpoint | Persona | Key Data Sources |
+| :--- | :--- | :--- |
+| `POST /api/ai_router/analyze/air` | Air Intelligence Officer | ADS-B tracks, squawk codes, NWS weather, Kp/GPS risk |
+| `POST /api/ai_router/analyze/sea` | MDA Specialist | AIS tracks, NDBC wave heights, IODA/cable correlation |
+| `POST /api/ai_router/analyze/orbital` | Space Weather Analyst | Kp index, NOAA R/S/G scales, SatNOGS signal loss |
+
+Each agent returns a structured `DomainAnalysisResponse` with `risk_score`, `indicators[]`, `narrative`, and a `context_snapshot` dict containing the raw environmental values used.
+
+See the [API Reference — AI Domain Agents](./API_Reference.md#ai-domain-agents) for full request/response schemas.
+
+---
+
+## Semantic Response Cache (RedisVL)
+
+LLM calls in the `SequenceEvaluationEngine` are fronted by a **semantic cache** powered by [RedisVL](https://github.com/RedisVentures/redisvl).
+
+| Setting | Value |
+| :--- | :--- |
+| Similarity threshold | **0.94** cosine similarity |
+| TTL | **120 seconds** |
+| Redis key prefix | `llm_sem_cache` |
+| Embedding model | `sentence-transformers/all-MiniLM-L6-v2` |
+
+When a prompt is semantically equivalent (≥ 0.94 similarity) to a recently cached prompt, the stored response is returned immediately and the LLM call is skipped. This reduces latency on repeated or near-identical regional evaluations (e.g., the heatmap endpoint evaluating adjacent H3 cells with similar context).
+
+The cache degrades gracefully — if `redisvl` is unavailable or the index cannot be created, all operations become no-ops and the LLM pipeline continues normally.
+
+---
+
 ## Adding or Updating a Model
 
 If you want to upgrade a model (e.g., switching from Gemini 1.5 to 2.5):
