@@ -255,7 +255,6 @@ export function UserManagementPanel() {
                 {/* Role selector */}
                 <select
                   value={u.role}
-                  aria-label={"Role for user " + u.username}
                   disabled={u.id === currentUser?.id}
                   onChange={(e) => handleRoleChange(u.id, e.target.value as 'viewer' | 'operator' | 'admin')}
                   aria-label={`Role for user ${u.username}`}

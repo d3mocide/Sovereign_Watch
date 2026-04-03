@@ -113,10 +113,11 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
               {isOperator && (
                 <button
                   onClick={() => removeEntry(entry.icao24)}
-                  className="p-1.5 text-alert-red/40 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-colors outline-none focus-visible:ring-1 focus-visible:ring-alert-red"
+                  className="p-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 text-alert-red/40 hover:text-alert-red hover:bg-alert-red/10 rounded-r transition-all outline-none focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-alert-red"
                   title="Remove from watchlist"
+                  aria-label={`Remove ${entry.icao24} from watchlist`}
                 >
-                  <Trash2 size={11} />
+                  <Trash2 size={11} aria-hidden="true" />
                 </button>
               )}
             </div>
