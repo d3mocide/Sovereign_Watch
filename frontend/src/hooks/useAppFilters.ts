@@ -2,6 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseMissionHash, updateMissionHash } from "./useMissionHash";
 import type { IntelEvent, MapFilters, RFMode } from "../types";
 
+type ViewMode = "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD" | "INTEL";
+
+const H3_RISK_MODE_PREF_KEY_PREFIX = "mapFilters:showH3Risk:";
+
+function defaultH3RiskForMode(viewMode: ViewMode): boolean {
+  return viewMode === "INTEL";
+}
+
+function readH3RiskModePref(viewMode: ViewMode): boolean | null {
+  const raw = localStorage.getItem(`${H3_RISK_MODE_PREF_KEY_PREFIX}${viewMode}`);
+  if (raw === null) return null;
+  return raw === "true";
+}
+
 const DEFAULT_FILTERS: MapFilters = {
   showAir: true,
   showSea: true,
@@ -46,7 +60,9 @@ const DEFAULT_FILTERS: MapFilters = {
   cableOpacity: 0.6,
   showConstellation_Starlink: false,
   showH3Coverage: false,
+  showH3Risk: false,
   showAurora: false,
+  showNWSAlerts: false,
   showJamming: true,
   showGdelt: false,
   showGdeltLabels: false,
@@ -66,7 +82,7 @@ const DEFAULT_ORBITAL_SAT_FILTERS = {
   showConstellation_Starlink: false,
 };
 
-function initFilters(): MapFilters {
+function initFilters(viewMode: ViewMode): MapFilters {
   const hashState = parseMissionHash();
   if (hashState.activeLayers.length > 0) {
     const hashFilters = { ...DEFAULT_FILTERS };
@@ -80,17 +96,22 @@ function initFilters(): MapFilters {
         (hashFilters as Record<string, unknown>)[layer] = true;
       }
     });
+    const modePref = readH3RiskModePref(viewMode);
+    hashFilters.showH3Risk = modePref ?? defaultH3RiskForMode(viewMode);
     return hashFilters;
   }
   const saved = localStorage.getItem("mapFilters");
   if (saved) {
     try {
-      return { ...DEFAULT_FILTERS, ...JSON.parse(saved) };
+      const merged = { ...DEFAULT_FILTERS, ...JSON.parse(saved) };
+      const modePref = readH3RiskModePref(viewMode);
+      merged.showH3Risk = modePref ?? defaultH3RiskForMode(viewMode);
+      return merged;
     } catch {
       // fall through to default
     }
   }
-  return DEFAULT_FILTERS;
+  return { ...DEFAULT_FILTERS, showH3Risk: defaultH3RiskForMode(viewMode) };
 }
 
 function initOrbitalSatFilters(): typeof DEFAULT_ORBITAL_SAT_FILTERS {
@@ -107,8 +128,9 @@ function initOrbitalSatFilters(): typeof DEFAULT_ORBITAL_SAT_FILTERS {
 
 export function useAppFilters(
   addEvent: (e: Omit<IntelEvent, "id" | "time">) => void,
+  viewMode: ViewMode,
 ) {
-  const [filters, setFilters] = useState<MapFilters>(initFilters);
+  const [filters, setFilters] = useState<MapFilters>(() => initFilters(viewMode));
   const [orbitalSatFilters, setOrbitalSatFilters] =
     useState(initOrbitalSatFilters);
 
@@ -137,11 +159,29 @@ export function useAppFilters(
     updateMissionHash(undefined, filters);
   }, [filters]);
 
+  // Apply mode-specific Risk Grid state when switching views.
+  useEffect(() => {
+    const modePref = readH3RiskModePref(viewMode);
+    const nextShowH3Risk = modePref ?? defaultH3RiskForMode(viewMode);
+    setFilters((prev) => {
+      if (prev.showH3Risk === nextShowH3Risk) return prev;
+      const next = { ...prev, showH3Risk: nextShowH3Risk };
+      localStorage.setItem("mapFilters", JSON.stringify(next));
+      return next;
+    });
+  }, [viewMode]);
+
   const handleFilterChange = useCallback(
     (key: string, value: boolean) => {
       setFilters((prev: MapFilters) => {
         const next = { ...prev, [key]: value };
         localStorage.setItem("mapFilters", JSON.stringify(next));
+        if (key === "showH3Risk") {
+          localStorage.setItem(
+            `${H3_RISK_MODE_PREF_KEY_PREFIX}${viewMode}`,
+            String(value),
+          );
+        }
 
         if (prev[key] !== value) {
           if (key === "showAir") {
@@ -174,7 +214,7 @@ export function useAppFilters(
         return next;
       });
     },
-    [addEvent],
+    [addEvent, viewMode],
   );
 
   const handleOrbitalFilterChange = useCallback(

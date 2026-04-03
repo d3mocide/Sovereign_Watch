@@ -1,25 +1,61 @@
-# Release - v0.62.0 - Tactical Intelligence Hardening
+# Release - v0.63.0 - Multi-INT Risk Fusion
 
 ## Summary
-The **v0.62.0** update, codenamed **"Tactical Intelligence Hardening,"** addresses critical reliability issues in the AI Analysis HUD and unifies the platform's persona architecture. This release eliminates the long-standing "wall of text" regressions and ensures that Strategic Intelligence Reports (SITREPs) maintain global operational context across all data sources.
+The **v0.63.0** release introduces three major capabilities for higher-confidence regional assessment: space-weather-aware suppression of false signal-loss alerts, persona-based autonomous domain analysis endpoints, and a new H3 composite risk heat-map pipeline. Together, these changes improve operational trust in alerting while expanding structured multi-INT risk context at both API and map layers.
 
 ## Key Features
-- **Unified AI Persona Framework**: Centralized all 7 operational modes (Tactical, OSINT, SAR, SITREP, GDELT, and HOLDING) into a single, disciplined system ensuring identical formatting across the entire grid.
-- **Strategic Intelligence Routing**: Forced SITREPs to use the "Strategic Director" persona (`### ACTIVE ZONES`, etc.), preventing OSINT headers from diluting high-level intelligence.
-- **AI HUD Rendering V2**: Implemented an aggressive 'Slash-and-Burn' regex pre-processor that "heals" malformed AI output in real-time, restoring headers and bullets to their intended layout.
-- **Defensive Persona Gating**: Personas now include mandatory negative constraints that forbid non-compliant markdown, ensuring the HUD HUD layout remains rock-solid.
+- **Space Weather Alert Suppression**
+- `SpaceWeatherSource` now polls NOAA scales (`R/S/G`) every 15 minutes.
+- Sets Redis key `space_weather:suppress_signal_loss` with a 70-minute TTL when `R >= 3` or `G >= 3`.
+- `EscalationDetector` now evaluates suppression via `should_suppress_signal_loss()`.
+- AI Router skips SatNOGS signal-loss escalation when suppression is active, logs the reason, and emits suppression context.
+- New endpoint: `GET /api/space-weather/alerts` (current scales + suppression state).
 
-## Technical Details
-- **Frontend Regex Stabilization**: Fixed a critical character-range error (`[*-•]`) that caused text fragmentation.
-- **Bold-Tag Healing**: Automatic re-joining of bold identifiers split by the LLM stream.
-- **Bullet-First Architecture**: Standardized all AI reporting on dash-bullets (`- `) for deterministic parsing.
-- **SITREP flag routing**: Full-stack support for the `isSitrep` flag from the UI down to the escalation engine.
+- **Domain Agent Endpoints (Backend API, Persona-Driven, H3 Regional Scope)**
+- `POST /analyze/air` (Air Intelligence Officer persona): fuses ADS-B tracks, emergency squawk codes (`7700/7600/7500`), NWS alerts, and Kp-index GPS degradation context.
+- `POST /analyze/sea` (MDA Specialist persona): fuses AIS tracks, NDBC wave-height conditions, and IODA outage/submarine cable landing correlation.
+- `POST /analyze/orbital` (Space Weather / Orbital Analyst persona): fuses Kp-index, NOAA scales, SatNOGS signal-loss events, and suppression state.
+- Shared response contract: `DomainAnalysisResponse` with `narrative`, `risk_score`, `indicators[]`, and `context_snapshot`.
+
+Current UI note: the AI Analyst panel still uses `POST /api/analyze/{uid}`; these domain endpoints are currently available for direct API use and planned UI integration.
+
+- **H3 Risk Heat-Map**
+- New endpoint: `GET /api/h3/risk` computes composite risk for active H3 cells.
+- Formula: `C = 0.6 * Density_norm + 0.4 * Sentiment_norm`.
+- Density is normalized entity count per cell.
+- Sentiment is inverted GDELT Goldstein signal (more negative -> higher risk).
+- Supports resolutions `4`, `6`, and `9`.
+- Redis cache TTL: 30 seconds.
+- Persists snapshots to TimescaleDB `h3_risk_scores` hypertable.
+- Frontend renders hex cells via `buildH3RiskLayer` with green -> yellow -> red gradient by `risk_score`.
+
+## Additional Enhancements
+- **NWS Alert Polling**: Infrastructure poller ingests active NWS weather alerts every 10 minutes into:
+- `nws:alerts:active` (full GeoJSON)
+- `nws:alerts:summary` (lightweight severity context)
+- **Tactical NWS Alert Overlay**: Added Environmental toggle-controlled NWS alert polygons to Tactical map with severity styling, hover tooltip, and click-through right-sidebar weather details (`nws_alert`).
+- **NWS Hover/Selection Reliability**: Improved 2D tactical picking by adjusting layer order above infra fills and normalizing feature classification into dedicated weather UI state.
+- **Orbital Scope Decision**: NWS weather overlay is intentionally Tactical-only to keep orbital context focused on space-domain overlays.
+- **IODA-Cable Correlation**: Outage features now include `nearby_cable_landings` when cable landings are within a 300 km radius.
+- **Dashboard Tactical Risk UX**: Tactical-first CRIT RISK rendering refined to larger, hex-only, critical-filtered display for clearer AO visibility.
+
+## Technical Notes
+- Suppression prevents false-positive satellite signal-loss alerts during active severe radio blackout / geomagnetic conditions.
+- Air domain logic detects emergency squawks and sustained holding behavior (>= 5 observations per UID).
+- Sea domain logic detects dark-vessel and heavy-sea conditions (>= 4.0m waves), plus infra correlation indicators.
+- Orbital domain logic now explicitly surfaces geomagnetic severity and suppression-aware signal-loss indicators.
 
 ## Upgrade Instructions
-To apply these changes, pull the latest code and rebuild the core services:
+Apply the release with a standard pull and targeted rebuild:
+
 ```bash
-docker compose pull
-docker compose build frontend
-docker compose up -d --build sovereign-backend
+git pull
+docker compose up -d --build sovereign-backend sovereign-infra-poller
+docker compose up -d --build sovereign-frontend
 ```
-*Note: Ingestion pollers do not require a rebuild for this logic update.*
+
+If maritime ingestion or related poller logic changed in your branch, also rebuild affected pollers:
+
+```bash
+docker compose up -d --build sovereign-ais-poller sovereign-adsb-poller sovereign-space-pulse sovereign-rf-pulse
+```

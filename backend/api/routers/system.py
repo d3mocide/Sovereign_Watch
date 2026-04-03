@@ -566,7 +566,7 @@ async def get_poller_health():
             last_success = None  # env-var-only source
 
         # Resolve last_error
-        last_error_ts = last_error_msg = None
+        last_error_ts = last_error_msg = last_error_code = None
         if error_key:
             err_raw = kv.get(error_key)
             if err_raw:
@@ -574,6 +574,7 @@ async def get_poller_health():
                     err = json.loads(err_raw)
                     last_error_ts = err.get("ts")
                     last_error_msg = err.get("msg")
+                    last_error_code = err.get("code")
                 except Exception:
                     pass
 
@@ -585,7 +586,7 @@ async def get_poller_health():
         if last_success is None and last_error_ts is None:
             status = "pending"
         elif last_error_ts and (last_success is None or last_error_ts > last_success):
-            status = "error"
+            status = "no_data" if last_error_code == "no_data_timeout" else "error"
         elif last_success is not None and stale_s is not None:
             status = "healthy" if (now - last_success) <= stale_s else "stale"
         else:

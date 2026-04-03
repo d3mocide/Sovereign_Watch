@@ -62,6 +62,12 @@ PEERINGDB_FAC_URL = "https://www.peeringdb.com/api/fac"
 POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
 POLL_INTERVAL_ISS_SECONDS = int(os.getenv("POLL_INTERVAL_ISS_SECONDS", "5"))
+POLL_INTERVAL_NWS_MINUTES = int(os.getenv("POLL_INTERVAL_NWS_MINUTES", "10"))
+
+NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
+NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
+# Maximum haversine distance (km) for IODA outage ↔ cable landing correlation
+IODA_CABLE_CORRELATION_KM = 300.0
 
 FCC_DOWNLOAD_CHUNK_BYTES = 1 * 1024 * 1024  # 1 MB
 FCC_CONNECT_TIMEOUT_S = 30
@@ -112,6 +118,15 @@ def ioda_severity(overall_score: float) -> float:
     """Normalise IODA overall score to 0-100 severity on a log scale."""
     log_score = math.log10(max(1, overall_score))
     return max(0.0, min(100.0, (log_score / 12.0) * 100))
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return great-circle distance in km between two (lat, lon) points."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +578,7 @@ class InfraPollerService:
             asyncio.create_task(self.fcc_loop()),
             asyncio.create_task(self.ndbc_loop()),
             asyncio.create_task(self.peeringdb_loop()),
+            asyncio.create_task(self.nws_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -776,6 +792,32 @@ class InfraPollerService:
             )
             if len(outages) >= 200:
                 break
+
+        # Correlate each outage with nearby submarine cable landing points
+        stations_raw = await self.redis.get("infra:stations")
+        if stations_raw:
+            try:
+                stations_geojson = json.loads(stations_raw)
+                landing_points = [
+                    {
+                        "name": f.get("properties", {}).get("name", ""),
+                        "lon": f["geometry"]["coordinates"][0],
+                        "lat": f["geometry"]["coordinates"][1],
+                    }
+                    for f in stations_geojson.get("features", [])
+                    if f.get("geometry", {}).get("type") == "Point"
+                    and len(f["geometry"]["coordinates"]) >= 2
+                ]
+                for feature in outages:
+                    o_lon, o_lat = feature["geometry"]["coordinates"]
+                    nearby = [
+                        lp["name"]
+                        for lp in landing_points
+                        if haversine_km(o_lat, o_lon, lp["lat"], lp["lon"]) <= IODA_CABLE_CORRELATION_KM
+                    ]
+                    feature["properties"]["nearby_cable_landings"] = nearby[:10]
+            except Exception as exc:
+                logger.warning("IODA/cable correlation failed: %s", exc)
 
         geojson = {"type": "FeatureCollection", "features": outages}
         await self.redis.set("infra:outages", json.dumps(geojson))
@@ -1040,6 +1082,68 @@ class InfraPollerService:
                 }
             ),
             ex=86400 * 2,
+        )
+
+
+    # -----------------------------------------------------------------------
+    # NWS Atmospheric Alerts loop — 10-minute interval
+    # -----------------------------------------------------------------------
+
+    async def nws_loop(self):
+        """Poll NWS active alerts every 10 minutes; write to ``nws:alerts:active``."""
+        interval_s = POLL_INTERVAL_NWS_MINUTES * 60
+        while self.running:
+            try:
+                await self._fetch_nws_alerts()
+            except Exception:
+                logger.exception("NWS alerts fetch error")
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_nws_alerts(self):
+        """
+        Fetch NWS active weather alerts (status=actual, limit=500).
+
+        Redis keys written:
+          nws:alerts:active   — GeoJSON FeatureCollection of active alerts (10-min TTL)
+          nws:alerts:summary  — {count, severe_count, extreme_count, fetched_at} (10-min TTL)
+        """
+        logger.info("Fetching NWS active alerts...")
+        timeout = aiohttp.ClientTimeout(total=20.0)
+        headers = {
+            "User-Agent": NWS_USER_AGENT,
+            "Accept": "application/geo+json",
+        }
+        # /alerts/active already scopes to active alerts; weather.gov rejects
+        # unsupported query params like limit with HTTP 400.
+        params = {"status": "actual"}
+
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
+            async with client.get(NWS_ALERTS_URL, params=params) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+
+        features = data.get("features", [])
+        severe_count = sum(
+            1 for f in features
+            if f.get("properties", {}).get("severity") in ("Severe", "Extreme")
+        )
+        extreme_count = sum(
+            1 for f in features
+            if f.get("properties", {}).get("severity") == "Extreme"
+        )
+
+        ttl = POLL_INTERVAL_NWS_MINUTES * 60 + 60
+        await self.redis.set("nws:alerts:active", json.dumps(data), ex=ttl)
+        summary = {
+            "count": len(features),
+            "severe_count": severe_count,
+            "extreme_count": extreme_count,
+            "fetched_at": datetime.now(UTC).isoformat(),
+        }
+        await self.redis.set("nws:alerts:summary", json.dumps(summary), ex=ttl)
+        logger.info(
+            "NWS alerts stored in Redis: %d total, %d severe, %d extreme",
+            len(features), severe_count, extreme_count,
         )
 
 

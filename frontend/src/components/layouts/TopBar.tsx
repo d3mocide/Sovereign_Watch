@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+    AlertCircle,
     Globe,
     Radio,
     Satellite,
@@ -39,6 +40,8 @@ interface TopBarProps {
     onToggleHistoryTails?: () => void;
     showTerminator?: boolean;
     onToggleTerminator?: () => void;
+    showH3Risk?: boolean;
+    onToggleH3Risk?: () => void;
     isReplayMode?: boolean;
     onToggleReplay?: () => void;
     viewMode?: 'TACTICAL' | 'RADIO' | 'ORBITAL' | 'DASHBOARD' | 'INTEL';
@@ -65,6 +68,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     showVelocityVectors, onToggleVelocityVectors,
     showHistoryTails, onToggleHistoryTails,
     showTerminator, onToggleTerminator,
+    showH3Risk, onToggleH3Risk,
     isReplayMode, onToggleReplay,
     viewMode = 'TACTICAL', onViewChange,
     onAlertsClick, isAlertsOpen, alerts, onAlertsClose,
@@ -314,6 +318,19 @@ export const TopBar: React.FC<TopBarProps> = ({
                             title={`Terminator (Day/Night) Overlay: ${showTerminator ? 'ACTIVE' : 'STANDBY'}`}
                         >
                             <Moon size={15} aria-hidden="true" className={showTerminator ? 'drop-shadow-[0_0_5px_rgba(99,102,241,0.6)]' : ''} />
+                        </button>
+                    )}
+
+                    {/* Risk Grid Toggle */}
+                    {onToggleH3Risk && (
+                        <button
+                            onClick={onToggleH3Risk}
+                            aria-label="Toggle Risk Grid"
+                            aria-pressed={showH3Risk}
+                            className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 focus-visible:ring-1 focus-visible:ring-red-500 outline-none ${showH3Risk ? 'bg-red-500/20 text-red-300 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.35)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
+                            title={`Risk Grid: ${showH3Risk ? 'ACTIVE' : 'STANDBY'}`}
+                        >
+                            <AlertCircle size={15} aria-hidden="true" className={showH3Risk ? 'drop-shadow-[0_0_5px_rgba(239,68,68,0.6)]' : ''} />
                         </button>
                     )}
 

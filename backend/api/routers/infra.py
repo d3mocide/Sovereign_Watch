@@ -55,6 +55,43 @@ async def get_infra_outages():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/api/infra/nws-alerts")
+async def get_nws_alerts():
+    """Returns active NWS weather alerts GeoJSON from Redis."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        data = await db.redis_client.get("nws:alerts:active")
+        if data:
+            return json.loads(data)
+        return {"type": "FeatureCollection", "features": []}
+    except Exception as e:
+        logger.error(f"Failed to fetch NWS alerts: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/infra/nws-alerts/summary")
+async def get_nws_alerts_summary():
+    """Returns summarized active NWS alert counts from Redis."""
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        data = await db.redis_client.get("nws:alerts:summary")
+        if data:
+            return json.loads(data)
+        return {
+            "count": 0,
+            "severe_count": 0,
+            "extreme_count": 0,
+            "fetched_at": None,
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch NWS alerts summary: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/api/infra/towers")
 async def get_infra_towers(
     min_lat: float, min_lon: float, max_lat: float, max_lon: float, limit: int = 10000

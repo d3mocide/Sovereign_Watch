@@ -48,6 +48,18 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   altitude_km?: number;
   velocity_kms?: number;
   timestamp?: number | string;
+  // NWS alert additions
+  event?: string;
+  headline?: string;
+  urgency?: string;
+  certainty?: string;
+  areaDesc?: string;
+  sent?: string;
+  effective?: string;
+  onset?: string;
+  expires?: string;
+  instruction?: string;
+  description?: string;
 }
 
 export interface InfraDetail {

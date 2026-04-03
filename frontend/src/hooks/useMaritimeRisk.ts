@@ -34,8 +34,8 @@ export interface MaritimeRiskReport {
 /** Fetch maritime conditions assessment for a selected vessel.
  *
  * Behaviour:
- *  - Fetches immediately when mmsi/lat/lon are provided.
- *  - Auto-refreshes every 30 seconds while the vessel remains selected.
+ *  - Fetches once when a vessel MMSI is selected.
+ *  - Optional auto-refresh when `refreshMs` is provided.
  *  - Clears data when mmsi becomes null (vessel deselected).
  *  - Returns null while loading or when no vessel is selected.
  */
@@ -44,14 +44,23 @@ export function useMaritimeRisk(
   lat: number | null,
   lon: number | null,
   radiusNm: number = 100,
+  refreshMs: number | null = null,
 ) {
   const [report, setReport] = useState<MaritimeRiskReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const coordsRef = useRef<{ lat: number | null; lon: number | null }>({
+    lat,
+    lon,
+  });
 
   useEffect(() => {
-    if (!mmsi || lat === null || lon === null) {
+    coordsRef.current = { lat, lon };
+  }, [lat, lon]);
+
+  useEffect(() => {
+    if (!mmsi || coordsRef.current.lat === null || coordsRef.current.lon === null) {
       setReport(null);
       setError(null);
       return;
@@ -65,10 +74,13 @@ export function useMaritimeRisk(
       setIsLoading(true);
       setError(null);
       try {
+        const { lat: latestLat, lon: latestLon } = coordsRef.current;
+        if (latestLat === null || latestLon === null) return;
+
         const url =
           `/api/maritime/risk-assessment` +
           `?mmsi=${encodeURIComponent(mmsi)}` +
-          `&lat=${lat}&lon=${lon}&radius_nm=${radiusNm}`;
+          `&lat=${latestLat}&lon=${latestLon}&radius_nm=${radiusNm}`;
         const res = await fetch(url, { signal: abortRef.current.signal });
         if (!res.ok) throw new Error(`Risk fetch failed: ${res.status}`);
         const data = (await res.json()) as MaritimeRiskReport;
@@ -83,13 +95,14 @@ export function useMaritimeRisk(
     };
 
     fetchRisk();
-    const interval = setInterval(fetchRisk, 30_000);
+    const interval =
+      refreshMs && refreshMs > 0 ? setInterval(fetchRisk, refreshMs) : null;
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       abortRef.current?.abort();
     };
-  }, [mmsi, lat, lon, radiusNm]);
+  }, [mmsi, radiusNm, refreshMs]);
 
   return { report, isLoading, error };
 }

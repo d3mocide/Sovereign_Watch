@@ -83,6 +83,12 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   if (entity.type === "buoy") {
     return <InfraView key={entity.uid} {...baseProps} />;
   }
+  if (entity.type === "nws_alert") {
+    return <InfraView key={entity.uid} {...baseProps} />;
+  }
+  if (entity.type === "outage") {
+    return <InfraView key={entity.uid} {...baseProps} />;
+  }
   if (entity.type === "infra") {
     return <InfraView key={entity.uid} {...baseProps} />;
   }

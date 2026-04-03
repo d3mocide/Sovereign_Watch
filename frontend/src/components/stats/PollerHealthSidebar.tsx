@@ -11,6 +11,7 @@ const STATUS_COLORS: Record<PollerHealth['status'], string> = {
   stale: 'bg-alert-amber',
   error: 'bg-error',
   pending: 'bg-tertiary',
+  no_data: 'bg-alert-amber',
   no_credentials: 'bg-on-surface-variant',
   unknown: 'bg-on-surface-variant',
 };
@@ -64,7 +65,7 @@ export default function PollerHealthSidebar({ healthData }: Props) {
                         ))}
                   </div>
                   <span className="text-[7px] text-on-surface-variant tracking-tighter uppercase">
-                    {p.status === 'healthy' ? '100% UP' : p.status.toUpperCase()}
+                    {p.status === 'healthy' ? '100% UP' : p.status === 'no_data' ? 'NO DATA' : p.status.toUpperCase()}
                   </span>
                 </div>
               </div>

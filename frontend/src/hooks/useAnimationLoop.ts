@@ -8,6 +8,7 @@ import {
   processReplayFrame,
 } from "../engine/EntityFilterEngine";
 import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
+import { fetchH3Risk, H3RiskCellData } from "../api/h3Risk";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import {
@@ -62,6 +63,8 @@ interface UseAnimationLoopOptions {
   jammingData?: any;
   /** GDELT v2 geolocated news events GeoJSON (from /api/gdelt/events) */
   gdeltData?: any;
+  /** Active NWS alerts GeoJSON (from /api/infra/nws-alerts) */
+  nwsAlertsData?: FeatureCollection | null;
   /** Minimum tone threshold for GDELT; default -Infinity (all events) */
   gdeltToneThreshold?: number;
   /** NDBC Ocean Buoy latest observations GeoJSON (Phase 1 Geospatial) */
@@ -115,6 +118,8 @@ interface UseAnimationLoopOptions {
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
   /** Aviation holding pattern GeoJSON (from /api/holding-patterns/active) */
   holdingPatternData?: FeatureCollection | null;
+  /** H3 resolution tier (4/6/9) derived from map zoom; drives risk layer refetch */
+  h3RiskResolution?: number;
 }
 
 export function useAnimationLoop({
@@ -147,6 +152,7 @@ export function useAnimationLoop({
   auroraData,
   jammingData,
   gdeltData,
+  nwsAlertsData,
   gdeltToneThreshold,
   buoyData,
   ixpData,
@@ -175,6 +181,7 @@ export function useAnimationLoop({
   historySegmentsRef,
   satnogsStationsRef,
   holdingPatternData,
+  h3RiskResolution,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -230,6 +237,9 @@ export function useAnimationLoop({
 
   const gdeltDataRef = useRef(gdeltData);
   gdeltDataRef.current = gdeltData;
+
+  const nwsAlertsDataRef = useRef(nwsAlertsData);
+  nwsAlertsDataRef.current = nwsAlertsData;
 
   const gdeltToneThresholdRef = useRef(gdeltToneThreshold);
   gdeltToneThresholdRef.current = gdeltToneThreshold;
@@ -344,6 +354,29 @@ export function useAnimationLoop({
 
     return () => clearInterval(interval);
   }, [filters?.showH3Coverage]);
+
+  const [h3RiskCells, setH3RiskCells] = React.useState<H3RiskCellData[]>([]);
+  const h3RiskCellsRef = useRef(h3RiskCells);
+  h3RiskCellsRef.current = h3RiskCells;
+
+  useEffect(() => {
+    if (!filters?.showH3Risk) {
+      setH3RiskCells([]);
+      return;
+    }
+    const res = h3RiskResolution ?? 6;
+    let cancelled = false;
+    const load = async () => {
+      const cells = await fetchH3Risk(res);
+      if (!cancelled) setH3RiskCells(cells);
+    };
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [filters?.showH3Risk, h3RiskResolution]);
 
   useEffect(() => {
     const animate = () => {
@@ -576,6 +609,7 @@ export function useAnimationLoop({
         js8Stations: js8StationsArrayRef.current,
         rfSites: rfSitesRef?.current || [],
         h3Cells: h3CellsRef.current,
+        h3RiskCells: h3RiskCellsRef.current,
         cablesData: cablesDataRef.current ?? null,
         stationsData: stationsDataRef.current ?? null,
         outagesData: outagesDataRef.current ?? null,
@@ -600,6 +634,7 @@ export function useAnimationLoop({
         auroraData: auroraDataRef.current,
         jammingData: jammingDataRef.current,
         gdeltData: gdeltDataRef.current,
+        nwsAlertsData: nwsAlertsDataRef.current ?? null,
         gdeltToneThreshold: gdeltToneThresholdRef.current,
         buoyData: buoyDataRef.current ?? null,
         ixpData: ixpDataRef.current ?? null,

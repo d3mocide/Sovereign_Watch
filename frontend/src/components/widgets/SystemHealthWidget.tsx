@@ -14,6 +14,7 @@ type PollerStatus =
   | "healthy"
   | "stale"
   | "pending"
+  | "no_data"
   | "no_credentials"
   | "error"
   | "active"
@@ -62,6 +63,7 @@ function StatusIcon({ status }: { status: PollerStatus }) {
         />
       );
     case "stale":
+    case "no_data":
       return (
         <Clock
           size={12}
@@ -101,6 +103,8 @@ function statusLabel(status: PollerStatus): string {
       return "ERROR";
     case "no_credentials":
       return "NO KEY";
+    case "no_data":
+      return "NO DATA";
     case "pending":
       return "PENDING";
     default:
@@ -114,6 +118,7 @@ function statusColor(status: PollerStatus): string {
     case "active":
       return "text-hud-green drop-shadow-[0_0_2px_rgba(0,255,65,0.5)]";
     case "stale":
+    case "no_data":
     case "no_credentials":
       return "text-amber-500 drop-shadow-[0_0_2px_rgba(245,158,11,0.5)]";
     case "error":

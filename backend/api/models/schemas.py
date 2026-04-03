@@ -25,9 +25,20 @@ class MissionLocation(BaseModel):
 
 
 class WatchlistAddRequest(BaseModel):
-    icao24: str = Field(
-        ..., description="ICAO24 hex code (exactly 6 hex chars, e.g. 'a1b2c3')"
-    )
-    ttl_days: Optional[float] = Field(
-        None, description="TTL in days; omit or null for permanent"
-    )
+    icao24: str = Field(..., description="ICAO24 hex code (exactly 6 hex chars, e.g. 'a1b2c3')")
+    ttl_days: Optional[float] = Field(None, description="TTL in days; omit or null for permanent")
+
+
+class H3RiskCell(BaseModel):
+    cell: str
+    lat: float
+    lon: float
+    density: float
+    sentiment: float
+    risk_score: float
+
+
+class H3RiskResponse(BaseModel):
+    cells: list[H3RiskCell]
+    resolution: int
+    generated_at: str

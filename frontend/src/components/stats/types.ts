@@ -4,7 +4,7 @@ export interface PollerHealth {
   id: string;
   name: string;
   group: string;
-  status: 'healthy' | 'stale' | 'error' | 'pending' | 'no_credentials' | 'unknown' | 'active';
+  status: 'healthy' | 'stale' | 'error' | 'pending' | 'no_credentials' | 'unknown' | 'active' | 'no_data';
   last_success: number | null;
   last_error_ts: number | null;
   last_error_msg: string | null;
