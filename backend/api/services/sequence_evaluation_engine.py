@@ -1,14 +1,9 @@
-"""
-Sequence Evaluation Engine: Routes aligned clausal chains through LiteLLM for narrative analysis.
-Implements zero-shot prompting for topological narrative analysis and escalation detection.
-"""
-
 import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import httpx
+from services.ai_service import ai_service
 
 logger = logging.getLogger(__name__)
 
@@ -27,47 +22,14 @@ class RiskAssessment:
 
 
 class SequenceEvaluationEngine:
-    """Routes clausal chain sequences through LiteLLM for AI-driven analysis."""
+    """Routes clausal chain sequences through AIService for AI-driven analysis."""
 
-    SYSTEM_PROMPT = """You are a Sequence Evaluation Engine specializing in topological narrative analysis.
-Your task is to analyze geopolitical events (GDELT) and tactical telemetry (TAK) to identify escalation patterns and anomalies.
-
-ESCALATION PATTERNS to identify:
-- protests → police_deployment → violent_clashes
-- demonstrate → law_enforcement → arrests
-- strike → military_mobilization
-- armed_conflict → civilian_casualties → humanitarian_crisis
-
-ANOMALY INDICATORS in TAK data:
-- Sudden clustering of aircraft/vessels in a region (>5 entities in <2 km²)
-- Rapid directional changes and holding patterns
-- Emergency transponder activations
-- Military aircraft concentrations in civilian airspace
-
-OUTPUT REQUIREMENTS:
-You must return valid JSON with exactly these fields:
-{
-    "risk_score": <float 0.0-1.0>,
-    "narrative_summary": "<2-3 sentence human-readable synthesis>",
-    "anomalous_uids": ["uid1", "uid2", ...],
-    "escalation_indicators": ["indicator1", "indicator2", ...],
-    "confidence": <float 0.0-1.0>
-}
-
-Be concise and factual. Do not speculate beyond the data provided."""
-
-    def __init__(self, litellm_config: Dict[str, Any]):
+    def __init__(self, litellm_config: Optional[Dict[str, Any]] = None):
         """
-        Initialize with LiteLLM configuration.
-
-        Args:
-            litellm_config: Dict with keys: api_key, api_base, model_name
+        Initialize the engine.
+        Note: actual model configuration is now managed by AIService.
         """
-        self.litellm_config = litellm_config
-        self.api_key = litellm_config.get("api_key", "")
-        self.api_base = litellm_config.get("api_base", "http://localhost:11434")
-        self.model_name = litellm_config.get("model_name", "llama3")
-        self.timeout_s = 30.0
+        pass
 
     async def evaluate_escalation(
         self,
@@ -75,34 +37,43 @@ Be concise and factual. Do not speculate beyond the data provided."""
         gdelt_summary: str,
         tak_summary: str,
         anomalous_uids: List[str],
+        behavioral_signals: List[str] = None,
+        is_sitrep: bool = True,
     ) -> RiskAssessment:
         """
-        Evaluate escalation risk for a region using LiteLLM.
-
-        Args:
-            h3_region: H3-7 hexagonal region ID
-            gdelt_summary: Narrative summary of GDELT events in region
-            tak_summary: Narrative summary of TAK telemetry in region
-            anomalous_uids: Pre-identified anomalous entity UIDs
-
-        Returns:
-            RiskAssessment object with structured output
+        Evaluate escalation risk for a region using AIService.
         """
         # Build user prompt with context
         user_prompt = self._build_context_window(
-            h3_region, gdelt_summary, tak_summary, anomalous_uids
+            h3_region, gdelt_summary, tak_summary, anomalous_uids, behavioral_signals
         )
 
         try:
-            # Route through LiteLLM (local Ollama or cloud API)
-            response = await self._call_litellm(user_prompt)
+            # 1. Fetch official persona with markdown rules
+            persona = ai_service.get_persona(mode="osint", is_sitrep=is_sitrep)
+            
+            # 2. Inject the MUST-BE-JSON requirement for the engine
+            json_requirement = (
+                "\n\nFINAL OUTPUT REQUIREMENT: You MUST return valid JSON with these fields: "
+                '{"risk_score": <float>, "narrative_summary": "<use SITREP headers here>", '
+                '"anomalous_uids": [], "escalation_indicators": [], "confidence": <float>}. '
+                "Ensure narrative_summary is structured with the requested ### headers."
+            )
+            
+            system_instruction = f"{persona['sys']}\n{persona['inst']}{json_requirement}"
+
+            # 3. Route through unified AIService
+            response = await ai_service.generate_static(
+                system_prompt=system_instruction, 
+                user_prompt=user_prompt
+            )
+            
             risk_assessment = self._parse_response(response, h3_region)
             risk_assessment.raw_response = response
             return risk_assessment
 
         except Exception as e:
             logger.error(f"Error in sequence evaluation: {e}")
-            # Return low-confidence default assessment
             return RiskAssessment(
                 h3_region_id=h3_region,
                 risk_score=0.0,
@@ -118,8 +89,14 @@ Be concise and factual. Do not speculate beyond the data provided."""
         gdelt_summary: str,
         tak_summary: str,
         anomalous_uids: List[str],
+        behavioral_signals: List[str] = None,
     ) -> str:
         """Build the user prompt with scaled contextual data."""
+        # Add heuristic signals for increased ground-truth texture
+        signals_text = "None detected"
+        if behavioral_signals:
+            signals_text = "\n".join([f"- {s}" for s in behavioral_signals])
+
         prompt = f"""Analyze the following multi-INT data for regional risk:
 
 REGION: H3 Cell {h3_region}
@@ -130,44 +107,14 @@ GEOPOLITICAL CONTEXT (GDELT):
 TACTICAL TELEMETRY (TAK):
 {tak_summary if tak_summary else "No recent TAK activity in region"}
 
+HEURISTIC BEHAVIORAL SIGNALS (GROUND TRUTH):
+{signals_text}
+
 ANOMALOUS ENTITIES:
-{', '.join(anomalous_uids) if anomalous_uids else "None identified"}
+{", ".join(anomalous_uids) if anomalous_uids else "None identified"}
 
-Based on this data, identify escalation patterns, risk indicators, and provide a risk assessment."""
+Based on this data, synthesize a regional risk assessment. Connect the tactical ground-truth signals to the geopolitical context where relevant."""
         return prompt
-
-    async def _call_litellm(self, user_prompt: str) -> str:
-        """Call LiteLLM API (local Ollama or cloud)."""
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.3,  # Deterministic analysis
-            "max_tokens": 500,
-        }
-
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout_s) as client:
-                response = await client.post(
-                    f"{self.api_base}/v1/chat/completions",
-                    json=payload,
-                    headers=headers,
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.error(f"LiteLLM API error: {e}")
-            raise
 
     def _parse_response(self, response_text: str, h3_region: str) -> RiskAssessment:
         """Parse LLM response into RiskAssessment."""

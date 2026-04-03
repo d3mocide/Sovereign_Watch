@@ -5,11 +5,14 @@ Functions are ported from backend/ingestion/orbital_pulse/utils.py, with the
 addition of ecef_to_topocentric which converts observer + satellite ECEF
 vectors to observer-relative azimuth, elevation and slant-range.
 """
+
 import math
 import numpy as np
 
 
-def teme_to_ecef(r_teme: tuple[float, float, float], jd: float, fr: float) -> tuple[float, float, float]:
+def teme_to_ecef(
+    r_teme: tuple[float, float, float], jd: float, fr: float
+) -> tuple[float, float, float]:
     """
     Rotate a single TEME position vector (km) to ECEF using GMST.
 
@@ -38,7 +41,6 @@ def teme_to_ecef(r_teme: tuple[float, float, float], jd: float, fr: float) -> tu
     )
 
 
-
 def ecef_to_lla_vectorized(r_ecef: np.ndarray):
     """
     Convert an (N, 3) ECEF array (km) to (lat_deg, lon_deg, alt_km).
@@ -52,9 +54,9 @@ def ecef_to_lla_vectorized(r_ecef: np.ndarray):
     a = 6378.137
     e2 = 0.00669437999014
     b = a * math.sqrt(1 - e2)
-    ep2 = (a ** 2 - b ** 2) / b ** 2
+    ep2 = (a**2 - b**2) / b**2
 
-    p = np.sqrt(x ** 2 + y ** 2)
+    p = np.sqrt(x**2 + y**2)
     th = np.arctan2(a * z, b * p)
 
     lon = np.arctan2(y, x)
@@ -142,10 +144,10 @@ def ecef_to_topocentric(
     n = dx * (-sin_lat * cos_lon) + dy * (-sin_lat * sin_lon) + dz * cos_lat
     u = dx * (cos_lat * cos_lon) + dy * (cos_lat * sin_lon) + dz * sin_lat
 
-    elevation_rad = math.atan2(u, math.sqrt(e ** 2 + n ** 2))
-    azimuth_rad   = math.atan2(e, n)  # measured from North, clockwise
+    elevation_rad = math.atan2(u, math.sqrt(e**2 + n**2))
+    azimuth_rad = math.atan2(e, n)  # measured from North, clockwise
 
-    azimuth_deg   = math.degrees(azimuth_rad) % 360.0
+    azimuth_deg = math.degrees(azimuth_rad) % 360.0
     elevation_deg = math.degrees(elevation_rad)
 
     return azimuth_deg, elevation_deg, slant_range_km

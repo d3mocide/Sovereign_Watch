@@ -34,7 +34,9 @@ class UserResponse(BaseModel):
 
 
 class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$")
+    username: str = Field(
+        ..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$"
+    )
     password: str = Field(..., min_length=8)
     role: str = Field(default="viewer")
 
@@ -61,5 +63,8 @@ class UserUpdate(BaseModel):
 
 class FirstSetupRequest(BaseModel):
     """Used to bootstrap the first admin account when no users exist."""
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$")
+
+    username: str = Field(
+        ..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$"
+    )
     password: str = Field(..., min_length=8)

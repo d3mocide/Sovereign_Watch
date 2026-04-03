@@ -78,21 +78,23 @@ async def get_jamming_history(hours: Optional[int] = Query(default=24, ge=1, le=
             lon = row["centroid_lon"]
             if lat is None or lon is None:
                 continue
-            features.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "properties": {
-                    "time": row["time"].isoformat() if row["time"] else None,
-                    "h3_index": row["h3_index"],
-                    "confidence": row["confidence"],
-                    "affected_count": row["affected_count"],
-                    "avg_nic": row["avg_nic"],
-                    "avg_nacp": row["avg_nacp"],
-                    "kp_at_event": row["kp_at_event"],
-                    "active": row["active"],
-                    "assessment": row["assessment"],
-                },
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                    "properties": {
+                        "time": row["time"].isoformat() if row["time"] else None,
+                        "h3_index": row["h3_index"],
+                        "confidence": row["confidence"],
+                        "affected_count": row["affected_count"],
+                        "avg_nic": row["avg_nic"],
+                        "avg_nacp": row["avg_nacp"],
+                        "kp_at_event": row["kp_at_event"],
+                        "active": row["active"],
+                        "assessment": row["assessment"],
+                    },
+                }
+            )
 
         return {"type": "FeatureCollection", "features": features}
     except Exception as e:

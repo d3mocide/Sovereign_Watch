@@ -22,6 +22,7 @@ MODELS_YAML_PATH = os.getenv("MODELS_YAML_PATH", "/app/models.yaml")
 
 _CACHED_MODELS = None
 
+
 def load_ai_models():
     global _CACHED_MODELS
     if _CACHED_MODELS is not None:
@@ -76,7 +77,6 @@ AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
 @router.post("/api/config/location", dependencies=[Depends(require_role("operator"))])
 async def set_mission_location(location: MissionLocation):
-
     """
     Update the active surveillance area.
     Publishes to Redis pub/sub to notify all pollers.
@@ -286,9 +286,10 @@ async def get_watchlist():
     return result
 
 
-@router.post("/api/watchlist", status_code=201, dependencies=[Depends(require_role("operator"))])
+@router.post(
+    "/api/watchlist", status_code=201, dependencies=[Depends(require_role("operator"))]
+)
 async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
-
     """Add or refresh an ICAO24 in the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
@@ -337,9 +338,10 @@ async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
     return {"status": "ok", "icao24": icao24, "permanent": req.ttl_days is None}
 
 
-@router.delete("/api/watchlist/{icao24}", dependencies=[Depends(require_role("operator"))])
+@router.delete(
+    "/api/watchlist/{icao24}", dependencies=[Depends(require_role("operator"))]
+)
 async def remove_from_watchlist(icao24: str):
-
     """Remove an ICAO24 from the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")

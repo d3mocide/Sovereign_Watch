@@ -3,6 +3,7 @@ Spatial-Temporal Alignment Engine: Maps and aligns clausal chains across spatial
 Converts GDELT regional events to H3 parent cells and TAK tracks to child cells for fusion.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -134,7 +135,14 @@ class SpatialTemporalAlignment:
                 continue  # Skip traces outside region
 
             raw_ctx = clause_dict.get("adverbial_context")
-            adverbial_context: Dict[str, Any] = dict(raw_ctx) if raw_ctx else {}
+            adverbial_context: Dict[str, Any] = {}
+            if isinstance(raw_ctx, dict):
+                adverbial_context = raw_ctx
+            elif isinstance(raw_ctx, str):
+                try:
+                    adverbial_context = json.loads(raw_ctx)
+                except Exception:
+                    adverbial_context = {}
 
             clause = AlignedClause(
                 time=clause_time,
@@ -214,7 +222,9 @@ class SpatialTemporalAlignment:
 
         # Simple scoring: count temporal overlaps
         overlap_count = 0
-        max_time_delta = timedelta(hours=2)  # Events within 2 hours count as overlapping
+        max_time_delta = timedelta(
+            hours=2
+        )  # Events within 2 hours count as overlapping
 
         for gdelt in gdelt_clauses:
             for tak in tak_clauses:

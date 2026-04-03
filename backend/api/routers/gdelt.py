@@ -218,7 +218,9 @@ async def get_gdelt_actors(
 
         if db.redis_client:
             try:
-                await db.redis_client.setex(cache_key, ACTORS_CACHE_TTL, json.dumps(result))
+                await db.redis_client.setex(
+                    cache_key, ACTORS_CACHE_TTL, json.dumps(result)
+                )
             except Exception as e:
                 logger.warning(f"Actors cache write failed: {e}")
 

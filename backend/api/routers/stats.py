@@ -8,6 +8,7 @@ router = APIRouter(dependencies=[Depends(require_role("viewer"))])
 
 logger = logging.getLogger("SovereignWatch.Stats")
 
+
 @router.get("/api/stats/activity")
 async def get_activity_stats(hours: int = 24):
     """
@@ -20,7 +21,8 @@ async def get_activity_stats(hours: int = 24):
     # Constrain hours to a reasonable dashboard view (max 72 hours matching retention)
     hours = max(1, min(hours, 72))
 
-    query = """
+    query = (
+        """
         SELECT
             time_bucket('1 minute', time) AS bucket,
             type,
@@ -29,7 +31,9 @@ async def get_activity_stats(hours: int = 24):
         WHERE time >= NOW() - INTERVAL '%s hours'
         GROUP BY bucket, type
         ORDER BY bucket ASC, type
-    """ % hours
+    """
+        % hours
+    )
 
     try:
         if db.pool:
@@ -39,21 +43,18 @@ async def get_activity_stats(hours: int = 24):
         # Reshape data into a timeline series suitable for ECharts
         timeline = {}
         for r in records:
-            b_str = r['bucket'].isoformat()
-            t_type = r['type'] or 'unknown'
+            b_str = r["bucket"].isoformat()
+            t_type = r["type"] or "unknown"
             if b_str not in timeline:
                 timeline[b_str] = {}
             if t_type not in timeline[b_str]:
                 timeline[b_str][t_type] = 0
-            timeline[b_str][t_type] += r['count']
+            timeline[b_str][t_type] += r["count"]
 
         # Flatten for the response
         result = []
         for b_str, counts in timeline.items():
-            result.append({
-                "time": b_str,
-                "counts": counts
-            })
+            result.append({"time": b_str, "counts": counts})
 
         # Ensure sorted
         result.sort(key=lambda x: x["time"])
@@ -67,6 +68,7 @@ async def get_activity_stats(hours: int = 24):
         logger.error(f"Failed to fetch activity stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.get("/api/stats/tak-breakdown")
 async def get_tak_breakdown(hours: int = 24):
     """
@@ -76,25 +78,64 @@ async def get_tak_breakdown(hours: int = 24):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
-    query = """
+    query = (
+        """
         SELECT type, COUNT(*) as count 
         FROM tracks 
         WHERE time >= NOW() - INTERVAL '%s hours'
         GROUP BY type 
         ORDER BY count DESC
-    """ % hours
+    """
+        % hours
+    )
 
     # Mapping of hierarchical CoT types to human-readable labels and categories
     COT_MAP = {
-        "a-f-A-C-F": {"label": "Civilian Fixed Wing", "category": "Aviation", "color": "#7dd3fc"},
-        "a-f-A-M-F": {"label": "Military Fixed Wing", "category": "Aviation", "color": "#fb923c"},
-        "a-f-A-C-H": {"label": "Civilian Helicopter", "category": "Aviation", "color": "#4ade80"},
-        "a-f-A-M-H": {"label": "Military Helicopter", "category": "Aviation", "color": "#facc15"},
-        "a-f-A-C-Q": {"label": "Civilian Drone/UAV", "category": "Aviation", "color": "#f8fafc"},
-        "a-f-A-M-Q": {"label": "Military Drone/UAV", "category": "Aviation", "color": "#e2e8f0"},
-        "a-f-S-C-M": {"label": "Maritime Surface", "category": "Maritime", "color": "#3b82f6"},
-        "a-f-G-E-V-C": {"label": "Ground Vehicle", "category": "Terrestrial", "color": "#f472b6"},
-        "a-f-O-X-S": {"label": "Orbital Satellite", "category": "Space", "color": "#c084fc"},
+        "a-f-A-C-F": {
+            "label": "Civilian Fixed Wing",
+            "category": "Aviation",
+            "color": "#7dd3fc",
+        },
+        "a-f-A-M-F": {
+            "label": "Military Fixed Wing",
+            "category": "Aviation",
+            "color": "#fb923c",
+        },
+        "a-f-A-C-H": {
+            "label": "Civilian Helicopter",
+            "category": "Aviation",
+            "color": "#4ade80",
+        },
+        "a-f-A-M-H": {
+            "label": "Military Helicopter",
+            "category": "Aviation",
+            "color": "#facc15",
+        },
+        "a-f-A-C-Q": {
+            "label": "Civilian Drone/UAV",
+            "category": "Aviation",
+            "color": "#f8fafc",
+        },
+        "a-f-A-M-Q": {
+            "label": "Military Drone/UAV",
+            "category": "Aviation",
+            "color": "#e2e8f0",
+        },
+        "a-f-S-C-M": {
+            "label": "Maritime Surface",
+            "category": "Maritime",
+            "color": "#3b82f6",
+        },
+        "a-f-G-E-V-C": {
+            "label": "Ground Vehicle",
+            "category": "Terrestrial",
+            "color": "#f472b6",
+        },
+        "a-f-O-X-S": {
+            "label": "Orbital Satellite",
+            "category": "Space",
+            "color": "#c084fc",
+        },
     }
 
     try:
@@ -102,46 +143,62 @@ async def get_tak_breakdown(hours: int = 24):
             records = await conn.fetch(query)
 
         # Calculate supplemental global metrics
-        total_pings = sum(r['count'] for r in records)
-        unknown_pings = sum(r['count'] for r in records if r['type'] is None or r['type'].lower() == 'unknown')
-        
+        total_pings = sum(r["count"] for r in records)
+        unknown_pings = sum(
+            r["count"]
+            for r in records
+            if r["type"] is None or r["type"].lower() == "unknown"
+        )
+
         # Signal Noise: ratio of unknown pings to total
-        noise_pct = round((unknown_pings / total_pings * 100), 2) if total_pings > 0 else 0.05
-        
-        # Load Efficiency: derived from total throughput vs expected capacity 
+        noise_pct = (
+            round((unknown_pings / total_pings * 100), 2) if total_pings > 0 else 0.05
+        )
+
+        # Load Efficiency: derived from total throughput vs expected capacity
         # (simulated performance metric based on data density)
         efficiency = min(99.8, round(84.0 + (total_pings / 10000), 1))
 
         breakdown = []
         for r in records:
-            t = r['type']
-            info = COT_MAP.get(t, {"label": f"Unknown ({t})", "category": "Unclassified", "color": "#4b5563"})
-            breakdown.append({
-                "type": t,
-                "label": info["label"],
-                "category": info["category"],
-                "color": info["color"],
-                "count": r['count']
-            })
+            t = r["type"]
+            info = COT_MAP.get(
+                t,
+                {
+                    "label": f"Unknown ({t})",
+                    "category": "Unclassified",
+                    "color": "#4b5563",
+                },
+            )
+            breakdown.append(
+                {
+                    "type": t,
+                    "label": info["label"],
+                    "category": info["category"],
+                    "color": info["color"],
+                    "count": r["count"],
+                }
+            )
 
         return {
-            "status": "ok", 
+            "status": "ok",
             "data": breakdown,
             "metrics": {
                 "noise_pct": noise_pct,
                 "efficiency_pct": efficiency,
-                "total_count": total_pings
-            }
+                "total_count": total_pings,
+            },
         }
 
     except Exception as e:
         logger.error(f"Failed to fetch TAK breakdown: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.get("/api/stats/sensors")
 async def get_sensor_intelligence():
     """
-    Tactical intelligence on sensor coverage, SNR trends (integrity proxy), 
+    Tactical intelligence on sensor coverage, SNR trends (integrity proxy),
     and geospatial detection horizon.
     """
     if not db.pool:
@@ -149,6 +206,7 @@ async def get_sensor_intelligence():
 
     # Node Reference point (Default: Portland AOR)
     import os
+
     LAT = float(os.getenv("CENTER_LAT", "45.5152"))
     LON = float(os.getenv("CENTER_LON", "-122.6784"))
 
@@ -184,25 +242,37 @@ async def get_sensor_intelligence():
 
         # Map octants to human labels
         OCT_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        radar = [{"label": OCT_LABELS[int(r['octant'])], "density": r['density'], "horizon": round(r['max_dist_nm'] or 0, 1)} 
-                 for r in octant_records if r['octant'] is not None]
+        radar = [
+            {
+                "label": OCT_LABELS[int(r["octant"])],
+                "density": r["density"],
+                "horizon": round(r["max_dist_nm"] or 0, 1),
+            }
+            for r in octant_records
+            if r["octant"] is not None
+        ]
 
         return {
             "status": "ok",
             "radar": radar,
             "integrity_trends": [
-                {"time": r['bucket'].isoformat(), "nic": round(r['avg_nic'] or 0, 2), "nacp": round(r['avg_nacp'] or 0, 2)}
+                {
+                    "time": r["bucket"].isoformat(),
+                    "nic": round(r["avg_nic"] or 0, 2),
+                    "nacp": round(r["avg_nacp"] or 0, 2),
+                }
                 for r in integrity_records
-            ]
+            ],
         }
     except Exception as e:
         logger.error(f"Sensor analytics error: {e}")
         return {"status": "error", "msg": str(e)}
 
+
 @router.get("/api/stats/fusion")
 async def get_fusion_audit():
     """
-    System integrity metrics: Pipeline latency, deduplication efficiency, 
+    System integrity metrics: Pipeline latency, deduplication efficiency,
     and database storage velocity.
     """
     if not db.redis_client or not db.pool:
@@ -215,7 +285,7 @@ async def get_fusion_audit():
             SELECT avg(extract(epoch from (now() - time)) * 1000) as latency_ms
             FROM (SELECT time FROM tracks ORDER BY time DESC LIMIT 100) s
         """
-        
+
         # 2. Storage Velocity (Daily growth rate)
         query_storage = "SELECT pg_total_relation_size('tracks') as total_bytes"
 
@@ -233,19 +303,22 @@ async def get_fusion_audit():
             "latency_ms": round(latency or 145.0, 1),
             "dedup_efficiency": efficiency,
             "storage": {
-                "total_mb": round(storage_bytes / (1024*1024), 1),
+                "total_mb": round(storage_bytes / (1024 * 1024), 1),
                 "velocity_mb_hr": 14.2,  # Simulated baseline for now
-                "retention_full_pct": round((storage_bytes / (50 * 1024**3)) * 100, 1) # Against 50GB quota
-            }
+                "retention_full_pct": round(
+                    (storage_bytes / (50 * 1024**3)) * 100, 1
+                ),  # Against 50GB quota
+            },
         }
     except Exception as e:
         logger.error(f"Fusion audit error: {e}")
         return {"status": "error", "msg": str(e)}
 
+
 @router.get("/api/stats/protocol-intelligence")
 async def get_protocol_intelligence():
     """
-    Advanced protocol metrics: Signal persistence and Priority Watchlist 
+    Advanced protocol metrics: Signal persistence and Priority Watchlist
     detecting extreme behaviors.
     """
     if not db.pool:
@@ -289,30 +362,32 @@ async def get_protocol_intelligence():
             p_records = await conn.fetch(query_persistence)
             w_records = await conn.fetch(query_watchlist)
 
-        persistence = [{"type": r['type'], "seconds": round(r['avg_persistence_s'] or 0, 1)} for r in p_records]
-        
+        persistence = [
+            {"type": r["type"], "seconds": round(r["avg_persistence_s"] or 0, 1)}
+            for r in p_records
+        ]
+
         watchlist = []
         for r in w_records:
-            is_extreme = (r['speed'] or 0) > 600 or (r['alt'] or 0) > 45000
-            watchlist.append({
-                "id": r['entity_id'],
-                "type": r['type'],
-                "callsign": r['callsign'] or "UNKNOWN",
-                "affiliation": r['affiliation'] or "unclassified",
-                "speed": r['speed'],
-                "alt": r['alt'],
-                "is_extreme": is_extreme,
-                "ts": r['time'].isoformat()
-            })
+            is_extreme = (r["speed"] or 0) > 600 or (r["alt"] or 0) > 45000
+            watchlist.append(
+                {
+                    "id": r["entity_id"],
+                    "type": r["type"],
+                    "callsign": r["callsign"] or "UNKNOWN",
+                    "affiliation": r["affiliation"] or "unclassified",
+                    "speed": r["speed"],
+                    "alt": r["alt"],
+                    "is_extreme": is_extreme,
+                    "ts": r["time"].isoformat(),
+                }
+            )
 
-        return {
-            "status": "ok",
-            "persistence": persistence,
-            "watchlist": watchlist
-        }
+        return {"status": "ok", "persistence": persistence, "watchlist": watchlist}
     except Exception as e:
         logger.error(f"Protocol intelligence error: {e}")
         return {"status": "error", "msg": str(e)}
+
 
 @router.get("/api/stats/throughput")
 async def get_throughput_stats():
@@ -324,10 +399,15 @@ async def get_throughput_stats():
         raise HTTPException(status_code=503, detail="Redis not ready")
 
     TOPICS = [
-        "adsb_raw", "ais_raw", "orbital_raw", "rf_raw", 
-        "satnogs_transmitters", "satnogs_observations", "gdelt_raw"
+        "adsb_raw",
+        "ais_raw",
+        "orbital_raw",
+        "rf_raw",
+        "satnogs_transmitters",
+        "satnogs_observations",
+        "gdelt_raw",
     ]
-    
+
     # Map topics to the IDs used in the Dashboard UI (canonical IDs)
     # satnogs_transmitters → SatNOGSDBSource (db.satnogs.org) → poller id "satnogs_db"
     # satnogs_observations → SatNOGSNetworkSource (network.satnogs.org) → poller id "satnogs_net"
@@ -338,35 +418,35 @@ async def get_throughput_stats():
         "rf_raw": "rf_ard",
         "satnogs_transmitters": "satnogs_db",
         "satnogs_observations": "satnogs_net",
-        "gdelt_raw": "gdelt"
+        "gdelt_raw": "gdelt",
     }
 
     try:
         throughput = {}
         total_bandwidth = 0
-        
+
         # Fetch current sec/rate (KB/S) and total daily bytes
         for topic in TOPICS:
             id_key = TOPIC_TO_ID.get(topic, topic)
-            
+
             # Current Rate
             rate_bytes = await db.redis_client.get(f"metrics:throughput:{topic}")
             rate_kb = (float(rate_bytes) / 1024.0) if rate_bytes else 0.0
-            
+
             # Total Daily
             total_bytes = await db.redis_client.get(f"metrics:total_bytes:{topic}")
             total_val = int(total_bytes) if total_bytes else 0
-            
+
             throughput[id_key] = {
                 "kb_per_sec": round(rate_kb, 1),
-                "total_bytes": total_val
+                "total_bytes": total_val,
             }
             total_bandwidth += total_val
 
         return {
             "status": "ok",
             "throughput": throughput,
-            "total_bandwidth_mb": round(total_bandwidth / (1024 * 1024), 1)
+            "total_bandwidth_mb": round(total_bandwidth / (1024 * 1024), 1),
         }
 
     except Exception as e:

@@ -87,7 +87,9 @@ def create_access_token(data: dict[str, Any]) -> str:
         minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
 
 
 def _decode_token(token: str) -> dict[str, Any]:
@@ -192,7 +194,9 @@ async def authenticate_token(token: str) -> dict[str, Any]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
 ) -> dict[str, Any]:
     """
     Validate the Bearer token and return the authenticated user dict.
@@ -211,7 +215,9 @@ async def get_current_user(
     return await authenticate_token(credentials.credentials)
 
 
-async def authenticate_websocket(websocket: WebSocket, token: str | None) -> dict[str, Any] | None:
+async def authenticate_websocket(
+    websocket: WebSocket, token: str | None
+) -> dict[str, Any] | None:
     """
     Authenticates a WebSocket connection using a query-param token.
     Accepts the connection first so it can send a proper close code on failure.

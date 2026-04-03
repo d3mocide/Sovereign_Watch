@@ -6,6 +6,7 @@ from core.database import db
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Infra")
 
+
 @router.get("/api/infra/cables")
 async def get_infra_cables():
     """Returns submarine cable data from Redis."""
@@ -21,6 +22,7 @@ async def get_infra_cables():
         logger.error(f"Failed to fetch infra cables: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.get("/api/infra/stations")
 async def get_infra_stations():
     """Returns submarine landing stations data from Redis."""
@@ -35,6 +37,7 @@ async def get_infra_stations():
     except Exception as e:
         logger.error(f"Failed to fetch infra stations: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/api/infra/outages")
 async def get_infra_outages():
@@ -96,7 +99,9 @@ async def get_infra_towers(
 
     try:
         async with db.pool.acquire() as conn:
-            result = await conn.fetchval(query, min_lon, min_lat, max_lon, max_lat, limit)
+            result = await conn.fetchval(
+                query, min_lon, min_lat, max_lon, max_lat, limit
+            )
             if not result:
                 return {"type": "FeatureCollection", "features": []}
             return json.loads(result)
@@ -152,7 +157,9 @@ async def get_ixps(
 
     try:
         async with db.pool.acquire() as conn:
-            result = await conn.fetchval(query, min_lon, min_lat, max_lon, max_lat, limit)
+            result = await conn.fetchval(
+                query, min_lon, min_lat, max_lon, max_lat, limit
+            )
             if not result:
                 return {"type": "FeatureCollection", "features": []}
             return json.loads(result)
@@ -208,7 +215,9 @@ async def get_facilities(
 
     try:
         async with db.pool.acquire() as conn:
-            result = await conn.fetchval(query, min_lon, min_lat, max_lon, max_lat, limit)
+            result = await conn.fetchval(
+                query, min_lon, min_lat, max_lon, max_lat, limit
+            )
             if not result:
                 return {"type": "FeatureCollection", "features": []}
             return json.loads(result)

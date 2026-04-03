@@ -3,6 +3,7 @@ import asyncpg
 import redis.asyncio as redis
 from core.config import settings
 
+
 class Database:
     pool: Optional[asyncpg.Pool] = None
     redis_client: Optional[redis.Redis] = None
@@ -13,7 +14,9 @@ class Database:
             cls.pool = await asyncpg.create_pool(settings.DB_DSN)
 
         if not cls.redis_client:
-            cls.redis_client = await redis.from_url(settings.REDIS_URL, decode_responses=True)
+            cls.redis_client = await redis.from_url(
+                settings.REDIS_URL, decode_responses=True
+            )
 
     @classmethod
     async def disconnect(cls):
@@ -24,5 +27,6 @@ class Database:
         if cls.redis_client:
             await cls.redis_client.aclose()
             cls.redis_client = None
+
 
 db = Database

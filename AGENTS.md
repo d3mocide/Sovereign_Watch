@@ -46,6 +46,7 @@
   - **Map Layer Reference**: `agent_docs/z-ordering.md` documents the full draw-order stack, `depthTest`/`depthBias` rules, and animation loop data threading. It is injected automatically when you edit files in `frontend/src/layers/` or `frontend/src/components/map/`.
 - **State**: Backend uses `Redpanda` (Kafka-compatible) for event streaming.
 - **Ingestion**: Use Python pollers (`backend/ingestion/`). Do NOT use Redpanda Connect (Benthos).
+- **AI Reasoning**: All AI-driven analysis, SITREPs, and regional evaluations **MUST** use the unified `AIService` in `backend/api/services/ai_service.py`. This ensures consistent model configuration, persona management, and behavioral signal integration across the platform.
 
 ## 3. Development Workflow (Live Code Updates)
 

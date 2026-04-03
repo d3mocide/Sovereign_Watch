@@ -3,6 +3,7 @@ Escalation Detector: Identifies prototypical escalation patterns and anomalies.
 Cross-references GDELT event sequences with TAK behavioral anomalies.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -80,7 +81,9 @@ class EscalationDetector:
 
         return best_match, best_confidence
 
-    def _match_pattern(self, event_codes: List[str], pattern: List[str]) -> Tuple[float, List[int]]:
+    def _match_pattern(
+        self, event_codes: List[str], pattern: List[str]
+    ) -> Tuple[float, List[int]]:
         """
         Match event sequence against pattern (allowing gaps).
 
@@ -144,7 +147,9 @@ class EscalationDetector:
                 filter_res = h3.get_resolution(h3_cell)
                 filter_parent = h3_cell
             except Exception as exc:
-                logger.warning("Invalid h3_cell '%s' for concentration filter: %s", h3_cell, exc)
+                logger.warning(
+                    "Invalid h3_cell '%s' for concentration filter: %s", h3_cell, exc
+                )
 
         # Group by H3 cell (at anomaly resolution), optionally filtered to h3_cell region
         cell_clusters: Dict[str, List[str]] = {}
@@ -234,8 +239,17 @@ class EscalationDetector:
             recent = trace[-1]
             prev = trace[-2]
 
-            prev_course = prev.get("adverbial_context", {}).get("course", 0.0)
-            curr_course = recent.get("adverbial_context", {}).get("course", 0.0)
+            def _get_ctx(c: Dict) -> Dict:
+                raw = c.get("adverbial_context") or {}
+                if isinstance(raw, str):
+                    try:
+                        return json.loads(raw)
+                    except (json.JSONDecodeError, TypeError):
+                        return {}
+                return raw
+
+            prev_course = _get_ctx(prev).get("course", 0.0)
+            curr_course = _get_ctx(recent).get("course", 0.0)
 
             delta = abs(curr_course - prev_course)
             if delta > 180:
@@ -253,17 +267,29 @@ class EscalationDetector:
 
         return anomalies
 
-    def detect_emergency_transponders(self, tak_clauses: List[Dict]) -> List[AnomalyMetric]:
+    def detect_emergency_transponders(
+        self, tak_clauses: List[Dict]
+    ) -> List[AnomalyMetric]:
         """Detect aviation emergency transponder codes (7700, 7600, 7500)."""
         anomalies = []
 
         for clause in tak_clauses:
             # Prefer squawk from adverbial_context (current schema), fallback to detail.classification
-            adverbial_context = clause.get("adverbial_context", {}) or {}
+            raw_ctx = clause.get("adverbial_context") or {}
+            if isinstance(raw_ctx, str):
+                try:
+                    adverbial_context = json.loads(raw_ctx)
+                except (json.JSONDecodeError, TypeError):
+                    adverbial_context = {}
+            else:
+                adverbial_context = raw_ctx
+
             squawk = adverbial_context.get("squawk")
 
             if not squawk:
-                classification = clause.get("detail", {}).get("classification", {}) or {}
+                classification = (
+                    clause.get("detail", {}).get("classification", {}) or {}
+                )
                 squawk = classification.get("squawk", "")
             if squawk in self.EMERGENCY_TRANSPONDER_CODES:
                 anomalies.append(
@@ -308,9 +334,7 @@ class EscalationDetector:
             description=f"Internet outage in {country} ({asn_name}): severity={severity:.2f}",
         )
 
-    def detect_space_weather_anomaly(
-        self, kp_index: Optional[float]
-    ) -> AnomalyMetric:
+    def detect_space_weather_anomaly(self, kp_index: Optional[float]) -> AnomalyMetric:
         """
         Detect space weather events that could explain GPS/comms anomalies.
 
@@ -420,7 +444,11 @@ class EscalationDetector:
             raw_time = clause.get("time")
             try:
                 if isinstance(raw_time, datetime):
-                    clause_time = raw_time if raw_time.tzinfo else raw_time.replace(tzinfo=timezone.utc)
+                    clause_time = (
+                        raw_time
+                        if raw_time.tzinfo
+                        else raw_time.replace(tzinfo=timezone.utc)
+                    )
                 else:
                     ts = str(raw_time or "").replace("Z", "+00:00")
                     clause_time = datetime.fromisoformat(ts)
@@ -510,7 +538,9 @@ class EscalationDetector:
         if context_anomalies:
             active_context = [a for a in context_anomalies if a.score > 0.0]
             if active_context:
-                context_score = sum(a.score for a in active_context) / len(active_context)
+                context_score = sum(a.score for a in active_context) / len(
+                    active_context
+                )
                 # Blend in contextual score so context-only risk is non-zero when warranted.
                 # This keeps context supportive (not dominant) while avoiding hard zeroes.
                 context_weight = 0.2

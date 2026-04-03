@@ -1,45 +1,35 @@
 import json
 import logging
-import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import numpy as np
-import yaml
 from core.auth import require_role
 from core.database import db
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
-from litellm import acompletion
 from models.schemas import AnalyzeRequest
 from sgp4.api import Satrec, jday
 from sse_starlette.sse import EventSourceResponse
 from utils.sgp4_utils import ecef_to_lla_vectorized, teme_to_ecef
 
-from routers.system import AI_MODEL_DEFAULT, AI_MODEL_REDIS_KEY
+from services.ai_service import ai_service
+from services.escalation_detector import EscalationDetector
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Analysis")
+escalation_detector = EscalationDetector()
 
-_LITELLM_CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/litellm_config.yaml")
 
-def _load_model_map() -> dict:
-    try:
-        with open(_LITELLM_CONFIG_PATH) as f:
-            cfg = yaml.safe_load(f)
-        model_map = {}
-        for m in cfg.get("model_list", []):
-            name = m["model_name"]
-            params = m.get("litellm_params", {}).copy()
-            for key, val in params.items():
-                if isinstance(val, str) and val.startswith("os.environ/"):
-                    env_var = val.split("/", 1)[1]
-                    params[key] = os.getenv(env_var, val)
-            model_map[name] = params
-        return model_map
-    except Exception as e:
-        logger.warning(f"Could not load LiteLLM config: {e}")
-        return {}
-
-_MODEL_MAP = _load_model_map()
+def _parse_jsonb(val: Any) -> dict:
+    """Safe-parse JSONB field that might be stringified."""
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except Exception:
+            return {}
+    return {}
 
 
 def _infer_track_domain(uid: str, track_type: str) -> str:
@@ -77,6 +67,7 @@ def _summarize_waypoints(waypoints: list) -> str:
 
     return "\n".join(points)
 
+
 @router.post("/api/analyze/{uid}", dependencies=[Depends(require_role("operator"))])
 async def analyze_track(
     request: Request, req: AnalyzeRequest, uid: str = Path(..., max_length=100)
@@ -107,7 +98,7 @@ async def analyze_track(
     if is_sitrep:
         intel_text = "No active metadata buffer."
         points = 0
-        
+
         if isinstance(req.sitrep_context, str):
             intel_text = req.sitrep_context
             points = len(intel_text.split("\n"))
@@ -116,8 +107,8 @@ async def analyze_track(
             intel_events = []
             for f in feats:
                 p = f.get("properties", {})
-                h = p.get('headline') or 'Unknown Event'
-                a1 = p.get('actor1') or 'Unknown'
+                h = p.get("headline") or "Unknown Event"
+                a1 = p.get("actor1") or "Unknown"
                 intel_events.append(f"- {h} | Actor: {a1}")
             intel_text = "\n".join(intel_events) if intel_events else intel_text
             points = len(intel_events)
@@ -128,10 +119,10 @@ async def analyze_track(
             "meta": {
                 "callsign": "GLOBAL_SITUATION_REPORT",
                 "entity_type": "sitrep",
-                "sitrep_data": intel_text
+                "sitrep_data": intel_text,
             },
             "waypoint_history": [],
-            "centroid_geom": None
+            "centroid_geom": None,
         }
 
     # --- 2. STANDARD TRACK HISTORY ---
@@ -165,247 +156,233 @@ async def analyze_track(
             LEFT JOIN metadata m ON true
         """
         try:
-            # Use float for lookback_hours to match tracks.py behavior and ensure interval multiplication stability
-            row = await db.pool.fetchrow(track_query, lookback_uid, float(req.lookback_hours))
+            row = await db.pool.fetchrow(
+                track_query, lookback_uid, float(req.lookback_hours)
+            )
             if row:
                 track_summary = dict(row)
         except Exception as e:
             logger.error(f"Analysis track query failed for {uid}: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Database query failed: {str(e)}"
+            )
 
-        # 2.1 Fallbacks
+        # 2.1 Fallbacks (Satellites, Infrastructure, GDELT)
         if not track_summary or track_summary.get("points") == 0:
             if uid.startswith("SAT-"):
                 norad_id = uid.replace("SAT-", "")
                 async with db.pool.acquire() as conn:
                     sat_row = await conn.fetchrow(
-                        "SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1", 
-                        norad_id
+                        "SELECT name, category, constellation, tle_line1, tle_line2 FROM satellites WHERE norad_id=$1",
+                        norad_id,
                     )
                 if sat_row and sat_row["tle_line1"]:
                     try:
-                        satrec = Satrec.twoline2rv(sat_row["tle_line1"], sat_row["tle_line2"])
+                        satrec = Satrec.twoline2rv(
+                            sat_row["tle_line1"], sat_row["tle_line2"]
+                        )
                         now = datetime.now(timezone.utc)
                         pts = []
                         for i in range(10):
                             t = now - timedelta(hours=req.lookback_hours * (i / 10))
-                            jd, fr = jday(t.year, t.month, t.day, t.hour, t.minute, t.second)
+                            jd, fr = jday(
+                                t.year, t.month, t.day, t.hour, t.minute, t.second
+                            )
                             e, r, v = satrec.sgp4(jd, fr)
                             if e == 0:
                                 r_ecef = teme_to_ecef(r, jd, fr)
-                                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
-                                pts.append({"lat": lat_arr[0], "lon": lon_arr[0], "alt": alt_arr[0]*1000, "time": t.isoformat()})
+                                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
+                                    np.array(r_ecef).reshape(1, 3)
+                                )
+                                pts.append(
+                                    {
+                                        "lat": lat_arr[0],
+                                        "lon": lon_arr[0],
+                                        "alt": alt_arr[0] * 1000,
+                                        "time": t.isoformat(),
+                                    }
+                                )
                         if pts:
                             track_summary = {
-                                "points": len(pts), 
-                                "type": "a-s-K", 
-                                "waypoint_history": pts, 
+                                "points": len(pts),
+                                "type": "a-s-K",
+                                "waypoint_history": pts,
                                 "centroid_geom": f"SRID=4326;POINT({pts[0]['lon']} {pts[0]['lat']})",
                                 "meta": {
-                                    "callsign": sat_row["name"], 
-                                    "classification": {"category": sat_row["category"]}
-                                }
+                                    "callsign": sat_row["name"],
+                                    "classification": {"category": sat_row["category"]},
+                                },
                             }
                     except Exception as e:
                         logger.warning(f"Sat fallback failed: {e}")
 
             if not track_summary or track_summary["points"] == 0:
                 try:
-                    tower = await db.pool.fetchrow("SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1", uid)
+                    tower = await db.pool.fetchrow(
+                        "SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1",
+                        uid,
+                    )
                     if tower:
                         track_summary = {
-                            "points": 1, 
-                            "type": "u-G-T", 
-                            "centroid_geom": tower["geom"], 
-                            "meta": {"callsign": f"TOWER:{tower['fcc_id']}"}, 
-                            "waypoint_history": [{"lat": tower["lat"], "lon": tower["lon"], "alt": 0}]
+                            "points": 1,
+                            "type": "u-G-T",
+                            "centroid_geom": tower["geom"],
+                            "meta": {"callsign": f"TOWER:{tower['fcc_id']}"},
+                            "waypoint_history": [
+                                {"lat": tower["lat"], "lon": tower["lon"], "alt": 0}
+                            ],
                         }
-                    
-                    if (not track_summary or track_summary["points"] == 0) and uid.startswith("gdelt-"):
+
+                    if (
+                        not track_summary or track_summary["points"] == 0
+                    ) and uid.startswith("gdelt-"):
                         ev_id = uid[6:]
-                        gd_row = await db.pool.fetchrow("SELECT * FROM gdelt_events WHERE event_id = $1", ev_id)
+                        gd_row = await db.pool.fetchrow(
+                            "SELECT * FROM gdelt_events WHERE event_id = $1", ev_id
+                        )
                         if gd_row:
                             track_summary = {
-                                "points": 1, 
-                                "type": "u-G-O", 
-                                "centroid_geom": gd_row["geom"], 
-                                "meta": {"callsign": gd_row["headline"], "url": gd_row["url"]}, 
-                                "waypoint_history": [{"lat": gd_row["lat"], "lon": gd_row["lon"], "alt": 0}]
+                                "points": 1,
+                                "type": "u-G-O",
+                                "centroid_geom": gd_row["geom"],
+                                "meta": {
+                                    "callsign": gd_row["headline"],
+                                    "url": gd_row["url"],
+                                },
+                                "waypoint_history": [
+                                    {
+                                        "lat": gd_row["lat"],
+                                        "lon": gd_row["lon"],
+                                        "alt": 0,
+                                    }
+                                ],
                             }
                 except Exception:
                     pass
 
     if not track_summary or track_summary["points"] == 0:
+
         async def err():
             yield {"event": "error", "data": "No telemetry or metadata buffer found."}
+
         return EventSourceResponse(err())
 
     # Decode waypoints
-    waypoints = []
-    if track_summary:
-        waypoints = track_summary.get("waypoint_history", [])
-        if isinstance(waypoints, str):
-            try:
-                waypoints = json.loads(waypoints)
-            except Exception:
-                waypoints = []
+    waypoints = track_summary.get("waypoint_history") or []
+    if isinstance(waypoints, str):
+        try:
+            waypoints = json.loads(waypoints)
+        except Exception:
+            waypoints = []
+
+    # --- 3. HEURISTIC ESCALATION DETECTION ---
+    behavioral_signals = []
+    if track_summary and track_summary.get("centroid_geom"):
+        try:
+            # Query clausal_chains for behavioral signals in the vicinity (50km)
+            tak_query = """
+                SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, source, predicate_type, adverbial_context
+                FROM clausal_chains
+                WHERE geom && ST_Expand($1::geometry, 0.5) -- Approx 50km
+                  AND time > NOW() - INTERVAL '30 minutes'
+                ORDER BY uid, time DESC
+            """
+            rows = await db.pool.fetch(tak_query, track_summary["centroid_geom"])
+            tak_clauses = [
+                {
+                    "uid": r["uid"],
+                    "locative_lat": r["locative_lat"],
+                    "locative_lon": r["locative_lon"],
+                    "source": r["source"],
+                    "predicate_type": r["predicate_type"],
+                    "adverbial_context": _parse_jsonb(r["adverbial_context"]),
+                }
+                for r in rows
+            ]
+
+            # Run detectors
+            rendezvous = escalation_detector.detect_rendezvous(tak_clauses)
+            if rendezvous:
+                behavioral_signals.append(
+                    f"[SIGNAL] Multi-entity rendezvous: {rendezvous.description}"
+                )
+
+            clustering = escalation_detector.detect_anomaly_concentration(tak_clauses)
+            if clustering:
+                behavioral_signals.append(
+                    f"[SIGNAL] Behavioral clustering: {clustering.description}"
+                )
+
+            emergency = escalation_detector.detect_emergency_transponders(tak_clauses)
+            if emergency:
+                behavioral_signals.append(
+                    f"[SIGNAL] Emergency Squawk: {emergency.description}"
+                )
+        except Exception as e:
+            logger.warning(f"Escalation detection failed for analysis: {e}")
 
     # Fusion variables (preserved but cleaned)
     intel_context = ""
     if track_summary and track_summary.get("centroid_geom"):
         try:
             intel_rows = await db.pool.fetch(
-                "SELECT content, timestamp FROM intel_reports WHERE ST_DWithin(geom::geography, $1::geography, 50000) ORDER BY timestamp DESC LIMIT 3", 
-                track_summary["centroid_geom"]
+                "SELECT content, timestamp FROM intel_reports WHERE ST_DWithin(geom::geography, $1::geography, 50000) ORDER BY timestamp DESC LIMIT 3",
+                track_summary["centroid_geom"],
             )
             if intel_rows:
-                intel_context = "\nCORRELATED INTEL (50km):\n" + "\n".join([f"- [{r['timestamp']}] {r['content']}" for r in intel_rows])
+                intel_context = "\nCORRELATED INTEL (50km):\n" + "\n".join(
+                    [f"- [{r['timestamp']}] {r['content']}" for r in intel_rows]
+                )
         except Exception:
             pass
 
-    mode_normalized = (req.mode or "tactical").strip().lower()
-    if mode_normalized not in {"tactical", "osint", "sar"}:
-        mode_normalized = "tactical"
-
     # --- 4. PERSONA & PROMPT ---
-    if is_sitrep:
-        persona = {
-            "sys": (
-                "You are Sovereign Watch Strategic Intelligence Director. "
-                "You analyze conflict and infrastructure signals, not marketing/business analytics. "
-                "Use only provided evidence. If evidence is weak, explicitly say INSUFFICIENT DATA."
-            ),
-            "inst": (
-                "Conduct a comprehensive SITREP. Use sections: **Active Zones**, **Actor Behavior**, "
-                "**Escalation Signals**, **Confidence**. Keep it operational and concise."
-            ),
-        }
-        user_content = f"SITREP DATA BUFFER:\n{track_summary['meta']['sitrep_data']}\n\nINST: {persona['inst']}\nASSESS:"
-    else:
-        persona_by_mode = {
-            "tactical": {
-                "sys": (
-                    "You are Sovereign Watch Tactical Intelligence Analyst. "
-                    "Domain is ISR/air/maritime/orbital/OSINT operations. "
-                    "Do not interpret identifiers as ads, campaigns, products, user segments, or e-commerce metadata. "
-                    "If telemetry is sparse, state INSUFFICIENT DATA and what is missing."
-                ),
-                "inst": (
-                    "Assess this target using only telemetry/intel context. "
-                    "Return sections: **Classification**, **Behavioral Assessment**, **Risk Signals**, **Confidence**."
-                ),
-            },
-            "osint": {
-                "sys": (
-                    "You are Sovereign Watch OSINT and Geopolitical Analyst. "
-                    "Focus on actor intent, information reliability, and escalation implications. "
-                    "Avoid generic business or marketing interpretations."
-                ),
-                "inst": (
-                    "Assess this target from an OSINT perspective using telemetry and correlated intel. "
-                    "Return sections: **Source/Context**, **Actor Intent Hypothesis**, **Regional Impact**, **Confidence**."
-                ),
-            },
-            "sar": {
-                "sys": (
-                    "You are Sovereign Watch Search-and-Rescue Analyst. "
-                    "Prioritize life safety, distress indicators, and operational recommendations. "
-                    "Do not speculate beyond provided evidence."
-                ),
-                "inst": (
-                    "Assess this target for SAR relevance. "
-                    "Return sections: **Distress Indicators**, **Operational Risk**, **Recommended Actions (Next 30-60 min)**, **Confidence**."
-                ),
-            },
-        }
+    mode_normalized = (req.mode or "tactical").strip().lower()
+    persona = ai_service.get_persona(
+        mode_normalized,
+        context={
+            "is_hold": is_hold, 
+            "is_gdelt": uid.startswith("gdelt-"),
+            "is_sitrep": is_sitrep
+        },
+    )
 
-        persona = persona_by_mode[mode_normalized]
+    meta = track_summary.get("meta") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = {}
 
-        if uid.startswith("gdelt-") and mode_normalized != "sar":
-            persona = {
-                "sys": (
-                    "You are Sovereign Watch Geopolitical Analyst for OSINT events. "
-                    "Avoid generic internet analytics framing; focus on actor intent, escalation, and regional implications."
-                ),
-                "inst": (
-                    "Assess this event with sections: **Event Context**, **Potential Impact**, "
-                    "**Escalation Risk**, **Confidence**."
-                ),
-            }
+    label = meta.get("callsign", "Unknown") if isinstance(meta, dict) else "Unknown"
+    track_type = track_summary.get("type", "unknown")
+    inferred_domain = _infer_track_domain(uid, track_type)
+    waypoint_brief = _summarize_waypoints(waypoints)
+    prefix = "[HOLDING DETECTED] " if is_hold else ""
 
-        if is_hold and mode_normalized == "tactical":
-            persona = {
-                "sys": (
-                    "You are Tactical Flight Safety & Surveillance Analyst. "
-                    "Ground your conclusions in track geometry and timing; avoid speculative narratives."
-                ),
-                "inst": (
-                    "Assess this AIRCRAFT HOLDING PATTERN and evaluate likely intent "
-                    "(arrival delay, weather, comms issue, emergency, or surveillance). "
-                    "Use sections: **Pattern Evidence**, **Most Likely Explanation**, **Risk Signals**, **Confidence**."
-                ),
-            }
-        elif is_hold and mode_normalized == "sar":
-            persona = {
-                "sys": (
-                    "You are Aviation SAR Analyst. "
-                    "Assess whether a holding pattern may indicate distress, diversion, weather avoidance, or comms degradation."
-                ),
-                "inst": (
-                    "Assess this AIRCRAFT HOLDING PATTERN for SAR posture. "
-                    "Use sections: **Distress Evidence**, **Alternative Explanations**, "
-                    "**Recommended SAR Readiness Actions**, **Confidence**."
-                ),
-            }
-        
-        meta = {}
-        if track_summary:
-            meta = track_summary.get("meta") or {}
-            if isinstance(meta, str):
-                try:
-                    meta = json.loads(meta)
-                except Exception:
-                    meta = {}
-        
-        label = meta.get('callsign', 'Unknown') if isinstance(meta, dict) else 'Unknown'
-        track_type = track_summary.get("type", "unknown") if track_summary else "unknown"
-        inferred_domain = _infer_track_domain(uid, track_type)
-        waypoint_brief = _summarize_waypoints(waypoints)
-        prefix = "[HOLDING DETECTED] " if is_hold else ""
-        user_content = (
-            f"TARGET: {uid}\n"
-            f"LABEL: {prefix}{label}\n"
-            f"MODE: {mode_normalized}\n"
-            f"INFERRED_DOMAIN: {inferred_domain}\n"
-            f"TRACK_TYPE: {track_type}\n"
-            f"HISTORY_POINTS: {track_summary['points'] if track_summary else 0}\n"
-            f"RECENT_WAYPOINTS:\n{waypoint_brief}\n"
-            f"{intel_context}\n"
-            f"INST: {persona['inst']}\n"
-            "ASSESS:"
-        )
+    signals_text = (
+        "\nBEHAVIORAL SIGNALS (RECENT):\n" + "\n".join(behavioral_signals)
+        if behavioral_signals
+        else ""
+    )
+
+    user_content = (
+        f"TARGET: {uid}\n"
+        f"LABEL: {prefix}{label}\n"
+        f"MODE: {mode_normalized}\n"
+        f"INFERRED_DOMAIN: {inferred_domain}\n"
+        f"TRACK_TYPE: {track_type}\n"
+        f"HISTORY_POINTS: {track_summary['points']}\n"
+        f"RECENT_WAYPOINTS:\n{waypoint_brief}\n"
+        f"{signals_text}\n"
+        f"{intel_context}\n"
+        f"INST: {persona['inst']}\n"
+        "ASSESS:"
+    )
 
     # --- 5. STREAMING ---
-    active_model = AI_MODEL_DEFAULT
-    if db.redis_client:
-        stored = await db.redis_client.get(AI_MODEL_REDIS_KEY)
-        if stored:
-            active_model = stored.decode() if hasattr(stored, 'decode') else str(stored)
-
-    model_params = _MODEL_MAP.get(active_model, {"model": active_model})
-
     async def ev_gen():
-        try:
-            response = await acompletion(
-                **model_params,
-                messages=[{"role": "system", "content": persona["sys"]}, {"role": "user", "content": user_content}],
-                stream=True,
-            )
-            async for chunk in response:
-                if content := chunk.choices[0].delta.content:
-                    yield {"data": content}
-        except Exception as e:
-            logger.error(f"Analysis error: {e}")
-            yield {"event": "error", "data": str(e)}
+        async for content in ai_service.generate_stream(persona["sys"], user_content):
+            yield {"data": content}
 
     return EventSourceResponse(ev_gen())

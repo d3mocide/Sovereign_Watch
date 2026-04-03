@@ -78,6 +78,7 @@ class EvaluationRequest(BaseModel):
     # When True the LLM narrative step is skipped (used internally for heatmaps
     # to avoid fanning out N LLM calls per heatmap request).
     lightweight: bool = False
+    is_sitrep: bool = False
 
 
 class RiskAssessmentResponse(BaseModel):
@@ -112,7 +113,9 @@ def _h3_cell_to_wkt(h3_cell: str) -> Optional[str]:
 
 
 @router.post("/evaluate")
-async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssessmentResponse:
+async def evaluate_regional_escalation(
+    request: EvaluationRequest,
+) -> RiskAssessmentResponse:
     """
     Evaluate escalation risk for a specific H3 region.
 
@@ -125,7 +128,9 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     Returns:
         RiskAssessmentResponse with structured risk evaluation
     """
-    logger.info(f"Evaluating region {request.h3_region} with {request.lookback_hours}h lookback")
+    logger.info(
+        f"🧠 [UNIFIED-BRAIN] Evaluating region {request.h3_region} with {request.lookback_hours}h lookback"
+    )
 
     # Initialize services
     alignment_engine = SpatialTemporalAlignment()
@@ -304,7 +309,8 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
             "locative_lat": clause.lat,
             "locative_lon": clause.lon,
             # Prefer actual adverbial_context from the clause if available; otherwise use the legacy placeholder
-            "adverbial_context": getattr(clause, "adverbial_context", None) or {"course": 0.0},
+            "adverbial_context": getattr(clause, "adverbial_context", None)
+            or {"course": 0.0},
         }
         for clause in aligned.tak_clauses
     ]
@@ -334,7 +340,9 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
 
     # Internet outage correlation
     if outage_data:
-        outage_anomaly = escalation_detector.detect_internet_outage_correlation(outage_data)
+        outage_anomaly = escalation_detector.detect_internet_outage_correlation(
+            outage_data
+        )
         context_anomalies.append(outage_anomaly)
         logger.info(f"Detected internet outage: {outage_anomaly.description}")
 
@@ -369,15 +377,22 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     # Build narrative summaries for LLM
     gdelt_summary = "\n".join(
         [
-            f"{c.predicate_type}: {c.narrative or 'N/A'}"
+            f"[{c.time.strftime('%H:%M')}] {c.predicate_type}: {c.narrative or 'N/A'}"
             for c in aligned.gdelt_clauses[:5]
         ]
     )
     tak_summary = "\n".join(
         [
-            f"{c.uid} ({c.source}): {c.predicate_type}"
+            f"[{c.time.strftime('%H:%M')}] {c.uid} ({c.source}): {c.predicate_type}"
             for c in aligned.tak_clauses[:5]
         ]
+    )
+
+    # Collect heuristic behavioral signals from active anomalies
+    behavioral_signals = [a.description for a in active_anomalies if a.description]
+    # Add context anomalies (outages, space weather)
+    behavioral_signals.extend(
+        [a.description for a in context_anomalies if a.score > 0.1]
     )
 
     # Initialize LLM-based sequence evaluation if risk is elevated.
@@ -388,13 +403,11 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
 
     if risk_score > 0.3 and not request.lightweight:
         try:
-            # Initialize LiteLLM config (minimal for now)
-            litellm_config = {
-                "api_key": "",
-                "api_base": "http://localhost:11434",  # Local Ollama
-                "model_name": "llama3",
-            }
-            evaluation_engine = SequenceEvaluationEngine(litellm_config)
+            logger.info(
+                f"🧠 [UNIFIED-BRAIN] Evaluating region {request.h3_region} "
+                f"with {len(behavioral_signals)} behavioral signals detected"
+            )
+            evaluation_engine = SequenceEvaluationEngine()
 
             # Call LLM for detailed analysis
             assessment: RiskAssessment = await asyncio.wait_for(
@@ -403,6 +416,8 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
                     gdelt_summary=gdelt_summary,
                     tak_summary=tak_summary,
                     anomalous_uids=anomalous_uids,
+                    behavioral_signals=behavioral_signals,
+                    is_sitrep=request.is_sitrep,
                 ),
                 timeout=_LLM_EVAL_TIMEOUT_SECONDS,
             )
@@ -435,16 +450,24 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
         escalation_indicators.append("Emergency transponders activated")
     if rendezvous_anomalies:
         total_rendezvous = sum(len(a.affected_uids) for a in rendezvous_anomalies)
-        escalation_indicators.append(f"Multi-entity rendezvous detected ({total_rendezvous} entities)")
+        escalation_indicators.append(
+            f"Multi-entity rendezvous detected ({total_rendezvous} entities)"
+        )
 
     # Context-based indicators
     for ctx_anomaly in context_anomalies:
         if ctx_anomaly.metric_type == "internet_outage" and ctx_anomaly.score > 0.5:
-            escalation_indicators.append(f"Internet outage detected (severity: {ctx_anomaly.score:.2f})")
+            escalation_indicators.append(
+                f"Internet outage detected (severity: {ctx_anomaly.score:.2f})"
+            )
         elif ctx_anomaly.metric_type == "space_weather" and ctx_anomaly.score > 0.5:
-            escalation_indicators.append(f"Space weather event (Kp: {ctx_anomaly.description})")
+            escalation_indicators.append(
+                f"Space weather event (Kp: {ctx_anomaly.description})"
+            )
         elif ctx_anomaly.metric_type == "satellite_signal_loss":
-            escalation_indicators.append(f"Satellite signal loss detected ({ctx_anomaly.affected_uids[0] if ctx_anomaly.affected_uids else 'unknown'})")
+            escalation_indicators.append(
+                f"Satellite signal loss detected ({ctx_anomaly.affected_uids[0] if ctx_anomaly.affected_uids else 'unknown'})"
+            )
 
     # Trigger Tier 3 escalation if risk is very high
     if risk_score > 0.8:
@@ -468,7 +491,9 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
 @router.get("/regional_risk")
 async def get_regional_risk_heatmap(
     h3_region: str = Query(..., description="H3-7 hexagonal region"),
-    lookback_hours: int = Query(24, ge=1, le=720, description="Lookback window in hours"),
+    lookback_hours: int = Query(
+        24, ge=1, le=720, description="Lookback window in hours"
+    ),
 ) -> Dict:
     """
     Get risk heatmap for a region and surrounding cells.
@@ -502,7 +527,9 @@ async def get_regional_risk_heatmap(
                     "anomaly_count": assessment.anomaly_count,
                 }
 
-        results = await asyncio.gather(*[_eval_cell(c) for c in all_cells], return_exceptions=True)
+        results = await asyncio.gather(
+            *[_eval_cell(c) for c in all_cells], return_exceptions=True
+        )
 
         heatmap = {}
         for result in results:
@@ -552,7 +579,9 @@ async def get_clausal_chains(
             ring = ", ".join(f"{lon} {lat}" for lon, lat in coords)
             wkt_polygon = f"POLYGON(({ring}))"
         except Exception as h3_err:
-            logger.warning("Invalid H3 region '%s': %s – skipping spatial filter", region, h3_err)
+            logger.warning(
+                "Invalid H3 region '%s': %s – skipping spatial filter", region, h3_err
+            )
             wkt_polygon = None
 
         async with db.pool.acquire() as conn:
@@ -564,7 +593,9 @@ async def get_clausal_chains(
             param_idx = 2
 
             if wkt_polygon:
-                where_clauses.append(f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))")
+                where_clauses.append(
+                    f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))"
+                )
                 params.append(wkt_polygon)
                 param_idx += 1
 
@@ -600,12 +631,16 @@ async def get_clausal_chains(
                     }
 
                 clause = {
-                    "time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
+                    "time": row["time"].isoformat()
+                    if hasattr(row["time"], "isoformat")
+                    else str(row["time"]),
                     "locative_lat": row["locative_lat"],
                     "locative_lon": row["locative_lon"],
                     "locative_hae": row["locative_hae"],
                     "state_change_reason": row["state_change_reason"],
-                    "adverbial_context": dict(row["adverbial_context"]) if row["adverbial_context"] else {},
+                    "adverbial_context": dict(row["adverbial_context"])
+                    if row["adverbial_context"]
+                    else {},
                 }
                 chains_by_uid[uid]["clauses"].append(clause)
 

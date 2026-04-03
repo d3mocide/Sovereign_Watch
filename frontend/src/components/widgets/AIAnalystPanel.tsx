@@ -38,22 +38,36 @@ const MODE_OPTIONS = [
 const formatAnalysisText = (text: string) => {
   if (!text) return '';
   
-  return text
-    // 1. Header/Section Normalization
-    .replace(/\*\*\s*([^*]*?(?:Section|:|&|Analysis|Verification|Indicators|Assessment)[^*]*?)\s*\*\*/gi, '\n\n**$1**\n')
-    // 2. Break before bold blocks following punctuation
-    .replace(/([.!?])\s*(\*\*)/g, '$1\n\n$2')
-    // 3. Spacing & Punctuation Cleanup (Fixes common LLM streaming artifacts)
-    .replace(/\s+([,.!?;:])/g, '$1') // Collapse spaces before punctuation
-    .replace(/(\w)\s*['\u2019'']\s*(\w)/g, "$1'$2") // Fix "it ' s" style spacing
-    .replace(/(\s['\u2019'']|['\u2019'']\s)/g, (m) => m.trim()) // General quote cleanup
-    .replace(/\(\s+/g, '(')
-    .replace(/\s+\)/g, ')')
-    // 4. Whitespace Normalization (Collapse multiple spaces/newlines)
+  // 1. Aggressive Structural Splitting & Healing ('Slash-and-Burn' v3)
+  const processed = text
+    // A. Force newline before every header (###) found anywhere
+    .replace(/([^\n])(###)/g, '$1\n$2')
+    // B. Force newline after every header (### SECTION NAME)
+    .replace(/(###\s+[A-Z\s,/-]+)(?=[A-Z1-9*])/g, '$1\n')
+    // C. Force newline before every bullet point (-, *, or •)
+    .replace(/([^\n])\s*([•*-])\s+/g, '$1\n$2 ')
+    // D. Split sentences that end and a bullet starts immediately: "text.* Bullet"
+    .replace(/\.(\s*([•*-]))/g, '.\n$1')
+    // E. HEAL "Empty Bullets" where the AI put a newline after the dash
+    .replace(/([-•*])\s*\n\s*/g, '$1 ')
+    // F. HEAL Split Bold Tags (e.g. "**High\nConfidence**")
+    .replace(/\*\*([^*]+)\n+([^*]+)\*\*/g, '**$1 $2**')
+    // G. Legacy header support (bold headers)
+    .replace(/([^\n])(\*\*.*?:?\*\*)/g, '$1\n$2');
+
+  // 2. Normalization & Cleanup
+  return processed
+    // Ensure space after # 
+    .replace(/^(#+)([^\s#])/gm, '$1 $2')
+    // Spacing & Punctuation Cleanup
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/(\w)\s*['\u2019'']\s*(\w)/g, "$1'$2")
+    .replace(/(\s['\u2019'']|['\u2019'']\s)/g, (m) => m.trim())
+    // Final Whitespace Normalization
     .split('\n')
     .map(line => line.replace(/[ \t]+/g, ' ').trim())
     .join('\n')
-    .replace(/\n{3,}/g, '\n\n') // Max 2 newlines for paragraph breaks
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
 
@@ -81,13 +95,30 @@ const AnalysisFormatter: React.FC<{ text: string; isStreaming: boolean; accentCo
            return <hr key={idx} className="border-white/10 my-4" />;
         }
 
+        // Handle Standard Markdown Headers (### Header)
+        const headerMatch = trimmed.match(/^(###+)\s+(.*)/);
+        
+        if (headerMatch) {
+          const headerText = headerMatch[2].trim();
+          
+          return (
+            <div key={idx} className="mb-2 mt-4">
+              <div key={`${idx}-h`} className={`font-bold tracking-widest uppercase text-[10px] ${accentColor} drop-shadow-[0_0_8px_currentColor] mb-2`}>
+                {headerText}
+              </div>
+            </div>
+          );
+        }
+
         // Handle Bullet Points
-        const listMatch = line.match(/^[\s]*[-*]\s+(.*)/);
+        const listMatch = line.match(/^[\s]*([•*-])\s+(.*)/);
         if (listMatch) {
           return (
-            <div key={idx} className="flex gap-2 pl-2">
-              <span className={`${accentColor} opacity-50 shrink-0`}>•</span>
-              <span className="text-white/80">{renderInline(listMatch[1], accentColor)}</span>
+            <div key={idx} className="flex gap-4 pl-2 mb-2">
+              <span className={`${accentColor} opacity-70 shrink-0 select-none mt-1`}>•</span>
+              <span className="text-white/80 leading-relaxed font-medium">
+                {renderInline(listMatch[2], accentColor)}
+              </span>
             </div>
           );
         }
@@ -190,7 +221,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
     if (isOpen && entityUid && autoRunTrigger && (autoRunTrigger !== lastStateRef.current.autoRunTrigger || !lastStateRef.current.isOpen)) {
       if (isOperator) {
         const sitrepContext = isSitrep ? entity?.detail?.sitrep_context : undefined;
-        run(entityUid, lookback, mode, sitrepContext);
+        run(entityUid, lookback, mode, sitrepContext, isSitrep);
       }
     }
     lastStateRef.current = { entityUid, autoRunTrigger, isOpen };
@@ -199,7 +230,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   const handleRun = () => {
     if (!entity || !isOperator) return;
     const sitrepContext = isSitrep ? entity.detail?.sitrep_context : undefined;
-    run(entity.uid, lookback, mode, sitrepContext);
+    run(entity.uid, lookback, mode, sitrepContext, isSitrep);
   };
 
   const handleCopy = () => {

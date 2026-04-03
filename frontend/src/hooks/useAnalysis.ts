@@ -9,7 +9,7 @@ export type AnalysisState = {
 };
 
 export type UseAnalysisReturn = AnalysisState & {
-  run: (uid: string, lookbackHours: number, mode?: string, sitrepContext?: any) => Promise<void>;
+  run: (uid: string, lookbackHours: number, mode?: string, sitrepContext?: any, isSitrep?: boolean) => Promise<void>;
   reset: () => void;
 };
 
@@ -35,7 +35,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setState(INITIAL_STATE);
   }, []);
 
-  const run = useCallback(async (uid: string, lookbackHours: number, mode: string = 'tactical', sitrepContext?: any) => {
+  const run = useCallback(async (uid: string, lookbackHours: number, mode: string = 'tactical', sitrepContext?: any, isSitrep: boolean = false) => {
     // Cancel any in-flight stream first
     readerRef.current?.cancel().catch(() => undefined);
     readerRef.current = null;
@@ -43,7 +43,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setState({ text: '', isStreaming: true, error: null, generatedAt: null });
 
     try {
-      const reader = await streamAnalysis(uid, lookbackHours, mode, sitrepContext);
+      const reader = await streamAnalysis(uid, lookbackHours, mode, sitrepContext, isSitrep);
       readerRef.current = reader;
 
       let buffer = '';

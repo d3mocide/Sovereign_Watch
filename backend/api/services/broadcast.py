@@ -64,7 +64,9 @@ class BroadcastManager:
         self.running = True
         try:
             self.consumer = AIOKafkaConsumer(
-                "adsb_raw", "ais_raw", "orbital_raw",
+                "adsb_raw",
+                "ais_raw",
+                "orbital_raw",
                 bootstrap_servers=settings.KAFKA_BROKERS,
                 group_id=None,  # broadcast mode — every instance gets all messages
                 auto_offset_reset="latest",
@@ -79,11 +81,12 @@ class BroadcastManager:
         # Start Redis pub/sub for real-time alerts (jamming zones, holding patterns)
         try:
             redis_url = f"redis://{settings.REDIS_HOST}:6379"
-            self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
+            self.redis_client = await aioredis.from_url(
+                redis_url, decode_responses=True
+            )
             self.redis_pubsub = self.redis_client.pubsub()
             await self.redis_pubsub.subscribe(
-                "jamming:active_zones",
-                "holding_pattern:active_zones"
+                "jamming:active_zones", "holding_pattern:active_zones"
             )
             logger.info("Redis pub/sub subscribed to alert channels")
             self.redis_task = asyncio.create_task(self._consume_redis_alerts())
@@ -121,8 +124,7 @@ class BroadcastManager:
 
         if self.redis_pubsub:
             await self.redis_pubsub.unsubscribe(
-                "jamming:active_zones",
-                "holding_pattern:active_zones"
+                "jamming:active_zones", "holding_pattern:active_zones"
             )
             await self.redis_pubsub.aclose()
             self.redis_pubsub = None
@@ -245,14 +247,21 @@ class BroadcastManager:
                     if isinstance(msg, tuple):
                         msg_type, data = msg
                         if msg_type == "alert":
-                            await asyncio.wait_for(ws.send_text(data.decode("utf-8")), timeout=3.0)
+                            await asyncio.wait_for(
+                                ws.send_text(data.decode("utf-8")), timeout=3.0
+                            )
                     else:
                         # TAK proto (bytes)
                         await asyncio.wait_for(ws.send_bytes(msg), timeout=3.0)
                 except asyncio.TimeoutError:
                     logger.warning("Client send timed out — disconnecting")
                     break
-                except (WebSocketDisconnect, ConnectionClosedOK, ConnectionClosedError, ClientDisconnected):
+                except (
+                    WebSocketDisconnect,
+                    ConnectionClosedOK,
+                    ConnectionClosedError,
+                    ClientDisconnected,
+                ):
                     break
                 except Exception as e:
                     logger.error(f"Client send error: {e}")
@@ -267,7 +276,9 @@ class BroadcastManager:
                     await ws.close()
                 except Exception:
                     pass
-                logger.info(f"Client worker exited. Total clients: {len(self._clients)}")
+                logger.info(
+                    f"Client worker exited. Total clients: {len(self._clients)}"
+                )
 
 
 # Global Instance

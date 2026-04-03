@@ -10,7 +10,9 @@ import types
 from unittest.mock import AsyncMock, MagicMock
 
 
-def install_common_test_stubs(*, include_psutil: bool = False, include_web_stack: bool = False) -> None:
+def install_common_test_stubs(
+    *, include_psutil: bool = False, include_web_stack: bool = False
+) -> None:
     """Install shared sys.modules stubs used across API unit tests."""
     mock_asyncpg = MagicMock()
     mock_asyncpg.create_pool = AsyncMock()

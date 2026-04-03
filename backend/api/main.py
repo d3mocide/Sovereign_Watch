@@ -168,6 +168,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+
 # ── Health check (public — used by Docker/nginx probes) ──────────────────────
 @app.get("/health", include_in_schema=False)
 async def health():
