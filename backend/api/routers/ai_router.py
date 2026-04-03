@@ -17,6 +17,7 @@ from services.sequence_evaluation_engine import (
     SequenceEvaluationEngine,
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
+from services.ai_service import ai_service
 from core.database import db
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class EvaluationRequest(BaseModel):
     # When True the LLM narrative step is skipped (used internally for heatmaps
     # to avoid fanning out N LLM calls per heatmap request).
     lightweight: bool = False
+    is_sitrep: bool = False
 
 
 class RiskAssessmentResponse(BaseModel):
@@ -377,15 +379,21 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
     # Build narrative summaries for LLM
     gdelt_summary = "\n".join(
         [
-            f"{c.predicate_type}: {c.narrative or 'N/A'}"
+            f"[{c.time.strftime('%H:%M')}] {c.predicate_type}: {c.narrative or 'N/A'}"
             for c in aligned.gdelt_clauses[:5]
         ]
     )
     tak_summary = "\n".join(
         [
-            f"{c.uid} ({c.source}): {c.predicate_type}"
+            f"[{c.time.strftime('%H:%M')}] {c.uid} ({c.source}): {c.predicate_type}"
             for c in aligned.tak_clauses[:5]
         ]
+    )
+
+    # Collect heuristic behavioral signals from active anomalies for LLM ground-truth context
+    behavioral_signals = [a.description for a in active_anomalies if a.description]
+    behavioral_signals.extend(
+        [a.description for a in context_anomalies if a.score > 0.1]
     )
 
     # Initialize LLM-based sequence evaluation if risk is elevated.
@@ -396,13 +404,12 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
 
     if risk_score > 0.3 and not request.lightweight:
         try:
-            # Initialize LiteLLM config (minimal for now)
-            litellm_config = {
-                "api_key": "",
-                "api_base": "http://localhost:11434",  # Local Ollama
-                "model_name": "llama3",
-            }
-            evaluation_engine = SequenceEvaluationEngine(litellm_config)
+            logger.info(
+                "🧠 [UNIFIED-BRAIN] Evaluating region %s with %d behavioral signals detected",
+                request.h3_region,
+                len(behavioral_signals),
+            )
+            evaluation_engine = SequenceEvaluationEngine()
 
             # Call LLM for detailed analysis
             assessment: RiskAssessment = await asyncio.wait_for(
@@ -411,6 +418,8 @@ async def evaluate_regional_escalation(request: EvaluationRequest) -> RiskAssess
                     gdelt_summary=gdelt_summary,
                     tak_summary=tak_summary,
                     anomalous_uids=anomalous_uids,
+                    behavioral_signals=behavioral_signals,
+                    is_sitrep=request.is_sitrep,
                 ),
                 timeout=_LLM_EVAL_TIMEOUT_SECONDS,
             )
@@ -737,16 +746,31 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     entity_count = len(set(r["uid"] for r in adsb_rows))
     risk_score = min(1.0, (len(emergency_squawks) * 0.4 + len(high_dwell) * 0.1 + entity_count * 0.005))
 
-    narrative = (
-        f"Air domain assessment for {request.h3_region}: "
-        f"{entity_count} ADS-B tracks observed in {request.lookback_hours}h window. "
-        + (f"{len(emergency_squawks)} emergency squawk(s) detected. " if emergency_squawks else "")
-        + (nws_summary + ". " if nws_summary else "")
-        + ("No significant air domain anomalies." if not indicators else "")
-    )
-
     context["adsb_entity_count"] = entity_count
     context["emergency_squawk_count"] = len(emergency_squawks)
+
+    # Build narrative via unified AIService (Air Intelligence Officer persona)
+    signals_text = "\n".join(f"- {i}" for i in indicators) if indicators else "- No anomalies detected"
+    user_prompt = (
+        f"Air domain assessment for H3 region {request.h3_region}:\n"
+        f"- {entity_count} ADS-B tracks in {request.lookback_hours}h window\n"
+        f"- Kp index: {context.get('kp_index', 'N/A')}\n"
+        f"- NWS alerts: {context.get('nws_alerts', {})}\n\n"
+        f"HEURISTIC SIGNALS:\n{signals_text}"
+    )
+    persona = ai_service.get_persona(mode="tactical")
+    logger.info("🧠 [UNIFIED-BRAIN] Air domain analysis for %s", request.h3_region)
+    try:
+        narrative = await ai_service.generate_static(
+            system_prompt=persona["sys"] + "\n" + persona["inst"],
+            user_prompt=user_prompt,
+        )
+    except Exception as exc:
+        logger.warning("Air domain LLM failed, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Air domain: {entity_count} ADS-B tracks in {request.lookback_hours}h. "
+            + ("; ".join(indicators) if indicators else "No anomalies detected.")
+        )
 
     return DomainAnalysisResponse(
         domain="air",
@@ -847,14 +871,30 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         indicators.append(f"Possible AIS dark vessels: {len(sparse_vessels)} with single observation")
 
     risk_score = min(1.0, len(indicators) * 0.2 + entity_count * 0.005)
-
-    narrative = (
-        f"Sea domain assessment for {request.h3_region}: "
-        f"{entity_count} AIS tracks observed in {request.lookback_hours}h window. "
-        + ("; ".join(indicators) + "." if indicators else "No significant maritime anomalies.")
-    )
-
     context["ais_entity_count"] = entity_count
+
+    # Build narrative via unified AIService (MDA Specialist persona)
+    signals_text = "\n".join(f"- {i}" for i in indicators) if indicators else "- No anomalies detected"
+    user_prompt = (
+        f"Maritime domain assessment for H3 region {request.h3_region}:\n"
+        f"- {entity_count} AIS tracks in {request.lookback_hours}h window\n"
+        f"- Max wave height: {context.get('max_wave_height_m', 'N/A')}m (NDBC)\n"
+        f"- Cable-correlated outages: {context.get('cable_correlated_outages', 0)}\n\n"
+        f"HEURISTIC SIGNALS:\n{signals_text}"
+    )
+    persona = ai_service.get_persona(mode="tactical")
+    logger.info("🧠 [UNIFIED-BRAIN] Sea domain analysis for %s", request.h3_region)
+    try:
+        narrative = await ai_service.generate_static(
+            system_prompt=persona["sys"] + "\n" + persona["inst"],
+            user_prompt=user_prompt,
+        )
+    except Exception as exc:
+        logger.warning("Sea domain LLM failed, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Sea domain: {entity_count} AIS tracks in {request.lookback_hours}h. "
+            + ("; ".join(indicators) if indicators else "No anomalies detected.")
+        )
 
     return DomainAnalysisResponse(
         domain="sea",
@@ -942,11 +982,28 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
     signal_risk = min(0.4, signal_count * 0.04) if not context.get("signal_loss_suppression", {}).get("active") else 0.0
     risk_score = min(1.0, kp_risk * 0.5 + scale_risk + signal_risk)
 
-    narrative = (
-        f"Orbital/space-weather assessment for {request.h3_region}: "
-        f"Kp={kp_val or 'N/A'} ({storm_level or 'unknown'}). "
-        + ("; ".join(indicators) + "." if indicators else "Nominal space weather conditions.")
+    # Build narrative via unified AIService (Space Weather / Orbital Analyst persona)
+    signals_text = "\n".join(f"- {i}" for i in indicators) if indicators else "- Nominal conditions"
+    user_prompt = (
+        f"Orbital / space-weather assessment for H3 region {request.h3_region}:\n"
+        f"- Kp index: {kp_val or 'N/A'} ({storm_level or 'unknown'})\n"
+        f"- NOAA scales: {context.get('noaa_scales', {})}\n"
+        f"- SatNOGS signal-loss events: {signal_count}\n\n"
+        f"HEURISTIC SIGNALS:\n{signals_text}"
     )
+    persona = ai_service.get_persona(mode="tactical")
+    logger.info("🧠 [UNIFIED-BRAIN] Orbital domain analysis for %s", request.h3_region)
+    try:
+        narrative = await ai_service.generate_static(
+            system_prompt=persona["sys"] + "\n" + persona["inst"],
+            user_prompt=user_prompt,
+        )
+    except Exception as exc:
+        logger.warning("Orbital domain LLM failed, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Orbital/space-weather: Kp={kp_val or 'N/A'} ({storm_level or 'unknown'}). "
+            + ("; ".join(indicators) if indicators else "Nominal space weather conditions.")
+        )
 
     return DomainAnalysisResponse(
         domain="orbital",
