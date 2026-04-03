@@ -120,9 +120,12 @@ class AIService:
 
         # 3. Dynamic Selection
         p_key = mode
-        if is_sitrep: p_key = "sitrep"
-        elif is_hold: p_key = "hold_sar" if mode == "sar" else "hold"
-        elif is_gdelt and mode != "sar": p_key = "gdelt"
+        if is_sitrep:
+            p_key = "sitrep"
+        elif is_hold:
+            p_key = "hold_sar" if mode == "sar" else "hold"
+        elif is_gdelt and mode != "sar":
+            p_key = "gdelt"
         
         selected = persona_defs.get(p_key, persona_defs["tactical"])
 
