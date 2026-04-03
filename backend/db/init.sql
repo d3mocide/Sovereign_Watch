@@ -389,6 +389,26 @@ CREATE INDEX IF NOT EXISTS ix_gdelt_geom ON gdelt_events USING GIST (geom);
 CREATE INDEX IF NOT EXISTS ix_gdelt_time ON gdelt_events (time DESC);
 CREATE INDEX IF NOT EXISTS ix_gdelt_tone ON gdelt_events (tone);
 
+-- TABLE: h3_risk_scores (H3-indexed composite risk heat-map, Phase 1)
+-- Persists per-resolution risk snapshots (density + sentiment → composite score).
+-- 1-hour chunk intervals; 24-hour retention matches the default lookback window.
+CREATE TABLE IF NOT EXISTS h3_risk_scores (
+    time          TIMESTAMPTZ      NOT NULL,
+    h3_index      TEXT             NOT NULL,
+    resolution    SMALLINT         NOT NULL,
+    density_raw   FLOAT            NOT NULL,
+    sentiment_raw FLOAT            NOT NULL,
+    risk_score    FLOAT            NOT NULL,
+    lat           DOUBLE PRECISION NOT NULL,
+    lon           DOUBLE PRECISION NOT NULL
+);
+SELECT create_hypertable('h3_risk_scores', 'time',
+    if_not_exists => TRUE,
+    chunk_time_interval => INTERVAL '1 hour');
+SELECT add_retention_policy('h3_risk_scores', INTERVAL '24 hours');
+CREATE INDEX IF NOT EXISTS ix_h3risk_index_res
+    ON h3_risk_scores (h3_index, resolution, time DESC);
+
 -- TABLE: ndbc_obs (NDBC Ocean Buoy Observations — Phase 1 Geospatial)
 -- Hypertable for real-time sea state baseline: wave height, water temp, wind.
 -- 15-minute cadence, 30-day rolling retention.  Used by Phase 3 fusion queries

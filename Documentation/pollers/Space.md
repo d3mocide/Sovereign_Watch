@@ -51,8 +51,37 @@ Integrates data from the **SatNOGS Network** and **Transmitter Database** to pro
 Monitors the Earth's geomagnetic environment to provide context for potential signal degradation or orbital anomalies.
 
 - **Aurora Forecast**: Fetches the 30-minute aurora probability from NOAA SWEPC.
-- **Kp-Index**: Tracks the planetary K-index (magnetic storm intensity).
+- **Kp-Index**: Tracks the planetary K-index (magnetic storm intensity), updated every 15 minutes.
+- **NOAA Scales**: Polls the current R (Radio Blackout), S (Solar Energetic Particle), and G (Geomagnetic Storm) event levels every 15 minutes.
 - **Storage**: Direct writes to TimescaleDB for historical analysis + Redis for real-time HUD status.
+
+### NOAA Scale Alert Suppression
+
+When R-scale ≥ R3 (Strong Radio Blackout) **or** G-scale ≥ G3 (Strong Geomagnetic Storm), the poller sets a Redis suppression key:
+
+```
+space_weather:suppress_signal_loss  (TTL: 70 minutes)
+```
+
+The AI Router reads this key before running satellite signal-loss anomaly detection. If suppression is active, signal-loss alerts are suppressed to prevent false-positive jamming/interference reports caused by natural space weather conditions.
+
+### Redis Keys
+
+| Key | Contents | TTL |
+| :--- | :--- | :--- |
+| `space_weather:kp_current` | Latest Kp value + storm level | None (overwritten) |
+| `space_weather:kp_history` | Last 24h of Kp readings | None (overwritten) |
+| `space_weather:aurora_geojson` | Auroral oval GeoJSON (intensity ≥ 5%) | None (overwritten) |
+| `space_weather:noaa_scales` | Current R/S/G scale levels from NOAA | None (overwritten) |
+| `space_weather:suppress_signal_loss` | Active suppression payload (reason, scales, timestamps) | **70 minutes** |
+
+### Poll Intervals
+
+| Source | Default | Env Variable |
+| :--- | :--- | :--- |
+| Kp-index | 15 minutes | `KP_INTERVAL_S` |
+| Aurora GeoJSON | 5 minutes | `AURORA_INTERVAL_S` |
+| NOAA Scales (R/S/G) | 15 minutes | `SCALES_INTERVAL_S` |
 
 ---
 

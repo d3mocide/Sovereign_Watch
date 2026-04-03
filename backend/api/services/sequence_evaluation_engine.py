@@ -1,9 +1,16 @@
+"""
+Sequence Evaluation Engine: Routes aligned clausal chains through AIService for narrative analysis.
+Implements zero-shot prompting for topological narrative analysis and escalation detection.
+"""
+
 import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from services.ai_service import ai_service
+from services.semantic_cache import get_semantic_cache
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +34,8 @@ class SequenceEvaluationEngine:
     def __init__(self, litellm_config: Optional[Dict[str, Any]] = None):
         """
         Initialize the engine.
-        Note: actual model configuration is now managed by AIService.
+        Actual model configuration is managed by AIService; litellm_config is accepted
+        for backward compatibility but ignored.
         """
         pass
 
@@ -42,8 +50,10 @@ class SequenceEvaluationEngine:
     ) -> RiskAssessment:
         """
         Evaluate escalation risk for a region using AIService.
+
+        Checks the RedisVL semantic cache (threshold 0.94) before calling the LLM,
+        and stores the response for future near-identical prompts.
         """
-        # Build user prompt with context
         user_prompt = self._build_context_window(
             h3_region, gdelt_summary, tak_summary, anomalous_uids, behavioral_signals
         )
@@ -51,23 +61,36 @@ class SequenceEvaluationEngine:
         try:
             # 1. Fetch official persona with markdown rules
             persona = ai_service.get_persona(mode="osint", is_sitrep=is_sitrep)
-            
-            # 2. Inject the MUST-BE-JSON requirement for the engine
+
+            # 2. Inject the MUST-BE-JSON requirement for structured parsing
             json_requirement = (
                 "\n\nFINAL OUTPUT REQUIREMENT: You MUST return valid JSON with these fields: "
                 '{"risk_score": <float>, "narrative_summary": "<use SITREP headers here>", '
                 '"anomalous_uids": [], "escalation_indicators": [], "confidence": <float>}. '
                 "Ensure narrative_summary is structured with the requested ### headers."
             )
-            
+
             system_instruction = f"{persona['sys']}\n{persona['inst']}{json_requirement}"
 
-            # 3. Route through unified AIService
+            # 3. Semantic cache look-aside (keyed on the full user prompt)
+            redis_url = os.getenv("REDIS_URL", "redis://sovereign-redis:6379")
+            sem_cache = await get_semantic_cache(redis_url)
+            cached = await sem_cache.check(user_prompt)
+            if cached is not None:
+                logger.info("SemanticCache HIT — skipping LLM call for region %s", h3_region)
+                risk_assessment = self._parse_response(cached, h3_region)
+                risk_assessment.raw_response = cached
+                return risk_assessment
+
+            # 4. Route through unified AIService
             response = await ai_service.generate_static(
-                system_prompt=system_instruction, 
-                user_prompt=user_prompt
+                system_prompt=system_instruction,
+                user_prompt=user_prompt,
             )
-            
+
+            # 5. Store in semantic cache for future near-identical requests
+            await sem_cache.store(user_prompt, response)
+
             risk_assessment = self._parse_response(response, h3_region)
             risk_assessment.raw_response = response
             return risk_assessment
@@ -92,7 +115,6 @@ class SequenceEvaluationEngine:
         behavioral_signals: List[str] = None,
     ) -> str:
         """Build the user prompt with scaled contextual data."""
-        # Add heuristic signals for increased ground-truth texture
         signals_text = "None detected"
         if behavioral_signals:
             signals_text = "\n".join([f"- {s}" for s in behavioral_signals])
@@ -119,7 +141,6 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
     def _parse_response(self, response_text: str, h3_region: str) -> RiskAssessment:
         """Parse LLM response into RiskAssessment."""
         try:
-            # Extract JSON from response (may contain markdown code blocks)
             json_str = response_text
             if "```json" in response_text:
                 json_str = response_text.split("```json")[1].split("```")[0]
@@ -141,21 +162,17 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
             return RiskAssessment(
                 h3_region_id=h3_region,
                 risk_score=0.5,
-                narrative_summary=response_text[:200],  # Use first 200 chars
+                narrative_summary=response_text[:200],
                 anomalous_uids=[],
                 escalation_indicators=[],
                 confidence=0.3,
             )
 
     def scale_tak_data(self, tak_clauses: List[Dict], target_count: int = 5) -> str:
-        """
-        Scale TAK data up to prevent token exhaustion.
-        Summarize multiple TAK clauses into fewer, aggregated narratives.
-        """
+        """Scale TAK data to prevent token exhaustion."""
         if not tak_clauses:
             return ""
 
-        # Group by UID
         uid_groups: Dict[str, List[Dict]] = {}
         for clause in tak_clauses:
             uid = clause.get("uid", "unknown")
@@ -163,10 +180,9 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
                 uid_groups[uid] = []
             uid_groups[uid].append(clause)
 
-        # Summarize per UID
         summaries = []
         for uid, clauses in list(uid_groups.items())[:target_count]:
-            latest = clauses[-1]  # Most recent clause
+            latest = clauses[-1]
             state_changes = [c.get("state_change_reason", "UNKNOWN") for c in clauses]
             lat = latest.get("locative_lat")
             lon = latest.get("locative_lon")
@@ -180,14 +196,10 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
         return "\n".join(summaries)
 
     def scale_gdelt_data(self, gdelt_clauses: List[Dict], target_count: int = 5) -> str:
-        """
-        Scale GDELT data to prevent token exhaustion.
-        Aggregate events by CAMEO code.
-        """
+        """Scale GDELT data to prevent token exhaustion."""
         if not gdelt_clauses:
             return ""
 
-        # Group by event code
         code_groups: Dict[str, List[Dict]] = {}
         for clause in gdelt_clauses:
             code = clause.get("predicate_type", "UNKNOWN")
@@ -195,7 +207,6 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
                 code_groups[code] = []
             code_groups[code].append(clause)
 
-        # Summarize per code
         summaries = []
         for code, clauses in list(code_groups.items())[:target_count]:
             summary = f"{code}: {len(clauses)} events, latest: {clauses[-1].get('narrative', 'N/A')[:100]}"

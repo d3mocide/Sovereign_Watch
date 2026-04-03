@@ -473,6 +473,8 @@ Returns submarine cable landing station GeoJSON.
 
 Returns active internet outage data (sourced from IODA, cached in Redis, refreshed every 30 minutes).
 
+Each outage feature includes a `nearby_cable_landings` array listing submarine cable landing point names within 300 km of the outage centroid.
+
 **Response:** GeoJSON `FeatureCollection` with outage Point features:
 ```json
 {
@@ -481,15 +483,196 @@ Returns active internet outage data (sourced from IODA, cached in Redis, refresh
     {
       "type": "Feature",
       "properties": {
-        "id": "outage-RU",
-        "region": "Russia",
-        "country_code": "RU",
-        "severity": 78.5,
-        "datasource": "IODA_OVERALL"
+        "id": "outage-EG",
+        "region": "Egypt",
+        "country_code": "EG",
+        "severity": 61.2,
+        "datasource": "IODA_OVERALL",
+        "nearby_cable_landings": ["Alexandria (Egypt)", "Port Said (Egypt)"]
       },
-      "geometry": { "type": "Point", "coordinates": [37.6, 55.7] }
+      "geometry": { "type": "Point", "coordinates": [30.8, 26.8] }
     }
   ]
+}
+```
+
+---
+
+## Space Weather
+
+### `GET /api/space-weather/kp`
+
+Returns the current Kp-index value and 24-hour history series.
+
+**Response:**
+```json
+{
+  "current": {
+    "kp": 3.3,
+    "kp_fraction": 3.33,
+    "storm_level": "unsettled",
+    "time": "2026-04-03T12:00:00Z",
+    "fetched_at": "2026-04-03T12:05:00Z"
+  },
+  "history": [
+    { "time": "2026-04-02T12:00:00Z", "kp": 2.0, "storm_level": "quiet" }
+  ]
+}
+```
+
+---
+
+### `GET /api/space-weather/aurora`
+
+Returns the NOAA 1-hour auroral oval forecast as a GeoJSON FeatureCollection. Each feature is a Point with an `aurora` property (0–100 intensity percentage). Only points with intensity ≥ 5% are included.
+
+---
+
+### `GET /api/space-weather/status`
+
+Quick-summary endpoint for HUD widgets.
+
+**Response:**
+```json
+{
+  "kp": 3.3,
+  "storm_level": "unsettled",
+  "aurora_active": true,
+  "gps_degradation_risk": "low",
+  "time": "2026-04-03T12:00:00Z"
+}
+```
+
+| `gps_degradation_risk` | Condition |
+| :--- | :--- |
+| `low` | Kp < 5 |
+| `moderate` | 5 ≤ Kp < 7 |
+| `high` | Kp ≥ 7 |
+
+---
+
+### `GET /api/space-weather/alerts`
+
+Returns current NOAA Space Weather Scale levels (R/S/G) and the active signal-loss suppression state.
+
+**Response:**
+```json
+{
+  "scales": {
+    "0": {
+      "R": { "Scale": "R3", "Text": "Strong" },
+      "S": { "Scale": "S0", "Text": "None" },
+      "G": { "Scale": "G0", "Text": "None" }
+    }
+  },
+  "suppression": {
+    "active": true,
+    "reason": "R3 Radio Blackout",
+    "r_scale": "R3",
+    "g_scale": "G0",
+    "expires_at": "2026-04-03T13:10:00Z",
+    "set_at": "2026-04-03T12:00:00Z"
+  },
+  "fetched_at": "2026-04-03T12:05:00Z"
+}
+```
+
+`suppression` is `null` when no R3+/G3+ event is active. When `suppression.active` is `true`, satellite signal-loss anomaly detection is suspended system-wide to prevent false-positive jamming alerts.
+
+---
+
+## AI Domain Agents
+
+Three specialized domain agent endpoints provide persona-driven risk assessments that fuse multi-INT data with environmental context.
+
+### `POST /api/ai_router/analyze/air`
+
+**Air Intelligence Officer persona.** Fuses ADS-B telemetry, emergency squawk codes, NWS weather alerts, and Kp-index GPS risk.
+
+**Request body:**
+```json
+{ "h3_region": "872830828ffffff", "lookback_hours": 24 }
+```
+
+**Response:**
+```json
+{
+  "domain": "air",
+  "h3_region": "872830828ffffff",
+  "narrative": "Air domain assessment for ...: 14 ADS-B tracks observed...",
+  "risk_score": 0.18,
+  "indicators": [
+    "Emergency squawk codes active: 1 aircraft",
+    "Possible holding patterns: 3 UIDs with ≥5 observations"
+  ],
+  "context_snapshot": {
+    "adsb_entity_count": 14,
+    "emergency_squawk_count": 1,
+    "kp_index": 2.3,
+    "nws_alerts": { "count": 42, "severe_count": 3, "extreme_count": 0 }
+  }
+}
+```
+
+---
+
+### `POST /api/ai_router/analyze/sea`
+
+**Maritime Domain Awareness (MDA) Specialist persona.** Fuses AIS vessel telemetry, NDBC wave height observations, and IODA internet outage / submarine cable landing correlation.
+
+**Request body:**
+```json
+{ "h3_region": "872830828ffffff", "lookback_hours": 24 }
+```
+
+**Response:**
+```json
+{
+  "domain": "sea",
+  "h3_region": "872830828ffffff",
+  "narrative": "Sea domain assessment for ...: 8 AIS tracks observed...",
+  "risk_score": 0.31,
+  "indicators": [
+    "High sea state: max wave height 5.2m (NDBC)",
+    "Internet outages near submarine cable landings: 2 regions affected"
+  ],
+  "context_snapshot": {
+    "ais_entity_count": 8,
+    "max_wave_height_m": 5.2,
+    "cable_correlated_outages": 2
+  }
+}
+```
+
+---
+
+### `POST /api/ai_router/analyze/orbital`
+
+**Space Weather / Orbital Analyst persona.** Fuses Kp-index, NOAA R/S/G scale levels, SatNOGS signal loss events, and the active suppression state.
+
+**Request body:**
+```json
+{ "h3_region": "872830828ffffff", "lookback_hours": 24 }
+```
+
+**Response:**
+```json
+{
+  "domain": "orbital",
+  "h3_region": "872830828ffffff",
+  "narrative": "Orbital/space-weather assessment for ...: Kp=7.0 (G2)...",
+  "risk_score": 0.62,
+  "indicators": [
+    "Significant geomagnetic storm: Kp=7.0 (G2 - Moderate)",
+    "Radio Blackout R3: HF comms degraded",
+    "Signal-loss suppression active: R3 Radio Blackout"
+  ],
+  "context_snapshot": {
+    "kp_index": 7.0,
+    "storm_level": "G2 - Moderate",
+    "noaa_scales": { "R": "R3", "G": "G2", "S": "S0" },
+    "signal_loss_suppression": { "active": true, "reason": "R3 Radio Blackout" }
+  }
 }
 ```
 

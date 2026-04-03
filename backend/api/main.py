@@ -14,6 +14,7 @@ from routers import (
     auth,
     buoys,
     gdelt,
+    h3_risk,
     holding_patterns,
     infra,
     iss,
@@ -207,6 +208,7 @@ app.include_router(buoys.router, dependencies=_viewer_auth)
 app.include_router(maritime.router, dependencies=_viewer_auth)
 app.include_router(iss.router, dependencies=_viewer_auth)
 app.include_router(ai_router.router, dependencies=_viewer_auth)
+app.include_router(h3_risk.router, dependencies=_viewer_auth)
 
 if __name__ == "__main__":
     import uvicorn

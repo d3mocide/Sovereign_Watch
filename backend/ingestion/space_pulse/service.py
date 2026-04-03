@@ -47,6 +47,7 @@ SATNOGS_DB_INTERVAL_H      = int(os.getenv("SATNOGS_DB_INTERVAL_H", "24"))
 SATNOGS_NETWORK_INTERVAL_H = int(os.getenv("SATNOGS_NETWORK_INTERVAL_H", "1"))
 AURORA_INTERVAL_S          = int(os.getenv("AURORA_INTERVAL_S", "300"))   # 5 min
 KP_INTERVAL_S              = int(os.getenv("KP_INTERVAL_S", "900"))       # 15 min
+SCALES_INTERVAL_S          = int(os.getenv("SCALES_INTERVAL_S", "900"))   # 15 min
 
 
 class SpacePulseService:
@@ -93,6 +94,7 @@ class SpacePulseService:
                 db_url=DATABASE_URL,
                 aurora_interval_s=AURORA_INTERVAL_S,
                 kp_interval_s=KP_INTERVAL_S,
+                scales_interval_s=SCALES_INTERVAL_S,
             ),
             ISSSource(
                 redis_client=self.redis_client,
