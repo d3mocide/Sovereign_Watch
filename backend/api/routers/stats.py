@@ -21,24 +21,21 @@ async def get_activity_stats(hours: int = 24):
     # Constrain hours to a reasonable dashboard view (max 72 hours matching retention)
     hours = max(1, min(hours, 72))
 
-    query = (
-        """
+    query = """
         SELECT
             time_bucket('1 minute', time) AS bucket,
             type,
             COUNT(*) as count
         FROM tracks
-        WHERE time >= NOW() - INTERVAL '%s hours'
+        WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
         GROUP BY bucket, type
         ORDER BY bucket ASC, type
     """
-        % hours
-    )
 
     try:
         if db.pool:
             async with db.pool.acquire() as conn:
-                records = await conn.fetch(query)
+                records = await conn.fetch(query, hours)
 
         # Reshape data into a timeline series suitable for ECharts
         timeline = {}
@@ -78,16 +75,13 @@ async def get_tak_breakdown(hours: int = 24):
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not ready")
 
-    query = (
-        """
+    query = """
         SELECT type, COUNT(*) as count 
         FROM tracks 
-        WHERE time >= NOW() - INTERVAL '%s hours'
+        WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
         GROUP BY type 
         ORDER BY count DESC
     """
-        % hours
-    )
 
     # Mapping of hierarchical CoT types to human-readable labels and categories
     COT_MAP = {
@@ -140,7 +134,7 @@ async def get_tak_breakdown(hours: int = 24):
 
     try:
         async with db.pool.acquire() as conn:
-            records = await conn.fetch(query)
+            records = await conn.fetch(query, hours)
 
         # Calculate supplemental global metrics
         total_pings = sum(r["count"] for r in records)
@@ -214,13 +208,13 @@ async def get_sensor_intelligence():
     # Group detections by 45-degree octants relative to center
     query_octants = """
         SELECT 
-            floor(mod(cast(ST_Azimuth(ST_SetSRID(ST_MakePoint(%s, %s), 4326), geom) * 180 / pi() + 360 as numeric), 360) / 45) as octant,
+            floor(mod(cast(ST_Azimuth(ST_SetSRID(ST_MakePoint($1, $2), 4326), geom) * 180 / pi() + 360 as numeric), 360) / 45) as octant,
             count(*) as density,
-            max(ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography) / 1852) as max_dist_nm
+            max(ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) / 1852) as max_dist_nm
         FROM tracks
         WHERE time >= NOW() - INTERVAL '15 minutes'
         GROUP BY octant
-    """ % (LON, LAT, LON, LAT)
+    """
 
     # 2. Signal Integrity Trends (using nic/nacp as proxies for SNR)
     query_integrity = """
@@ -237,7 +231,7 @@ async def get_sensor_intelligence():
 
     try:
         async with db.pool.acquire() as conn:
-            octant_records = await conn.fetch(query_octants)
+            octant_records = await conn.fetch(query_octants, LON, LAT)
             integrity_records = await conn.fetch(query_integrity)
 
         # Map octants to human labels
