@@ -104,12 +104,13 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
 
             {/* Username */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
+              <label htmlFor="login-username" className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                 Username
               </label>
               <div className="relative">
                 <User size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                 <input
+                  id="login-username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -126,12 +127,13 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
+              <label htmlFor="login-password" className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                 Password
               </label>
               <div className="relative">
                 <Lock size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                 <input
+                  id="login-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -149,12 +151,13 @@ export function LoginView({ isFirstSetup = false, onSetupComplete }: LoginViewPr
             {/* Confirm password — first-setup only */}
             {isFirstSetup && (
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
+                <label htmlFor="login-confirm-password" className="block text-[10px] font-bold text-hud-green/55 uppercase tracking-[0.3em]">
                   Confirm Password
                 </label>
                 <div className="relative">
                   <Lock size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
                   <input
+                    id="login-confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
