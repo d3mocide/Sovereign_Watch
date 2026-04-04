@@ -33,6 +33,8 @@ import { getSatNOGSLayer } from "./SatNOGSLayer";
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
 import type { H3RiskCellData } from "../api/h3Risk";
+import type { ClusterInfo } from "../api/clusters";
+import { buildClusterLayer } from "./buildClusterLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -94,6 +96,8 @@ interface LayerCompositionOptions {
   holdingPatternData?: FeatureCollection | null;
   historySegments?: HistorySegment[];
   satnogsStations?: SatNOGSStation[];
+  /** ST-DBSCAN cluster centroids (Phase 2) */
+  clusterData?: ClusterInfo[];
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -143,6 +147,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     historySegments,
     satnogsStations,
     holdingPatternData,
+    clusterData,
   } = options;
 
   // JS8 station layers
@@ -247,6 +252,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   return [
     ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
     ...buildH3RiskLayer(h3RiskCells, !!filters?.showH3Risk),
+    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, now),
     getTerminatorLayer(!!filters?.showTerminator),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
