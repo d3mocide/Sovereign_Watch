@@ -144,8 +144,9 @@ export function UserManagementPanel() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             <div className="space-y-1">
-              <label className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Identity</label>
+              <label htmlFor="create-username" className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Identity</label>
               <input
+                id="create-username"
                 type="text"
                 placeholder="Username"
                 value={createForm.username}
@@ -155,8 +156,9 @@ export function UserManagementPanel() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Credential</label>
+              <label htmlFor="create-password" className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Credential</label>
               <input
+                id="create-password"
                 type="password"
                 placeholder="********"
                 value={createForm.password}
@@ -169,8 +171,9 @@ export function UserManagementPanel() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Privilege Level</label>
+            <label htmlFor="create-role" className="text-[8px] text-white/30 font-mono uppercase tracking-widest ml-0.5">Privilege Level</label>
             <select
+              id="create-role"
               value={createForm.role}
               onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserCreate['role'] })}
               className="w-full bg-white/5 border border-white/10 rounded px-2.5 py-1.5 text-white text-[10px] font-mono focus:outline-none focus:border-hud-green/30 focus:ring-1 focus:ring-hud-green/10 transition-all appearance-none"
@@ -255,7 +258,6 @@ export function UserManagementPanel() {
                 {/* Role selector */}
                 <select
                   value={u.role}
-                  aria-label={"Role for user " + u.username}
                   disabled={u.id === currentUser?.id}
                   onChange={(e) => handleRoleChange(u.id, e.target.value as 'viewer' | 'operator' | 'admin')}
                   aria-label={`Role for user ${u.username}`}
