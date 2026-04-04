@@ -1,6 +1,6 @@
 import { Brain, Crosshair, Map as MapIcon, Shield, Terminal, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { fetchTrajectory } from "../../api/trajectory";
+import { fetchTrajectory, HMMResult } from "../../../api/trajectory";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { Compass } from "../../widgets/Compass";
 import { HMMStateBadge, HMMTimelinePanel } from "../../widgets/HMMTimelinePanel";
@@ -28,7 +28,7 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
   // Lazily fetch HMM dominant state for badge display
   useEffect(() => {
     let cancelled = false;
-    fetchTrajectory(entity.uid).then((r) => {
+    fetchTrajectory(entity.uid).then((r: HMMResult | null) => {
       if (!cancelled && r)
         setHmmState({ dominant: r.dominant_state, anomaly: r.anomaly_score });
     });
