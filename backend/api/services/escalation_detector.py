@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import h3
+from services.hmm_trajectory import classify_trajectory
+from services.stdbscan import detect_clusters
 
 logger = logging.getLogger(__name__)
 
@@ -515,6 +517,77 @@ class EscalationDetector:
                     ),
                 )
             )
+
+        return anomalies
+
+    def detect_stdbscan_clusters(
+        self, tak_clauses: List[Dict]
+    ) -> List[AnomalyMetric]:
+        """Run ST-DBSCAN; return AnomalyMetric for each cluster with >= min_samples entities."""
+        if not tak_clauses:
+            return []
+
+        points = []
+        for c in tak_clauses:
+            uid = c.get("uid")
+            lat = c.get("locative_lat")
+            lon = c.get("locative_lon")
+            t = c.get("time")
+            if uid and lat is not None and lon is not None and t is not None:
+                points.append({"uid": uid, "lat": lat, "lon": lon, "time": t})
+
+        if not points:
+            return []
+
+        try:
+            result = detect_clusters(points)
+        except Exception as exc:
+            logger.warning("ST-DBSCAN failed: %s", exc)
+            return []
+
+        anomalies: List[AnomalyMetric] = []
+        for cluster in result.clusters:
+            score = min(cluster.entity_count / 20.0, 1.0)
+            anomalies.append(
+                AnomalyMetric(
+                    metric_type="stdbscan_cluster",
+                    score=score,
+                    affected_uids=cluster.uids,
+                    description=(
+                        f"ST-DBSCAN cluster {cluster.cluster_id}: "
+                        f"{cluster.entity_count} entities near "
+                        f"({cluster.centroid_lat:.4f}, {cluster.centroid_lon:.4f})"
+                    ),
+                )
+            )
+        return anomalies
+
+    def detect_hmm_anomalies(
+        self, uid_tracks: Dict[str, List[Dict]]
+    ) -> List[AnomalyMetric]:
+        """Run HMM classifier per UID; flag MANEUVERING/HOLDING_PATTERN/CONVERGING dominant states."""
+        _ANOMALOUS = {"MANEUVERING", "HOLDING_PATTERN", "CONVERGING"}
+        anomalies: List[AnomalyMetric] = []
+
+        for uid, tracks in uid_tracks.items():
+            try:
+                hmm_result = classify_trajectory(uid, tracks)
+            except Exception as exc:
+                logger.warning("HMM classification failed for uid=%s: %s", uid, exc)
+                continue
+
+            if hmm_result.dominant_state in _ANOMALOUS:
+                anomalies.append(
+                    AnomalyMetric(
+                        metric_type="hmm_trajectory",
+                        score=hmm_result.anomaly_score,
+                        affected_uids=[uid],
+                        description=(
+                            f"{uid}: HMM dominant state {hmm_result.dominant_state} "
+                            f"(anomaly_score={hmm_result.anomaly_score:.2f})"
+                        ),
+                    )
+                )
 
         return anomalies
 

@@ -812,3 +812,21 @@ GROUP BY cc.uid, cc.time, cc.source, cc.predicate_type, cc.state_change_reason,
          cc.narrative_summary, cc.locative_lat, cc.locative_lon,
          io.country_code, io.severity, io.asn_name,
          swc.kp_index, swc.kp_category, swc.dst_index;
+
+-- ---------------------------------------------------------------------------
+-- Phase 2: HMM trajectory state persistence
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trajectory_states (
+    time          TIMESTAMPTZ NOT NULL,
+    uid           TEXT        NOT NULL,
+    state         TEXT        NOT NULL,
+    confidence    FLOAT       NOT NULL,
+    anomaly_score FLOAT       NOT NULL
+);
+SELECT create_hypertable(
+    'trajectory_states', 'time',
+    if_not_exists       => TRUE,
+    chunk_time_interval => INTERVAL '1 hour'
+);
+SELECT add_retention_policy('trajectory_states', INTERVAL '48 hours');
+CREATE INDEX IF NOT EXISTS ix_traj_uid ON trajectory_states (uid, time DESC);
