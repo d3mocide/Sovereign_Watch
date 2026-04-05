@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.64.1] - 2026-04-05
+
+### Changed
+- **Environment Configuration Alignment**: Synchronized `docker-compose.yml` and `.env.example` to expose ghost environment variables across infrastructure pulling, backend track limits, news RSS URLs, and GDELT Redis configurations.
+- **AI Network Cleanup**: Removed the orphaned `sovereign-net-ai` network from `docker-compose.yml` and all container definitions to reduce Docker daemon overhead.
+
+### Fixed
+- **Space Weather Parsing Resilience**: Updated `SpaceWeatherSource` to correctly parse NOAA scales from the new bare-numeric API format (e.g., `3` instead of `R3`), restoring Kp-index and GPS integrity telemetry.
+- **Space Weather UI Continuity**: Restored 'R/G/S' scale prefixes at the ingestion layer so frontend alert streams render properly without breaking existing regex pipelines.
+- **Space Weather Interval Fix**: Added missing `SCALES_INTERVAL_S` environment mapping in `docker-compose.yml`, preventing default parsing crashes in the ingestion container.
+
 ## [0.64.0] - 2026-04-05
 
 ### Infrastructure & Stability
