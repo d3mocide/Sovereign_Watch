@@ -38,6 +38,8 @@ jobs:
               - '.github/workflows/ci.yml'
             api:
               - 'backend/api/**'
+              - 'backend/db/**'
+              - 'backend/redpanda/**'
               - '.github/workflows/ci.yml'
             aviation:
               - 'backend/ingestion/aviation_poller/**'

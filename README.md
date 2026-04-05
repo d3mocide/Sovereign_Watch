@@ -58,7 +58,9 @@ cp .env.example .env
 # Edit .env — see Documentation/Configuration.md for all variables
 
 # 2. Boot
-docker compose up -d --build
+make prod          # production build (static frontend, no hot-reload)
+# or
+make dev           # development build (Vite HMR, uvicorn --reload)
 
 # 3. Access
 #   Tactical Map: http://localhost
@@ -70,6 +72,8 @@ docker compose up -d --build
 ```bash
 CENTER_LAT=45.5152        # Your monitoring area
 CENTER_LON=-122.6784
+POSTGRES_PASSWORD=...     # Required — choose any strong password
+JWT_SECRET_KEY=...        # Required — generate with: openssl rand -hex 32
 AISSTREAM_API_KEY=...     # Free at aisstream.io (maritime data)
 VITE_MAPBOX_TOKEN=...     # mapbox.com (optional — for 3D terrain)
 ANTHROPIC_API_KEY=...     # For AI track analysis (optional)

@@ -42,6 +42,8 @@ services:
       retries: 5
 
   # --- Redpanda Topic Init (one-shot) ---
+  # Runs init-topics.sh after the broker is healthy.
+  # To add a new topic, edit backend/redpanda/init-topics.sh — do not inline commands here.
   sovereign-redpanda-init:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: sovereign-redpanda-init
@@ -50,23 +52,10 @@ services:
         condition: service_healthy
     networks:
       - sovereign-net-backend
+    volumes:
+      - ./backend/redpanda/init-topics.sh:/init-topics.sh:ro
     entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        rpk topic create orbital_raw \
-          --config retention.ms=3600000 \
-          --brokers sovereign-redpanda:9092 2>/dev/null \
-        || rpk topic alter-config orbital_raw \
-          --set retention.ms=3600000 \
-          --brokers sovereign-redpanda:9092
-
-        rpk topic create clausal_chains_state_changes \
-          --config retention.ms=259200000 \
-          --brokers sovereign-redpanda:9092 2>/dev/null \
-        || rpk topic alter-config clausal_chains_state_changes \
-          --set retention.ms=259200000 \
-          --brokers sovereign-redpanda:9092
+    command: ["/init-topics.sh"]
     restart: "no"
 
   # --- Ingestion: Maritime AIS ---
@@ -299,7 +288,7 @@ services:
       - OPEN_API_MODEL=${OPEN_API_MODEL:-llama3}
       - OPEN_API_LABEL=${OPEN_API_LABEL:-Llama3}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env — generate with: openssl rand -hex 32}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -320,6 +309,13 @@ services:
     depends_on:
       sovereign-timescaledb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   # --- JS8Call Radio Terminal ---
   sovereign-js8call:
@@ -370,6 +366,7 @@ services:
     networks:
       - sovereign-net-frontend
       - sovereign-net-backend
+    restart: unless-stopped
 
   # --- Nginx Reverse Proxy ---
   sovereign-nginx:
@@ -383,7 +380,10 @@ services:
       - sovereign-net-frontend
       - sovereign-net-backend
     depends_on:
-      - sovereign-frontend
-      - sovereign-backend
-      - sovereign-js8call
+      sovereign-frontend:
+        condition: service_started
+      sovereign-backend:
+        condition: service_healthy
+      sovereign-js8call:
+        condition: service_started
     restart: unless-stopped
