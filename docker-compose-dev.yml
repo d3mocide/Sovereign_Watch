@@ -1,0 +1,51 @@
+# =============================================================================
+# docker-compose-dev.yml — Development overrides
+# =============================================================================
+# Merges on top of docker-compose.yml. Only the services that differ in dev
+# are listed here; everything else comes from the base file unchanged.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose-dev.yml up
+#
+# What changes vs prod:
+#   sovereign-frontend  — Vite HMR dev server instead of nginx static build.
+#                         Source tree is live-mounted so edits reflect instantly.
+#   sovereign-backend   — uvicorn --reload enabled; source tree live-mounted.
+#   sovereign-nginx     — uses nginx-dev.conf (frontend upstream on port 3700,
+#                         WebSocket upgrade headers for Vite HMR).
+# =============================================================================
+
+volumes:
+  # node_modules persisted across restarts to avoid full reinstall on each up.
+  sovereign-vol-frontend-node-modules:
+
+services:
+
+  # --- Frontend (dev: Vite HMR dev server) ---
+  sovereign-frontend:
+    build:
+      target: dev          # overrides target: prod from base file
+    volumes:
+      - ./frontend:/app
+      - sovereign-vol-frontend-node-modules:/app/node_modules
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost}
+      - VITE_ENABLE_MAPBOX=${VITE_ENABLE_MAPBOX:-true}
+      - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
+      - VITE_CENTER_LAT=${CENTER_LAT:-45.5152}
+      - VITE_CENTER_LON=${CENTER_LON:--122.6784}
+      - VITE_COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
+      - VITE_ENABLE_3D_TERRAIN=${VITE_ENABLE_3D_TERRAIN:-false}
+      - VITE_JS8_WS_URL=${VITE_JS8_WS_URL}
+      - VITE_JS8_BASE_URL=${VITE_JS8_BASE_URL}
+
+  # --- Backend (dev: uvicorn --reload + live source mount) ---
+  sovereign-backend:
+    command: sh -c "python migrate.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./backend/api:/app   # appended to prod volumes (ai configs + migrations)
+
+  # --- Nginx (dev: routes to Vite on :3700, enables HMR WebSocket upgrade) ---
+  sovereign-nginx:
+    volumes:
+      - ./nginx/nginx-dev.conf:/etc/nginx/nginx.conf:ro

@@ -17,11 +17,23 @@
   
 - **Infrastructure**: Docker Compose, localized dev environment.
 
+### Running the stack
+
+| Environment | Command |
+| :--- | :--- |
+| **Development** (hot-reload, Vite HMR) | `docker compose -f docker-compose.yml -f docker-compose-dev.yml up` |
+| **Production** (static build, no reload) | `docker compose up` |
+
+`docker-compose.yml` is the complete, production-ready compose file.
+`docker-compose-dev.yml` is a small override file — it only redefines the three services that differ in dev (`sovereign-frontend`, `sovereign-backend`, `sovereign-nginx`). All other services are identical between environments.
+
+> **Rule for agents:** When adding or changing a service's environment variables, ports, or other config, update **`docker-compose.yml`** only. The dev override inherits everything from the base file.
+
 ### Docker Compose Mappings
 
 | Service Container | Source Path | Context / Responsibility |
 | :--- | :--- | :--- |
-| `sovereign-frontend` | `frontend/` | React (Vite) HUD interface |
+| `sovereign-frontend` | `frontend/` | **Prod:** nginx static bundle · **Dev:** Vite HMR server |
 | `sovereign-backend` | `backend/api/` | FastAPI REST/WS/SSE API |
 | `sovereign-ais-poller` | `backend/ingestion/maritime_poller/` | AIS Ingestion (AISStream) |
 | `sovereign-adsb-poller` | `backend/ingestion/aviation_poller/` | ADS-B Ingestion (ADSBx) |
@@ -54,8 +66,8 @@ Both frontend and backend have Hot Module Replacement (HMR) enabled:
 
 | Service       | Trigger                      | HMR Method                                                     | Notes                                          |
 | ------------- | ---------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
-| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                                | No restart needed. Changes reflect instantly.  |
-| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                                | No restart needed. Server auto-restarts.       |
+| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                                | Dev only. Prod requires `docker compose build sovereign-frontend`. |
+| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                                | Dev only. Prod runs without `--reload`.        |
 | **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart. |
 
 ## 4. Documentation & Change Tracking

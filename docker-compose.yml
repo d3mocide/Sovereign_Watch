@@ -10,7 +10,6 @@ volumes:
   sovereign-vol-redpanda:
   sovereign-vol-postgres:
   sovereign-vol-redis:
-  sovereign-vol-frontend-node-modules:
 
 services:
   # --- Ingestion & Streaming ---
@@ -27,7 +26,6 @@ services:
       - --node-id 0
       - --check=false
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-      # Advertise internal for backend, external for host access if needed
       - --advertise-kafka-addr internal://sovereign-redpanda:9092,external://localhost:29092
       - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
       - --advertise-pandaproxy-addr internal://sovereign-redpanda:8082,external://localhost:28082
@@ -43,11 +41,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Redpanda Topic Init (one-shot: sets per-topic retention configs) ---
-  # orbital_raw is high-volume (~2 200 msg/s for ~11 000 satellites every 5 s).
-  # Positions are never persisted — they are recomputed on demand via SGP4.
-  # 1-hour retention gives ample replay buffer for service restarts while
-  # keeping the volume bounded (~1.5 GB at steady state vs unbounded default).
+  # --- Redpanda Topic Init (one-shot) ---
   sovereign-redpanda-init:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: sovereign-redpanda-init
@@ -75,7 +69,7 @@ services:
           --brokers sovereign-redpanda:9092
     restart: "no"
 
-  # --- Ingestion: Maritime AIS (via Python Poller with Dynamic Area Management) ---
+  # --- Ingestion: Maritime AIS ---
   sovereign-ais-poller:
     build:
       context: ./backend/ingestion/maritime_poller
@@ -99,7 +93,7 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # --- Ingestion: Aviation ADS-B (via Python Poller) ---
+  # --- Ingestion: Aviation ADS-B ---
   sovereign-adsb-poller:
     build:
       context: ./backend/ingestion/aviation_poller
@@ -134,7 +128,7 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # --- Ingestion: Space Domain (Orbital TLE + SatNOGS Spectrum + Space Weather) ---
+  # --- Ingestion: Space Domain ---
   sovereign-space-pulse:
     build:
       context: ./backend/ingestion/space_pulse
@@ -145,16 +139,10 @@ services:
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
-      # UTC hour (0-23) at which Celestrak TLE refreshes are allowed to run.
-      # Set to -1 to disable hour gating and fetch immediately when interval elapses.
       - SPACE_TLE_FETCH_HOUR=${SPACE_TLE_FETCH_HOUR:-${ORBITAL_TLE_FETCH_HOUR:-2}}
-      # SatNOGS transmitter catalog refresh interval (hours)
       - SATNOGS_DB_INTERVAL_H=${SATNOGS_DB_INTERVAL_H:-24}
-      # SatNOGS observation poll interval (hours)
       - SATNOGS_NETWORK_INTERVAL_H=${SATNOGS_NETWORK_INTERVAL_H:-1}
-      # Aurora GeoJSON poll interval in seconds (default 300 = 5 min)
       - AURORA_INTERVAL_S=${AURORA_INTERVAL_S:-300}
-      # Kp-index poll interval in seconds (default 900 = 15 min)
       - KP_INTERVAL_S=${KP_INTERVAL_S:-900}
     networks:
       - sovereign-net-backend
@@ -176,9 +164,7 @@ services:
     environment:
       - REDIS_URL=redis://sovereign-redis:6379/0
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
-      # UTC hour (0-23) at which the weekly FCC tower sync is allowed to run.
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
-      # NDBC latest observations polling interval in minutes.
       - POLL_INTERVAL_NDBC_MINUTES=${POLL_INTERVAL_NDBC_MINUTES:-15}
     networks:
       - sovereign-net-backend
@@ -189,7 +175,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # --- Ingestion: Geopolitical OSINT (via GDELT CSV Poller) ---
+  # --- Ingestion: Geopolitical OSINT (GDELT) ---
   sovereign-gdelt-pulse:
     build:
       context: ./backend/ingestion/gdelt_pulse
@@ -205,7 +191,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # --- Ingestion: RF Infrastructure (Repeaters, NOAA NWR, Public Safety) ---
+  # --- Ingestion: RF Infrastructure ---
   sovereign-rf-pulse:
     build:
       context: ./backend/ingestion/rf_pulse
@@ -224,8 +210,6 @@ services:
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
-      # UTC hour (0-23) at which the weekly RadioReference SOAP fetch is allowed to run.
-      # Set to -1 to disable (fetch immediately when interval elapses).
       - RF_RR_FETCH_HOUR=${RF_RR_FETCH_HOUR:-4}
     networks:
       - sovereign-net-backend
@@ -236,7 +220,7 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # --- Processing: TAK Clausalizer (Delta Engine + State-Change Evaluator) ---
+  # --- Processing: TAK Clausalizer ---
   sovereign-tak-clausalizer:
     build:
       context: ./backend/ingestion/tak_clausalizer
@@ -292,7 +276,8 @@ services:
       timeout: 3s
       retries: 5
 
-  # --- Backend & AI ---
+  # --- Backend API ---
+  # Runs schema migrations before starting uvicorn (see backend/api/migrate.py).
   sovereign-backend:
     build:
       context: ./backend/api
@@ -326,7 +311,6 @@ services:
       - MODELS_YAML_PATH=/app/models.yaml
       - LITELLM_CONFIG_PATH=/app/litellm_config.yaml
     volumes:
-      - ./backend/api:/app
       - ./backend/ai/models.yaml:/app/models.yaml:ro
       - ./backend/ai/litellm_config.yaml:/app/litellm_config.yaml:ro
       - ./backend/db/migrations:/app/migrations:ro
@@ -337,27 +321,20 @@ services:
       sovereign-timescaledb:
         condition: service_healthy
 
-  # --- JS8Call Radio Terminal (Phase 1/2/3) ---
-  # Headless JS8Call instance with virtual PulseAudio routing from a KiwiSDR node.
-  # The FastAPI WebSocket bridge (server.py) runs inside this same container on
-  # port 8080 and is accessed by the frontend RadioTerminal component.
+  # --- JS8Call Radio Terminal ---
   sovereign-js8call:
     build:
       context: ./js8call
       dockerfile: Dockerfile
     container_name: sovereign-js8call
     environment:
-      # KiwiSDR WebSDR source – override with your target node
       - KIWI_HOST=${KIWI_HOST:-kiwisdr.example.com}
       - KIWI_PORT=${KIWI_PORT:-8073}
-      - KIWI_FREQ=${KIWI_FREQ:-14078} # kHz – 20m JS8Call calling frequency
+      - KIWI_FREQ=${KIWI_FREQ:-14078}
       - KIWI_MODE=${KIWI_MODE:-usb}
-      # Operator Maidenhead grid for distance/bearing calculations
       - MY_GRID=${MY_GRID:-CN85}
-      # JS8Call TCP API – internal to container
       - JS8CALL_HOST=127.0.0.1
       - JS8CALL_PORT=2442
-      # FastAPI bridge port (exposed below)
       - BRIDGE_PORT=8080
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
     networks:
@@ -371,30 +348,30 @@ services:
       retries: 3
       start_period: 20s
 
-  # --- Frontend ---
+  # --- Frontend (prod: nginx serving compiled static bundle) ---
+  # VITE_* vars are baked into the bundle at build time via build.args.
+  # To change them you must rebuild the image: docker compose build sovereign-frontend
   sovereign-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost}
+        VITE_ENABLE_MAPBOX: ${VITE_ENABLE_MAPBOX:-true}
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
+        VITE_CENTER_LAT: ${CENTER_LAT:-45.5152}
+        VITE_CENTER_LON: ${CENTER_LON:--122.6784}
+        VITE_COVERAGE_RADIUS_NM: ${COVERAGE_RADIUS_NM:-150}
+        VITE_ENABLE_3D_TERRAIN: ${VITE_ENABLE_3D_TERRAIN:-false}
+        VITE_JS8_WS_URL: ${VITE_JS8_WS_URL}
+        VITE_JS8_BASE_URL: ${VITE_JS8_BASE_URL}
     container_name: sovereign-frontend
-    volumes:
-      - ./frontend:/app
-      - sovereign-vol-frontend-node-modules:/app/node_modules
     networks:
       - sovereign-net-frontend
       - sovereign-net-backend
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost}
-      - VITE_ENABLE_MAPBOX=${VITE_ENABLE_MAPBOX:-true}
-      - VITE_MAPBOX_TOKEN=${VITE_MAPBOX_TOKEN}
-      - VITE_CENTER_LAT=${CENTER_LAT:-45.5152}
-      - VITE_CENTER_LON=${CENTER_LON:--122.6784}
-      - VITE_COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
-      - VITE_ENABLE_3D_TERRAIN=${VITE_ENABLE_3D_TERRAIN:-false}
-      - VITE_JS8_WS_URL=${VITE_JS8_WS_URL}
-      - VITE_JS8_BASE_URL=${VITE_JS8_BASE_URL}
 
-  # --- Nginx Reverse Proxy (single entry point) ---
+  # --- Nginx Reverse Proxy ---
   sovereign-nginx:
     image: nginx:alpine
     container_name: sovereign-nginx
