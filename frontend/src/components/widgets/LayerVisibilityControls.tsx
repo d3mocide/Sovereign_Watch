@@ -7,6 +7,7 @@ import {
   ChevronUp,
   CloudRain,
   GitBranch,
+  Globe,
   Layers,
   Network,
   Radio,
