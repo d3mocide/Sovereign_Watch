@@ -21,11 +21,13 @@
 
 | Environment | Command |
 | :--- | :--- |
-| **Development** (hot-reload, Vite HMR) | `docker compose -f docker-compose.yml -f docker-compose-dev.yml up` |
-| **Production** (static build, no reload) | `docker compose up` |
+| **Development** (hot-reload, Vite HMR) | `make dev` |
+| **Production** (static build, no reload) | `make prod` |
 
 `docker-compose.yml` is the complete, production-ready compose file.
-`docker-compose-dev.yml` is a small override file — it only redefines the three services that differ in dev (`sovereign-frontend`, `sovereign-backend`, `sovereign-nginx`). All other services are identical between environments.
+`compose.dev.yml` is a small override file — it only redefines the three services that differ in dev (`sovereign-frontend`, `sovereign-backend`, `sovereign-nginx`). All other services are identical between environments.
+
+The `Makefile` wraps the full compose commands so you never have to type them out. Run `make` with no arguments to see all available targets.
 
 > **Rule for agents:** When adding or changing a service's environment variables, ports, or other config, update **`docker-compose.yml`** only. The dev override inherits everything from the base file.
 
