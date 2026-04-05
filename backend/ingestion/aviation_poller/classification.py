@@ -7,11 +7,18 @@ MILITARY_OPERATORS = {
     "Royal Canadian Air Force", "Luftwaffe", "USAF", "US Navy", "US Army"
 }
 
-# Known Government Operators
+# Known Government Operators (High Confidence)
 GOV_OPERATORS = {
     "US Customs and Border Protection", "FBI", "Department of Homeland Security",
-    "NASA", "State Police", "DHS", "CBP", "National Police"
+    "NASA", "State Police", "DHS", "CBP", "National Police", "Justice Department",
+    "United States Marshals Service", "USMS", "Drug Enforcement Administration", "DEA"
 }
+
+# Law Enforcement and Government Keywords (Substring Match)
+LAW_ENFORCEMENT_KEYWORDS = [
+    "POLICE", "SHERIFF", "STATE TROOPER", "LAW ENFORCEMENT", "DEPT OF JUSTICE",
+    "HIGHWAY PATROL", "CONSTABLE", "CITY OF", "COUNTY OF"
+]
 
 # Drone specific string matchers
 MILITARY_UAS_STRINGS = [
@@ -57,13 +64,17 @@ def classify_aircraft(ac: Dict[str, Any]) -> Dict[str, Any]:
     # 2. Operator match -> Military
     elif operator in MILITARY_OPERATORS:
         affiliation = "military"
-    # 3. Operator match -> Government
+    # 3. Operator match (Exact) -> Government
     elif operator in GOV_OPERATORS:
         affiliation = "government"
-    # 4. Hex range AE0000-AFFFFF -> Military (US)
+    # 4. Operator/Callsign match (Substring) -> Government
+    elif any(kw in operator.upper() for kw in LAW_ENFORCEMENT_KEYWORDS) or \
+         any(kw in callsign.upper() for kw in LAW_ENFORCEMENT_KEYWORDS):
+        affiliation = "government"
+    # 5. Hex range AE0000-AFFFFF -> Military (US)
     elif "AE0000" <= hex_id <= "AFFFFF":
         affiliation = "military"
-    # 5. Commercial patterns
+    # 6. Commercial patterns
     # - Callsign 3-letter ICAO prefix (e.g., AAL123, UAL456)
     # - Category A3 (Large), A4 (Heavy), A5 (High Performance) typically commercial
     elif (len(callsign) > 3 and callsign[:3].isalpha() and callsign[3].isdigit()) or \
