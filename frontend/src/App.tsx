@@ -1001,6 +1001,7 @@ function AuthenticatedApp() {
               onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
               onAnalyzeDomain={handleAnalyzeDomain}
               missionArea={missionArea as any}
+              currentMission={(missionArea as any).currentMission ?? null}
               onMapActionsReady={setMapActions}
               showVelocityVectors={showVelocityVectors}
               showHistoryTails={showHistoryTails}

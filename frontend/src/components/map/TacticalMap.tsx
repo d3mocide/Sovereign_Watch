@@ -36,6 +36,7 @@ import { RFLegend } from "./RFLegend";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { SpeedLegend } from "./SpeedLegend";
 import { StarField } from "./StarField";
+import { NWSAlertsWidget } from "../widgets/NWSAlertsWidget";
 
 // DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
 // so that useControl is always called within the correct react-map-gl endpoint context.
@@ -78,6 +79,7 @@ interface TacticalMapProps {
     handleSaveFormCancel: () => void;
     handleReturnHome: () => Promise<void>;
   };
+  currentMission?: { lat: number; lon: number; radius_nm: number } | null;
   globeMode?: boolean;
   onToggleGlobe?: () => void; // Added prop for Globe toggle
   replayMode?: boolean;
@@ -210,6 +212,7 @@ export function TacticalMap({
   issPosition,
   issTrack,
   historySegments,
+  currentMission,
 }: TacticalMapProps) {
   // State for UI interactions
   const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -1038,6 +1041,27 @@ export function TacticalMap({
       <AltitudeLegend visible={filters?.showAir ?? true} />
       <SpeedLegend visible={filters?.showSea ?? true} />
       <RFLegend visible={!!showRepeaters} />
+
+      {/* NWS Alerts HUD — top-left, fires onEvent for AOT-intersecting Severe/Extreme alerts */}
+      {filters?.showNWSAlerts !== false && (
+        <div
+          style={{
+            position: "absolute",
+            top: 70,
+            left: 16,
+            zIndex: 100,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ pointerEvents: "auto" }}>
+            <NWSAlertsWidget
+              nwsAlerts={nwsAlertsData ?? null}
+              mission={currentMission}
+              onEvent={onEvent}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

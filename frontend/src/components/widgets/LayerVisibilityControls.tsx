@@ -94,20 +94,6 @@ export const LayerVisibilityControls: React.FC<
 
   const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters || filters?.showClausalChains);
 
-  // NWS summary badge state (GAP-04)
-  const [nwsSummary, setNwsSummary] = useState<{ count: number; severe_count: number; extreme_count: number } | null>(null);
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch("/api/infra/nws-alerts/summary");
-        if (r.ok) setNwsSummary(await r.json());
-      } catch { /* silent */ }
-    };
-    load();
-    const interval = setInterval(load, 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
   const hazardsIsOn =
     !!filters &&
     (!!filters.showJamming || filters.showHoldingPatterns !== false);
@@ -1045,18 +1031,6 @@ export const LayerVisibilityControls: React.FC<
                     >
                       NWS ALERTS
                     </span>
-                    {nwsSummary && nwsSummary.count > 0 && (
-                      <span
-                        className="ml-1 text-[8px] font-bold px-1 py-0.5 rounded"
-                        style={{
-                          color: nwsSummary.extreme_count > 0 ? "#ef4444" : nwsSummary.severe_count > 0 ? "#f59e0b" : "rgba(255,255,255,0.4)",
-                          background: nwsSummary.extreme_count > 0 ? "rgba(239,68,68,0.15)" : nwsSummary.severe_count > 0 ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.08)",
-                          border: `1px solid ${nwsSummary.extreme_count > 0 ? "rgba(239,68,68,0.4)" : nwsSummary.severe_count > 0 ? "rgba(245,158,11,0.4)" : "rgba(255,255,255,0.15)"}`,
-                        }}
-                      >
-                        {nwsSummary.count}{nwsSummary.severe_count > 0 ? ` (${nwsSummary.severe_count}⚡)` : ""}
-                      </span>
-                    )}
                   </div>
                   <input
                     type="checkbox"
