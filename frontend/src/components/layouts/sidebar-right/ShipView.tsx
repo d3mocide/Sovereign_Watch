@@ -1,8 +1,10 @@
-import { Crosshair, Shield, Terminal, X } from "lucide-react";
-import React, { useState } from "react";
+import { Brain, Crosshair, Shield, Terminal, X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { fetchTrajectory } from "../../../api/trajectory";
 import { NAV_STATUS_MAP, SHIP_TYPE_MAP } from "../../../constants/maritime";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { Compass } from "../../widgets/Compass";
+import { HMMStateBadge, HMMTimelinePanel } from "../../widgets/HMMTimelinePanel";
 import { PayloadInspector } from "../../widgets/PayloadInspector";
 import { TimeTracked } from "../TimeTracked";
 import { BaseViewProps } from "./types";
@@ -14,7 +16,22 @@ export const ShipView: React.FC<BaseViewProps> = ({
   onOpenAnalystPanel,
 }) => {
   const [showInspector, setShowInspector] = useState(false);
+  const [showHMM, setShowHMM] = useState(false);
+  const [hmmState, setHmmState] = useState<{
+    dominant: string;
+    anomaly: number;
+  } | null>(null);
   const vc = entity.vesselClassification;
+
+  // Lazily fetch HMM dominant state for badge display
+  useEffect(() => {
+    let cancelled = false;
+    fetchTrajectory(entity.uid).then((r) => {
+      if (!cancelled && r)
+        setHmmState({ dominant: r.dominant_state, anomaly: r.anomaly_score });
+    });
+    return () => { cancelled = true; };
+  }, [entity.uid]);
 
   if (showInspector) {
     return (
@@ -50,13 +67,21 @@ export const ShipView: React.FC<BaseViewProps> = ({
               <span className="text-[10px] font-bold tracking-[.3em] text-white/40">
                 IDENTIFIED_TARGET
               </span>
-              {vc?.category && (
-                <span
-                  className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${categoryBadgeClass}`}
-                >
-                  {vc.category.toUpperCase()}
-                </span>
-              )}
+              <div className="flex gap-1.5 flex-wrap">
+                {vc?.category && (
+                  <span
+                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${categoryBadgeClass}`}
+                  >
+                    {vc.category.toUpperCase()}
+                  </span>
+                )}
+                {hmmState && (
+                  <HMMStateBadge
+                    dominantState={hmmState.dominant}
+                    anomalyScore={hmmState.anomaly}
+                  />
+                )}
+              </div>
             </div>
             <h2 className="text-mono-xl font-bold tracking-tighter text-sea-accent drop-shadow-[0_0_8px_currentColor] mb-2">
               {entity.callsign}
@@ -133,11 +158,29 @@ export const ShipView: React.FC<BaseViewProps> = ({
             <Crosshair size={12} />
             CENTER_VIEW
           </button>
+          <button
+            onClick={() => setShowHMM((h) => !h)}
+            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-[10px] font-bold tracking-widest transition-all active:scale-[0.98] ${
+              showHMM
+                ? "bg-gradient-to-b from-amber-500/30 to-amber-500/10 hover:from-amber-500/40 hover:to-amber-500/20 border border-amber-500/50 text-amber-400 shadow-[0_0_15px_rgba(251,146,60,0.1)]"
+                : "bg-gradient-to-b from-white/10 to-transparent hover:from-white/20 hover:to-white/5 border border-white/10 text-white/70"
+            }`}
+          >
+            <Brain size={12} />
+            HMM_STATES
+          </button>
         </div>
       </div>
 
       {/* Body */}
       <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
+        {showHMM && (
+          <>
+            <HMMTimelinePanel uid={entity.uid} />
+            <div className="h-px bg-white/5 w-full" />
+          </>
+        )}
+
         <section className="space-y-2">
           <div className="flex items-center gap-2 text-hud-green/40 pb-1">
             <h3 className="text-[10px] text-white/50 font-bold">

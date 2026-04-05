@@ -9,6 +9,8 @@ import {
 } from "../engine/EntityFilterEngine";
 import { processSatelliteFrame } from "../engine/EntityPositionInterpolator";
 import { fetchH3Risk, H3RiskCellData } from "../api/h3Risk";
+import { fetchClusters, ClusterInfo } from "../api/clusters";
+import { latLngToCell } from "h3-js";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import {
@@ -378,6 +380,32 @@ export function useAnimationLoop({
     };
   }, [filters?.showH3Risk, h3RiskResolution]);
 
+  // ── ST-DBSCAN cluster data (Phase 2) ─────────────────────────────────────
+  const [clusterData, setClusterData] = React.useState<ClusterInfo[]>([]);
+  const clusterDataRef = useRef(clusterData);
+  clusterDataRef.current = clusterData;
+
+  useEffect(() => {
+    if (!filters?.showClusters) {
+      setClusterData([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const center = mapRef.current?.getMap()?.getCenter();
+      if (!center) return;
+      const h3Cell = latLngToCell(center.lat, center.lng, 7);
+      const resp = await fetchClusters(h3Cell);
+      if (!cancelled) setClusterData(resp.clusters);
+    };
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [filters?.showClusters]);
+
   useEffect(() => {
     const animate = () => {
       const entities = entitiesRef.current;
@@ -649,6 +677,7 @@ export function useAnimationLoop({
         historySegments: historySegmentsRef?.current,
         satnogsStations: satnogsStationsRef?.current || [],
         holdingPatternData: holdingPatternDataRef.current,
+        clusterData: clusterDataRef.current,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {

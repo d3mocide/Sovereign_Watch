@@ -1,7 +1,9 @@
-import { Crosshair, Map as MapIcon, Shield, Terminal, X } from "lucide-react";
-import React, { useState } from "react";
+import { Brain, Crosshair, Map as MapIcon, Shield, Terminal, X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { fetchTrajectory, HMMResult } from "../../../api/trajectory";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { Compass } from "../../widgets/Compass";
+import { HMMStateBadge, HMMTimelinePanel } from "../../widgets/HMMTimelinePanel";
 import { PayloadInspector } from "../../widgets/PayloadInspector";
 import { TrackHistoryPanel } from "../../widgets/TrackHistoryPanel";
 import { TimeTracked } from "../TimeTracked";
@@ -16,7 +18,22 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
 }) => {
   const [showInspector, setShowInspector] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showHMM, setShowHMM] = useState(false);
+  const [hmmState, setHmmState] = useState<{
+    dominant: string;
+    anomaly: number;
+  } | null>(null);
   const cl = entity.classification;
+
+  // Lazily fetch HMM dominant state for badge display
+  useEffect(() => {
+    let cancelled = false;
+    fetchTrajectory(entity.uid).then((r: HMMResult | null) => {
+      if (!cancelled && r)
+        setHmmState({ dominant: r.dominant_state, anomaly: r.anomaly_score });
+    });
+    return () => { cancelled = true; };
+  }, [entity.uid]);
 
   if (showInspector) {
     return (
@@ -47,7 +64,7 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
                 IDENTIFIED_TARGET
               </span>
               {cl && (
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 flex-wrap">
                   {showAffiliationBadge && (
                     <span
                       className={`text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider ${
@@ -63,6 +80,12 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
                     <span className="text-[8px] font-bold px-1.5 py-0.5 rounded tracking-wider bg-[#FF8800]/20 text-[#FF8800] border border-[#FF8800]/30">
                       {cl.platform!.toUpperCase()}
                     </span>
+                  )}
+                  {hmmState && (
+                    <HMMStateBadge
+                      dominantState={hmmState.dominant}
+                      anomalyScore={hmmState.anomaly}
+                    />
                   )}
                 </div>
               )}
@@ -145,6 +168,17 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
             <MapIcon size={12} />
             TRACK_LOG
           </button>
+          <button
+            onClick={() => setShowHMM((h) => !h)}
+            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-[10px] font-bold tracking-widest transition-all active:scale-[0.98] ${
+              showHMM
+                ? "bg-gradient-to-b from-amber-500/30 to-amber-500/10 hover:from-amber-500/40 hover:to-amber-500/20 border border-amber-500/50 text-amber-400 shadow-[0_0_15px_rgba(251,146,60,0.1)]"
+                : "bg-gradient-to-b from-white/10 to-transparent hover:from-white/20 hover:to-white/5 border border-white/10 text-white/70"
+            }`}
+          >
+            <Brain size={12} />
+            HMM_STATES
+          </button>
         </div>
       </div>
 
@@ -156,6 +190,13 @@ export const AircraftView: React.FC<AircraftViewProps> = ({
               entity={entity}
               onHistoryLoaded={onHistoryLoaded ?? (() => {})}
             />
+            <div className="h-px bg-white/5 w-full" />
+          </>
+        )}
+
+        {showHMM && (
+          <>
+            <HMMTimelinePanel uid={entity.uid} />
             <div className="h-px bg-white/5 w-full" />
           </>
         )}
