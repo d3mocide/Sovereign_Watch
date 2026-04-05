@@ -44,6 +44,10 @@ CENTER_LAT=45.5152
 CENTER_LON=-122.6784
 COVERAGE_RADIUS_NM=150
 
+# Required — the stack will not start without these
+POSTGRES_PASSWORD=choose-a-strong-password
+JWT_SECRET_KEY=        # generate with: openssl rand -hex 32
+
 # Required for maritime data
 AISSTREAM_API_KEY=your-key-here
 
@@ -60,16 +64,22 @@ See [Configuration Reference](./Configuration.md) for the complete variable refe
 ### 3. Build and Start
 
 ```bash
-docker compose up -d --build
+make prod          # production (static frontend build, stable)
+# or
+make dev           # development (Vite HMR, uvicorn --reload, live source mounts)
 ```
+
+> **Windows without WSL:** run the underlying command directly:
+> `docker compose up -d --build` (prod) or
+> `docker compose -f docker-compose.yml -f compose.dev.yml up -d --build` (dev)
 
 This starts all services:
 
 | Container | Role |
 | :--- | :--- |
 | `sovereign-nginx` | Reverse proxy, serves frontend on port 80 |
-| `sovereign-frontend` | React/Vite application (HMR dev server) |
-| `sovereign-backend` | FastAPI fusion API |
+| `sovereign-frontend` | **Prod:** nginx serving compiled static bundle · **Dev:** Vite HMR server |
+| `sovereign-backend` | FastAPI fusion API (runs schema migrations on startup) |
 | `sovereign-timescaledb` | TimescaleDB (PostgreSQL + time-series extensions) |
 | `sovereign-redpanda` | Kafka-compatible message bus |
 | `sovereign-redis` | Redis cache and pub/sub |
@@ -125,11 +135,8 @@ After a fresh start, allow time for the pollers to populate data:
 ## Stopping the System
 
 ```bash
-# Stop all containers (data is preserved in named volumes)
-docker compose down
-
-# Stop and remove all data volumes (DESTRUCTIVE — deletes all TimescaleDB data)
-docker compose down -v
+make down                   # stop all containers (data preserved in volumes)
+docker compose down -v      # DESTRUCTIVE — also deletes all TimescaleDB data
 ```
 
 ---
@@ -145,7 +152,7 @@ git pull
 ### 2. Rebuild and Restart
 
 ```bash
-docker compose up -d --build
+make prod          # or: make dev
 ```
 
 Docker Compose will rebuild only the containers whose images have changed and restart them.
@@ -197,6 +204,8 @@ Sovereign Watch is configured for **Hot Module Replacement** in development:
 ```bash
 # Rebuild a specific service
 docker compose up -d --build sovereign-adsb-poller
+# or rebuild everything
+make prod
 ```
 
 ---
@@ -324,7 +333,7 @@ docker compose logs sovereign-nginx
 ```bash
 # Full reset — destroys all data
 docker compose down -v
-docker compose up -d --build
+make prod
 ```
 
 ---

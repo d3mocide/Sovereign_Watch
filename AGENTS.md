@@ -17,11 +17,25 @@
   
 - **Infrastructure**: Docker Compose, localized dev environment.
 
+### Running the stack
+
+| Environment | Command |
+| :--- | :--- |
+| **Development** (hot-reload, Vite HMR) | `make dev` |
+| **Production** (static build, no reload) | `make prod` |
+
+`docker-compose.yml` is the complete, production-ready compose file.
+`compose.dev.yml` is a small override file — it only redefines the three services that differ in dev (`sovereign-frontend`, `sovereign-backend`, `sovereign-nginx`). All other services are identical between environments.
+
+The `Makefile` wraps the full compose commands so you never have to type them out. Run `make` with no arguments to see all available targets.
+
+> **Rule for agents:** When adding or changing a service's environment variables, ports, or other config, update **`docker-compose.yml`** only. The dev override inherits everything from the base file.
+
 ### Docker Compose Mappings
 
 | Service Container | Source Path | Context / Responsibility |
 | :--- | :--- | :--- |
-| `sovereign-frontend` | `frontend/` | React (Vite) HUD interface |
+| `sovereign-frontend` | `frontend/` | **Prod:** nginx static bundle · **Dev:** Vite HMR server |
 | `sovereign-backend` | `backend/api/` | FastAPI REST/WS/SSE API |
 | `sovereign-ais-poller` | `backend/ingestion/maritime_poller/` | AIS Ingestion (AISStream) |
 | `sovereign-adsb-poller` | `backend/ingestion/aviation_poller/` | ADS-B Ingestion (ADSBx) |
@@ -30,7 +44,7 @@
 | `sovereign-infra-poller` | `backend/ingestion/infra_poller/` | Cables, Outages, FCC Towers |
 | `sovereign-gdelt-pulse` | `backend/ingestion/gdelt_pulse/` | OSINT Events (GDELT) |
 | `sovereign-js8call` | `js8call/` | HF Radio Terminal + Bridge |
-| `sovereign-timescaledb` | `backend/db/` | Historical Data Store |
+| `sovereign-timescaledb` | `backend/db/initdb/` | Historical Data Store (schema bootstrapped from initdb/) |
 | `sovereign-redis` | N/A | Real-time Cache / State |
 | `sovereign-redpanda` | N/A | Event Stream (Kafka) |
 | `sovereign-nginx` | `nginx/` | Reverse Proxy / Ingress |
@@ -54,8 +68,8 @@ Both frontend and backend have Hot Module Replacement (HMR) enabled:
 
 | Service       | Trigger                      | HMR Method                                                     | Notes                                          |
 | ------------- | ---------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
-| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                                | No restart needed. Changes reflect instantly.  |
-| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                                | No restart needed. Server auto-restarts.       |
+| **Frontend**  | Save any `.tsx`/`.ts`/`.css` | Vite HMR (polling, 1s interval)                                | Dev only. Prod requires `docker compose build sovereign-frontend`. |
+| **Backend**   | Save any `.py`               | Uvicorn `--reload` (StatReload)                                | Dev only. Prod runs without `--reload`.        |
 | **Ingestion** | Modify Code/Config           | **REQUIRES REBUILD:** `docker compose up -d --build <service>` | Python Pollers need container rebuild/restart. |
 
 ## 4. Documentation & Change Tracking
@@ -106,7 +120,58 @@ Use this gate to avoid unnecessary container overhead while preserving runtime p
    2. If host toolchain is missing or results are environment-sensitive, run inside Docker.
    3. Before merge/release, ensure parity-critical checks have been run in Docker.
 
-## 6. Directory Structure Map
+## 6. Database Schema Workflow
+
+> **CRITICAL RULE:** Never edit files in `backend/db/initdb/` to make schema changes on a running deployment. Those files only run on a completely empty Postgres volume (first install). Editing them has **zero effect** on any existing database.
+
+### How the schema system works
+
+| Path | Purpose | When it runs |
+| :--- | :--- | :--- |
+| `backend/db/initdb/01_extensions.sql` … `12_views.sql` | Bootstrap schema for fresh installs | Once, on empty volume only |
+| `backend/db/migrations/V002__*.sql` … | Incremental schema changes | Every `docker compose up`, applied once per version |
+| `backend/api/migrate.py` | Migration runner (part of backend startup) | Runs before uvicorn starts |
+
+### Making a schema change (the only correct workflow)
+
+1. Create a new file in `backend/db/migrations/` following the naming convention:
+   ```
+   V<NNN>__<short_description>.sql
+   ```
+   Start at **V002** — V001 is reserved for the initdb baseline.
+
+2. Write idempotent SQL where possible (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `CREATE OR REPLACE`).
+
+3. On next `docker compose up`, the backend logs will show `Applying V002__...` and record it in the `schema_migrations` table. Subsequent restarts skip it.
+
+### Rules for agents
+
+- **DO NOT** add tables, columns, indexes, functions, or views to `backend/db/initdb/` files after the project has been deployed.
+- **DO NOT** create a new container or service to run migrations — the backend handles this at startup.
+- **DO** create a migration file in `backend/db/migrations/` for every schema change.
+- When adding a new domain/feature that requires multiple tables, a single migration file covering all related tables for that feature is fine.
+- To check what migrations have been applied: `SELECT * FROM schema_migrations ORDER BY version;`
+
+### initdb file map
+
+The `backend/db/initdb/` files are the authoritative baseline schema, split by domain:
+
+| File | Domain |
+| :--- | :--- |
+| `01_extensions.sql` | PostgreSQL extensions (timescaledb, postgis, vector, pg_trgm) |
+| `02_telemetry.sql` | `tracks` hypertable (ADS-B / AIS / TAK live feed) |
+| `03_satellites_satnogs.sql` | `satellites`, `satnogs_transmitters`, `satnogs_observations`, `satnogs_signal_events` |
+| `04_rf_infrastructure.sql` | `rf_sites`, `rf_systems`, `rf_talkgroups`, `prune_stale_rf_sites()` |
+| `05_intel.sql` | `intel_reports`, `get_contextual_intel()` vector search function |
+| `06_critical_infrastructure.sql` | `infra_towers`, `internet_outages`, `peeringdb_ixps`, `peeringdb_facilities`, `iss_positions` |
+| `07_space_weather.sql` | `space_weather_kp`, `jamming_events`, `space_weather_context` |
+| `08_gdelt_osint.sql` | `gdelt_events`, `h3_risk_scores` |
+| `09_ocean_ndbc.sql` | `ndbc_obs`, `ndbc_hourly_baseline` continuous aggregate |
+| `10_users_auth.sql` | `users`, `update_users_updated_at()` trigger |
+| `11_clausal_chains.sql` | `clausal_chains`, `hourly_clausal_summaries` continuous aggregate, triggers |
+| `12_views.sql` | `clausal_chains_enriched` view |
+
+## 7. Directory Structure Map
 
 ```text
 .
@@ -116,6 +181,7 @@ Use this gate to avoid unnecessary container overhead while preserving runtime p
 │   └── package.json  # Frontend Dependencies
 ├── backend/          # Microservices Root
 │   ├── api/          # FastAPI Server (pyproject.toml + uv.lock)
+│   │   └── migrate.py    # DB migration runner (runs before uvicorn on startup)
 │   ├── ingestion/    # Data Ingestion Services (Python Pollers)
 │   │   ├── aviation_poller/   # ADS-B, OpenSky
 │   │   ├── maritime_poller/   # AIS (AISStream)
@@ -124,7 +190,9 @@ Use this gate to avoid unnecessary container overhead while preserving runtime p
 │   │   └── infra_poller/  # Cables, Outages, FCC Towers
 │   ├── ai/           # LLM Config (litellm_config.yaml)
 │   ├── database/     # Database Policies (Retention)
-│   ├── db/           # Database Initialization (init.sql)
+│   ├── db/
+│   │   ├── initdb/       # Bootstrap SQL (fresh installs only — DO NOT EDIT for changes)
+│   │   └── migrations/   # Incremental schema changes (V002__*.sql and beyond)
 │   └── scripts/      # Utility Scripts
 ├── js8call/          # HF Radio Terminal + Bridge
 ├── nginx/            # Reverse Proxy Config
