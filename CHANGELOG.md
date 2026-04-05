@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.64.0] - 2026-04-05
+
+### Infrastructure & Stability
+
+- **Nginx Infrastructure Overhaul**: Standardized `nginx.conf` and `nginx-dev.conf` with proper MIME type support and Gzip compression, resolving "blank screen" asset loading failures.
+- **Backend Healthcheck Restoration**: Integrated `curl` into the FastAPI slim image and fixed container healthcheck probes to correctly report REST/WS service status.
+- **Build System Hardening**: Updated `Makefile` to enforce the `--build` flag on all targets, ensuring multi-stage build isolation and preventing image target confusion between `dev` and `prod`.
+- **Database Migration Pipeline**: Formally documented the "one-shot" idempotent SQL migration architecture (V001 stamping) now integrated into the backend initialization.
+- **Nginx Dev Proxy Fix**: Added `Upgrade` and `Connection` headers to the root location in `nginx-dev.conf` to reliably support Vite HMR through the reverse proxy.
+- **Operational Configuration Fix**: Resolved a critical YAML syntax error for `JWT_SECRET_KEY` by enforcing double-quoting in `docker-compose.yml`.
+
 ## [0.63.0] - 2026-04-03
 
 ### Added

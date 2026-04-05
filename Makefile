@@ -2,11 +2,11 @@
 
 ## Start in development mode (Vite HMR, uvicorn --reload, live source mounts)
 dev:
-	docker compose -f docker-compose.yml -f compose.dev.yml up
+	docker compose -f docker-compose.yml -f compose.dev.yml up -d --build
 
 ## Start in production mode (static frontend build, no reload)
 prod:
-	docker compose up
+	docker compose up -d --build
 
 ## Build all images
 build:

@@ -1,61 +1,39 @@
-# Release - v0.63.0 - Multi-INT Risk Fusion
+# Release - v0.64.0 - Infrastructure Hardening
 
-## Summary
-The **v0.63.0** release introduces three major capabilities for higher-confidence regional assessment: space-weather-aware suppression of false signal-loss alerts, persona-based autonomous domain analysis endpoints, and a new H3 composite risk heat-map pipeline. Together, these changes improve operational trust in alerting while expanding structured multi-INT risk context at both API and map layers.
+This release focuses on hardening the **Sovereign Watch** deployment stack, resolving critical asset delivery issues and ensuring high-availability container health.
 
-## Key Features
-- **Space Weather Alert Suppression**
-- `SpaceWeatherSource` now polls NOAA scales (`R/S/G`) every 15 minutes.
-- Sets Redis key `space_weather:suppress_signal_loss` with a 70-minute TTL when `R >= 3` or `G >= 3`.
-- `EscalationDetector` now evaluates suppression via `should_suppress_signal_loss()`.
-- AI Router skips SatNOGS signal-loss escalation when suppression is active, logs the reason, and emits suppression context.
-- New endpoint: `GET /api/space-weather/alerts` (current scales + suppression state).
+## High-Level Summary
+The main objective of `v0.64.0` was to standardize the infrastructure configuration across both development and production environments. We addressed a series of "silent failures" where frontend assets would fail to load (rendering a blank white screen) and backend containers were incorrectly reporting healthy status despite missing connectivity tools.
 
-- **Domain Agent Endpoints (Backend API, Persona-Driven, H3 Regional Scope)**
-- `POST /analyze/air` (Air Intelligence Officer persona): fuses ADS-B tracks, emergency squawk codes (`7700/7600/7500`), NWS alerts, and Kp-index GPS degradation context.
-- `POST /analyze/sea` (MDA Specialist persona): fuses AIS tracks, NDBC wave-height conditions, and IODA outage/submarine cable landing correlation.
-- `POST /analyze/orbital` (Space Weather / Orbital Analyst persona): fuses Kp-index, NOAA scales, SatNOGS signal-loss events, and suppression state.
-- Shared response contract: `DomainAnalysisResponse` with `narrative`, `risk_score`, `indicators[]`, and `context_snapshot`.
+## Key Infrastructure Improvements
 
-Current UI note: the AI Analyst panel still uses `POST /api/analyze/{uid}`; these domain endpoints are currently available for direct API use and planned UI integration.
+- **Nginx Standardization**: Rewrote `nginx.conf` and `nginx-dev.conf` with production-grade MIME type support and Gzip compression. This ensures that browsers correctly identify and cache assets, resolving loading failures.
+- **Backend Health Restoration**: Integrated standard diagnostic tools (`curl`) into the minimal backend image. The FastAPI container now accurately reports its health to the Docker engine via live REST/WS probes at `/health`.
+- **Build System Parity**: Hardened the `Makefile` build targets. The CLI now enforces the `--build` flag on all operations, ensuring that Vite-specific development targets and Nginx-specific production targets never overlap or cause 502 Bad Gateway errors.
+- **Idempotent Migration Pipeline**: Documented and stabilized the integrated database migration runner. The system now automatically stamps a `V001` baseline on existing deployments before applying new, numbered SQL migrations.
+- **WebSocket Stability**: Optimized the development proxy to include `Upgrade` and `Connection` headers for the root location, ensuring reliable Vite HMR (Hot Module Replacement) during active development.
 
-- **H3 Risk Heat-Map**
-- New endpoint: `GET /api/h3/risk` computes composite risk for active H3 cells.
-- Formula: `C = 0.6 * Density_norm + 0.4 * Sentiment_norm`.
-- Density is normalized entity count per cell.
-- Sentiment is inverted GDELT Goldstein signal (more negative -> higher risk).
-- Supports resolutions `4`, `6`, and `9`.
-- Redis cache TTL: 30 seconds.
-- Persists snapshots to TimescaleDB `h3_risk_scores` hypertable.
-- Frontend renders hex cells via `buildH3RiskLayer` with green -> yellow -> red gradient by `risk_score`.
+## Documentation & Task Summary
+This release cycle also aggregates several high-fidelity feature additions from early April:
+- **Unified AI Architecture (v1.5)**: Consolidation of reasoning into a single `AIService`.
+- **H3 Composite Risk Scoring**: Real-time multi-INT risk fusion rendering.
+- **Tactical NWS Alerts**: Polygon overlay support for active weather events in the map UI.
 
-## Additional Enhancements
-- **NWS Alert Polling**: Infrastructure poller ingests active NWS weather alerts every 10 minutes into:
-- `nws:alerts:active` (full GeoJSON)
-- `nws:alerts:summary` (lightweight severity context)
-- **Tactical NWS Alert Overlay**: Added Environmental toggle-controlled NWS alert polygons to Tactical map with severity styling, hover tooltip, and click-through right-sidebar weather details (`nws_alert`).
-- **NWS Hover/Selection Reliability**: Improved 2D tactical picking by adjusting layer order above infra fills and normalizing feature classification into dedicated weather UI state.
-- **Orbital Scope Decision**: NWS weather overlay is intentionally Tactical-only to keep orbital context focused on space-domain overlays.
-- **IODA-Cable Correlation**: Outage features now include `nearby_cable_landings` when cable landings are within a 300 km radius.
-- **Dashboard Tactical Risk UX**: Tactical-first CRIT RISK rendering refined to larger, hex-only, critical-filtered display for clearer AO visibility.
-
-## Technical Notes
-- Suppression prevents false-positive satellite signal-loss alerts during active severe radio blackout / geomagnetic conditions.
-- Air domain logic detects emergency squawks and sustained holding behavior (>= 5 observations per UID).
-- Sea domain logic detects dark-vessel and heavy-sea conditions (>= 4.0m waves), plus infra correlation indicators.
-- Orbital domain logic now explicitly surfaces geomagnetic severity and suppression-aware signal-loss indicators.
+---
 
 ## Upgrade Instructions
-Apply the release with a standard pull and targeted rebuild:
+
+To upgrade to `v0.64.0`, pull the latest changes and use the hardened `Makefile` to rebuild the stack:
 
 ```bash
-git pull
-docker compose up -d --build sovereign-backend sovereign-infra-poller
-docker compose up -d --build sovereign-frontend
+# 1. Pull latest changes
+git pull origin main
+
+# 2. Stop existing containers and prune volumes if needed
+make down
+
+# 3. Clean rebuild and start (enforces --build flag safety)
+make prod
 ```
 
-If maritime ingestion or related poller logic changed in your branch, also rebuild affected pollers:
-
-```bash
-docker compose up -d --build sovereign-ais-poller sovereign-adsb-poller sovereign-space-pulse sovereign-rf-pulse
-```
+Verification of success can be checked via `docker compose ps` to ensure all containers report a `healthy` status.

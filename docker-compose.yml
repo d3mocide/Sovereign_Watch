@@ -11,6 +11,7 @@ volumes:
   sovereign-vol-postgres:
   sovereign-vol-redis:
 
+
 services:
   # --- Ingestion & Streaming ---
   sovereign-redpanda:
@@ -55,7 +56,7 @@ services:
     volumes:
       - ./backend/redpanda/init-topics.sh:/init-topics.sh:ro
     entrypoint: /bin/bash
-    command: ["/init-topics.sh"]
+    command: [ "/init-topics.sh" ]
     restart: "no"
 
   # --- Ingestion: Maritime AIS ---
@@ -288,7 +289,7 @@ services:
       - OPEN_API_MODEL=${OPEN_API_MODEL:-llama3}
       - OPEN_API_LABEL=${OPEN_API_LABEL:-Llama3}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env — generate with: openssl rand -hex 32}
+      - "JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env — generate with: openssl rand -hex 32}"
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -310,7 +311,7 @@ services:
       sovereign-timescaledb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
