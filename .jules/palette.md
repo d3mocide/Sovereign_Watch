@@ -59,3 +59,6 @@
 ## 2024-05-15 - UserManagementPanel Select Accessibility
 **Learning:** Dense lists with inline controls (like a dropdown to select a user's role) often lack visual space for a `<label>` element. Without a label, screen readers announce "combo box" without context, confusing the user about whose role they are modifying.
 **Action:** When a `<select>` or similar input lacks a corresponding explicit `<label>`, always inject a dynamic `aria-label` (e.g., `aria-label={"Role for user " + username}`) to provide exact contextual identity to assistive technologies.
+## 2026-04-04 - Explicit Form Label Association
+**Learning:** Found several forms in the UI where `<label>` elements lacked `htmlFor` attributes and their corresponding inputs/selects lacked `id` attributes. While visually clear, this breaks screen reader association and click-to-focus functionality, reducing accessibility and UX quality.
+**Action:** When building or auditing forms, always ensure every label explicitly targets its input using matching `htmlFor` and `id` attributes, even if they appear visually adjacent.
