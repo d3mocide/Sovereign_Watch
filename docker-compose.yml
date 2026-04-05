@@ -163,8 +163,8 @@ services:
         condition: service_healthy
       sovereign-redis:
         condition: service_started
-      sovereign-timescaledb:
-        condition: service_healthy
+      sovereign-db-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # --- Ingestion: Infrastructure (Cables, Outages, Datacenters, FCC Towers) ---
@@ -185,8 +185,8 @@ services:
     depends_on:
       sovereign-redis:
         condition: service_started
-      sovereign-timescaledb:
-        condition: service_healthy
+      sovereign-db-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # --- Ingestion: Geopolitical OSINT (via GDELT CSV Poller) ---
@@ -254,8 +254,8 @@ services:
         condition: service_healthy
       sovereign-redis:
         condition: service_started
-      sovereign-timescaledb:
-        condition: service_healthy
+      sovereign-db-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # --- Persistence ---
@@ -276,6 +276,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # --- Schema Migrations (one-shot; runs after TimescaleDB is healthy) ---
+  # Applies any pending SQL files from backend/db/migrations/ in version order.
+  # Services that depend on the schema being ready should list this with
+  # condition: service_completed_successfully.
+  sovereign-db-migrate:
+    build:
+      context: ./backend/db/migrator
+      dockerfile: Dockerfile
+    container_name: sovereign-db-migrate
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
+    volumes:
+      - ./backend/db/migrations:/migrations:ro
+    networks:
+      - sovereign-net-backend
+    depends_on:
+      sovereign-timescaledb:
+        condition: service_healthy
+    restart: "no"
 
   sovereign-redis:
     image: redis:alpine
@@ -333,8 +353,8 @@ services:
       - sovereign-net-backend
       - sovereign-net-ai
     depends_on:
-      sovereign-timescaledb:
-        condition: service_healthy
+      sovereign-db-migrate:
+        condition: service_completed_successfully
 
   # --- JS8Call Radio Terminal (Phase 1/2/3) ---
   # Headless JS8Call instance with virtual PulseAudio routing from a KiwiSDR node.
