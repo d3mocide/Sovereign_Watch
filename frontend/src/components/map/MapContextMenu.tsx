@@ -1,6 +1,6 @@
 import { useAuth } from '../../hooks/useAuth';
 import React from 'react';
-import { Crosshair, Save, Home, MapPin, Lock, Zap } from 'lucide-react';
+import { Crosshair, Save, Home, MapPin, Lock, Zap, Plane, Anchor, Satellite } from 'lucide-react';
 import { latLngToCell } from 'h3-js';
 
 interface MapContextMenuProps {
@@ -10,6 +10,7 @@ interface MapContextMenuProps {
   onSaveLocation: (lat: number, lon: number) => void;
   onReturnHome: () => void;
   onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
+  onAnalyzeDomain?: (domain: 'air' | 'sea' | 'orbital', h3Region: string, lat: number, lon: number) => void;
   onClose: () => void;
 }
 
@@ -20,6 +21,7 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
   onSaveLocation,
   onReturnHome,
   onAnalyzeRegionalRisk,
+  onAnalyzeDomain,
   onClose,
 }) => {
   const { hasRole } = useAuth();
@@ -50,13 +52,21 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
     }
   };
 
+  const handleAnalyzeDomain = (domain: 'air' | 'sea' | 'orbital') => {
+    if (onAnalyzeDomain) {
+      const h3Region = latLngToCell(coordinates.lat, coordinates.lon, 7);
+      onAnalyzeDomain(domain, h3Region, coordinates.lat, coordinates.lon);
+      onClose();
+    }
+  };
+
   return (
     <>
       {/* Context Menu - No Backdrop (managed by map interaction) */}
       <div
         className="fixed z-[1000] min-w-[240px] animate-in fade-in-0 zoom-in-95 duration-200"
-        style={{ 
-          left: `${position.x}px`, 
+        style={{
+          left: `${position.x}px`,
           top: `${position.y}px`,
         }}
         onContextMenu={(e) => {
@@ -110,6 +120,41 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
                   <div>
                     <div className="text-xs text-white/90 group-hover:text-white font-medium">Analyze Regional Risk</div>
                     <div className="text-[10px] text-white/40">AI multi-INT assessment for H3 region</div>
+                  </div>
+                </button>
+
+                <div className="border-t border-white/5 my-1" />
+
+                <button
+                  onClick={() => handleAnalyzeDomain('air')}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-sky-500/10 transition-colors group text-left"
+                >
+                  <Plane size={14} className="text-sky-400/60 group-hover:text-sky-400" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Air Intelligence</div>
+                    <div className="text-[10px] text-white/40">ADS-B + NWS + GDELT air domain fuse</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleAnalyzeDomain('sea')}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-cyan-500/10 transition-colors group text-left"
+                >
+                  <Anchor size={14} className="text-cyan-400/60 group-hover:text-cyan-400" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Sea Intelligence</div>
+                    <div className="text-[10px] text-white/40">AIS + NDBC + IODA + GDELT sea domain fuse</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleAnalyzeDomain('orbital')}
+                  className="w-full px-3 py-2 flex items-center gap-3 hover:bg-purple-500/10 transition-colors group text-left"
+                >
+                  <Satellite size={14} className="text-purple-400/60 group-hover:text-purple-400" />
+                  <div>
+                    <div className="text-xs text-white/90 group-hover:text-white font-medium">Orbital Intelligence</div>
+                    <div className="text-[10px] text-white/40">Kp + R/S/G + SatNOGS orbital fuse</div>
                   </div>
                 </button>
               </>

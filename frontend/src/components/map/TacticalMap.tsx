@@ -11,6 +11,7 @@ import React, {
   useState,
 } from "react";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
+import { useClausalChains } from "../../hooks/useClausalChains";
 import { useMapBase } from "../../hooks/useMapBase";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { CoTEntity, JS8Station, JammingZone, RFSite, Tower } from "../../types";
@@ -56,6 +57,7 @@ interface TacticalMapProps {
   selectedEntity: CoTEntity | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
   onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
+  onAnalyzeDomain?: (domain: 'air' | 'sea' | 'orbital', h3Region: string, lat: number, lon: number) => void;
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
   showHistoryTails?: boolean;
@@ -168,6 +170,7 @@ export function TacticalMap({
   selectedEntity,
   onEntitySelect,
   onAnalyzeRegionalRisk,
+  onAnalyzeDomain,
   onMapActionsReady,
   showVelocityVectors,
   showHistoryTails,
@@ -657,6 +660,11 @@ export function TacticalMap({
     return 9;              // neighbourhood / street detail (fine cells)
   }, [viewState.zoom]);
 
+  const { data: clausalChainsData } = useClausalChains({
+    enabled: filters?.showClausalChains === true,
+    lookback_hours: 24,
+  });
+
   useAnimationLoop({
     entitiesRef,
     satellitesRef,
@@ -772,6 +780,7 @@ export function TacticalMap({
     historySegmentsRef,
     holdingPatternData,
     h3RiskResolution,
+    clausalChainsData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
@@ -1007,6 +1016,7 @@ export function TacticalMap({
         onSaveLocation={handleSaveLocation}
         onReturnHome={handleReturnHome}
         onAnalyzeRegionalRisk={onAnalyzeRegionalRisk}
+        onAnalyzeDomain={onAnalyzeDomain}
         onClose={() => {
           setContextMenuPos(null);
           setContextMenuCoords(null);

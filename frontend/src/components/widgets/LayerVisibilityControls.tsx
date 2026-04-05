@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ChevronUp,
   CloudRain,
+  GitBranch,
   Layers,
   Network,
   Radio,
@@ -91,7 +92,21 @@ export const LayerVisibilityControls: React.FC<
     filters?.showNWSAlerts
   );
 
-  const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters);
+  const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters || filters?.showClausalChains);
+
+  // NWS summary badge state (GAP-04)
+  const [nwsSummary, setNwsSummary] = useState<{ count: number; severe_count: number; extreme_count: number } | null>(null);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await fetch("/api/infra/nws-alerts/summary");
+        if (r.ok) setNwsSummary(await r.json());
+      } catch { /* silent */ }
+    };
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const hazardsIsOn =
     !!filters &&
@@ -153,9 +168,11 @@ export const LayerVisibilityControls: React.FC<
     if (analysisIsOn) {
       onFilterChange("showH3Risk", false);
       onFilterChange("showClusters", false);
+      onFilterChange("showClausalChains", false);
     } else {
       onFilterChange("showH3Risk", getFilterPref("showH3Risk", false));
       onFilterChange("showClusters", getFilterPref("showClusters", true));
+      onFilterChange("showClausalChains", getFilterPref("showClausalChains", false));
     }
   };
 
@@ -1028,6 +1045,18 @@ export const LayerVisibilityControls: React.FC<
                     >
                       NWS ALERTS
                     </span>
+                    {nwsSummary && nwsSummary.count > 0 && (
+                      <span
+                        className="ml-1 text-[8px] font-bold px-1 py-0.5 rounded"
+                        style={{
+                          color: nwsSummary.extreme_count > 0 ? "#ef4444" : nwsSummary.severe_count > 0 ? "#f59e0b" : "rgba(255,255,255,0.4)",
+                          background: nwsSummary.extreme_count > 0 ? "rgba(239,68,68,0.15)" : nwsSummary.severe_count > 0 ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.08)",
+                          border: `1px solid ${nwsSummary.extreme_count > 0 ? "rgba(239,68,68,0.4)" : nwsSummary.severe_count > 0 ? "rgba(245,158,11,0.4)" : "rgba(255,255,255,0.15)"}`,
+                        }}
+                      >
+                        {nwsSummary.count}{nwsSummary.severe_count > 0 ? ` (${nwsSummary.severe_count}⚡)` : ""}
+                      </span>
+                    )}
                   </div>
                   <input
                     type="checkbox"
@@ -1201,6 +1230,38 @@ export const LayerVisibilityControls: React.FC<
                     ))}
                   </div>
                 )}
+
+                {/* Clausal Chains narrative layer */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showClausalChains ? "border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_8px_rgba(99,102,241,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch
+                      size={10}
+                      className={filters.showClausalChains ? "text-indigo-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showClausalChains ? "text-indigo-400/80" : "text-white/30"}`}
+                    >
+                      CLAUSAL CHAINS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showClausalChains}
+                    onChange={(e) =>
+                      handleSubFilterChange("showClausalChains", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showClausalChains ? "bg-indigo-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showClausalChains ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
               </div>
             )}
           </div>

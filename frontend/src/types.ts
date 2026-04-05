@@ -285,6 +285,8 @@ export interface MapFilters {
   // Phase 2 — ST-DBSCAN cluster overlay
   showClusters?: boolean;
   clusterLookbackHours?: number;
+  // Clausal chain narrative layer
+  showClausalChains?: boolean;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 
