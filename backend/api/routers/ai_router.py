@@ -13,11 +13,13 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from services.escalation_detector import EscalationDetector
+from services.hmm_trajectory import HMMResult, classify_trajectory
 from services.sequence_evaluation_engine import (
     RiskAssessment,
     SequenceEvaluationEngine,
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
+from services.stdbscan import detect_clusters
 from services.ai_service import ai_service
 from core.database import db
 
@@ -338,11 +340,51 @@ async def evaluate_regional_escalation(
     emergency_anomalies = escalation_detector.detect_emergency_transponders(tak_dicts)
     rendezvous_anomalies = escalation_detector.detect_rendezvous(tak_dicts)
 
+    # Phase 2 — ST-DBSCAN clustering over raw TAK rows (carry locative_hae for HMM)
+    stdbscan_clauses = [
+        {
+            "uid": row["uid"],
+            "locative_lat": row["locative_lat"],
+            "locative_lon": row["locative_lon"],
+            "time": row["time"],
+        }
+        for row in tak_events
+        if row.get("uid") and row.get("locative_lat") is not None and row.get("locative_lon") is not None
+    ]
+    stdbscan_anomalies = escalation_detector.detect_stdbscan_clusters(stdbscan_clauses)
+
+    # Build per-UID track sequences for HMM (use raw tak_events for locative_hae)
+    _uid_tracks: Dict[str, list] = {}
+    for row in tak_events:
+        uid = row.get("uid")
+        if not uid:
+            continue
+        ctx = row.get("adverbial_context") or {}
+        if isinstance(ctx, str):
+            try:
+                ctx = json.loads(ctx)
+            except (json.JSONDecodeError, TypeError):
+                ctx = {}
+        _uid_tracks.setdefault(uid, []).append(
+            {
+                "speed_kts": float(ctx.get("speed") or 0.0),
+                "heading_deg": float(ctx.get("course") or 0.0),
+                "alt_ft": float(row.get("locative_hae") or 0.0) * 3.28084,
+                "time": row["time"],
+            }
+        )
+    for uid in _uid_tracks:
+        _uid_tracks[uid].sort(key=lambda p: p["time"])
+
+    hmm_anomalies = escalation_detector.detect_hmm_anomalies(_uid_tracks)
+
     all_anomalies = (
         [clustering_anomaly]
         + directional_anomalies
         + emergency_anomalies
         + rendezvous_anomalies
+        + stdbscan_anomalies
+        + hmm_anomalies
     )
     active_anomalies = [a for a in all_anomalies if a.score > 0.0]
     anomaly_score = max([a.score for a in all_anomalies], default=0.0)
@@ -469,6 +511,19 @@ async def evaluate_regional_escalation(
         total_rendezvous = sum(len(a.affected_uids) for a in rendezvous_anomalies)
         escalation_indicators.append(
             f"Multi-entity rendezvous detected ({total_rendezvous} entities)"
+        )
+    if stdbscan_anomalies:
+        total_stdbscan = sum(len(a.affected_uids) for a in stdbscan_anomalies)
+        escalation_indicators.append(
+            f"ST-DBSCAN: {len(stdbscan_anomalies)} cluster(s), {total_stdbscan} entities"
+        )
+    if hmm_anomalies:
+        flagged_states = {
+            a.description.split("dominant state ")[-1].split(" ")[0]
+            for a in hmm_anomalies
+        }
+        escalation_indicators.append(
+            f"HMM anomalous trajectories: {len(hmm_anomalies)} UID(s) — {', '.join(sorted(flagged_states))}"
         )
 
     # Space-weather suppression indicator
@@ -678,6 +733,220 @@ async def get_clausal_chains(
 async def health_check() -> Dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy", "service": "ai-router"}
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — ST-DBSCAN + HMM Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/clusters")
+async def get_clusters(
+    h3_region: Optional[str] = Query(None, description="H3-7 hexagonal cell ID"),
+    lat: Optional[float] = Query(None, description="Center latitude"),
+    lon: Optional[float] = Query(None, description="Center longitude"),
+    radius_nm: Optional[float] = Query(None, description="Radius in nautical miles"),
+    lookback_hours: int = Query(24, ge=1, le=720, description="Lookback window in hours"),
+    eps_km: float = Query(2.0, gt=0, description="Spatial neighbourhood radius in km"),
+    min_samples: int = Query(5, ge=2, description="Minimum samples to form a core point"),
+) -> Dict:
+    """
+    Detect ST-DBSCAN entity clusters within an H3 region or circular AOT.
+
+    Queries TAK clausal_chains for the region and time window, then runs
+    spatial-temporal DBSCAN clustering.  Returns per-cluster metadata and
+    a count of noise (unclustered) entity UIDs.
+    """
+    wkt_polygon = _h3_cell_to_wkt(h3_region) if h3_region else None
+
+    # Use DISTINCT ON (uid) so each entity contributes exactly one point —
+    # its most recent position within the window.  This ensures clusters
+    # represent co-location of *different* entities, not repeated observations
+    # of the same moving track.
+    # Hard cap: ST-DBSCAN is O(n²) — keep input to a safe size.
+    _ROW_LIMIT = 5000
+
+    async with db.pool.acquire() as conn:
+        if lat is not None and lon is not None and radius_nm is not None:
+            radius_m = radius_nm * 1852.0
+            rows = await conn.fetch(
+                """
+                SELECT uid, locative_lat, locative_lon, time
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                      AND ST_DWithin(
+                          geom::geography,
+                          ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                          $4
+                      )
+                    ORDER BY uid, time DESC
+                ) latest
+                ORDER BY time DESC
+                LIMIT $5
+                """,
+                lookback_hours,
+                lon,
+                lat,
+                radius_m,
+                _ROW_LIMIT,
+            )
+        elif wkt_polygon:
+            rows = await conn.fetch(
+                """
+                SELECT uid, locative_lat, locative_lon, time
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                      AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                    ORDER BY uid, time DESC
+                ) latest
+                ORDER BY time DESC
+                LIMIT $3
+                """,
+                lookback_hours,
+                wkt_polygon,
+                _ROW_LIMIT,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT uid, locative_lat, locative_lon, time
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                    ORDER BY uid, time DESC
+                ) latest
+                ORDER BY time DESC
+                LIMIT $2
+                """,
+                lookback_hours,
+                _ROW_LIMIT,
+            )
+
+    points = [
+        {
+            "uid": row["uid"],
+            "lat": row["locative_lat"],
+            "lon": row["locative_lon"],
+            "time": row["time"],
+        }
+        for row in rows
+        if row["uid"] and row["locative_lat"] is not None and row["locative_lon"] is not None
+    ]
+
+    if len(points) == _ROW_LIMIT:
+        logger.warning(
+            "get_clusters: row cap (%d) hit — results may be incomplete. "
+            "Tighten the AOI or reduce lookback_hours.",
+            _ROW_LIMIT,
+        )
+
+    # Offload the CPU-bound O(n²) ST-DBSCAN to a thread so the event loop
+    # stays responsive while clustering runs.
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: detect_clusters(points, eps_km=eps_km, min_samples=min_samples)
+    )
+
+    clusters_out = [
+        {
+            "cluster_id": c.cluster_id,
+            "uids": c.uids,
+            "centroid_lat": c.centroid_lat,
+            "centroid_lon": c.centroid_lon,
+            "entity_count": c.entity_count,
+            "start_time": c.start_time.isoformat(),
+            "end_time": c.end_time.isoformat(),
+        }
+        for c in result.clusters
+    ]
+
+    return {
+        "clusters": clusters_out,
+        "total_clusters": len(result.clusters),
+        "noise_count": len(result.noise_uids),
+    }
+
+
+@router.get("/trajectory/{uid}")
+async def get_trajectory(
+    uid: str,
+    lookback_hours: int = Query(24, ge=1, le=720, description="Lookback window in hours"),
+) -> Dict:
+    """
+    Classify the behavioral state trajectory for a single entity UID.
+
+    Fetches the entity's track from clausal_chains, runs the HMM Viterbi
+    decoder, persists the result to trajectory_states (fire-and-forget),
+    and returns the decoded state sequence with summary statistics.
+    """
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT time, locative_hae, adverbial_context
+            FROM clausal_chains
+            WHERE uid = $1
+              AND source IN ('TAK_ADSB', 'TAK_AIS')
+              AND time > now() - ($2 * interval '1 hour')
+            ORDER BY time ASC
+            """,
+            uid,
+            lookback_hours,
+        )
+
+    track_points = []
+    for row in rows:
+        ctx = row["adverbial_context"] or {}
+        if isinstance(ctx, str):
+            try:
+                ctx = json.loads(ctx)
+            except (json.JSONDecodeError, TypeError):
+                ctx = {}
+        track_points.append(
+            {
+                "speed_kts": float(ctx.get("speed") or 0.0),
+                "heading_deg": float(ctx.get("course") or 0.0),
+                "alt_ft": float(row["locative_hae"] or 0.0) * 3.28084,
+                "time": row["time"],
+            }
+        )
+
+    hmm_result: HMMResult = classify_trajectory(uid, track_points)
+
+    # Persist to trajectory_states — fire-and-forget, does not block response
+    async def _persist(r: HMMResult) -> None:
+        try:
+            async with db.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO trajectory_states (time, uid, state, confidence, anomaly_score)
+                    VALUES (now(), $1, $2, $3, $4)
+                    """,
+                    r.uid,
+                    r.dominant_state,
+                    r.confidence,
+                    r.anomaly_score,
+                )
+        except Exception as exc:
+            logger.warning("Failed to persist trajectory state for uid=%s: %s", uid, exc)
+
+    asyncio.create_task(_persist(hmm_result))
+
+    return {
+        "uid": hmm_result.uid,
+        "state_sequence": hmm_result.state_sequence,
+        "dominant_state": hmm_result.dominant_state,
+        "confidence": hmm_result.confidence,
+        "anomaly_score": hmm_result.anomaly_score,
+        "track_point_count": len(track_points),
+    }
 
 
 # ---------------------------------------------------------------------------

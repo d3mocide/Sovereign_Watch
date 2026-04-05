@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.65.0] - 2026-04-05
+
+### Added
+
+- **ST-DBSCAN Spatial-Temporal Clustering**: Pure-Python ST-DBSCAN engine (`stdbscan.py`) with Haversine distance gate (`eps_km`) and temporal gate (`eps_t`). Returns `STDBSCANResult` with `Cluster` dataclasses and `noise_uids` list.
+- **HMM Trajectory Classifier**: NumPy-only discrete Hidden Markov Model (`hmm_trajectory.py`) with 5 hidden states × 27 observation symbols (speed × turn × altitude). Viterbi decoding in log-domain. `classify_trajectory()` returns `HMMResult` with `state_sequence`, `dominant_state`, `confidence`, and `anomaly_score`. Model matrices built lazily on first call.
+- **Cluster API Endpoints**: `GET /api/ai_router/clusters` and `GET /api/ai_router/trajectory/{uid}` — both detectors wired into `evaluate_regional_escalation()` before risk scoring. HMM results persisted to `trajectory_states` via fire-and-forget.
+- **`trajectory_states` Hypertable**: TimescaleDB hypertable with 48-hour retention and UID index (migration V002).
+- **ClusterView Sidebar**: New `ClusterView.tsx` right-sidebar component with scrollable entity UID list, entity count, and threat-level badge.
+- **Cluster Teal Palette**: Full recolor of `buildClusterLayer.ts` from amber to teal across fill, outline, and label colors.
+- **Cluster Octagon Polygons in MiniMap**: Dashboard tactical overview now renders cluster zones as geographic octagon polygons (MapLibre fill + line layers, teal) fetched from the clusters API.
+- **Hazards `AlertTriangle` Icon**: Replaced the incorrect `Globe` icon with `AlertTriangle` in both the HAZARDS section header and the quick-toggle button in `LayerVisibilityControls`.
+- **Teal Sub-Filter Pills**: TRAJECTORY CLUSTERS row in `LayerVisibilityControls` now uses consistent `cyan-400/500` palette for all 1h/4h/24h time-window pills.
+- **SituationGlobe Country Conflict Heat**: Country fill highlights (red/amber/yellow) driven by GDELT actor threat levels via `buildCountryHeatLayer`. Polls `/api/gdelt/actors?limit=40&hours=24` every 5 minutes.
+- **MapTooltip Cluster Detail**: Hover tooltips for cluster entities include entity count, dominant state, and threat classification.
+
+### Changed
+
+- **SituationGlobe Layer Stack**: Outage overlays hidden (`showOutages: false`), IXPs hidden, cable opacity reduced to 0.35. Country conflict heat inserted below cables/GDELT dots for clean visual precedence.
+- **Terminator Layer Depth Fix**: Added `parameters: { depthTest: false }` to `TerminatorLayer` so the night shadow no longer occludes surface layers (country heat, cables) underneath it. Layer now renders after aurora/country heat so the shadow correctly tints over conflict fills.
+- **H3 Risk Zoom Breakpoints**: `TacticalMap` breakpoints aligned to backend-valid resolutions only — `z < 9 → res 4`, `z < 13 → res 6`, `z ≥ 13 → res 9`. Eliminates silent fallback from invalid res 7/8 requests.
+- **Holding Pattern Pixel Cap**: `buildHoldingPatternLayer` now enforces `pointRadiusMinPixels: 8, pointRadiusMaxPixels: 14`, preventing indicator dots from inflating into zone-sized circles at regional zoom.
+
+### Fixed
+
+- **ClusterView Scroll**: Removed nested `max-h-52` inner cap; outer wrapper now has a concrete `calc(100vh-8rem)` ceiling with a `flex-1 min-h-0` body so long UID lists scroll correctly.
+- **Terminator Occlusion of Country Heat**: `depthTest: false` on the terminator layer prevents the depth buffer from hiding globe surface layers rendered before it.
+- **HMM Test Stub Conflict**: Removed mock `numpy` from `test_stubs.py` — numpy is a real installed dependency and mocking it broke HMM tests requiring real array operations.
+
+### Verification
+
+- All 82 backend tests pass (`uv run python -m pytest`).
+- Ruff lint clean across backend API and ingestion services.
+- Frontend lint clean (`pnpm run lint`).
+
 ## [0.64.1] - 2026-04-05
 
 ### Changed

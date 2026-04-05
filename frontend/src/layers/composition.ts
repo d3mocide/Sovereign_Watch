@@ -33,6 +33,8 @@ import { getSatNOGSLayer } from "./SatNOGSLayer";
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
 import type { H3RiskCellData } from "../api/h3Risk";
+import type { ClusterInfo } from "../api/clusters";
+import { buildClusterLayer } from "./buildClusterLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -94,6 +96,8 @@ interface LayerCompositionOptions {
   holdingPatternData?: FeatureCollection | null;
   historySegments?: HistorySegment[];
   satnogsStations?: SatNOGSStation[];
+  /** ST-DBSCAN cluster centroids (Phase 2) */
+  clusterData?: ClusterInfo[];
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -143,6 +147,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     historySegments,
     satnogsStations,
     holdingPatternData,
+    clusterData,
   } = options;
 
   // JS8 station layers
@@ -284,6 +289,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoverPosition,
       onEntitySelect,
     ),
+    // Cluster octagons sit above jamming so they are visible through the circular halos
+    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, setHoveredEntity, setHoverPosition, onEntitySelect),
     // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
     // Auto-enabled when a mission area is active (shows all events in AOT)
     ...buildGdeltLayer(

@@ -282,6 +282,9 @@ export interface MapFilters {
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
   showNWSAlerts?: boolean;
+  // Phase 2 — ST-DBSCAN cluster overlay
+  showClusters?: boolean;
+  clusterLookbackHours?: number;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 

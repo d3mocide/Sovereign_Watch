@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { MapRef } from "react-map-gl/maplibre";
 import { buildAOTLayers } from "../../layers/buildAOTLayers";
 import { buildAuroraLayer } from "../../layers/buildAuroraLayer";
+import { buildCountryHeatLayer, type ActorEntry } from "../../layers/buildCountryHeatLayer";
 import { buildGdeltLayer } from "../../layers/buildGdeltLayer";
 import { buildInfraLayers } from "../../layers/buildInfraLayers";
 import { getOrbitalLayers } from "../../layers/OrbitalLayer";
@@ -69,6 +70,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   >(new Map());
   const [auroraData, setAuroraData] = useState<any>(null);
   const [gdeltData, setGdeltData] = useState<any>(null);
+  const [actors, setActors] = useState<ActorEntry[]>([]);
 
   // Poll for aurora data
   useEffect(() => {
@@ -87,6 +89,23 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       cancelled = true;
       clearInterval(id);
     };
+  }, []);
+
+  // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
+  useEffect(() => {
+    let cancelled = false;
+    const fetchActors = async () => {
+      try {
+        const r = await fetch("/api/gdelt/actors?limit=40&hours=24");
+        if (r.ok && !cancelled) {
+          const data = await r.json();
+          if (Array.isArray(data)) setActors(data);
+        }
+      } catch { /* silent fail */ }
+    };
+    fetchActors();
+    const id = setInterval(fetchActors, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
@@ -196,10 +215,10 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       {
         showCables: true,
         showLandingStations: false,
-        showOutages: true,
-        showIXPs: true,
-        showFacilities: false, // too dense for the ambient globe
-        cableOpacity: 0.5,
+        showOutages: false,  // replaced by GDELT conflict zones as primary geographic layer
+        showIXPs: false,     // too dense alongside conflict dots
+        showFacilities: false,
+        cableOpacity: 0.35,  // subtle — cables as background geography only
       },
       () => {}, // No-op hover
       () => {}, // No-op click
@@ -241,8 +260,12 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
 
     overlayRef.current.setProps({
       layers: [
-        getTerminatorLayer(!!showTerminator),
         ...buildAuroraLayer(auroraData, true, true, now),
+        // Country conflict heat — fills countries by GDELT threat level (below cables/dots)
+        ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, 0),
+        // Night-side overlay — rendered after country heat so the shadow tints over it;
+        // depthTest:false on the layer ensures it never occludes surface layers.
+        getTerminatorLayer(!!showTerminator),
         ...infra,
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
         ...buildGdeltLayer(
@@ -272,6 +295,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     mission,
     auroraData,
     gdeltData,
+    actors,
     onHover,
     onGdeltClick,
   ]);

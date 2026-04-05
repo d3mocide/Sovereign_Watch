@@ -35,11 +35,8 @@ def install_common_test_stubs(
     sys.modules["aiokafka"] = mock_aiokafka
     sys.modules["aiokafka.admin"] = mock_aiokafka_admin
 
-    mock_numpy = types.ModuleType("numpy")
-    mock_numpy.bool_ = bool
-    mock_numpy.isscalar = lambda _obj: False
-    mock_numpy.ndarray = tuple
-    sys.modules["numpy"] = mock_numpy
+    # numpy is a real installed dependency — do not stub it so that services
+    # that actually call numpy functions (e.g. hmm_trajectory) work correctly.
 
     sys.modules["litellm"] = MagicMock()
 
