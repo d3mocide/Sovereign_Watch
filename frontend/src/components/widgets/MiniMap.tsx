@@ -2,6 +2,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cellToBoundary } from "h3-js";
+import { fetchClusters } from "../../api/clusters";
 import { fetchH3Risk } from "../../api/h3Risk";
 import { CoTEntity } from "../../types";
 import { calculateZoom, getDistanceMeters } from "../../utils/map/geoUtils";
@@ -46,6 +47,25 @@ function makeMissionCircle(
   };
 }
 
+/** Build an 8-sided polygon ring in geographic coords for MapLibre fill layers. */
+function makeOctagonRing(
+  lat: number,
+  lon: number,
+  radiusM: number,
+): [number, number][] {
+  const sides = 8;
+  const latDeg = radiusM / 111_320;
+  const lonDeg = radiusM / (111_320 * Math.cos((lat * Math.PI) / 180));
+  // Rotate 22.5° so a flat edge faces up (stop-sign orientation)
+  const offset = Math.PI / 8;
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= sides; i++) {
+    const angle = offset + (i * 2 * Math.PI) / sides;
+    ring.push([lon + lonDeg * Math.cos(angle), lat + latDeg * Math.sin(angle)]);
+  }
+  return ring;
+}
+
 export interface MiniMapProps {
   mission: { lat: number; lon: number; radius_nm: number };
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
@@ -63,6 +83,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   const [h3RiskFeatures, setH3RiskFeatures] = useState<GeoJSON.Feature[]>([]);
   const [jammingFeatures, setJammingFeatures] = useState<GeoJSON.Feature[]>([]);
   const [holdingFeatures, setHoldingFeatures] = useState<GeoJSON.Feature[]>([]);
+  const [clusterFeatures, setClusterFeatures] = useState<GeoJSON.Feature[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapReadyRef = useRef(false);
@@ -303,6 +324,30 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           "circle-opacity": 0.95,
         },
       });
+
+      map.addSource("cluster-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "cluster-zone-fill",
+        type: "fill",
+        source: "cluster-zones",
+        paint: {
+          "fill-color": "#06b6d4",
+          "fill-opacity": 0.10,
+        },
+      });
+      map.addLayer({
+        id: "cluster-zone-outline",
+        type: "line",
+        source: "cluster-zones",
+        paint: {
+          "line-color": "#22d3ee",
+          "line-width": 1.5,
+          "line-opacity": 0.85,
+        },
+      });
       mapReadyRef.current = true;
     });
     return () => {
@@ -416,6 +461,44 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchClusterOverlay = async () => {
+      try {
+        const resp = await fetchClusters({
+          lat: mission.lat,
+          lon: mission.lon,
+          radiusNm: mission.radius_nm,
+          lookbackHours: 4,
+        });
+        if (cancelled) return;
+        // Build octagon Polygon features (matches tactical map shape)
+        const BASE_R = 3000; // metres — same as CLUSTER_BASE_RADIUS_M in buildClusterLayer.ts
+        const MAX_R = 12000;
+        const features: GeoJSON.Feature[] = (resp.clusters ?? []).map((c) => {
+          const radiusM = Math.min(BASE_R + c.entity_count * 250, MAX_R);
+          const ring = makeOctagonRing(c.centroid_lat, c.centroid_lon, radiusM);
+          return {
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: [ring] },
+            properties: { entity_count: c.entity_count, cluster_id: c.cluster_id },
+          };
+        });
+        setClusterFeatures(features);
+      } catch {
+        // Non-blocking.
+      }
+    };
+
+    fetchClusterOverlay();
+    const id = setInterval(fetchClusterOverlay, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [mission.lat, mission.lon, mission.radius_nm]);
+
   const updateLayers = useCallback(() => {
     const map = mapRef.current;
     if (!map || !mapReadyRef.current) return;
@@ -478,6 +561,10 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
         features: h3RiskFeatures,
       },
     );
+    (map.getSource("cluster-zones") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: clusterFeatures,
+    });
   }, [
     entitiesRef,
     satellitesRef,
@@ -485,6 +572,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
     jammingFeatures,
     holdingFeatures,
     h3RiskFeatures,
+    clusterFeatures,
   ]);
 
   useEffect(() => {
@@ -524,6 +612,13 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           <span className="text-[8px] text-white/55 tabular-nums">
             {holdingFeatures.length}
             {criticalHolds > 0 ? ` (${criticalHolds}C)` : ""}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+          <span className="text-[8px] font-bold text-cyan-300">CLSTR</span>
+          <span className="text-[8px] text-white/55 tabular-nums">
+            {clusterFeatures.length}
           </span>
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">

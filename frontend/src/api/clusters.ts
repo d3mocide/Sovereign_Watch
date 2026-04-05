@@ -16,21 +16,31 @@ export interface ClusterResponse {
   noise_count: number;
 }
 
+export interface ClusterParams {
+  h3Region?: string;
+  lat?: number;
+  lon?: number;
+  radiusNm?: number;
+  lookbackHours?: number;
+  epsKm?: number;
+  minSamples?: number;
+}
+
 export async function fetchClusters(
-  h3Region: string,
-  lookbackHours = 24,
-  epsKm = 2.0,
-  minSamples = 5,
+  params: ClusterParams,
 ): Promise<ClusterResponse> {
   const token = getToken();
   try {
-    const params = new URLSearchParams({
-      h3_region: h3Region,
-      lookback_hours: String(lookbackHours),
-      eps_km: String(epsKm),
-      min_samples: String(minSamples),
-    });
-    const res = await fetch(`/api/ai_router/clusters?${params}`, {
+    const urlParams = new URLSearchParams();
+    if (params.h3Region) urlParams.append("h3_region", params.h3Region);
+    if (params.lat !== undefined) urlParams.append("lat", String(params.lat));
+    if (params.lon !== undefined) urlParams.append("lon", String(params.lon));
+    if (params.radiusNm !== undefined) urlParams.append("radius_nm", String(params.radiusNm));
+    
+    urlParams.append("lookback_hours", String(params.lookbackHours || 24));
+    urlParams.append("eps_km", String(params.epsKm || 2.0));
+    urlParams.append("min_samples", String(params.minSamples || 5));
+    const res = await fetch(`/api/ai_router/clusters?${urlParams.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) return { clusters: [], total_clusters: 0, noise_count: 0 };

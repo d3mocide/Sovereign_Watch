@@ -252,7 +252,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   return [
     ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
     ...buildH3RiskLayer(h3RiskCells, !!filters?.showH3Risk),
-    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, now),
     getTerminatorLayer(!!filters?.showTerminator),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
@@ -290,6 +289,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoverPosition,
       onEntitySelect,
     ),
+    // Cluster octagons sit above jamming so they are visible through the circular halos
+    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, setHoveredEntity, setHoverPosition, onEntitySelect),
     // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
     // Auto-enabled when a mission area is active (shows all events in AOT)
     ...buildGdeltLayer(

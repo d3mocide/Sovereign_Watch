@@ -65,7 +65,7 @@ def _to_utc(t: object) -> Optional[datetime]:
 def detect_clusters(
     points: list[dict],
     eps_km: float = 2.0,
-    eps_t: float = 300.0,
+    eps_t: float = 900.0,
     min_samples: int = 5,
 ) -> STDBSCANResult:
     """

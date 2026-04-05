@@ -394,8 +394,24 @@ export function useAnimationLoop({
     const load = async () => {
       const center = mapRef.current?.getMap()?.getCenter();
       if (!center) return;
-      const h3Cell = latLngToCell(center.lat, center.lng, 7);
-      const resp = await fetchClusters(h3Cell);
+      
+      const mission = currentMissionRef.current;
+      const clusterParams: import("../api/clusters").ClusterParams = {};
+      
+      if (mission) {
+        // Use exact AOT (Area Of Tactical Interest) if available
+        clusterParams.lat = mission.lat;
+        clusterParams.lon = mission.lon;
+        clusterParams.radiusNm = mission.radius_nm;
+      } else {
+        // Fallback to a large ~100km region centered on the viewport
+        clusterParams.h3Region = latLngToCell(center.lat, center.lng, 3);
+      }
+      
+      const resp = await fetchClusters({
+        ...clusterParams,
+        lookbackHours: filters?.clusterLookbackHours ?? 4,
+      });
       if (!cancelled) setClusterData(resp.clusters);
     };
     load();
@@ -404,7 +420,7 @@ export function useAnimationLoop({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [filters?.showClusters]);
+  }, [filters?.showClusters, filters?.clusterLookbackHours]);
 
   useEffect(() => {
     const animate = () => {

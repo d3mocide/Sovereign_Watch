@@ -742,44 +742,92 @@ async def health_check() -> Dict[str, str]:
 
 @router.get("/clusters")
 async def get_clusters(
-    h3_region: str = Query(..., description="H3-7 hexagonal cell ID"),
+    h3_region: Optional[str] = Query(None, description="H3-7 hexagonal cell ID"),
+    lat: Optional[float] = Query(None, description="Center latitude"),
+    lon: Optional[float] = Query(None, description="Center longitude"),
+    radius_nm: Optional[float] = Query(None, description="Radius in nautical miles"),
     lookback_hours: int = Query(24, ge=1, le=720, description="Lookback window in hours"),
     eps_km: float = Query(2.0, gt=0, description="Spatial neighbourhood radius in km"),
     min_samples: int = Query(5, ge=2, description="Minimum samples to form a core point"),
 ) -> Dict:
     """
-    Detect ST-DBSCAN entity clusters within an H3 region.
+    Detect ST-DBSCAN entity clusters within an H3 region or circular AOT.
 
     Queries TAK clausal_chains for the region and time window, then runs
     spatial-temporal DBSCAN clustering.  Returns per-cluster metadata and
     a count of noise (unclustered) entity UIDs.
     """
-    wkt_polygon = _h3_cell_to_wkt(h3_region)
+    wkt_polygon = _h3_cell_to_wkt(h3_region) if h3_region else None
+
+    # Use DISTINCT ON (uid) so each entity contributes exactly one point —
+    # its most recent position within the window.  This ensures clusters
+    # represent co-location of *different* entities, not repeated observations
+    # of the same moving track.
+    # Hard cap: ST-DBSCAN is O(n²) — keep input to a safe size.
+    _ROW_LIMIT = 5000
 
     async with db.pool.acquire() as conn:
-        if wkt_polygon:
+        if lat is not None and lon is not None and radius_nm is not None:
+            radius_m = radius_nm * 1852.0
             rows = await conn.fetch(
                 """
                 SELECT uid, locative_lat, locative_lon, time
-                FROM clausal_chains
-                WHERE source IN ('TAK_ADSB', 'TAK_AIS')
-                  AND time > now() - ($1 * interval '1 hour')
-                  AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                      AND ST_DWithin(
+                          geom::geography,
+                          ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                          $4
+                      )
+                    ORDER BY uid, time DESC
+                ) latest
                 ORDER BY time DESC
+                LIMIT $5
+                """,
+                lookback_hours,
+                lon,
+                lat,
+                radius_m,
+                _ROW_LIMIT,
+            )
+        elif wkt_polygon:
+            rows = await conn.fetch(
+                """
+                SELECT uid, locative_lat, locative_lon, time
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                      AND ST_Within(geom, ST_GeomFromText($2, 4326))
+                    ORDER BY uid, time DESC
+                ) latest
+                ORDER BY time DESC
+                LIMIT $3
                 """,
                 lookback_hours,
                 wkt_polygon,
+                _ROW_LIMIT,
             )
         else:
             rows = await conn.fetch(
                 """
                 SELECT uid, locative_lat, locative_lon, time
-                FROM clausal_chains
-                WHERE source IN ('TAK_ADSB', 'TAK_AIS')
-                  AND time > now() - ($1 * interval '1 hour')
+                FROM (
+                    SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, time
+                    FROM clausal_chains
+                    WHERE source IN ('TAK_ADSB', 'TAK_AIS')
+                      AND time > now() - ($1 * interval '1 hour')
+                    ORDER BY uid, time DESC
+                ) latest
                 ORDER BY time DESC
+                LIMIT $2
                 """,
                 lookback_hours,
+                _ROW_LIMIT,
             )
 
     points = [
@@ -793,7 +841,19 @@ async def get_clusters(
         if row["uid"] and row["locative_lat"] is not None and row["locative_lon"] is not None
     ]
 
-    result = detect_clusters(points, eps_km=eps_km, min_samples=min_samples)
+    if len(points) == _ROW_LIMIT:
+        logger.warning(
+            "get_clusters: row cap (%d) hit — results may be incomplete. "
+            "Tighten the AOI or reduce lookback_hours.",
+            _ROW_LIMIT,
+        )
+
+    # Offload the CPU-bound O(n²) ST-DBSCAN to a thread so the event loop
+    # stays responsive while clustering runs.
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: detect_clusters(points, eps_km=eps_km, min_samples=min_samples)
+    )
 
     clusters_out = [
         {

@@ -61,11 +61,12 @@ export function TrackHistoryPanel({
 
     async function load() {
       try {
+        const targetUid = entity.uid.replace(/^hold-/, "");
         const [histRes, flightRes] = await Promise.allSettled([
           fetch(
-            `/api/tracks/history/${encodeURIComponent(entity.uid)}?limit=500&hours=72`,
+            `/api/tracks/history/${encodeURIComponent(targetUid)}?limit=500&hours=72`,
           ),
-          fetch(`/api/tracks/flight-info/${encodeURIComponent(entity.uid)}`),
+          fetch(`/api/tracks/flight-info/${encodeURIComponent(targetUid)}`),
         ]);
 
         if (cancelled) return;

@@ -1,6 +1,7 @@
 import {
   CloudRain,
   Crosshair,
+  HexagonIcon,
   Layers,
   Network,
   Plane,
@@ -71,6 +72,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isHold = entity.type === "hold";
   const isGdelt = entity.type === "gdelt";
   const isJamming = entity.type === "jamming";
+  const isCluster = entity.type === "cluster";
   const jammingAssessment = String(
     (entity.detail as Record<string, unknown> | undefined)?.assessment ||
       "mixed",
@@ -123,7 +125,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                             ? "text-hud-green"
                             : isJamming
                               ? jammingColor
-                              : "text-air-accent";
+                              : isCluster
+                                ? "text-amber-400"
+                                : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -157,7 +161,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                             ? "border-hud-green/30"
                             : isJamming
                               ? "border-amber-400/50"
-                              : "border-air-accent/50";
+                              : isCluster
+                                ? "border-amber-400/50"
+                                : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -191,7 +197,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                             ? WifiOff
                             : isHold
                               ? Crosshair
-                              : Plane;
+                              : isCluster
+                                ? HexagonIcon
+                                : Plane;
 
   return (
     <div
@@ -241,7 +249,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                             ? "OSINT"
                             : isJamming
                               ? "SIGINT"
-                              : "LIVE"}
+                              : isCluster
+                                ? "CLUSTER"
+                                : "LIVE"}
           </span>
         </div>
       </div>
@@ -828,6 +838,53 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               </span>
             </div>
           )}
+        </div>
+      ) : isCluster ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CONVERGENCE ZONE
+            </span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight uppercase">
+              ST-DBSCAN ENTITY CLUSTER
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ENTITIES
+            </span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold leading-tight">
+              {String(entity.detail?.entity_count ?? 0)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CENTROID
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {entity.lat.toFixed(3)}, {entity.lon.toFixed(3)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              FIRST SEEN
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {entity.detail?.start_time
+                ? new Date(String(entity.detail.start_time)).toLocaleTimeString()
+                : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LAST SEEN
+            </span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight">
+              {entity.detail?.end_time
+                ? new Date(String(entity.detail.end_time)).toLocaleTimeString()
+                : "—"}
+            </span>
+          </div>
         </div>
       ) : isJamming ? (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">

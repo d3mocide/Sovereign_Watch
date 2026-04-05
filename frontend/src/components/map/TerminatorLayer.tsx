@@ -121,6 +121,11 @@ export function getTerminatorLayer(visible: boolean) {
     lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
+    // Transparent night overlay — must not write to the depth buffer so it
+    // doesn't occlude surface layers (country heat, cables, etc.) beneath it.
+    parameters: {
+      depthTest: false,
+    } as any,
     // Add updateTriggers if we want it to react to time changes
     updateTriggers: {
       getFillColor: [now.getTime()]

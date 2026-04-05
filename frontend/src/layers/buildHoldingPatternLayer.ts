@@ -57,7 +57,8 @@ export function buildHoldingPatternLayer(
       stroked: true,
       filled: true,
       lineWidthMinPixels: 2,
-      pointRadiusMinPixels: 12, // Larger hit area for easier analyst hover
+      pointRadiusMinPixels: 8,  // fixed-size indicator — same behaviour as entity dots
+      pointRadiusMaxPixels: 14, // never grows into zone-circle territory
       getLineColor: (f: any) => {
         const props = (f?.properties ?? {}) as HoldProps;
         const color = getHoldSeverityColor(props.turns_completed);

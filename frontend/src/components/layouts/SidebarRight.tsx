@@ -1,6 +1,7 @@
 import React from "react";
 import { CoTEntity, HistorySegment } from "../../types";
 import { AircraftView } from "./sidebar-right/AircraftView";
+import { ClusterView } from "./sidebar-right/ClusterView";
 import { GdeltView } from "./sidebar-right/GdeltView";
 import { HoldingPatternView } from "./sidebar-right/HoldingPatternView";
 import { InfraView } from "./sidebar-right/InfraView";
@@ -58,6 +59,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   // Domain-specific early-return routes
   if (entity.type === "sitrep") {
     return null;
+  }
+  if (entity.type === "cluster") {
+    return <ClusterView key={entity.uid} {...baseProps} />;
   }
   if (entity.type === "hold") {
     return (

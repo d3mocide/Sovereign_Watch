@@ -1,11 +1,11 @@
 import {
   AlertCircle,
+  AlertTriangle,
   Anchor,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   CloudRain,
-  Globe,
   Layers,
   Network,
   Radio,
@@ -85,11 +85,13 @@ export const LayerVisibilityControls: React.FC<
       filters.showFacilities === true ||
       filters.showISS === true);
 
-  const environmentalIsOn =
-    !!filters &&
-    (!!filters.showAurora || !!filters.showBuoys || !!filters.showNWSAlerts);
+  const environmentalIsOn = !!(
+    filters?.showAurora ||
+    filters?.showBuoys ||
+    filters?.showNWSAlerts
+  );
 
-  const analysisIsOn = !!filters && !!filters.showH3Risk;
+  const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters);
 
   const hazardsIsOn =
     !!filters &&
@@ -148,7 +150,13 @@ export const LayerVisibilityControls: React.FC<
 
   const toggleAnalysis = () => {
     if (!onFilterChange || !filters) return;
-    onFilterChange("showH3Risk", !filters.showH3Risk);
+    if (analysisIsOn) {
+      onFilterChange("showH3Risk", false);
+      onFilterChange("showClusters", false);
+    } else {
+      onFilterChange("showH3Risk", getFilterPref("showH3Risk", false));
+      onFilterChange("showClusters", getFilterPref("showClusters", true));
+    }
   };
 
   return (
@@ -249,7 +257,7 @@ export const LayerVisibilityControls: React.FC<
                 aria-label={hazardsIsOn ? "Hide Hazards Layers" : "Show Hazards Layers"}
                 aria-pressed={hazardsIsOn}
               >
-                <AlertCircle size={12} aria-hidden="true" />
+                <AlertTriangle size={12} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -618,6 +626,38 @@ export const LayerVisibilityControls: React.FC<
                   </div>
                 </label>
 
+                {/* Cable Opacity Slider */}
+                {filters.showCables !== false && (
+                  <div className="group flex flex-col gap-1 rounded border border-white/5 bg-white/5 p-1.5 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold tracking-wide text-white/50">
+                        CABLE OPACITY
+                      </span>
+                      <span className="text-[9px] text-white/50">
+                        {Math.round(
+                          ((filters.cableOpacity as unknown as number) ?? 0.6) *
+                            100,
+                        )}
+                        %
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="1"
+                      step="0.1"
+                      value={(filters.cableOpacity as unknown as number) ?? 0.6}
+                      onChange={(e) =>
+                        onFilterChange(
+                          "cableOpacity",
+                          parseFloat(e.target.value) as unknown as boolean,
+                        )
+                      }
+                      className="h-1 w-full appearance-none rounded bg-white/10 outline-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
+                    />
+                  </div>
+                )}
+
                 {/* Landing Stations */}
                 <label
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showLandingStations !== false ? "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "border-white/5 bg-white/5"}`}
@@ -826,36 +866,6 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
-
-                {/* Cable Opacity Slider */}
-                <div className="group flex flex-col gap-1 rounded border border-white/5 bg-white/5 p-1.5 transition-all">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-bold tracking-wide text-white/50">
-                      CABLE OPACITY
-                    </span>
-                    <span className="text-[9px] text-white/50">
-                      {Math.round(
-                        ((filters.cableOpacity as unknown as number) ?? 0.6) *
-                          100,
-                      )}
-                      %
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.2"
-                    max="1"
-                    step="0.1"
-                    value={(filters.cableOpacity as unknown as number) ?? 0.6}
-                    onChange={(e) =>
-                      onFilterChange(
-                        "cableOpacity",
-                        parseFloat(e.target.value) as unknown as boolean,
-                      )
-                    }
-                    className="h-1 w-full appearance-none rounded bg-white/10 outline-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
-                  />
-                </div>
               </div>
             )}
           </div>
@@ -1141,6 +1151,56 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
+
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showClusters ? "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(6,182,212,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Network
+                      size={10}
+                      className={
+                        filters.showClusters ? "text-cyan-400" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showClusters ? "text-cyan-400/80" : "text-white/30"}`}
+                    >
+                      TRAJECTORY CLUSTERS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showClusters}
+                    onChange={(e) =>
+                      handleSubFilterChange("showClusters", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showClusters ? "bg-cyan-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showClusters ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+                {filters.showClusters && (
+                  <div className="flex w-full gap-1 px-0.5">
+                    {([1, 4, 24] as const).map((h) => (
+                      <button
+                        key={h}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded border transition-all ${
+                          (filters.clusterLookbackHours ?? 4) === h
+                            ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_6px_rgba(6,182,212,0.3)]"
+                            : "bg-white/5 text-white/30 border-white/10 hover:bg-white/10 hover:text-white/50"
+                        }`}
+                        onClick={() => onFilterChange("clusterLookbackHours", h)}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1161,7 +1221,7 @@ export const LayerVisibilityControls: React.FC<
                 aria-label={hazardsExpanded ? "Collapse Hazards" : "Expand Hazards"}
               >
                 <div className="flex items-center gap-3">
-                  <Globe
+                  <AlertTriangle
                     size={14}
                     className={hazardsIsOn ? "text-amber-400" : "text-white/20"}
                     aria-hidden="true"

@@ -649,13 +649,12 @@ export function TacticalMap({
 
   const h3RiskResolution = useMemo(() => {
     const z = viewState.zoom;
-    // Tactical map: keep midsize cells through common mission zooms,
-    // then increase detail only at deeper local zoom levels.
-    if (z < 5) return 4;
-    if (z < 15) return 6;
-    if (z < 17) return 7;
-    if (z < 19) return 8;
-    return 9;
+    // Backend supports only resolutions 4, 6, 9.
+    // Keep large (res-4) hexagons through all regional/state zooms; only
+    // switch to finer detail when genuinely zoomed into metro or street level.
+    if (z < 9) return 4;   // continent → state → regional (large cells)
+    if (z < 13) return 6;  // metro / city overview (medium cells)
+    return 9;              // neighbourhood / street detail (fine cells)
   }, [viewState.zoom]);
 
   useAnimationLoop({

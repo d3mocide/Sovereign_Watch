@@ -284,6 +284,7 @@ export interface MapFilters {
   showNWSAlerts?: boolean;
   // Phase 2 — ST-DBSCAN cluster overlay
   showClusters?: boolean;
+  clusterLookbackHours?: number;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 
