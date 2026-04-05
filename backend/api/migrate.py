@@ -24,8 +24,8 @@ import sys
 
 import asyncpg
 
-MIGRATIONS_DIR = "/migrations"
-DATABASE_URL = os.environ["DATABASE_URL"]
+MIGRATIONS_DIR = os.environ.get("MIGRATIONS_DIR", "/app/migrations")
+DATABASE_URL = os.environ["DB_DSN"]
 
 
 async def run() -> None:
