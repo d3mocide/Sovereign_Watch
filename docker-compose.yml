@@ -267,7 +267,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
     volumes:
       - sovereign-vol-postgres:/home/postgres/pgdata/data
-      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/db/initdb:/docker-entrypoint-initdb.d
     networks:
       - sovereign-net-backend
       - sovereign-net-ai
