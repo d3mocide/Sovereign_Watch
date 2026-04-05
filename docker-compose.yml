@@ -3,8 +3,6 @@ networks:
     driver: bridge
   sovereign-net-backend:
     driver: bridge
-  sovereign-net-ai:
-    driver: bridge
 
 volumes:
   sovereign-vol-redpanda:
@@ -99,6 +97,7 @@ services:
       - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID:-}
       - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET:-}
       - OPENSKY_RATE_LIMIT_PERIOD=${OPENSKY_RATE_LIMIT_PERIOD:-0}
+      - OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD=${OPENSKY_WATCHLIST_RATE_LIMIT_PERIOD:-0}
       - OPENSKY_WATCHLIST_ENABLED=${OPENSKY_WATCHLIST_ENABLED:-false}
       - OPENSKY_WATCHLIST_AUTO_SEED=${OPENSKY_WATCHLIST_AUTO_SEED:-true}
       - OPENSKY_WATCHLIST_SEED_TYPES=${OPENSKY_WATCHLIST_SEED_TYPES:-military,government,drone}
@@ -108,6 +107,7 @@ services:
       - HOLDING_WINDOW_S=${HOLDING_WINDOW_S:-300}
       - HEADING_CHANGE_THRESHOLD=${HEADING_CHANGE_THRESHOLD:-2}
       - MIN_CIRCLE_DURATION=${MIN_CIRCLE_DURATION:-60}
+      - MIN_DIRECTIONAL_CONSISTENCY=${MIN_DIRECTIONAL_CONSISTENCY:-0.7}
       - MIN_VELOCITY_KNOTS=${MIN_VELOCITY_KNOTS:-0}
     networks:
       - sovereign-net-backend
@@ -134,6 +134,7 @@ services:
       - SATNOGS_NETWORK_INTERVAL_H=${SATNOGS_NETWORK_INTERVAL_H:-1}
       - AURORA_INTERVAL_S=${AURORA_INTERVAL_S:-300}
       - KP_INTERVAL_S=${KP_INTERVAL_S:-900}
+      - SCALES_INTERVAL_S=${SCALES_INTERVAL_S:-900}
     networks:
       - sovereign-net-backend
     depends_on:
@@ -156,6 +157,9 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}@sovereign-timescaledb:5432/${POSTGRES_DB:-sovereign_watch}
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
       - POLL_INTERVAL_NDBC_MINUTES=${POLL_INTERVAL_NDBC_MINUTES:-15}
+      - POLL_INTERVAL_PEERINGDB_HOURS=${POLL_INTERVAL_PEERINGDB_HOURS:-24}
+      - POLL_INTERVAL_ISS_SECONDS=${POLL_INTERVAL_ISS_SECONDS:-5}
+      - POLL_INTERVAL_NWS_MINUTES=${POLL_INTERVAL_NWS_MINUTES:-10}
     networks:
       - sovereign-net-backend
     depends_on:
@@ -174,6 +178,7 @@ services:
     environment:
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - POLL_INTERVAL=900
+      - REDIS_URL=redis://sovereign-redis:6379
     networks:
       - sovereign-net-backend
     depends_on:
@@ -200,6 +205,7 @@ services:
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
       - RADIOREF_PASSWORD=${RADIOREF_PASSWORD}
+      - RADIOREF_STATE_IDS=${RADIOREF_STATE_IDS:-AUTO}
       - RF_RR_FETCH_HOUR=${RF_RR_FETCH_HOUR:-4}
     networks:
       - sovereign-net-backend
@@ -244,7 +250,6 @@ services:
       - ./backend/db/initdb:/docker-entrypoint-initdb.d
     networks:
       - sovereign-net-backend
-      - sovereign-net-ai
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -259,7 +264,6 @@ services:
       - sovereign-vol-redis:/data
     networks:
       - sovereign-net-backend
-      - sovereign-net-ai
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -278,6 +282,12 @@ services:
       - CENTER_LAT=${CENTER_LAT:-45.5152}
       - CENTER_LON=${CENTER_LON:--122.6784}
       - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
+      - TRACK_HISTORY_MAX_LIMIT=${TRACK_HISTORY_MAX_LIMIT:-1000}
+      - TRACK_HISTORY_MAX_HOURS=${TRACK_HISTORY_MAX_HOURS:-168}
+      - TRACK_REPLAY_MAX_LIMIT=${TRACK_REPLAY_MAX_LIMIT:-10000}
+      - TRACK_REPLAY_MAX_HOURS=${TRACK_REPLAY_MAX_HOURS:-168}
+      - TRACK_SEARCH_MAX_LIMIT=${TRACK_SEARCH_MAX_LIMIT:-100}
+      - NEWS_RSS_URLS
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
       - RADIOREF_APP_KEY=${RADIOREF_APP_KEY}
       - RADIOREF_USERNAME=${RADIOREF_USERNAME}
@@ -306,7 +316,6 @@ services:
       - ./backend/db/migrations:/app/migrations:ro
     networks:
       - sovereign-net-backend
-      - sovereign-net-ai
     depends_on:
       sovereign-timescaledb:
         condition: service_healthy

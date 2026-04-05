@@ -1,39 +1,18 @@
-# Release - v0.64.0 - Infrastructure Hardening
+# Release - v0.64.1 - Space Weather & Configuration Alignment
 
-This release focuses on hardening the **Sovereign Watch** deployment stack, resolving critical asset delivery issues and ensuring high-availability container health.
+This patch restores the Space Weather and Geomagnetic intelligence feeds following upstream NOAA API changes, and performs a comprehensive audit and synchronization of docker-compose environment variables to ensure local configurations are fully respected.
 
-## High-Level Summary
-The main objective of `v0.64.0` was to standardize the infrastructure configuration across both development and production environments. We addressed a series of "silent failures" where frontend assets would fail to load (rendering a blank white screen) and backend containers were incorrectly reporting healthy status despite missing connectivity tools.
+### Key Features
+- **NOAA API Resilience**: Overhauled scale parsing logic to tolerate upstream JSON format breaking changes (bare numbers vs strings) while maintaining prefix continuity for the frontend regex decoders.
+- **Enlightened Intervals**: Over an entire suite of "ghost" environment variables—from peering intervals and infrastructure pulling thresholds to backend tracking limits and RSS arrays—are now correctly surfaced to `.env` control.
 
-## Key Infrastructure Improvements
+### Technical Details
+- Removed the deprecated and orphaned `sovereign-net-ai` network.
+- Correctly parsed `SCALES_INTERVAL_S` to resolve initialization crashes in Space Weather ingestion.
 
-- **Nginx Standardization**: Rewrote `nginx.conf` and `nginx-dev.conf` with production-grade MIME type support and Gzip compression. This ensures that browsers correctly identify and cache assets, resolving loading failures.
-- **Backend Health Restoration**: Integrated standard diagnostic tools (`curl`) into the minimal backend image. The FastAPI container now accurately reports its health to the Docker engine via live REST/WS probes at `/health`.
-- **Build System Parity**: Hardened the `Makefile` build targets. The CLI now enforces the `--build` flag on all operations, ensuring that Vite-specific development targets and Nginx-specific production targets never overlap or cause 502 Bad Gateway errors.
-- **Idempotent Migration Pipeline**: Documented and stabilized the integrated database migration runner. The system now automatically stamps a `V001` baseline on existing deployments before applying new, numbered SQL migrations.
-- **WebSocket Stability**: Optimized the development proxy to include `Upgrade` and `Connection` headers for the root location, ensuring reliable Vite HMR (Hot Module Replacement) during active development.
-
-## Documentation & Task Summary
-This release cycle also aggregates several high-fidelity feature additions from early April:
-- **Unified AI Architecture (v1.5)**: Consolidation of reasoning into a single `AIService`.
-- **H3 Composite Risk Scoring**: Real-time multi-INT risk fusion rendering.
-- **Tactical NWS Alerts**: Polygon overlay support for active weather events in the map UI.
-
----
-
-## Upgrade Instructions
-
-To upgrade to `v0.64.0`, pull the latest changes and use the hardened `Makefile` to rebuild the stack:
-
+### Upgrade Instructions
+To apply this update, rebuild the affected poller and backend containers:
 ```bash
-# 1. Pull latest changes
 git pull origin main
-
-# 2. Stop existing containers and prune volumes if needed
-make down
-
-# 3. Clean rebuild and start (enforces --build flag safety)
-make prod
+docker compose up -d --build
 ```
-
-Verification of success can be checked via `docker compose ps` to ensure all containers report a `healthy` status.

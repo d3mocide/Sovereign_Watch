@@ -51,8 +51,18 @@ def _kp_to_storm_level(kp: float) -> str:
 
 
 def _parse_scale_int(scale_str: str) -> int:
-    """Extract numeric level from NOAA scale string like 'R3', 'G0', 'S2'. Returns 0 on parse failure."""
-    if not scale_str or len(scale_str) < 2:
+    """Extract numeric level from NOAA scale string like 'R3', 'G0', 'S2', or bare strings like '3', '0'."""
+    if not scale_str:
+        return 0
+    
+    # Try parsing directly if they removed the prefix (e.g., '3')
+    try:
+        return int(scale_str)
+    except ValueError:
+        pass
+        
+    # Fallback for original prefixed format (e.g., 'R3')
+    if len(scale_str) < 2:
         return 0
     try:
         return int(scale_str[1:])
@@ -266,9 +276,14 @@ class SpaceWeatherSource:
             logger.debug("No current-period NOAA Scales data")
             return
 
-        r_scale_str = current.get("R", {}).get("Scale", "R0")
-        g_scale_str = current.get("G", {}).get("Scale", "G0")
-        s_scale_str = current.get("S", {}).get("Scale", "S0")
+        r_scale_raw = str(current.get("R", {}).get("Scale", "0"))
+        g_scale_raw = str(current.get("G", {}).get("Scale", "0"))
+        s_scale_raw = str(current.get("S", {}).get("Scale", "0"))
+
+        # Add prefix back if NOAA removed it (e.g., '3' -> 'R3')
+        r_scale_str = r_scale_raw if r_scale_raw.startswith("R") else f"R{r_scale_raw}"
+        g_scale_str = g_scale_raw if g_scale_raw.startswith("G") else f"G{g_scale_raw}"
+        s_scale_str = s_scale_raw if s_scale_raw.startswith("S") else f"S{s_scale_raw}"
 
         r_level = _parse_scale_int(r_scale_str)
         g_level = _parse_scale_int(g_scale_str)
