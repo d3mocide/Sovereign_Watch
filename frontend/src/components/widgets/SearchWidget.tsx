@@ -201,7 +201,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                         <button
                             key={result.uid}
                             onClick={() => handleSelect(result)}
-                            className="w-full text-left flex items-center gap-3 p-2 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                            className="group w-full text-left flex items-center gap-3 p-2 hover:bg-white/10 focus-visible:bg-white/10 focus-visible:ring-1 focus-visible:ring-hud-green outline-none transition-colors border-b border-white/5 last:border-0"
                         >
                             <div className="flex-shrink-0">
                                 {getIcon(result.type, result.isLive)}
@@ -264,7 +264,7 @@ export const SearchWidget: React.FC<SearchWidgetProps> = ({ mapActions, onEntity
                                     </div>
                                 </div>
                             </div>
-                            <div className="text-cyan-400/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="text-cyan-400/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                                 <Search size={12} />
                             </div>
                         </button>

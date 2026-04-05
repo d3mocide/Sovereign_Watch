@@ -59,6 +59,9 @@
 ## 2024-05-15 - UserManagementPanel Select Accessibility
 **Learning:** Dense lists with inline controls (like a dropdown to select a user's role) often lack visual space for a `<label>` element. Without a label, screen readers announce "combo box" without context, confusing the user about whose role they are modifying.
 **Action:** When a `<select>` or similar input lacks a corresponding explicit `<label>`, always inject a dynamic `aria-label` (e.g., `aria-label={"Role for user " + username}`) to provide exact contextual identity to assistive technologies.
+## 2024-03-31 - Focus-visible and opacity logic for nested actions
+**Learning:** Actions that are visually hidden behind a `group-hover` (e.g. `opacity-0 group-hover:opacity-100`) become inaccessible via keyboard because the nested actions lack focus states. While hovering exposes them, tabbing does not automatically reveal them since `focus-visible` needs to trigger opacity.
+**Action:** When nesting hidden interactive elements using `group-hover:opacity-100`, also apply `group-focus-within:opacity-100` to the container or `focus-visible:opacity-100` directly on the actionable element to ensure keyboard users can tab into them and make them visible.
 ## 2026-04-04 - Explicit Form Label Association
 **Learning:** Found several forms in the UI where `<label>` elements lacked `htmlFor` attributes and their corresponding inputs/selects lacked `id` attributes. While visually clear, this breaks screen reader association and click-to-focus functionality, reducing accessibility and UX quality.
 **Action:** When building or auditing forms, always ensure every label explicitly targets its input using matching `htmlFor` and `id` attributes, even if they appear visually adjacent.
