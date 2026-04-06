@@ -281,7 +281,11 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
             {currentScales && (
               <div className="flex gap-1 mt-0.5">
                 {(["R", "S", "G"] as const).map(key => {
-                  const val = currentScales[key] ?? `${key}0`;
+                  const rawVal = currentScales[key] as any;
+                  // Handle cases where NOAA returns an object {Scale, Text...} instead of a string
+                  const val = (rawVal && typeof rawVal === "object" && "Scale" in rawVal)
+                    ? rawVal.Scale
+                    : rawVal ?? `${key}0`;
                   const c = scaleColor(val);
                   return (
                     <div key={key}
