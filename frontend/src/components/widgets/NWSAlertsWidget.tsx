@@ -139,9 +139,10 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
   const features: Feature[] = nwsAlerts?.features ?? [];
 
   // Split all features vs AOT-intersecting features
+  // We strictly isolate to the Active AOT to prevent global alert spam
   const aotFeatures = mission
     ? features.filter((f) => alertIntersectsAOT(f, mission))
-    : features; // if no mission, show all
+    : [];
 
   const sorted = [...aotFeatures].sort(sortBySeverity);
 
