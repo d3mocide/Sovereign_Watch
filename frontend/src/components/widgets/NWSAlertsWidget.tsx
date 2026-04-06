@@ -200,7 +200,9 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
       {/* ── Header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center justify-between p-2.5 rounded-t-sm border border-b-0 backdrop-blur-md text-left w-full"
+        className={`flex items-center justify-between p-2.5 backdrop-blur-md text-left w-full border ${
+          expanded ? "rounded-t-sm border-b-0" : "rounded-sm"
+        }`}
         style={{
           background: `linear-gradient(135deg, ${headerColor}14 0%, ${headerColor}05 100%)`,
           borderColor: `${headerColor}35`,
@@ -231,6 +233,12 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
             <span className="text-[9px] font-bold px-1 py-0.5 rounded"
                   style={{ background: "#f59e0b20", border: "1px solid #f59e0b55", color: "#f59e0b" }}>
               {counts.moderate}M
+            </span>
+          )}
+          {aotTotal === 0 && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white/30"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              0 ACTIVE
             </span>
           )}
           {expanded ? (
