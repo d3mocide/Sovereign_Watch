@@ -83,6 +83,10 @@ interface TacticalMapProps {
   passGeometry?: any; // Kept for interface padding but logic removed
   onPassData?: (data: any) => void;
   currentPassData?: any;
+  /** Current ISS position (Initiative B real-time tracker) */
+  issPosition?: import("../../types").ISSPosition | null;
+  /** ISS ground track ring buffer (Initiative B real-time tracker) */
+  issTrack?: import("../../types").ISSPosition[];
 }
 
 type InfraPickObject = {
@@ -141,6 +145,8 @@ export function OrbitalMap({
   worldCountriesData,
   missionArea,
   satnogsStationsRef,
+  issPosition,
+  issTrack,
 }: TacticalMapProps) {
 
   // State for UI interactions
@@ -562,6 +568,8 @@ export function OrbitalMap({
     observerRef,
     worldCountriesData,
     satnogsStationsRef,
+    issPosition,
+    issTrack,
     h3RiskResolution: ORBITAL_H3_RISK_RESOLUTION,
   });
 

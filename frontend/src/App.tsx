@@ -1121,6 +1121,8 @@ function AuthenticatedApp() {
             onSatellitesRefReady={(ref) => {
               orbitalSatellitesRef.current = ref;
             }}
+            issPosition={issPosition}
+            issTrack={issTrack}
             />
             {regionalRiskOverlay}
           </>
