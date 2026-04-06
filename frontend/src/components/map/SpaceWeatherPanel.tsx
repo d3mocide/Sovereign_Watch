@@ -35,9 +35,10 @@ function stormHex(level: string): string { return STORM_HEX[level] ?? "#4b5563";
 function riskHex(level: string):  string { return RISK_HEX[level]  ?? "#4b5563"; }
 
 /** Maps NOAA scale value string (e.g. "R3", "S0", "G2") to a hex colour. */
-function scaleColor(val: string | undefined): string {
-  if (!val || val.length < 2) return "#4b5563";
-  const n = parseInt(val.slice(1), 10);
+function scaleColor(val: string | number | undefined): string {
+  const s = String(val || "");
+  if (s.length < 2) return "#4b5563";
+  const n = parseInt(s.slice(1), 10);
   if (n === 0) return "#22c55e";
   if (n === 1) return "#f59e0b";
   if (n === 2) return "#f97316";
