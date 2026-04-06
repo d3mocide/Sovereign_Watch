@@ -146,10 +146,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .length;
   }, [gdeltData]);
 
-  const nwsAlertsCount = useMemo(() => {
-    if (!nwsAlertsData?.features || !mission) return 0;
-    return nwsAlertsData.features.filter((f: any) => alertIntersectsAOT(f, mission)).length;
+  const nwsAoAlerts = useMemo(() => {
+    if (!nwsAlertsData?.features || !mission) return [];
+    return nwsAlertsData.features.filter((f: any) => alertIntersectsAOT(f, mission));
   }, [nwsAlertsData, mission]);
+
+  const nwsAlertsCount = nwsAoAlerts.length;
 
   const fmtTime = (d: Date) => d.toISOString().split("T")[1].substring(0, 8);
   const fmtPassTime = (iso: string) =>
@@ -394,6 +396,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 entitiesRef={entitiesRef}
                 satellitesRef={satellitesRef}
                 rfSites={rfEmcomm.results}
+                nwsAlerts={nwsAoAlerts}
               />
             ) : (
               <div className="flex flex-col items-center justify-center w-full h-full gap-3">

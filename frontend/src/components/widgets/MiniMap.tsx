@@ -71,6 +71,7 @@ export interface MiniMapProps {
   entitiesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   satellitesRef: React.MutableRefObject<Map<string, CoTEntity>>;
   rfSites: RFSiteResult[];
+  nwsAlerts?: GeoJSON.Feature[];
 }
 
 export const MiniTacticalMap: React.FC<MiniMapProps> = ({
@@ -78,6 +79,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   entitiesRef,
   satellitesRef,
   rfSites,
+  nwsAlerts = [],
 }) => {
   const DASHBOARD_RISK_CRITICAL_THRESHOLD = 0.72;
   const [h3RiskFeatures, setH3RiskFeatures] = useState<GeoJSON.Feature[]>([]);
@@ -348,6 +350,48 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           "line-opacity": 0.85,
         },
       });
+
+      map.addSource("nws-alerts", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "nws-alerts-fill",
+        type: "fill",
+        source: "nws-alerts",
+        paint: {
+          "fill-color": [
+            "match",
+            ["coalesce", ["get", "severity"], "Unknown"],
+            "Extreme", "#ef4444",
+            "Severe", "#f97316",
+            "Moderate", "#f59e0b",
+            "Minor", "#3b82f6",
+            "#6b7280"
+          ],
+          "fill-opacity": 0.15,
+        },
+      });
+      map.addLayer({
+        id: "nws-alerts-line",
+        type: "line",
+        source: "nws-alerts",
+        paint: {
+          "line-color": [
+            "match",
+            ["coalesce", ["get", "severity"], "Unknown"],
+            "Extreme", "#ef4444",
+            "Severe", "#f97316",
+            "Moderate", "#f59e0b",
+            "Minor", "#3b82f6",
+            "#6b7280"
+          ],
+          "line-width": 1.5,
+          "line-opacity": 0.6,
+          "line-dasharray": [2, 2],
+        },
+      });
+
       mapReadyRef.current = true;
     });
     return () => {
@@ -565,6 +609,10 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       type: "FeatureCollection",
       features: clusterFeatures,
     });
+    (map.getSource("nws-alerts") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: nwsAlerts,
+    });
   }, [
     entitiesRef,
     satellitesRef,
@@ -573,6 +621,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
     holdingFeatures,
     h3RiskFeatures,
     clusterFeatures,
+    nwsAlerts,
   ]);
 
   useEffect(() => {
@@ -626,6 +675,13 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
           <span className="text-[8px] font-bold text-red-200">CRIT RISK</span>
           <span className="text-[8px] text-white/55 tabular-nums">
             {h3RiskFeatures.length}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          <span className="text-[8px] font-bold text-amber-400">NWS</span>
+          <span className="text-[8px] text-white/55 tabular-nums">
+            {nwsAlerts.length}
           </span>
         </div>
       </div>
