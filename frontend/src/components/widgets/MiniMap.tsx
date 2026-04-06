@@ -186,7 +186,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
         filter: ["==", ["get", "etype"], "sea"],
         paint: {
           "circle-radius": 2.5,
-          "circle-color": "#22d3ee",
+          "circle-color": "#3b82f6",
           "circle-opacity": 0.85,
         },
       });
