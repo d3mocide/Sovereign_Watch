@@ -36,14 +36,15 @@ function riskHex(level: string):  string { return RISK_HEX[level]  ?? "#4b5563";
 
 /** Maps NOAA scale value string (e.g. "R3", "S0", "G2") to a hex colour. */
 function scaleColor(val: string | number | undefined): string {
-  const s = String(val || "");
-  if (s.length < 2) return "#4b5563";
-  const n = parseInt(s.slice(1), 10);
-  if (n === 0) return "#22c55e";
-  if (n === 1) return "#f59e0b";
-  if (n === 2) return "#f97316";
-  if (n === 3) return "#ef4444";
-  return "#991b1b"; // 4 or 5
+  const s = String(val ?? "");
+  if (!s) return "#4b5563";
+  // Extract number: if "R1" -> 1, if "0" -> 0
+  const n = (s.length >= 2) ? parseInt(s.slice(1), 10) : parseInt(s, 10);
+  if (isNaN(n) || n === 0) return "#22c55e"; // Level 0 (Quiet)
+  if (n === 1) return "#f59e0b"; // Minor
+  if (n === 2) return "#f97316"; // Moderate
+  if (n === 3) return "#ef4444"; // Strong
+  return "#991b1b"; // Severe/Extreme
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -286,12 +287,20 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
                   const val = (rawVal && typeof rawVal === "object" && "Scale" in rawVal)
                     ? rawVal.Scale
                     : rawVal ?? `${key}0`;
+                  const desc = (rawVal && typeof rawVal === "object" && "Text" in rawVal)
+                    ? rawVal.Text
+                    : "";
+                  
                   const c = scaleColor(val);
+                  // Ensure label has the prefix (e.g. "R0" instead of just "0")
+                  const label = val.toString().startsWith(key) ? val : `${key}${val}`;
+
                   return (
                     <div key={key}
-                         className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
+                         title={desc ? `${label}: ${desc}` : ""}
+                         className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider cursor-help"
                          style={{ background: `${c}18`, border: `1px solid ${c}50`, color: c }}>
-                      {val}
+                      {label}
                     </div>
                   );
                 })}
