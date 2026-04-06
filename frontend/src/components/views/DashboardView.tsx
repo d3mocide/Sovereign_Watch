@@ -5,6 +5,7 @@ import {
   Antenna,
   Globe,
   Newspaper,
+  CloudRain,
   Plane,
   Satellite,
   Ship,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePassPredictions } from "../../hooks/usePassPredictions";
+import { alertIntersectsAOT } from "../../utils/map/geoUtils";
 import { CoTEntity, DRState, IntelEvent, MissionProps } from "../../types";
 import { SituationGlobe } from "../map/SituationGlobe";
 import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
@@ -45,6 +47,7 @@ interface DashboardViewProps {
   gdeltData: FeatureCollection | null;
   ixpData?: FeatureCollection | null;
   facilityData?: FeatureCollection | null;
+  nwsAlertsData?: FeatureCollection | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -62,6 +65,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   gdeltData,
   ixpData,
   facilityData,
+  nwsAlertsData,
 }) => {
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
@@ -141,6 +145,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return gdeltData.features.filter((f: any) => (f.properties?.tone ?? 0) <= -5)
       .length;
   }, [gdeltData]);
+
+  const nwsAlertsCount = useMemo(() => {
+    if (!nwsAlertsData?.features || !mission) return 0;
+    return nwsAlertsData.features.filter((f: any) => alertIntersectsAOT(f, mission)).length;
+  }, [nwsAlertsData, mission]);
 
   const fmtTime = (d: Date) => d.toISOString().split("T")[1].substring(0, 8);
   const fmtPassTime = (iso: string) =>
@@ -241,6 +250,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-[9px] text-white/35">EMCOMM</span>
           <span className="text-[10px] text-amber-300 font-bold">
             {rfEmcomm.count}
+          </span>
+        </div>
+
+        <div className="h-3 w-px bg-white/10" />
+
+        {/* NWS Alerts Count */}
+        <div
+          className="flex items-center gap-1.5"
+          title="NWS Alerts in mission area"
+        >
+          <CloudRain size={10} className={nwsAlertsCount > 0 ? "text-amber-400" : "text-amber-400/30"} />
+          <span className="text-[9px] text-white/35">NWS</span>
+          <span className={`text-[10px] font-bold ${nwsAlertsCount > 0 ? "text-amber-300" : "text-white/30"}`}>
+            {nwsAlertsCount}
           </span>
         </div>
 

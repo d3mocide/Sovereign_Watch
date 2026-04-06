@@ -11,6 +11,7 @@ Removed the generic, area-based domain calls from the spatial context menu, isol
 2. **`TacticalMap.tsx` & `OrbitalMap.tsx`**: Removed `onAnalyzeDomain` from prop signatures.
 3. **`App.tsx`**: Removed the redundant floating UI component (`domainAnalysisUi`) and routing callbacks since this information will now exclusively render within the Analyst Panel.
 4. **`AIAnalystPanel.tsx`**: Injected a dynamic `domainLabel` based on entity type to explicitly reflect which domain (Tactical, Air, Sea, Orbital) is actively targeted by the intelligence execution.
+5. **`DashboardView.tsx` & `geoUtils.ts`**: Extracted AOT-intersection logic out of `NWSAlertsWidget.tsx` and implemented a localized NWS Alert count badge in the Dashboard View's primary metrics banner.
 
 ## Verification
 - Code successfully compiled with zero TypeScript warnings.
