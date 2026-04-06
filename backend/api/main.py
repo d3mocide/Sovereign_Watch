@@ -207,7 +207,7 @@ app.include_router(gdelt.router, dependencies=_viewer_auth)
 app.include_router(stats.router)
 app.include_router(buoys.router, dependencies=_viewer_auth)
 app.include_router(maritime.router, dependencies=_viewer_auth)
-app.include_router(iss.router, dependencies=_viewer_auth)
+app.include_router(iss.router)
 app.include_router(ai_router.router, dependencies=_viewer_auth)
 app.include_router(h3_risk.router, dependencies=_viewer_auth)
 
