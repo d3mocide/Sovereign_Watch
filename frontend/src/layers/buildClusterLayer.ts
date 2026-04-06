@@ -131,10 +131,13 @@ export function buildClusterLayer(
       billboard: true,
       pickable: false,
       // Collision detection: hide labels that overlap — bigger clusters win.
-      extensions: [new CollisionFilterExtension()],
-      collisionEnabled: true,
-      collisionGroup: "cluster-labels",
-      getCollisionPriority: (d) => d.entity_count,
+      // Cast required: CollisionFilterExtension props are not in the base TextLayer type.
+      ...({
+        extensions: [new CollisionFilterExtension()],
+        collisionEnabled: true,
+        collisionGroup: "cluster-labels",
+        getCollisionPriority: (d: ClusterWithPoly) => d.entity_count,
+      } as object),
     }),
   ];
 }

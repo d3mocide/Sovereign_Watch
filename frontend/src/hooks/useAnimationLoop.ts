@@ -26,6 +26,7 @@ import {
   VisualState,
 } from "../types";
 import { getCompensatedCenter } from "../utils/map/geoUtils";
+import { ClausalChain } from "../layers/buildClausalChainLayer";
 
 interface UseAnimationLoopOptions {
   entitiesRef: MutableRefObject<Map<string, CoTEntity>>;
@@ -122,6 +123,8 @@ interface UseAnimationLoopOptions {
   holdingPatternData?: FeatureCollection | null;
   /** H3 resolution tier (4/6/9) derived from map zoom; drives risk layer refetch */
   h3RiskResolution?: number;
+  /** Clausal chain narrative traces for the map overlay */
+  clausalChainsData?: ClausalChain[];
 }
 
 export function useAnimationLoop({
@@ -184,6 +187,7 @@ export function useAnimationLoop({
   satnogsStationsRef,
   holdingPatternData,
   h3RiskResolution,
+  clausalChainsData,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -266,6 +270,9 @@ export function useAnimationLoop({
 
   const holdingPatternDataRef = useRef(holdingPatternData);
   holdingPatternDataRef.current = holdingPatternData;
+
+  const clausalChainsDataRef = useRef(clausalChainsData);
+  clausalChainsDataRef.current = clausalChainsData;
 
   const onCountsUpdateRef = useRef(onCountsUpdate);
   onCountsUpdateRef.current = onCountsUpdate;
@@ -694,6 +701,7 @@ export function useAnimationLoop({
         satnogsStations: satnogsStationsRef?.current || [],
         holdingPatternData: holdingPatternDataRef.current,
         clusterData: clusterDataRef.current,
+        clausalChainsData: clausalChainsDataRef.current,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {
