@@ -1039,15 +1039,16 @@ export function TacticalMap({
       <SpeedLegend visible={filters?.showSea ?? true} />
       <RFLegend visible={!!showRepeaters} />
 
-      {/* NWS Alerts HUD — top-left, fires onEvent for AOT-intersecting Severe/Extreme alerts */}
+      {/* NWS Alerts HUD — top-right, fires onEvent for AOT-intersecting Severe/Extreme alerts */}
       {filters?.showNWSAlerts !== false && (
         <div
           style={{
             position: "absolute",
             top: 70,
-            left: 16,
+            right: selectedEntity ? 380 : 20,
             zIndex: 100,
             pointerEvents: "none",
+            transition: "right 0.3s ease-in-out",
           }}
         >
           <div style={{ pointerEvents: "auto" }}>
