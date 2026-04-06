@@ -58,7 +58,6 @@ interface TacticalMapProps {
   selectedEntity: CoTEntity | null;
   onEntitySelect: (entity: CoTEntity | null) => void;
   onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
-  onAnalyzeDomain?: (domain: 'air' | 'sea' | 'orbital', h3Region: string, lat: number, lon: number) => void;
   onMapActionsReady?: (actions: import("../../types").MapActions) => void;
   showVelocityVectors?: boolean;
   showHistoryTails?: boolean;
@@ -172,7 +171,6 @@ export function TacticalMap({
   selectedEntity,
   onEntitySelect,
   onAnalyzeRegionalRisk,
-  onAnalyzeDomain,
   onMapActionsReady,
   showVelocityVectors,
   showHistoryTails,
@@ -1019,7 +1017,6 @@ export function TacticalMap({
         onSaveLocation={handleSaveLocation}
         onReturnHome={handleReturnHome}
         onAnalyzeRegionalRisk={onAnalyzeRegionalRisk}
-        onAnalyzeDomain={onAnalyzeDomain}
         onClose={() => {
           setContextMenuPos(null);
           setContextMenuCoords(null);

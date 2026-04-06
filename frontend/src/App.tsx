@@ -1,5 +1,5 @@
 import type { FeatureCollection } from "geojson";
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Plane, Anchor, Satellite, Radar, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Radar, X, XCircle } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getSetupStatus } from "./api/auth";
 import RadioTerminal from "./components/js8call/RadioTerminal";
@@ -69,26 +69,6 @@ function AuthenticatedApp() {
     lat: number;
     lon: number;
     result?: RegionalRiskResponse;
-    error?: string;
-    updatedAt: number;
-  };
-
-  type DomainAnalysisResponse = {
-    domain: string;
-    h3_region: string;
-    narrative: string;
-    risk_score: number;
-    indicators: string[];
-    context_snapshot: Record<string, unknown>;
-  };
-
-  type DomainAnalysisUiState = {
-    status: "loading" | "success" | "error";
-    domain: string;
-    h3Region: string;
-    lat: number;
-    lon: number;
-    result?: DomainAnalysisResponse;
     error?: string;
     updatedAt: number;
   };
@@ -205,8 +185,6 @@ function AuthenticatedApp() {
   );
   const [regionalRiskUi, setRegionalRiskUi] =
     useState<RegionalRiskUiState | null>(null);
-  const [domainAnalysisUi, setDomainAnalysisUi] =
-    useState<DomainAnalysisUiState | null>(null);
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -420,61 +398,6 @@ function AuthenticatedApp() {
     [addEvent],
   );
 
-  const handleAnalyzeDomain = useCallback(
-    async (domain: 'air' | 'sea' | 'orbital', h3Region: string, lat: number, lon: number) => {
-      const requestTimeoutMs = 20000;
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs);
-
-      setDomainAnalysisUi({ status: "loading", domain, h3Region, lat, lon, updatedAt: Date.now() });
-
-      addEvent({
-        message: `DOMAIN_INTEL: Analyzing ${domain.toUpperCase()} domain for ${h3Region} @ ${lat.toFixed(3)}, ${lon.toFixed(3)}`,
-        type: "new",
-        entityType: domain === "air" ? "air" : domain === "sea" ? "sea" : "orbital",
-      });
-
-      try {
-        const response = await fetch(`/api/ai_router/analyze/${domain}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({ h3_region: h3Region, lookback_hours: 24 }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => response.statusText);
-          throw new Error(`Domain analysis request failed (${response.status}): ${errorText}`);
-        }
-
-        const result = (await response.json()) as DomainAnalysisResponse;
-        const riskPct = Math.round((result.risk_score ?? 0) * 100);
-
-        setDomainAnalysisUi({ status: "success", domain, h3Region, lat, lon, result, updatedAt: Date.now() });
-
-        addEvent({
-          message: `${domain.toUpperCase()} INTEL RISK ${riskPct}% | ${result.indicators?.slice(0, 2).join(" | ") || result.narrative?.slice(0, 80)}`,
-          type: riskPct >= 70 ? "alert" : "new",
-          entityType: domain === "air" ? "air" : domain === "sea" ? "sea" : "orbital",
-        });
-      } catch (error: unknown) {
-        const message =
-          error instanceof DOMException && error.name === "AbortError"
-            ? `Domain analysis timed out after ${requestTimeoutMs / 1000}s`
-            : error instanceof Error
-              ? error.message
-              : "Unknown domain analysis error";
-
-        setDomainAnalysisUi({ status: "error", domain, h3Region, lat, lon, error: message, updatedAt: Date.now() });
-
-        addEvent({ message: `DOMAIN_INTEL ERROR: ${message}`, type: "lost", entityType: "infra" });
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
-    },
-    [addEvent],
-  );
-
   const hasRightSidebarContent =
     !!(selectedEntity && (selectedEntity as any).type !== "sitrep") ||
     (viewMode === "INTEL" &&
@@ -542,71 +465,6 @@ function AuthenticatedApp() {
                   <div className="flex items-start gap-2 text-[10px] text-amber-200/90">
                     <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                     <span>{regionalRiskUi.result?.escalation_indicators.slice(0, 3).join(" | ")}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Domain Intelligence Panel ── */}
-        {domainAnalysisUi && (
-          <div className="pointer-events-auto mt-2 border border-[#a855f7]/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-semibold"
-                   style={{ color: domainAnalysisUi.domain === 'air' ? '#38bdf8' : domainAnalysisUi.domain === 'sea' ? '#22d3ee' : '#c084fc' }}>
-                {domainAnalysisUi.domain === 'air' ? <Plane size={12} /> : domainAnalysisUi.domain === 'sea' ? <Anchor size={12} /> : <Satellite size={12} />}
-                {domainAnalysisUi.domain.toUpperCase()} Intelligence
-              </div>
-              <button
-                onClick={() => setDomainAnalysisUi(null)}
-                className="text-white/40 hover:text-white/80 transition-colors"
-                aria-label="Dismiss domain analysis panel"
-                title="Dismiss"
-              >
-                <X size={12} />
-              </button>
-            </div>
-
-            <div className="px-3 py-2 text-[11px] text-white/70 font-mono">
-              <div>{domainAnalysisUi.h3Region}</div>
-              <div className="text-white/45">
-                {domainAnalysisUi.lat.toFixed(3)}, {domainAnalysisUi.lon.toFixed(3)}
-              </div>
-            </div>
-
-            {domainAnalysisUi.status === "loading" ? (
-              <div className="flex items-center gap-2 px-3 pb-3 text-[11px] text-purple-200">
-                <Loader2 size={13} className="animate-spin" />
-                Fusing {domainAnalysisUi.domain} domain intelligence...
-              </div>
-            ) : domainAnalysisUi.status === "error" ? (
-              <div className="px-3 pb-3">
-                <div className="flex items-start gap-2 text-[11px] text-red-300">
-                  <XCircle size={13} className="mt-0.5 shrink-0" />
-                  <span>{domainAnalysisUi.error}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="px-3 pb-3 space-y-2">
-                <div className="flex items-center gap-2 text-[11px] text-emerald-300">
-                  <CheckCircle2 size={13} className="shrink-0" />
-                  Completed
-                </div>
-                <div className="text-[11px] text-white/80">
-                  Risk: <span className="font-semibold text-amber-300">{Math.round((domainAnalysisUi.result?.risk_score ?? 0) * 100)}%</span>
-                </div>
-                <div className="text-[11px] text-white/70 leading-relaxed">
-                  {domainAnalysisUi.result?.narrative || "No narrative available."}
-                </div>
-                {(domainAnalysisUi.result?.indicators?.length ?? 0) > 0 && (
-                  <div className="space-y-1">
-                    {domainAnalysisUi.result!.indicators.slice(0, 5).map((ind, i) => (
-                      <div key={i} className="flex items-start gap-2 text-[10px] text-amber-200/90">
-                        <AlertTriangle size={10} className="mt-0.5 shrink-0" />
-                        <span>{ind}</span>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
@@ -999,7 +857,6 @@ function AuthenticatedApp() {
               selectedEntity={selectedEntity}
               onEntitySelect={handleEntitySelect}
               onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
-              onAnalyzeDomain={handleAnalyzeDomain}
               missionArea={missionArea as any}
               currentMission={(missionArea as any).currentMission ?? null}
               onMapActionsReady={setMapActions}
@@ -1082,7 +939,6 @@ function AuthenticatedApp() {
             globeMode={orbitalViewMode === "3D"}
             onEntitySelect={handleEntitySelect}
             onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
-            onAnalyzeDomain={handleAnalyzeDomain}
             selectedEntity={selectedEntity}
             onCountsUpdate={
               setTrackCounts as unknown as (counts: {
