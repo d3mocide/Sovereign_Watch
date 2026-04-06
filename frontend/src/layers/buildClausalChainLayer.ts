@@ -5,6 +5,7 @@
 
 import type { Layer, PickingInfo } from "@deck.gl/core";
 import { IconLayer, PathLayer, TextLayer } from "@deck.gl/layers";
+import { ICON_ATLAS } from "../utils/map/iconAtlas";
 
 export interface ClausalChain {
   uid: string;
@@ -183,6 +184,8 @@ export function buildClausalChainLayer(
       pickable: true,
       getPosition: (d) => [d.position[0], d.position[1], 0],
       getIcon: (d) => getIconName(d.predicate_type),
+      iconAtlas: ICON_ATLAS.url,
+      iconMapping: ICON_ATLAS.mapping,
       getSize: 32,
       sizeUnits: "pixels",
       getColor: (d) => {
