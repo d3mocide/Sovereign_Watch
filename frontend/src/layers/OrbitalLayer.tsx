@@ -230,8 +230,8 @@ export function getOrbitalLayers({
             id: `satellite-ground-track${sfx}`,
             data: satellites,
             getPath: (d: CoTEntity): PathPoint3D[] => {
-              const trailRaw = d.smoothedTrail || [];
-              if (trailRaw.length === 0) return [];
+              const trailRaw = d.smoothedTrail;
+              if (!Array.isArray(trailRaw) || trailRaw.length === 0) return [];
               
               const trail = trailRaw.map(
                 (pt) => [pt[0] ?? 0, pt[1] ?? 0, pt[2] ?? 0] as PathPoint3D,
@@ -331,6 +331,7 @@ export function getOrbitalLayers({
             data: [predictedGroundTrack],
             // @ts-expect-error - deck.gl path type complexity
             getPath: (pts: GroundTrackPoint[]) => {
+              if (!Array.isArray(pts)) return [];
               if (projectionMode === "globe") {
                 const alt = selectedEntity.altitude || 0;
                 return pts.map((pt) => [pt.lon, pt.lat, alt]);

@@ -78,8 +78,13 @@ export function usePassPredictions(
           throw new Error(`Pass prediction API returned ${response.status}`);
         }
 
-        const data: PassResult[] = await response.json();
-        setPasses(data);
+        const data: unknown = await response.json();
+        if (Array.isArray(data)) {
+          setPasses(data as PassResult[]);
+        } else {
+          setPasses([]);
+          console.warn("Pass prediction API returned non-array data:", data);
+        }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           return;

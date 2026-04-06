@@ -575,11 +575,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="flex items-center justify-center h-10 text-[9px] text-white/20 animate-pulse">
                 CALCULATING…
               </div>
-            ) : passes.length === 0 ? (
+            ) : Array.isArray(passes) && passes.length === 0 ? (
               <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
                 No Passes in Window
               </div>
-            ) : (
+            ) : Array.isArray(passes) ? (
               <div className="grid grid-cols-3 gap-px bg-white/[0.03]">
                 {passes.slice(0, 18).map((pass, i) => {
                   const isNow = untilPass(pass.aos) === "NOW";
@@ -639,6 +639,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   );
                 })}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
+                Error Loading Passes
               </div>
             )}
           </div>
