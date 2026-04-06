@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 import h3
 from services.hmm_trajectory import classify_trajectory
+from services.risk_taxonomy import CONVERGENCE_BOOST_PER_DOMAIN
 from services.stdbscan import detect_clusters
 
 logger = logging.getLogger(__name__)
@@ -66,9 +67,6 @@ class EscalationDetector:
         "space_weather":         "orbital",
         "internet_outage":       "infrastructure",
     }
-
-    # Each additional distinct domain beyond the first contributes this boost.
-    CONVERGENCE_BOOST_PER_DOMAIN = 0.20
 
     def __init__(self):
         pass
@@ -666,7 +664,7 @@ class EscalationDetector:
             } - {"multi"}
             if len(active_domains) >= 2:
                 # Each domain beyond the first adds a multiplicative boost.
-                convergence_factor = 1.0 + self.CONVERGENCE_BOOST_PER_DOMAIN * (
+                convergence_factor = 1.0 + CONVERGENCE_BOOST_PER_DOMAIN * (
                     len(active_domains) - 1
                 )
                 risk *= convergence_factor

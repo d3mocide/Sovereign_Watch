@@ -5,40 +5,15 @@ Converts GDELT regional events to H3 parent cells and TAK tracks to child cells 
 
 import json
 import logging
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import h3
 
+from services.risk_taxonomy import DECAY_HALF_LIFE_HOURS, temporal_weight  # noqa: F401 — re-exported
+
 logger = logging.getLogger(__name__)
-
-# Exponential decay half-lives per signal domain (hours).
-# A signal captured exactly one half-life ago carries 50% of its original weight.
-DECAY_HALF_LIFE_HOURS: Dict[str, float] = {
-    "GDELT":    12.0,   # geopolitical events remain relevant for ~12 h
-    "TAK_ADSB": 2.0,    # aviation track state stales quickly
-    "TAK_AIS":  6.0,    # vessel tracks stale more slowly
-    "orbital":  1.0,    # satellite signal-loss events are extremely time-sensitive
-    "default":  6.0,
-}
-
-
-def temporal_weight(capture_time: datetime, domain: str = "default") -> float:
-    """Return an exponential decay weight for a signal captured at *capture_time*.
-
-    weight = exp(-ln(2) * Δt / half_life)
-
-    A brand-new signal returns ~1.0; a signal captured exactly one half-life ago
-    returns 0.5; older signals approach 0 asymptotically.
-    """
-    half_life = DECAY_HALF_LIFE_HOURS.get(domain, DECAY_HALF_LIFE_HOURS["default"])
-    now = datetime.now(timezone.utc)
-    if capture_time.tzinfo is None:
-        capture_time = capture_time.replace(tzinfo=timezone.utc)
-    delta_hours = max((now - capture_time).total_seconds() / 3600.0, 0.0)
-    return math.exp(-math.log(2) * delta_hours / half_life)
 
 
 @dataclass

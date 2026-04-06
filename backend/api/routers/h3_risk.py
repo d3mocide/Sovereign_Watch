@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 import h3
 from core.database import db
 from fastapi import APIRouter, Query
-from models.schemas import H3RiskCell, H3RiskResponse, score_to_severity
-from services.spatial_temporal_alignment import temporal_weight
+from models.schemas import H3RiskCell, H3RiskResponse
+from services.risk_taxonomy import SOURCE_CONFIDENCE, score_to_severity, temporal_weight
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.H3Risk")
@@ -16,21 +16,6 @@ OMEGA_D = 0.6  # entity density weight
 OMEGA_S = 0.4  # GDELT sentiment weight
 
 VALID_RESOLUTIONS = {4, 6, 9}
-
-# Source reliability coefficients used to weight contributions to density/sentiment.
-# quad_class 3 = Verbal Conflict, 4 = Material Conflict (higher confidence).
-# quad_class 1 = Verbal Cooperation, 2 = Material Cooperation (lower conflict signal).
-SOURCE_CONFIDENCE: dict[str, float] = {
-    "dump1090":      0.95,  # local ADS-B receiver
-    "opensky_sat":   0.75,  # satellite-received ADS-B
-    "opensky_crowd": 0.65,  # crowd-sourced ADS-B
-    "ais_terrestrial": 0.90,
-    "ais_satellite": 0.70,
-    "gdelt_conflict": 0.80,  # quad_class 3 or 4
-    "gdelt_verbal":   0.50,  # quad_class 1 or 2
-    "satnogs":       0.80,
-    "default":       0.70,
-}
 
 
 def _entity_domain(entity_id: str) -> str:
