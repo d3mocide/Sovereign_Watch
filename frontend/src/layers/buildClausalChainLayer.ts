@@ -115,7 +115,7 @@ export function buildClausalChainLayer(
   globeMode: boolean,
   onHover?: (entity: any | null, pos: { x: number; y: number } | null) => void,
 ): Layer[] {
-  if (!visible || !clausalChains || clausalChains.length === 0) {
+  if (!visible || !Array.isArray(clausalChains) || clausalChains.length === 0) {
     return [];
   }
 

@@ -155,7 +155,8 @@ export function buildGdeltLayer(
   }));
 
   const formatDomainLabel = (value: string): string => {
-    const raw = (value || "").trim().toLowerCase();
+    const raw = (value || "").toString().trim().toLowerCase();
+    if (!raw) return "";
     const noWww = raw.startsWith("www.") ? raw.slice(4) : raw;
     return noWww.length > 28 ? `${noWww.slice(0, 28)}...` : noWww;
   };
