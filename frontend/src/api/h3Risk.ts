@@ -1,5 +1,7 @@
 import { getToken } from "./auth";
 
+export type RiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
 export interface H3RiskCellData {
   cell: string;
   lat: number;
@@ -7,6 +9,7 @@ export interface H3RiskCellData {
   density: number;
   sentiment: number;
   risk_score: number;
+  severity: RiskSeverity;
 }
 
 export async function fetchH3Risk(

@@ -47,6 +47,10 @@ H3_RESOLUTION = 6
 # Redis TTL for active zones (2x the detection window so stale zones expire)
 ACTIVE_ZONES_TTL = WINDOW_SECONDS * 2
 
+# Hard ceilings on in-process state to prevent unbounded memory growth.
+JAMMING_MAX_CELLS = 2_000       # Max distinct H3 cells tracked simultaneously
+JAMMING_MAX_OBS_PER_CELL = 500  # Max observations retained per cell before oldest dropped
+
 
 class JammingAnalyzer:
     """
@@ -92,7 +96,18 @@ class JammingAnalyzer:
             return
 
         now = time.time()
-        self._cell_observations[cell].append((now, nic, nacp, uid))
+        if cell not in self._cell_observations and len(self._cell_observations) >= JAMMING_MAX_CELLS:
+            # Evict the cell with the oldest most-recent observation to stay within cap.
+            oldest_cell = min(
+                self._cell_observations,
+                key=lambda c: self._cell_observations[c][-1][0] if self._cell_observations[c] else 0,
+            )
+            del self._cell_observations[oldest_cell]
+        obs = self._cell_observations[cell]
+        obs.append((now, nic, nacp, uid))
+        if len(obs) > JAMMING_MAX_OBS_PER_CELL:
+            # Drop the oldest observation to stay within the per-cell cap.
+            del obs[0]
 
     def _evict_stale(self) -> None:
         """Remove observations older than WINDOW_SECONDS from all cells."""

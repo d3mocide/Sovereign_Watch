@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -29,6 +30,37 @@ class WatchlistAddRequest(BaseModel):
     ttl_days: Optional[float] = Field(None, description="TTL in days; omit or null for permanent")
 
 
+class RiskSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+# Per-domain score thresholds: [low_max, medium_max, high_max]
+# Scores at or above high_max are CRITICAL.
+SEVERITY_THRESHOLDS: dict[str, list[float]] = {
+    "default":        [0.25, 0.55, 0.80],
+    "maritime":       [0.20, 0.45, 0.70],  # tighter — sea-state is noisy
+    "aviation":       [0.25, 0.55, 0.80],
+    "orbital":        [0.30, 0.60, 0.85],  # looser — space-weather spikes expected
+    "rf":             [0.25, 0.55, 0.80],
+    "infrastructure": [0.25, 0.55, 0.80],
+}
+
+
+def score_to_severity(score: float, domain: str = "default") -> RiskSeverity:
+    """Map a normalised [0, 1] risk score to a severity label for the given domain."""
+    lo, mid, hi = SEVERITY_THRESHOLDS.get(domain, SEVERITY_THRESHOLDS["default"])
+    if score < lo:
+        return RiskSeverity.LOW
+    if score < mid:
+        return RiskSeverity.MEDIUM
+    if score < hi:
+        return RiskSeverity.HIGH
+    return RiskSeverity.CRITICAL
+
+
 class H3RiskCell(BaseModel):
     cell: str
     lat: float
@@ -36,6 +68,7 @@ class H3RiskCell(BaseModel):
     density: float
     sentiment: float
     risk_score: float
+    severity: RiskSeverity = RiskSeverity.LOW
 
 
 class H3RiskResponse(BaseModel):

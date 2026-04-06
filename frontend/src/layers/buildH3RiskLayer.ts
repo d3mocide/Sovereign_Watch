@@ -1,31 +1,36 @@
 import { Layer } from "@deck.gl/core";
 import { H3HexagonLayer } from "@deck.gl/geo-layers";
-import { H3RiskCellData } from "../api/h3Risk";
+import { H3RiskCellData, RiskSeverity } from "../api/h3Risk";
 
 /**
- * Maps a normalized risk score [0, 1] to an RGBA color.
+ * Maps a severity label to a fixed RGBA colour.
  *
- * Gradient: Green (stable) → Yellow → Red (critical)
- *   0.0 → [  0, 200, 100, ~40]
- *   0.5 → [255, 200,   0, ~130]
- *   1.0 → [255,   0,  50, ~220]
+ * Using hard threshold colours instead of a continuous gradient ensures that:
+ *  - operators see the same colour regardless of relative score distribution
+ *  - colour meaning is anchored to the schema-level taxonomy (LOW/MEDIUM/HIGH/CRITICAL)
  */
-function riskToColor(score: number): [number, number, number, number] {
-  const r = score < 0.5 ? Math.round(score * 2 * 255) : 255;
-  const g =
-    score < 0.5 ? 200 : Math.round((1 - (score - 0.5) * 2) * 200);
-  const b = score < 0.5 ? Math.round((1 - score * 2) * 100) : 50;
-  const a = Math.round(40 + score * 180);
-  return [r, g, b, a];
+const SEVERITY_COLORS: Record<RiskSeverity, [number, number, number, number]> =
+  {
+    LOW: [0, 200, 100, 40],       // green, low opacity
+    MEDIUM: [255, 200, 0, 110],   // amber
+    HIGH: [255, 100, 0, 160],     // orange
+    CRITICAL: [255, 0, 50, 220],  // red, high opacity
+  };
+
+function severityToColor(
+  severity: RiskSeverity | undefined,
+): [number, number, number, number] {
+  return SEVERITY_COLORS[severity ?? "LOW"];
 }
 
 /**
  * Builds an H3HexagonLayer visualizing the composite risk heat-map.
  *
- * Each hexagon is filled with a color derived from its normalized risk score:
- *   C = ω_D · Density_norm + ω_S · Sentiment_norm  (ω_D=0.6, ω_S=0.4)
+ * Each hexagon is filled with a colour anchored to its severity label:
+ *   LOW → green  |  MEDIUM → amber  |  HIGH → orange  |  CRITICAL → red
  *
- * Uses updateTriggers to avoid re-rendering when data reference is unchanged.
+ * Severity is computed server-side via per-domain thresholds so all domains
+ * (maritime, aviation, orbital, RF) share a common visual language.
  */
 export function buildH3RiskLayer(
   cells: H3RiskCellData[],
@@ -42,7 +47,7 @@ export function buildH3RiskLayer(
       filled: true,
       extruded: false,
       getHexagon: (d) => d.cell,
-      getFillColor: (d) => riskToColor(d.risk_score),
+      getFillColor: (d) => severityToColor(d.severity),
       getLineColor: [255, 255, 255, 8],
       lineWidthMinPixels: 1,
       updateTriggers: {

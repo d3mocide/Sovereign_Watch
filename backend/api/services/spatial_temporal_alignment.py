@@ -5,6 +5,7 @@ Converts GDELT regional events to H3 parent cells and TAK tracks to child cells 
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -12,6 +13,32 @@ from typing import Any, Dict, List, Optional
 import h3
 
 logger = logging.getLogger(__name__)
+
+# Exponential decay half-lives per signal domain (hours).
+# A signal captured exactly one half-life ago carries 50% of its original weight.
+DECAY_HALF_LIFE_HOURS: Dict[str, float] = {
+    "GDELT":    12.0,   # geopolitical events remain relevant for ~12 h
+    "TAK_ADSB": 2.0,    # aviation track state stales quickly
+    "TAK_AIS":  6.0,    # vessel tracks stale more slowly
+    "orbital":  1.0,    # satellite signal-loss events are extremely time-sensitive
+    "default":  6.0,
+}
+
+
+def temporal_weight(capture_time: datetime, domain: str = "default") -> float:
+    """Return an exponential decay weight for a signal captured at *capture_time*.
+
+    weight = exp(-ln(2) * Δt / half_life)
+
+    A brand-new signal returns ~1.0; a signal captured exactly one half-life ago
+    returns 0.5; older signals approach 0 asymptotically.
+    """
+    half_life = DECAY_HALF_LIFE_HOURS.get(domain, DECAY_HALF_LIFE_HOURS["default"])
+    now = datetime.now(timezone.utc)
+    if capture_time.tzinfo is None:
+        capture_time = capture_time.replace(tzinfo=timezone.utc)
+    delta_hours = max((now - capture_time).total_seconds() / 3600.0, 0.0)
+    return math.exp(-math.log(2) * delta_hours / half_life)
 
 
 @dataclass
@@ -213,29 +240,32 @@ class SpatialTemporalAlignment:
     def _calculate_alignment_score(
         self, gdelt_clauses: List[AlignedClause], tak_clauses: List[AlignedClause]
     ) -> float:
-        """
-        Score alignment between GDELT and TAK events.
-        Higher score = stronger temporal/spatial overlap.
+        """Score alignment between GDELT and TAK events.
+
+        Temporally-weighted overlap: each pair's contribution is the product of
+        both clauses' decay weights.  This ensures that stale signals from earlier
+        in the lookback window contribute less than fresh signals, preventing a
+        23-hour-old event from carrying the same weight as one 5 minutes old.
         """
         if not gdelt_clauses or not tak_clauses:
             return 0.0
 
-        # Simple scoring: count temporal overlaps
-        overlap_count = 0
-        max_time_delta = timedelta(
-            hours=2
-        )  # Events within 2 hours count as overlapping
+        max_time_delta = timedelta(hours=2)
+        weighted_overlap = 0.0
+        max_possible = 0.0
 
         for gdelt in gdelt_clauses:
+            gdelt_w = temporal_weight(gdelt.time, "GDELT")
             for tak in tak_clauses:
-                if abs((gdelt.time - tak.time)) < max_time_delta:
-                    overlap_count += 1
+                tak_w = temporal_weight(tak.time, tak.source)
+                pair_weight = gdelt_w * tak_w
+                max_possible += pair_weight
+                if abs(gdelt.time - tak.time) < max_time_delta:
+                    weighted_overlap += pair_weight
 
-        # Normalize: max possible is len(gdelt) * len(tak)
-        max_overlaps = max(len(gdelt_clauses) * len(tak_clauses), 1)
-        score = min(overlap_count / max_overlaps, 1.0)
-
-        return score
+        if max_possible == 0.0:
+            return 0.0
+        return min(weighted_overlap / max_possible, 1.0)
 
     def h3_parent_map(self, gdelt_events: List[Dict]) -> Dict[str, List[Dict]]:
         """Map GDELT events to H3-7 parent cells."""
