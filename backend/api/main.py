@@ -160,6 +160,7 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 ]
+logger.info(f"CORS: Allowed Origins = {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,

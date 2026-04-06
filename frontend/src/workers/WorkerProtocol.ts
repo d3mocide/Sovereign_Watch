@@ -52,9 +52,13 @@ export function startWorkerProtocol({
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const getWsUrl = () => {
     const envUrl = import.meta.env.VITE_API_URL;
-    const base = envUrl && !envUrl.includes("localhost")
-      ? envUrl.replace("http", "ws") + "/api/tracks/live"
-      : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/tracks/live`;
+    let base = "";
+    if (envUrl && !envUrl.includes("localhost")) {
+      const normalizedBase = envUrl.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
+      base = normalizedBase.replace("http", "ws") + "/api/tracks/live";
+    } else {
+      base = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/tracks/live`;
+    }
     const tok = getToken();
     return tok ? `${base}?token=${encodeURIComponent(tok)}` : base;
   };
