@@ -18,6 +18,7 @@ import logging
 
 from core.database import db
 from fastapi import APIRouter, HTTPException, Query
+from models.schemas import score_to_severity
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.Maritime")
@@ -27,13 +28,7 @@ logger = logging.getLogger("SovereignWatch.Maritime")
 
 def _threat_label(score: float) -> str:
     """Translate a composite 0–10 score to a human-readable threat level."""
-    if score >= 7.0:
-        return "CRITICAL"
-    if score >= 4.5:
-        return "HIGH"
-    if score >= 2.0:
-        return "MEDIUM"
-    return "LOW"
+    return score_to_severity(score / 10.0, "maritime").value
 
 
 # ─── risk-assessment ─────────────────────────────────────────────────────────

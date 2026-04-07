@@ -12,6 +12,11 @@ ARBI_MIN_SPATIAL_M = 100.0
 # How long (seconds) to retain an entry in the cache after last publish.
 ARBI_TTL_S = 30.0
 
+# Hard ceiling on the number of aircraft tracked simultaneously.
+# If exceeded, the stalest entry is evicted before recording the new one.
+ARBI_MAX_ENTRIES = 5_000
+
+
 class Arbitrator:
     def __init__(self):
         # Per-hex arbitration cache: hex -> {"ts": float, "lat": float, "lon": float, "wall": float}
@@ -49,6 +54,10 @@ class Arbitrator:
 
     def record_publish(self, hex_id: str, source_ts: float, lat: float, lon: float) -> None:
         """Update the arbitration cache after a successful publish."""
+        if len(self._arbi_cache) >= ARBI_MAX_ENTRIES and hex_id not in self._arbi_cache:
+            # Evict the stalest entry to stay within the hard cap.
+            oldest = min(self._arbi_cache, key=lambda k: self._arbi_cache[k]["wall"])
+            del self._arbi_cache[oldest]
         self._arbi_cache[hex_id] = {
             "ts": source_ts,
             "lat": lat,

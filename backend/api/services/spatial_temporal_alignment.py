@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 import h3
 
+from services.risk_taxonomy import DECAY_HALF_LIFE_HOURS, temporal_weight  # noqa: F401 — re-exported
+
 logger = logging.getLogger(__name__)
 
 
@@ -213,29 +215,32 @@ class SpatialTemporalAlignment:
     def _calculate_alignment_score(
         self, gdelt_clauses: List[AlignedClause], tak_clauses: List[AlignedClause]
     ) -> float:
-        """
-        Score alignment between GDELT and TAK events.
-        Higher score = stronger temporal/spatial overlap.
+        """Score alignment between GDELT and TAK events.
+
+        Temporally-weighted overlap: each pair's contribution is the product of
+        both clauses' decay weights.  This ensures that stale signals from earlier
+        in the lookback window contribute less than fresh signals, preventing a
+        23-hour-old event from carrying the same weight as one 5 minutes old.
         """
         if not gdelt_clauses or not tak_clauses:
             return 0.0
 
-        # Simple scoring: count temporal overlaps
-        overlap_count = 0
-        max_time_delta = timedelta(
-            hours=2
-        )  # Events within 2 hours count as overlapping
+        max_time_delta = timedelta(hours=2)
+        weighted_overlap = 0.0
+        max_possible = 0.0
 
         for gdelt in gdelt_clauses:
+            gdelt_w = temporal_weight(gdelt.time, "GDELT")
             for tak in tak_clauses:
-                if abs((gdelt.time - tak.time)) < max_time_delta:
-                    overlap_count += 1
+                tak_w = temporal_weight(tak.time, tak.source)
+                pair_weight = gdelt_w * tak_w
+                max_possible += pair_weight
+                if abs(gdelt.time - tak.time) < max_time_delta:
+                    weighted_overlap += pair_weight
 
-        # Normalize: max possible is len(gdelt) * len(tak)
-        max_overlaps = max(len(gdelt_clauses) * len(tak_clauses), 1)
-        score = min(overlap_count / max_overlaps, 1.0)
-
-        return score
+        if max_possible == 0.0:
+            return 0.0
+        return min(weighted_overlap / max_possible, 1.0)
 
     def h3_parent_map(self, gdelt_events: List[Dict]) -> Dict[str, List[Dict]]:
         """Map GDELT events to H3-7 parent cells."""
