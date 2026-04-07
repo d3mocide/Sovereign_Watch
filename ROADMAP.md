@@ -7,21 +7,21 @@ This document outlines the trajectory for the Sovereign Watch platform. For curr
 Sovereign Watch is transitioning from initial feature parity to a **Version 1.0 Release Candidate**. Our focus is shifting from "Core Ingestion" to **Systems Reliability**, **Security Hardening**, and **Operational Maturity**.
 
 - **Strategic Vision**: Reclaiming data sovereignty through active, self-hosted multi-INT fusion on low-power hardware.
-- **Current Status**: v0.58.0 (Development). Core pipelines stable; Security & CI/CD gaps identified.
+- **Current Status**: v0.66.0 — All P0 blockers resolved. Ready to tag **v1.0.0**.
 - **Archive**: For a full list of completed milestones, see [COMPLETED_ARCHIVE.md](./agent_docs/COMPLETED_ARCHIVE.md).
 
 ---
 
-## 2. P0: V1.0 Release Blockers (Immediate Focus)
+## 2. P0: V1.0 Release Blockers — ALL COMPLETE ✅
 
-These items are considered "Blocking" for a public or multi-user deployment of the platform.
+All P0 blockers have been resolved as of v0.66.0. The platform is ready for a v1.0 tag.
 
-| ID | Task Name | Component | Description |
-| :--- | :--- | :--- | :--- |
-| **DevOps-01** | CI/CD Maturity | DevOps | Move from "Smoke" to Full Validation (Full Lint + All Tests + Build). |
-| **Fix-02** | Replay Mode Cleanup | Frontend | Finalize `TimeControls.tsx` wiring and `onClose` navigation (P1). |
-| **Fix-03** | Layer Polish | Frontend | Implement Satellite footprints (OrbitalMap) and infra hover tooltips. |
-| **Fix-04** | Dep Dependency Cleanup | Systems | Resolve exhaustive-deps warnings and 20+ deferred lint items. |
+| ID | Task Name | Component | Status | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **DevOps-01** | CI/CD Maturity | DevOps | ✅ Done | Full pipeline: path-change detection + Lint + Typecheck + Test + Build for frontend and all 8 backend services. |
+| **Fix-02** | Replay Mode Cleanup | Frontend | ✅ Done | `TimeControls.tsx` fully wired in `App.tsx`; `onClose` exits replay mode and resets playback state. |
+| **Fix-03** | Layer Polish | Frontend | ✅ Done | Satellite footprints live in `OrbitalLayer.tsx` (physics-based radius). Infra hover tooltips wired via `handleHoveredInfra` → `MapTooltip` on 5 layer types. |
+| **Fix-04** | Dependency Cleanup | Systems | ✅ Done | `exhaustive-deps` warnings resolved; only 2 intentional `eslint-disable` comments remain in `main.tsx` and `useAuth.tsx`. |
 
 ---
 
@@ -63,4 +63,4 @@ Future-looking features for distributed operations.
 
 ---
 
-- **Last Updated**: 2026-03-30 (V1.0 Readiness Pivot).
+- **Last Updated**: 2026-04-07 (All P0 blockers verified complete; v1.0.0 ready to tag).
