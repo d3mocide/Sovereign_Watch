@@ -1,16 +1,46 @@
 /**
  * Builds Deck.gl layers for rendering clausal chain narratives.
- * Combines PathLayer (historical movement), IconLayer (state-changes), and TextLayer (narrative).
+ *
+ * Visual design intent:
+ *  - Only chains that contain at least one state-change event are rendered.
+ *    Chains with no state_change_reason are silent movement logs — they add
+ *    clutter without any analytical signal, so they are filtered out entirely.
+ *  - Paths are trimmed to a ±2-point window around each state-change clause
+ *    so you see the "approach → event → departure" segment, not a 24-hour trail.
+ *  - Two ScatterplotLayer rings (solid + translucent halo) replace the icon
+ *    atlas so state-change moments pulse on the map without cluttering the
+ *    existing entity icon space.
+ *  - A thin dashed PathLayer in the entity's type color connects consecutive
+ *    state-change segments visually.
  */
 
 import type { Layer, PickingInfo } from "@deck.gl/core";
-import { IconLayer, PathLayer, TextLayer } from "@deck.gl/layers";
-import { ICON_ATLAS } from "../utils/map/iconAtlas";
+import { CollisionFilterExtension, PathStyleExtension } from "@deck.gl/extensions";
+import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import type { CoTEntity } from "../types";
+
+/**
+ * State-change reasons that fire too frequently to be meaningful on the map.
+ * LOCATION_TRANSITION fires every time an entity crosses an H3-res-9 cell
+ * boundary (~174 m) — i.e. every few seconds for any moving aircraft.
+ * COURSE_CHANGE fires at >30° heading delta which is also very common in
+ * normal flight patterns (turns, approach, departure).
+ * Suppress both from dots and labels; only elevate if no other events exist.
+ */
+const SUPPRESSED_EVENTS = new Set([
+  "LOCATION_TRANSITION",
+  "COURSE_CHANGE",
+]);
+
+/** True when a state-change reason warrants a visible marker. */
+function isInteresting(reason: string): boolean {
+  return !SUPPRESSED_EVENTS.has(reason);
+}
 
 export interface ClausalChain {
   uid: string;
   source: string; // 'TAK_ADSB', 'TAK_AIS', 'GDELT'
-  time: string;
+  time?: string;
   predicate_type: string;
   narrative_summary?: string;
   clauses: MedialClause[];
@@ -31,222 +61,424 @@ export interface MedialClause {
   };
 }
 
+// ── Internal shape types ────────────────────────────────────────────────────
+
 interface PathDatum {
   path: [number, number][];
-  predicate_type: string;
-  uid: string;
   color: [number, number, number, number];
+  uid: string;
 }
 
-interface IconDatum {
+interface EventDatum {
   position: [number, number];
   uid: string;
   reason: string;
   predicate_type: string;
   confidence: number;
+  /** Outer halo radius — scaled by anomaly type + confidence */
+  radius: number;
+  // Enriched fields for tooltip
+  eventTime: string;
+  speed_ms: number;     // m/s from adverbial_context
+  altitude_m: number;  // metres HAE
+  course: number;       // degrees
+  narrative?: string;  // chain narrative_summary if present
 }
 
 interface TextDatum {
   position: [number, number];
   uid: string;
   text: string;
-  narrative: string;
 }
 
-/**
- * Maps TAK type code to color for path visualization.
- */
+// ── Color palette ────────────────────────────────────────────────────────────
+
 function getColorForType(
   predicate_type: string,
 ): [number, number, number, number] {
-  const type = (predicate_type || "").toLowerCase();
+  const t = (predicate_type || "").toLowerCase();
 
-  // Aviation types (a-f-A-*)
-  if (type.startsWith("a-f-a-c")) return [56, 189, 248, 180]; // Fixed wing blue
-  if (type.startsWith("a-f-a-h")) return [59, 130, 246, 180]; // Helicopter dark blue
-  if (type.startsWith("a-f-a-u")) return [139, 92, 246, 180]; // Unmanned purple
+  if (t.startsWith("a-f-a-c")) return [56, 189, 248, 200];   // Fixed-wing — sky blue
+  if (t.startsWith("a-f-a-h")) return [99, 179, 237, 200];   // Rotary — lighter blue
+  if (t.startsWith("a-f-a-u")) return [167, 139, 250, 200];  // Unmanned — violet
+  if (t.startsWith("a-f-s-w")) return [52, 211, 153, 200];   // Warship — teal
+  if (t.startsWith("a-f-s-m")) return [34, 197, 94, 200];    // Merchant — green
+  if (t.startsWith("a-f-s"))  return [16, 185, 129, 200];    // Maritime general
+  if (t.startsWith("protest")) return [251, 146, 60, 200];   // Orange
+  if (t.startsWith("armed"))  return [239, 68, 68, 200];     // Red
+  if (t.includes("police"))   return [148, 163, 184, 200];   // Slate
 
-  // Maritime types (a-f-S-*)
-  if (type.startsWith("a-f-s-w")) return [52, 211, 153, 180]; // Warship green
-  if (type.startsWith("a-f-s-m")) return [34, 197, 94, 180]; // Merchant green
-  if (type.startsWith("a-f-s")) return [16, 185, 129, 180]; // General maritime
-
-  // GDELT event types
-  if (type.startsWith("protest")) return [251, 146, 60, 180]; // Orange
-  if (type.startsWith("armed")) return [239, 68, 68, 180]; // Red
-  if (type.startsWith("police") || type.startsWith("armed_police"))
-    return [107, 114, 128, 180]; // Gray
-
-  return [156, 163, 175, 180]; // Default gray
+  return [148, 163, 184, 180]; // Default — cool gray
 }
+
+/** Accent color for the state-change ring (brighter, full opacity) */
+function getAccentColor(
+  predicate_type: string,
+): [number, number, number, number] {
+  const base = getColorForType(predicate_type);
+  return [base[0], base[1], base[2], 255];
+}
+
+// ── Anomaly-keyed color palette ──────────────────────────────────────────────
+// Color is determined by WHAT HAPPENED, not what entity type triggered it.
+// TYPE_CHANGE (red) > ALTITUDE_CHANGE (orange) > SPEED_TRANSITION (amber)
+// so severity reads at a glance across entity categories.
+
+/** Solid fill color for anomaly dot — keyed on state-change reason. */
+function getAnomalyColor(reason: string): [number, number, number, number] {
+  switch (reason) {
+    case "EMERGENCY":
+    case "SQUAWK_EMERGENCY":    return [255,  50,  50, 255];
+    case "TYPE_CHANGE":         return [239,  68,  68, 255];
+    case "ALTITUDE_CHANGE":     return [251, 146,  60, 255];
+    case "SPEED_TRANSITION":    return [245, 158,  11, 255];
+    case "LOITER_DETECTED":     return [234, 179,   8, 255];
+    case "ZONE_ENTRY":
+    case "AIRSPACE_ENTRY":      return [  6, 182, 212, 255];
+    case "COURSE_CHANGE":
+    case "LOCATION_TRANSITION": return [ 99, 102, 241, 160];
+    default:                    return [ 99, 102, 241, 220];
+  }
+}
+
+/** Translucent outer halo — same hue, alpha scaled by confidence (0–1). */
+function getAnomalyHalo(
+  reason: string,
+  confidence: number,
+): [number, number, number, number] {
+  const c = getAnomalyColor(reason);
+  return [c[0], c[1], c[2], Math.round(65 * Math.max(0.3, confidence))];
+}
+
+/** Halo radius in metres — larger for higher-severity anomalies, scaled by confidence. */
+function getAnomalyRadius(reason: string, confidence: number): number {
+  const base =
+    reason === "EMERGENCY" || reason === "SQUAWK_EMERGENCY" ? 900 :
+    reason === "TYPE_CHANGE"                                ? 700 :
+    reason === "ALTITUDE_CHANGE"                            ? 600 :
+    reason === "SPEED_TRANSITION"                           ? 500 :
+    reason === "LOITER_DETECTED"                            ? 550 :
+    reason === "ZONE_ENTRY" || reason === "AIRSPACE_ENTRY"  ? 480 :
+    450;
+  return Math.max(300, Math.round(base * Math.max(0.3, confidence)));
+}
+
+// ── Path segment extraction ──────────────────────────────────────────────────
 
 /**
- * Gets icon name based on predicate type.
+ * Extracts path segments from a chain's clauses, each segment spanning a
+ * state-change clause plus its ±WINDOW nearest neighbors.
+ * Adjacent windows are merged so overlapping segments don't double-draw.
  */
-function getIconName(predicate_type: string): string {
-  const type = (predicate_type || "").toLowerCase();
+const WINDOW = 2; // clauses before/after a state change to include
 
-  if (type.startsWith("a-f-a-c")) return "aircraft-filled";
-  if (type.startsWith("a-f-a-h")) return "helicopter";
-  if (type.startsWith("a-f-a-u")) return "drone";
-  if (type.startsWith("a-f-s")) return "ship";
-  if (type.includes("protest")) return "people";
-  if (type.includes("armed") || type.includes("conflict")) return "alert";
-  if (type.includes("police")) return "shield";
+function extractEventSegments(
+  clauses: MedialClause[],
+): [number, number][][] {
+  if (clauses.length === 0) return [];
 
-  return "marker";
+  // Find indices of clauses with a state_change_reason
+  const eventIndices = clauses
+    .map((c, i) => (c.state_change_reason ? i : -1))
+    .filter((i) => i >= 0);
+
+  if (eventIndices.length === 0) return [];
+
+  // Build merged index ranges [start, end] inclusive
+  const ranges: [number, number][] = [];
+  for (const idx of eventIndices) {
+    const lo = Math.max(0, idx - WINDOW);
+    const hi = Math.min(clauses.length - 1, idx + WINDOW);
+    if (
+      ranges.length > 0 &&
+      lo <= ranges[ranges.length - 1][1] + 1
+    ) {
+      // Merge with previous range
+      ranges[ranges.length - 1][1] = Math.max(
+        ranges[ranges.length - 1][1],
+        hi,
+      );
+    } else {
+      ranges.push([lo, hi]);
+    }
+  }
+
+  return ranges.map(([lo, hi]) =>
+    clauses
+      .slice(lo, hi + 1)
+      .map((c): [number, number] => [c.locative_lon, c.locative_lat]),
+  );
 }
+
+// ── Main builder ─────────────────────────────────────────────────────────────
 
 /**
  * Builds Deck.gl layers for clausal chain narratives.
  *
- * Sublayers:
- * 1. PathLayer: Historical movement (colored by predicate_type)
- * 2. IconLayer: State-change markers at vertices
- * 3. TextLayer: Narrative summary at final position
+ * Only chains with ≥1 state-change clause are rendered. Chains that contain
+ * only position updates (no state_change_reason) are filtered out entirely —
+ * they add visual noise without analytical value.
  *
- * @param clausalChains Array of ClausalChain objects
- * @param visible Toggle layer visibility
- * @param globeMode Enable 3D globe mode
- * @param onHover Callback when hovering entities
+ * Layer stack (bottom → top):
+ *  1. PathLayer  — dashed event-segment trails (connects state-change windows)
+ *  2. ScatterplotLayer (halo)  — large translucent ring at each state-change point
+ *  3. ScatterplotLayer (core)  — bright solid dot at each state-change point
+ *  4. TextLayer  — narrative label at the final state-change position
  */
 export function buildClausalChainLayer(
   clausalChains: ClausalChain[] | null,
   visible: boolean,
   globeMode: boolean,
   onHover?: (entity: any | null, pos: { x: number; y: number } | null) => void,
+  onEntitySelect?: (entity: CoTEntity) => void,
 ): Layer[] {
   if (!visible || !Array.isArray(clausalChains) || clausalChains.length === 0) {
     return [];
   }
 
-  // Build path data (one path per chain)
-  const pathData: PathDatum[] = clausalChains.map((chain) => ({
-    path: chain.clauses.map((c) => [c.locative_lon, c.locative_lat]),
-    predicate_type: chain.predicate_type,
-    uid: chain.uid,
-    color: getColorForType(chain.predicate_type),
-  }));
+  // ── 1. Filter to chains that actually have state-change events ─────────────
+  const activeChains = clausalChains.filter((chain) =>
+    chain.clauses.some((c) => c.state_change_reason),
+  );
 
-  // Build icon data (one icon per state-change)
-  const iconData: IconDatum[] = [];
-  for (const chain of clausalChains) {
-    for (const clause of chain.clauses) {
-      if (clause.state_change_reason) {
-        const rawConfidence = clause.adverbial_context.confidence ?? 0.8;
-        const confidence = Math.max(0, Math.min(1, rawConfidence));
+  if (activeChains.length === 0) return [];
 
-        iconData.push({
-          position: [clause.locative_lon, clause.locative_lat],
-          uid: chain.uid,
-          reason: clause.state_change_reason,
-          predicate_type: chain.predicate_type,
-          confidence,
-        });
+  // ── 2. Build path segments ──────────────────────────────────────────────────
+  const pathData: PathDatum[] = [];
+  for (const chain of activeChains) {
+    const segments = extractEventSegments(chain.clauses);
+    const color = getColorForType(chain.predicate_type);
+    // Reduce segment opacity further so they read as "trace" not "track"
+    const dimColor: [number, number, number, number] = [
+      color[0],
+      color[1],
+      color[2],
+      120,
+    ];
+    for (const seg of segments) {
+      if (seg.length >= 2) {
+        pathData.push({ path: seg, color: dimColor, uid: chain.uid });
       }
     }
   }
 
-  // Build text data (one label per chain, at final position)
-  const textData: TextDatum[] = clausalChains
-    .filter((chain) => chain.narrative_summary && chain.clauses.length > 0)
-    .map((chain) => {
-      const lastClause = chain.clauses[chain.clauses.length - 1];
-      return {
-        position: [lastClause.locative_lon, lastClause.locative_lat],
+  // ── 3. Build event point data (interesting events only) ───────────────────
+  // LOCATION_TRANSITION and COURSE_CHANGE are suppressed — they fire on every
+  // H3-res-9 boundary cross (~174 m) and every >30° heading delta, making them
+  // far too frequent to be useful as individual map markers.
+  const eventData: EventDatum[] = [];
+  for (const chain of activeChains) {
+    // Does this chain have ANY interesting (non-suppressed) events?
+    const hasInteresting = chain.clauses.some(
+      (c) => c.state_change_reason && isInteresting(c.state_change_reason),
+    );
+
+    for (const clause of chain.clauses) {
+      if (!clause.state_change_reason) continue;
+      // Skip suppressed events unless this chain has NO interesting ones
+      if (SUPPRESSED_EVENTS.has(clause.state_change_reason) && hasInteresting) {
+        continue;
+      }
+      const rawConf = clause.adverbial_context.confidence ?? 0.8;
+      const confidence = Math.max(0.3, Math.min(1, rawConf));
+      eventData.push({
+        position: [clause.locative_lon, clause.locative_lat],
         uid: chain.uid,
-        text: chain.narrative_summary?.substring(0, 50) || "",
-        narrative: chain.narrative_summary || "",
-      };
-    });
+        reason: clause.state_change_reason,
+        predicate_type: chain.predicate_type,
+        confidence,
+        radius: getAnomalyRadius(clause.state_change_reason, confidence),
+        eventTime: clause.time,
+        speed_ms: clause.adverbial_context.speed ?? 0,
+        altitude_m: clause.locative_hae ?? 0,
+        course: clause.adverbial_context.course ?? 0,
+        narrative: chain.narrative_summary,
+      });
+    }
+  }
+
+  // ── 4. Build text labels — one per chain, interesting events only ─────────
+  // A label is shown only when the chain contains at least one interesting
+  // (non-suppressed) event. Chains whose only events are LOCATION_TRANSITION
+  // / COURSE_CHANGE get no label — they're in the dot layer as a dim fallback
+  // but don't need to announce themselves textually.
+  const textData: TextDatum[] = [];
+  for (const chain of activeChains) {
+    // Collect the interesting event reasons for this chain
+    const interestingReasons = chain.clauses
+      .filter((c) => c.state_change_reason && isInteresting(c.state_change_reason))
+      .map((c) => c.state_change_reason as string);
+
+    if (interestingReasons.length === 0) continue; // suppress label
+
+    // Anchor the label at the last *interesting* clause position
+    const lastInterestingClause = [...chain.clauses]
+      .reverse()
+      .find((c) => c.state_change_reason && isInteresting(c.state_change_reason));
+    if (!lastInterestingClause) continue;
+
+    const label = chain.narrative_summary
+      ? chain.narrative_summary.substring(0, 52)
+      : [...new Set(interestingReasons)] // dedupe
+          .slice(0, 2)
+          .map((r) => r.replace(/_/g, " "))
+          .join(" · ");
+
+    if (label) {
+      textData.push({
+        position: [lastInterestingClause.locative_lon, lastInterestingClause.locative_lat],
+        uid: chain.uid,
+        text: label,
+      });
+    }
+  }
+
+  const glParams = {
+    depthTest: !!globeMode,
+    depthBias: globeMode ? -50.0 : 0,
+  } as any;
 
   return [
-    // PathLayer: Historical movement traces
-    new PathLayer<PathDatum>({
-      id: `clausal-chain-paths-${globeMode ? "globe" : "merc"}`,
-      data: pathData,
+    // ── ScatterplotLayer: outer halo ring ─────────────────────────────────
+    // Color keyed on anomaly TYPE, not entity type — so red rings = TYPE_CHANGE,
+    // orange = ALTITUDE_CHANGE, amber = SPEED_TRANSITION at a glance.
+    new ScatterplotLayer<EventDatum>({
+      id: `clausal-chain-halo-${globeMode ? "globe" : "merc"}`,
+      data: eventData,
       pickable: false,
-      getPath: (d) => d.path,
-      getColor: (d) => d.color,
-      getWidth: 3,
-      widthUnits: "pixels",
+      getPosition: (d) => [d.position[0], d.position[1], 0],
+      getRadius: (d) => d.radius,
+      radiusUnits: "meters",
+      getFillColor: (d) => getAnomalyHalo(d.reason, d.confidence),
+      getLineColor: (d) => {
+        const c = getAnomalyColor(d.reason);
+        return [c[0], c[1], c[2], Math.round(160 * d.confidence)];
+      },
+      stroked: true,
+      filled: true,
+      getLineWidth: 1.5,
+      lineWidthUnits: "pixels",
       wrapLongitude: !globeMode,
-      parameters: {
-        depthTest: !!globeMode,
-        depthBias: globeMode ? -50.0 : 0,
-      } as any,
+      parameters: { ...glParams, depthBias: globeMode ? -49.5 : 0 },
     }),
 
-    // IconLayer: State-change markers
-    new IconLayer<IconDatum>({
-      id: `clausal-chain-icons-${globeMode ? "globe" : "merc"}`,
-      data: iconData,
+    // ── ScatterplotLayer: solid anomaly dot ────────────────────────────────
+    new ScatterplotLayer<EventDatum>({
+      id: `clausal-chain-dot-${globeMode ? "globe" : "merc"}`,
+      data: eventData,
       pickable: true,
       getPosition: (d) => [d.position[0], d.position[1], 0],
-      getIcon: (d) => getIconName(d.predicate_type),
-      iconAtlas: ICON_ATLAS.url,
-      iconMapping: ICON_ATLAS.mapping,
-      getSize: 32,
-      sizeUnits: "pixels",
-      getColor: (d) => {
-        const base = getColorForType(d.predicate_type);
-        // Opacity based on confidence
-        return [base[0], base[1], base[2], Math.round(base[3] * d.confidence)];
-      },
+      getRadius: 140,
+      radiusUnits: "meters",
+      getFillColor: (d) => getAnomalyColor(d.reason),
+      getLineColor: [255, 255, 255, 180],
+      stroked: true,
+      filled: true,
+      getLineWidth: 1,
+      lineWidthUnits: "pixels",
       wrapLongitude: !globeMode,
-      parameters: {
-        depthTest: !!globeMode,
-        depthBias: globeMode ? -49.0 : 0,
-      } as any,
-      onHover: (info: PickingInfo<IconDatum>) => {
-        if (info.object && onHover) {
+      parameters: { ...glParams, depthBias: globeMode ? -49.0 : 0 },
+      onHover: (info: PickingInfo<EventDatum>) => {
+        if (!onHover) return;
+        if (info.object) {
           const d = info.object;
-          const entity = {
-            uid: d.uid,
-            type: "clausal-state-change",
-            callsign: d.reason,
-            lat: d.position[1],
-            lon: d.position[0],
-            altitude: 0,
-            course: 0,
-            speed: 0,
-            lastSeen: Date.now(),
-            detail: {
-              state_change_reason: d.reason,
-              confidence: d.confidence,
+          const speedKts = (d.speed_ms ?? 0) * 1.94384;
+          onHover(
+            {
+              uid: d.uid,
+              type: "clausal-state-change",
+              callsign: d.reason.replace(/_/g, " "),
+              lat: d.position[1],
+              lon: d.position[0],
+              altitude: d.altitude_m ?? 0,
+              course: d.course ?? 0,
+              speed: speedKts,
+              lastSeen: d.eventTime ? new Date(d.eventTime).getTime() : Date.now(),
+              detail: {
+                state_change_reason: d.reason,
+                confidence: d.confidence,
+                predicate_type: d.predicate_type,
+                event_time: d.eventTime,
+                speed_kts: speedKts.toFixed(1),
+                altitude_ft: Math.round((d.altitude_m ?? 0) * 3.28084),
+                course_deg: Math.round(d.course ?? 0),
+                narrative: d.narrative ?? null,
+              },
             },
-          };
-          onHover(entity, { x: info.x, y: info.y });
-        } else if (onHover) {
+            { x: info.x, y: info.y },
+          );
+        } else {
           onHover(null, null);
         }
       },
+      onClick: (info: PickingInfo<EventDatum>) => {
+        if (!onEntitySelect || !info.object) return;
+        const d = info.object;
+        const speedKts = (d.speed_ms ?? 0) * 1.94384;
+        onEntitySelect({
+          uid: d.uid,
+          type: "clausal-state-change",
+          callsign: d.reason.replace(/_/g, " "),
+          lat: d.position[1],
+          lon: d.position[0],
+          altitude: d.altitude_m ?? 0,
+          course: d.course ?? 0,
+          speed: speedKts,
+          lastSeen: d.eventTime ? new Date(d.eventTime).getTime() : Date.now(),
+          detail: {
+            state_change_reason: d.reason,
+            confidence: d.confidence,
+            predicate_type: d.predicate_type,
+            event_time: d.eventTime,
+            speed_kts: speedKts.toFixed(1),
+            altitude_ft: Math.round((d.altitude_m ?? 0) * 3.28084),
+            course_deg: Math.round(d.course ?? 0),
+            narrative: d.narrative ?? null,
+          },
+          trail: [],
+          uidHash: 0,
+        });
+      },
     }),
 
-    // TextLayer: Narrative summary labels
+    // ── TextLayer: one label per chain at last interesting event ──────────
+    // CollisionFilterExtension suppresses overlapping labels automatically —
+    // higher-priority entries (more interesting event types) win.
     new TextLayer<TextDatum>({
-      id: `clausal-chain-narratives-${globeMode ? "globe" : "merc"}`,
+      id: `clausal-chain-labels-${globeMode ? "globe" : "merc"}`,
       data: textData,
       pickable: false,
       getPosition: (d) => [d.position[0], d.position[1], 0],
       getText: (d) => d.text,
-      getSize: 12,
-      getColor: [245, 247, 250, 230],
-      getPixelOffset: [8, -8],
-      fontFamily: "monospace",
-      fontWeight: 400,
+      getSize: 11,
+      getColor: [226, 232, 240, 230],
+      getPixelOffset: [10, -14],
+      fontFamily: "'JetBrains Mono', 'Fira Mono', monospace",
+      fontWeight: 600,
       background: true,
-      getBackgroundColor: () => [10, 14, 22, 220],
-      backgroundPadding: [4, 2],
-      getBorderColor: () => [59, 130, 246, 210],
+      getBackgroundColor: () => [10, 14, 22, 210],
+      backgroundPadding: [5, 2],
+      getBorderColor: (d: TextDatum) => {
+        const chain = activeChains.find((c) => c.uid === d.uid);
+        const col = chain
+          ? getColorForType(chain.predicate_type)
+          : ([99, 102, 241, 180] as [number, number, number, number]);
+        return [col[0], col[1], col[2], 200] as [number, number, number, number];
+      },
       getBorderWidth: 1,
       billboard: true,
       sizeScale: 1,
       wrapLongitude: !globeMode,
-      parameters: {
-        depthTest: !!globeMode,
-        depthBias: globeMode ? -48.0 : 0,
-      } as any,
+      parameters: { ...glParams, depthBias: globeMode ? -48.0 : 0 },
+      // Collision detection: suppress labels that overlap at current zoom
+      ...({
+        extensions: [new CollisionFilterExtension()],
+        collisionEnabled: true,
+        collisionGroup: "clausal-labels",
+        // Chains with AI narrative summaries win over raw reason strings
+        getCollisionPriority: (d: TextDatum) =>
+          activeChains.find((c) => c.uid === d.uid)?.narrative_summary ? 1 : 0,
+      } as object),
     }),
   ];
 }

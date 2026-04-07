@@ -11,7 +11,6 @@ import React, {
   useState,
 } from "react";
 import { useAnimationLoop } from "../../hooks/useAnimationLoop";
-import { useClausalChains } from "../../hooks/useClausalChains";
 import { useMapBase } from "../../hooks/useMapBase";
 import { useMapCamera } from "../../hooks/useMapCamera";
 import { CoTEntity, JS8Station, JammingZone, RFSite, Tower } from "../../types";
@@ -661,11 +660,6 @@ export function TacticalMap({
     return 9;              // neighbourhood / street detail (fine cells)
   }, [viewState.zoom]);
 
-  const { data: clausalChainsData } = useClausalChains({
-    enabled: filters?.showClausalChains === true,
-    lookback_hours: 24,
-  });
-
   useAnimationLoop({
     entitiesRef,
     satellitesRef,
@@ -781,7 +775,6 @@ export function TacticalMap({
     historySegmentsRef,
     holdingPatternData,
     h3RiskResolution,
-    clausalChainsData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog

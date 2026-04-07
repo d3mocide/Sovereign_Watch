@@ -1237,6 +1237,23 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
+                {filters.showClausalChains && (
+                  <div className="flex w-full gap-1 px-0.5">
+                    {([1, 6, 24] as const).map((h) => (
+                      <button
+                        key={h}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded border transition-all ${
+                          (filters.clausalLookbackHours ?? 6) === h
+                            ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/50 shadow-[0_0_6px_rgba(99,102,241,0.3)]"
+                            : "bg-white/5 text-white/30 border-white/10 hover:bg-white/10 hover:text-white/50"
+                        }`}
+                        onClick={() => onFilterChange("clausalLookbackHours", h)}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

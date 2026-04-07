@@ -1,4 +1,5 @@
 import {
+  Activity,
   CloudRain,
   Crosshair,
   HexagonIcon,
@@ -73,6 +74,24 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isGdelt = entity.type === "gdelt";
   const isJamming = entity.type === "jamming";
   const isCluster = entity.type === "cluster";
+  const isClausal = entity.type === "clausal-state-change";
+  const clausalReason = String(detailProps.state_change_reason ?? "");
+  const clausalAccentText =
+    clausalReason === "EMERGENCY" || clausalReason === "SQUAWK_EMERGENCY" ? "text-red-500" :
+    clausalReason === "TYPE_CHANGE"      ? "text-red-400" :
+    clausalReason === "ALTITUDE_CHANGE" ? "text-orange-400" :
+    clausalReason === "SPEED_TRANSITION" ? "text-amber-400" :
+    clausalReason === "LOITER_DETECTED" ? "text-yellow-400" :
+    clausalReason === "ZONE_ENTRY" || clausalReason === "AIRSPACE_ENTRY" ? "text-cyan-400" :
+    "text-violet-400";
+  const clausalBorderClass =
+    clausalReason === "EMERGENCY" || clausalReason === "SQUAWK_EMERGENCY" ? "border-red-500/50" :
+    clausalReason === "TYPE_CHANGE"      ? "border-red-400/50" :
+    clausalReason === "ALTITUDE_CHANGE" ? "border-orange-400/50" :
+    clausalReason === "SPEED_TRANSITION" ? "border-amber-400/50" :
+    clausalReason === "LOITER_DETECTED" ? "border-yellow-400/50" :
+    clausalReason === "ZONE_ENTRY" || clausalReason === "AIRSPACE_ENTRY" ? "border-cyan-400/50" :
+    "border-violet-400/50";
   const jammingAssessment = String(
     (entity.detail as Record<string, unknown> | undefined)?.assessment ||
       "mixed",
@@ -127,7 +146,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? jammingColor
                               : isCluster
                                 ? "text-amber-400"
-                                : "text-air-accent";
+                                : isClausal
+                                  ? clausalAccentText
+                                  : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -163,7 +184,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? "border-amber-400/50"
                               : isCluster
                                 ? "border-amber-400/50"
-                                : "border-air-accent/50";
+                                : isClausal
+                                  ? clausalBorderClass
+                                  : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -199,7 +222,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? Crosshair
                               : isCluster
                                 ? HexagonIcon
-                                : Plane;
+                                : isClausal
+                                  ? Activity
+                                  : Plane;
 
   return (
     <div
@@ -251,7 +276,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? "SIGINT"
                               : isCluster
                                 ? "CLUSTER"
-                                : "LIVE"}
+                                : isClausal
+                                  ? "CLAUSAL"
+                                  : "LIVE"}
           </span>
         </div>
       </div>
@@ -953,6 +980,73 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               )}
             </span>
           </div>
+        </div>
+      ) : isClausal ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              EVENT TYPE
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight uppercase ${clausalAccentText}`}>
+              {clausalReason.replace(/_/g, " ") || "STATE CHANGE"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CONFIDENCE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.confidence != null
+                ? `${Math.round(Number(detailProps.confidence) * 100)}%`
+                : "--"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              TIME
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.event_time
+                ? new Date(String(detailProps.event_time)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                : "--"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SPEED
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.speed_kts != null ? `${detailProps.speed_kts} kts` : "--"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ALTITUDE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.altitude_ft != null
+                ? `${Number(detailProps.altitude_ft).toLocaleString()} ft`
+                : "--"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COURSE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.course_deg != null ? `${detailProps.course_deg}°` : "--"}
+            </span>
+          </div>
+          {detailProps.narrative && (
+            <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
+              <span className="text-[8px] text-white/40 block leading-tight">
+                NARRATIVE
+              </span>
+              <span className="text-[9px] text-white/70 font-mono leading-snug">
+                {String(detailProps.narrative).substring(0, 120)}
+              </span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">

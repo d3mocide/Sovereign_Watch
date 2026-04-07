@@ -31,6 +31,25 @@ docker compose exec sovereign-js8call uv tool run ruff check .
 **Container-first still applies for:** building images, running the application, and
 ingestion poller changes (always require rebuild + restart).
 
+## Documentation & Change Tracking (REQUIRED)
+
+> **This is the most commonly missed rule.** After completing any significant feature, bug fix, or architectural change you **MUST** create a task log file, no exceptions.
+
+- **Path**: `agent_docs/tasks/YYYY-MM-DD-{task-slug}.md`
+- **When**: After every completed task that touches source code — not just "significant" ones. If in doubt, create the log.
+- **Required sections**: Issue · Solution · Changes (files + logic) · Verification · Benefits
+
+```
+# Example: agent_docs/tasks/2026-04-07-fix-websocket-reconnect.md
+## Issue
+## Solution
+## Changes
+## Verification
+## Benefits
+```
+
+See Section 4 of `AGENTS.md` for the full spec.
+
 ## Map Layer Work
 
 Z-ordering rules are injected automatically when you edit files in

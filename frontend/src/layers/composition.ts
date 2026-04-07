@@ -334,6 +334,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         setHoveredEntity(entity);
         setHoverPosition(pos);
       },
+      onEntitySelect,
     ),
     // ISS real-time tracker — Navigation/Orbital group (Z-order 15–17)
     ...(filters?.showISS !== false

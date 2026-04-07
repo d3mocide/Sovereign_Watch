@@ -123,8 +123,6 @@ interface UseAnimationLoopOptions {
   holdingPatternData?: FeatureCollection | null;
   /** H3 resolution tier (4/6/9) derived from map zoom; drives risk layer refetch */
   h3RiskResolution?: number;
-  /** Clausal chain narrative traces for the map overlay */
-  clausalChainsData?: ClausalChain[];
 }
 
 export function useAnimationLoop({
@@ -187,7 +185,6 @@ export function useAnimationLoop({
   satnogsStationsRef,
   holdingPatternData,
   h3RiskResolution,
-  clausalChainsData,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -271,6 +268,10 @@ export function useAnimationLoop({
   const holdingPatternDataRef = useRef(holdingPatternData);
   holdingPatternDataRef.current = holdingPatternData;
 
+  // ── Clausal chain data ───────────────────────────────────────────────────
+  // Managed internally (same pattern as cluster fetch) so the region is always
+  // derived from the live viewport / mission AOT — never undefined.
+  const [clausalChainsData, setClausalChainsData] = React.useState<ClausalChain[]>([]);
   const clausalChainsDataRef = useRef(clausalChainsData);
   clausalChainsDataRef.current = clausalChainsData;
 
@@ -428,6 +429,60 @@ export function useAnimationLoop({
       clearInterval(interval);
     };
   }, [filters?.showClusters, filters?.clusterLookbackHours]);
+
+  // ── Clausal chain fetch (mirrors cluster pattern) ─────────────────────────
+  useEffect(() => {
+    if (!filters?.showClausalChains) {
+      setClausalChainsData([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const center = mapRef.current?.getMap()?.getCenter();
+      if (!center) return;
+
+      const mission = currentMissionRef.current;
+      let params: string;
+
+      if (mission) {
+        // Radius mode — pass the AOT centre + exact radius directly.
+        // Converting 250nm to an H3 cell would shrink it to ~12nm (res-4)
+        // or ~32nm (res-3); ST_DWithin on the backend handles the full radius.
+        params = new URLSearchParams({
+          lat: String(mission.lat),
+          lon: String(mission.lon),
+          radius_nm: String(mission.radius_nm),
+          lookback_hours: String(filters?.clausalLookbackHours ?? 6),
+        }).toString();
+      } else {
+        // No mission: fall back to viewport centre at H3 res-3 (~large region)
+        const region = latLngToCell(center.lat, center.lng, 3);
+        params = new URLSearchParams({
+          region,
+          lookback_hours: String(filters?.clausalLookbackHours ?? 6),
+        }).toString();
+      }
+
+      try {
+        const token = sessionStorage.getItem("sw_token") || "";
+        const resp = await fetch(`/api/ai_router/clausal-chains?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (resp.ok && !cancelled) {
+          const chains: ClausalChain[] = await resp.json();
+          setClausalChainsData(chains);
+        }
+      } catch {
+        // Network failure — keep stale data rather than clearing
+      }
+    };
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [filters?.showClausalChains, filters?.clausalLookbackHours]);
 
   useEffect(() => {
     const animate = () => {

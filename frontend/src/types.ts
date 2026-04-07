@@ -287,6 +287,7 @@ export interface MapFilters {
   clusterLookbackHours?: number;
   // Clausal chain narrative layer
   showClausalChains?: boolean;
+  clausalLookbackHours?: number;
   [key: string]: string | boolean | number | string[] | undefined;
 }
 

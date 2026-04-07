@@ -21,8 +21,8 @@ import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
 import { MiniTacticalMap } from "../widgets/MiniMap";
 import type { RFSiteResult } from "../widgets/MiniMap";
 import { NewsWidget } from "../widgets/NewsWidget";
+import { ActiveConflictWidget } from "../widgets/ActiveConflictWidget";
 import { OutageAlertPanel } from "../widgets/OutageAlertPanel";
-import { RFSiteSearchPanel } from "../widgets/RFSiteSearchPanel";
 import { StreamStatusMonitor } from "../widgets/StreamStatusMonitor";
 import { TrackSparkline } from "../widgets/TrackSparkline";
 
@@ -167,7 +167,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (type === "air")
       return <Plane size={9} className="text-hud-green flex-shrink-0" />;
     if (type === "sea")
-      return <Ship size={9} className="text-blue-500 flex-shrink-0" />;
+      return <Ship size={9} className="text-sea-accent flex-shrink-0" />;
     if (type === "orbital")
       return <Satellite size={9} className="text-purple-400 flex-shrink-0" />;
     return <Activity size={9} className="text-white/30 flex-shrink-0" />;
@@ -214,9 +214,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </span>
           <span className="flex items-center gap-1 text-[10px]">
-            <Ship size={10} className="text-blue-500" />
+            <Ship size={10} className="text-sea-accent" />
             <span className="text-white/35">SEA</span>
-            <span className="text-blue-500 font-bold tabular-nums">
+            <span className="text-sea-accent font-bold tabular-nums">
               {trackCounts.sea}
             </span>
           </span>
@@ -415,7 +415,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">
                 AIR {trackCounts.air}
               </span>
-              <span className="text-[8px] bg-black/80 text-blue-500 px-1.5 py-0.5 rounded border border-blue-500/30">
+              <span className="text-[8px] bg-black/80 text-sea-accent px-1.5 py-0.5 rounded border border-sea-accent/30">
                 SEA {trackCounts.sea}
               </span>
               <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">
@@ -570,7 +570,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <GdeltBreakdownWidget gdeltData={gdeltData} />
           )}
 
-          <OutageAlertPanel />
+          <ActiveConflictWidget />
         </div>
       </div>
 
@@ -674,8 +674,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* RF EmComm Sites */}
-        <RFSiteSearchPanel count={rfEmcomm.count} results={rfEmcomm.results} />
+        {/* Internet Outages */}
+        <div className="flex flex-col border-r border-white/5 overflow-hidden">
+          <OutageAlertPanel />
+        </div>
 
         {/* News Feed */}
         <div className="flex flex-col overflow-hidden">

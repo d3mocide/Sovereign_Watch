@@ -64,10 +64,10 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
             e.stopPropagation(); // prevent map from processing right click on menu itself
         }}
       >
-        <div className="border border-hud-green/30 bg-black/90 backdrop-blur-xl rounded shadow-[0_0_20px_rgba(0,255,65,0.15)]">
+        <div className="border border-white/10 bg-black/90 backdrop-blur-xl rounded shadow-[0_4px_20px_rgba(0,0,0,0.6)]">
           {/* Header */}
-          <div className="border-b border-hud-green/20 px-3 py-2 bg-gradient-to-b from-hud-green/10 to-transparent">
-            <div className="flex items-center gap-2 text-[10px] text-hud-green/60 uppercase font-bold tracking-wider">
+          <div className="border-b border-white/5 px-3 py-2">
+            <div className="flex items-center gap-2 text-[10px] text-white/40 uppercase font-bold tracking-wider">
               <MapPin size={10} />
               <span>Mission Control</span>
             </div>
