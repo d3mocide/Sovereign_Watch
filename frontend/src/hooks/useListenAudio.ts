@@ -16,11 +16,16 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-// Derive the audio WebSocket URL from the same origin as the JS8 WS.
 const getAudioWSUrl = () => {
   const js8EnvUrl = import.meta.env.VITE_JS8_WS_URL;
   if (js8EnvUrl && !js8EnvUrl.includes('localhost')) {
-    return js8EnvUrl.replace(/\/ws\/js8$/, '/ws/audio');
+    // If it's a full URL ending in /ws/js8, swap it for /ws/audio
+    if (js8EnvUrl.endsWith('/ws/js8')) {
+      return js8EnvUrl.replace(/\/ws\/js8$/, '/ws/audio');
+    }
+    // If it's just a host (e.g. ws://1.2.3.4), append the path
+    const base = js8EnvUrl.endsWith('/') ? js8EnvUrl.slice(0, -1) : js8EnvUrl;
+    return `${base}/js8/ws/audio`;
   }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}/js8/ws/audio`;

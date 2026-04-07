@@ -249,6 +249,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   let accentColor = 'text-white/50';
   let accentBorder = 'border-white/20';
   let accentBg = 'bg-black/80';
+  let domainLabel = 'Tactical';
 
   if (entity) {
     if (isSitrep) {
@@ -273,10 +274,12 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
       }
 
       if (isSat) {
+        domainLabel = 'Orbital';
         accentColor = 'text-purple-400';
         accentBorder = 'border-purple-400/30';
         accentBg = 'bg-gradient-to-br from-black/90 to-purple-400/5';
       } else if (isShip) {
+        domainLabel = 'Sea';
         accentColor = 'text-sea-accent';
         accentBorder = 'border-sea-accent/30';
         accentBg = 'bg-gradient-to-br from-black/90 to-sea-accent/5';
@@ -309,6 +312,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
           accentBg = 'bg-gradient-to-br from-black/90 to-cyan-400/5';
         }
       } else {
+        domainLabel = 'Air';
         accentColor = 'text-air-accent';
         accentBorder = 'border-air-accent/30';
         accentBg = 'bg-gradient-to-br from-black/90 to-air-accent/5';
@@ -450,12 +454,12 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
                 <button
                   onClick={handleRun}
                   disabled={!entity || !isOperator}
-                  className={`group relative flex items-center justify-center h-9 px-6 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`group relative flex items-center justify-center h-9 px-4 shrink-0 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <div className={`absolute top-0 left-0 w-full h-[1px] ${accentColor.replace('text-', 'bg-')} group-hover:animate-pulse opacity-50`} />
                   {!isOperator && <Lock size={10} className="mr-2 opacity-50" />}
-                  <span className="text-[10px] font-black tracking-[.4em] uppercase">
-                    {isOperator ? 'Run' : 'Locked'}
+                  <span className="text-[10px] font-black tracking-[.25em] uppercase whitespace-nowrap">
+                    {isOperator ? `Run ${domainLabel} Intel` : 'Locked'}
                   </span>
                 </button>
               )}

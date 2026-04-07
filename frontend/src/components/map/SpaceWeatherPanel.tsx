@@ -2,7 +2,7 @@
  * SpaceWeatherPanel — Space weather HUD for the Orbital Dashboard.
  *
  * Sovereign Glass design: matches the SidebarRight glass aesthetic.
- * Polls /api/space-weather/kp every 5 minutes.
+ * Polls /api/space-weather/kp and /api/space-weather/alerts every 5 minutes.
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -33,6 +33,19 @@ const RISK_HEX: Record<string, string> = {
 
 function stormHex(level: string): string { return STORM_HEX[level] ?? "#4b5563"; }
 function riskHex(level: string):  string { return RISK_HEX[level]  ?? "#4b5563"; }
+
+/** Maps NOAA scale value string (e.g. "R3", "S0", "G2") to a hex colour. */
+function scaleColor(val: string | number | undefined): string {
+  const s = String(val ?? "");
+  if (!s) return "#4b5563";
+  // Extract number: if "R1" -> 1, if "0" -> 0
+  const n = (s.length >= 2) ? parseInt(s.slice(1), 10) : parseInt(s, 10);
+  if (isNaN(n) || n === 0) return "#22c55e"; // Level 0 (Quiet)
+  if (n === 1) return "#f59e0b"; // Minor
+  if (n === 2) return "#f97316"; // Moderate
+  if (n === 3) return "#ef4444"; // Strong
+  return "#991b1b"; // Severe/Extreme
+}
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
@@ -110,11 +123,23 @@ function KpSparkline({ history }: { history: KpHistoryPoint[] }) {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
+interface SpaceWeatherAlerts {
+  scales: Record<string, { R?: string; S?: string; G?: string }> | null;
+  suppression: {
+    active: boolean;
+    reason: string;
+    r_scale: string;
+    g_scale: string;
+    expires_at: string;
+  } | null;
+}
+
 interface Props { visible?: boolean; }
 
 export function SpaceWeatherPanel({ visible = true }: Props) {
   const [status, setStatus] = useState<SpaceWeatherStatus | null>(null);
   const [history, setHistory] = useState<KpHistoryPoint[]>([]);
+  const [alerts, setAlerts] = useState<SpaceWeatherAlerts | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -147,6 +172,13 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
         } : prev);
       }
     } catch { /* silent */ }
+
+    try {
+      const ar = await fetch("/api/space-weather/alerts");
+      if (ar.ok) {
+        setAlerts(await ar.json());
+      }
+    } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
@@ -164,6 +196,14 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
   const aurora     = status?.aurora_active ?? false;
   const highKp     = kp !== null && kp >= 5;
   const sColor     = stormHex(stormLevel);
+
+  const currentScales = alerts?.scales?.["0"] ?? null;
+  const suppression   = alerts?.suppression ?? null;
+
+  // Format suppression expiry as a short UTC time string
+  const suppressExpiry = suppression?.expires_at
+    ? new Date(suppression.expires_at).toUTCString().replace(/:\d\d GMT$/, " UTC")
+    : null;
 
   return (
     /* Outer glass card */
@@ -189,6 +229,19 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
       {/* ── Body ── */}
       <div className="border border-t-0 border-[#a855f7]/20
                       bg-black/40 backdrop-blur-md p-3 rounded-b-sm space-y-3">
+
+        {/* Signal-loss suppression banner */}
+        {suppression?.active && (
+          <div className="bg-amber-500/10 border border-amber-500/40 rounded px-2 py-1.5 space-y-0.5">
+            <div className="text-[9px] font-bold tracking-widest text-amber-300/90">
+              ⚠ SIGNAL-LOSS SUPPRESSION ACTIVE
+            </div>
+            <div className="text-[8px] text-amber-200/70 leading-relaxed">
+              RF anomaly detection paused — {suppression.reason}
+              {suppressExpiry && <> — until {suppressExpiry}</>}
+            </div>
+          </div>
+        )}
 
         {/* Gauge + badges */}
         <div className="flex items-start gap-3">
@@ -224,6 +277,35 @@ export function SpaceWeatherPanel({ visible = true }: Props) {
                 AURORA {aurora ? "ACTIVE" : "QUIET"}
               </span>
             </div>
+
+            {/* R / S / G scale badges */}
+            {currentScales && (
+              <div className="flex gap-1 mt-0.5">
+                {(["R", "S", "G"] as const).map(key => {
+                  const rawVal = currentScales[key] as any;
+                  // Handle cases where NOAA returns an object {Scale, Text...} instead of a string
+                  const val = (rawVal && typeof rawVal === "object" && "Scale" in rawVal)
+                    ? rawVal.Scale
+                    : rawVal ?? `${key}0`;
+                  const desc = (rawVal && typeof rawVal === "object" && "Text" in rawVal)
+                    ? rawVal.Text
+                    : "";
+                  
+                  const c = scaleColor(val);
+                  // Ensure label has the prefix (e.g. "R0" instead of just "0")
+                  const label = val.toString().startsWith(key) ? val : `${key}${val}`;
+
+                  return (
+                    <div key={key}
+                         title={desc ? `${label}: ${desc}` : ""}
+                         className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider cursor-help"
+                         style={{ background: `${c}18`, border: `1px solid ${c}50`, color: c }}>
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

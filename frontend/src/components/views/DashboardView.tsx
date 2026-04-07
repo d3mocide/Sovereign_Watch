@@ -5,6 +5,7 @@ import {
   Antenna,
   Globe,
   Newspaper,
+  CloudRain,
   Plane,
   Satellite,
   Ship,
@@ -13,14 +14,15 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePassPredictions } from "../../hooks/usePassPredictions";
+import { alertIntersectsAOT } from "../../utils/map/geoUtils";
 import { CoTEntity, DRState, IntelEvent, MissionProps } from "../../types";
 import { SituationGlobe } from "../map/SituationGlobe";
 import { GdeltBreakdownWidget } from "../widgets/GdeltBreakdownWidget";
 import { MiniTacticalMap } from "../widgets/MiniMap";
 import type { RFSiteResult } from "../widgets/MiniMap";
 import { NewsWidget } from "../widgets/NewsWidget";
+import { ActiveConflictWidget } from "../widgets/ActiveConflictWidget";
 import { OutageAlertPanel } from "../widgets/OutageAlertPanel";
-import { RFSiteSearchPanel } from "../widgets/RFSiteSearchPanel";
 import { StreamStatusMonitor } from "../widgets/StreamStatusMonitor";
 import { TrackSparkline } from "../widgets/TrackSparkline";
 
@@ -45,6 +47,7 @@ interface DashboardViewProps {
   gdeltData: FeatureCollection | null;
   ixpData?: FeatureCollection | null;
   facilityData?: FeatureCollection | null;
+  nwsAlertsData?: FeatureCollection | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -62,6 +65,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   gdeltData,
   ixpData,
   facilityData,
+  nwsAlertsData,
 }) => {
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
@@ -142,6 +146,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .length;
   }, [gdeltData]);
 
+  const nwsAoAlerts = useMemo(() => {
+    if (!nwsAlertsData?.features || !mission) return [];
+    return nwsAlertsData.features.filter((f: any) => alertIntersectsAOT(f, mission));
+  }, [nwsAlertsData, mission]);
+
+  const nwsAlertsCount = nwsAoAlerts.length;
+
   const fmtTime = (d: Date) => d.toISOString().split("T")[1].substring(0, 8);
   const fmtPassTime = (iso: string) =>
     new Date(iso).toISOString().split("T")[1].substring(0, 5) + "Z";
@@ -156,7 +167,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (type === "air")
       return <Plane size={9} className="text-hud-green flex-shrink-0" />;
     if (type === "sea")
-      return <Ship size={9} className="text-cyan-400 flex-shrink-0" />;
+      return <Ship size={9} className="text-sea-accent flex-shrink-0" />;
     if (type === "orbital")
       return <Satellite size={9} className="text-purple-400 flex-shrink-0" />;
     return <Activity size={9} className="text-white/30 flex-shrink-0" />;
@@ -203,9 +214,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </span>
           <span className="flex items-center gap-1 text-[10px]">
-            <Ship size={10} className="text-cyan-400" />
+            <Ship size={10} className="text-sea-accent" />
             <span className="text-white/35">SEA</span>
-            <span className="text-cyan-400 font-bold tabular-nums">
+            <span className="text-sea-accent font-bold tabular-nums">
               {trackCounts.sea}
             </span>
           </span>
@@ -241,6 +252,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-[9px] text-white/35">EMCOMM</span>
           <span className="text-[10px] text-amber-300 font-bold">
             {rfEmcomm.count}
+          </span>
+        </div>
+
+        <div className="h-3 w-px bg-white/10" />
+
+        {/* NWS Alerts Count */}
+        <div
+          className="flex items-center gap-1.5"
+          title="NWS Alerts in mission area"
+        >
+          <CloudRain size={10} className={nwsAlertsCount > 0 ? "text-amber-400" : "text-amber-400/30"} />
+          <span className="text-[9px] text-white/35">NWS</span>
+          <span className={`text-[10px] font-bold ${nwsAlertsCount > 0 ? "text-amber-300" : "text-white/30"}`}>
+            {nwsAlertsCount}
           </span>
         </div>
 
@@ -371,6 +396,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 entitiesRef={entitiesRef}
                 satellitesRef={satellitesRef}
                 rfSites={rfEmcomm.results}
+                nwsAlerts={nwsAoAlerts}
               />
             ) : (
               <div className="flex flex-col items-center justify-center w-full h-full gap-3">
@@ -389,7 +415,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="text-[8px] bg-black/80 text-hud-green px-1.5 py-0.5 rounded border border-hud-green/20">
                 AIR {trackCounts.air}
               </span>
-              <span className="text-[8px] bg-black/80 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-400/20">
+              <span className="text-[8px] bg-black/80 text-sea-accent px-1.5 py-0.5 rounded border border-sea-accent/30">
                 SEA {trackCounts.sea}
               </span>
               <span className="text-[8px] bg-black/80 text-purple-400 px-1.5 py-0.5 rounded border border-purple-400/20">
@@ -544,7 +570,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <GdeltBreakdownWidget gdeltData={gdeltData} />
           )}
 
-          <OutageAlertPanel />
+          <ActiveConflictWidget />
         </div>
       </div>
 
@@ -575,11 +601,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="flex items-center justify-center h-10 text-[9px] text-white/20 animate-pulse">
                 CALCULATING…
               </div>
-            ) : passes.length === 0 ? (
+            ) : Array.isArray(passes) && passes.length === 0 ? (
               <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
                 No Passes in Window
               </div>
-            ) : (
+            ) : Array.isArray(passes) ? (
               <div className="grid grid-cols-3 gap-px bg-white/[0.03]">
                 {passes.slice(0, 18).map((pass, i) => {
                   const isNow = untilPass(pass.aos) === "NOW";
@@ -640,12 +666,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   );
                 })}
               </div>
+            ) : (
+              <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
+                Error Loading Passes
+              </div>
             )}
           </div>
         </div>
 
-        {/* RF EmComm Sites */}
-        <RFSiteSearchPanel count={rfEmcomm.count} results={rfEmcomm.results} />
+        {/* Internet Outages */}
+        <div className="flex flex-col border-r border-white/5 overflow-hidden">
+          <OutageAlertPanel />
+        </div>
 
         {/* News Feed */}
         <div className="flex flex-col overflow-hidden">

@@ -12,22 +12,23 @@ import json
 import logging
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from uvicorn.protocols.utils import ClientDisconnected
 
-from core.auth import authenticate_websocket
+from core.auth import authenticate_websocket, require_role
 from core.config import settings
 from core.database import db
 
 router = APIRouter()
+_viewer_auth = [Depends(require_role("viewer"))]
 logger = logging.getLogger("SovereignWatch.ISS")
 
 _REDIS_CHANNEL = "infrastructure:iss-position"
 _REDIS_LATEST_KEY = "infra:iss_latest"
 
 
-@router.get("/api/infrastructure/iss/position")
+@router.get("/api/infrastructure/iss/position", dependencies=_viewer_auth)
 async def get_iss_position():
     """Return the latest ISS position cached by the poller (≤60s old)."""
     if not db.redis_client:
@@ -47,7 +48,7 @@ async def get_iss_position():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/api/infrastructure/iss/track")
+@router.get("/api/infrastructure/iss/track", dependencies=_viewer_auth)
 async def get_iss_track(points: int = 720):
     """Return the last N ISS positions from the archive (default 720 ≈ 1 orbit at 5s cadence)."""
     if not db.pool:

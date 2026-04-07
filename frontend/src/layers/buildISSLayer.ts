@@ -61,7 +61,7 @@ export function buildISSLayer({
     const layers = [];
 
     // Ground track PathLayer — white fading line
-    if (track.length >= 2) {
+    if (Array.isArray(track) && track.length >= 2) {
         // Reverse so index 0 is oldest; PathLayer renders head→tail
         const ordered = [...track].reverse();
 

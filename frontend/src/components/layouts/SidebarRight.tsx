@@ -1,6 +1,7 @@
 import React from "react";
 import { CoTEntity, HistorySegment } from "../../types";
 import { AircraftView } from "./sidebar-right/AircraftView";
+import { ClausalView } from "./sidebar-right/ClausalView";
 import { ClusterView } from "./sidebar-right/ClusterView";
 import { GdeltView } from "./sidebar-right/GdeltView";
 import { HoldingPatternView } from "./sidebar-right/HoldingPatternView";
@@ -62,6 +63,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
   if (entity.type === "cluster") {
     return <ClusterView key={entity.uid} {...baseProps} />;
+  }
+  if (entity.type === "clausal-state-change") {
+    return <ClausalView key={entity.uid} {...baseProps} />;
   }
   if (entity.type === "hold") {
     return (

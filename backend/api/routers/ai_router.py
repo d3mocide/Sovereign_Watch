@@ -116,6 +116,32 @@ def _h3_cell_to_wkt(h3_cell: str) -> Optional[str]:
         return None
 
 
+def _parse_adverbial_context(value: object) -> Dict:
+    """Safely coerce an adverbial_context DB value to a plain dict.
+
+    asyncpg returns JSONB columns as either a pre-parsed dict (normal case)
+    or a raw JSON string (can happen when the column was inserted as text).
+    Calling ``dict()`` on a string raises the misleading
+    'dictionary update sequence element #0 has length 1' error because Python
+    iterates the string's characters instead of key-value pairs.
+    """
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    # asyncpg Record or other mapping
+    try:
+        return dict(value)
+    except Exception:
+        return {}
+
+
 @router.post("/evaluate")
 async def evaluate_regional_escalation(
     request: EvaluationRequest,
@@ -634,48 +660,60 @@ async def get_regional_risk_heatmap(
 
 @router.get("/clausal-chains")
 async def get_clausal_chains(
-    region: str = Query(...),
+    region: Optional[str] = Query(None),
     lookback_hours: int = Query(24),
     source: Optional[str] = Query(None),
+    lat: Optional[float] = Query(None, description="Center latitude for radius-based AOT query"),
+    lon: Optional[float] = Query(None, description="Center longitude for radius-based AOT query"),
+    radius_nm: Optional[float] = Query(None, description="Query radius in nautical miles"),
 ) -> List[Dict]:
     """
     Fetch clausal chains for a region within a time window.
 
-    Returns serialized ClausalChain objects with full medial clause data.
-    The ``region`` parameter is an H3 cell ID; only clauses whose ``geom``
-    falls within that hex polygon are returned (PostGIS ST_Within + GIST index).
+    Supports two spatial modes (mirrors the /clusters endpoint):
+    - **Radius mode** (preferred when a mission AOT is active): provide
+      ``lat``, ``lon``, ``radius_nm``; uses ST_DWithin on the geography
+      column for accurate great-circle distance filtering.
+    - **H3 mode**: provide ``region`` (H3 cell ID); uses ST_Within against
+      the cell WKT polygon + GIST index.
+    - **No spatial filter**: omit all spatial params to return chains across
+      the full lookback window (use with care on large deployments).
     """
     try:
-        # Build a WKT polygon from the H3 cell boundary so we can push the
-        # spatial filter down to PostGIS and use the GIST index.
-        try:
-            boundary = h3.cell_to_boundary(region)  # list of (lat, lon) tuples
-            # PostGIS WKT expects (lon lat) ordering
-            coords = [(lon, lat) for lat, lon in boundary]
-            # Close the ring by repeating the first vertex
-            coords.append(coords[0])
-            ring = ", ".join(f"{lon} {lat}" for lon, lat in coords)
-            wkt_polygon = f"POLYGON(({ring}))"
-        except Exception as h3_err:
-            logger.warning(
-                "Invalid H3 region '%s': %s – skipping spatial filter", region, h3_err
-            )
-            wkt_polygon = None
-
         async with db.pool.acquire() as conn:
-            # Query clausal_chains for the region and time window
             where_clauses = [
                 "time > now() - ($1 * interval '1 hour')",
             ]
             params: list = [lookback_hours]
             param_idx = 2
 
-            if wkt_polygon:
+            if lat is not None and lon is not None and radius_nm is not None:
+                # Radius mode — ST_DWithin on geography for accurate AOT coverage
+                radius_m = radius_nm * 1852.0
                 where_clauses.append(
-                    f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))"
+                    f"ST_DWithin("
+                    f"  geom::geography,"
+                    f"  ST_SetSRID(ST_MakePoint(${param_idx + 1}, ${param_idx}), 4326)::geography,"
+                    f"  ${param_idx + 2}"
+                    f")"
                 )
-                params.append(wkt_polygon)
-                param_idx += 1
+                params.append(lat)
+                params.append(lon)
+                params.append(radius_m)
+                param_idx += 3
+            elif region:
+                # H3 mode — build WKT polygon from cell and use ST_Within + GIST
+                wkt_polygon = _h3_cell_to_wkt(region)
+                if wkt_polygon:
+                    where_clauses.append(
+                        f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))"
+                    )
+                    params.append(wkt_polygon)
+                    param_idx += 1
+                else:
+                    logger.warning(
+                        "Invalid H3 region '%s' – skipping spatial filter", region
+                    )
 
             if source:
                 where_clauses.append(f"source = ${param_idx}")
@@ -716,9 +754,7 @@ async def get_clausal_chains(
                     "locative_lon": row["locative_lon"],
                     "locative_hae": row["locative_hae"],
                     "state_change_reason": row["state_change_reason"],
-                    "adverbial_context": dict(row["adverbial_context"])
-                    if row["adverbial_context"]
-                    else {},
+                    "adverbial_context": _parse_adverbial_context(row["adverbial_context"]),
                 }
                 chains_by_uid[uid]["clauses"].append(clause)
 
@@ -727,6 +763,7 @@ async def get_clausal_chains(
     except Exception as e:
         logger.error(f"Error fetching clausal chains: {e}")
         return []
+
 
 
 @router.get("/health")

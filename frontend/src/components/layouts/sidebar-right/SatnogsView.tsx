@@ -1,8 +1,57 @@
-import { Crosshair, Radio, Satellite, X } from "lucide-react";
-import React from "react";
+import { Crosshair, Radio, Satellite, X, ChevronDown, ChevronRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { TimeTracked } from "../TimeTracked";
 import { BaseViewProps } from "./types";
+
+// ── Type helpers ────────────────────────────────────────────────────────────
+
+interface SatnogsTransmitter {
+  uuid: string;
+  norad_id: string;
+  sat_name: string;
+  description: string;
+  mode: string;
+  downlink_low: number | null;
+  downlink_high: number | null;
+  alive: boolean;
+}
+
+interface SatnogsObservation {
+  observation_id: number;
+  norad_id: string;
+  ground_station_id: number;
+  frequency: number | null;
+  mode: string;
+  status: string;
+  start_time: string;
+  has_audio: boolean;
+  has_waterfall: boolean;
+  vetted_status: string;
+}
+
+function fmtMHz(hz: number | null): string {
+  if (hz === null || hz === undefined) return "—";
+  return (hz / 1e6).toFixed(3) + " MHz";
+}
+
+function modeColor(mode: string): string {
+  const m = (mode || "").toUpperCase();
+  if (m.includes("FM")) return "text-teal-300";
+  if (m.includes("SSB") || m.includes("USB") || m.includes("LSB")) return "text-sky-300";
+  if (m.includes("CW")) return "text-lime-300";
+  if (m.includes("BPSK") || m.includes("PSK")) return "text-purple-300";
+  return "text-white/50";
+}
+
+function obsStatusColor(status: string): string {
+  const s = (status || "").toLowerCase();
+  if (s.includes("good") || s === "ok") return "text-hud-green";
+  if (s.includes("fail") || s.includes("bad")) return "text-red-400";
+  return "text-amber-400";
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export const SatnogsView: React.FC<BaseViewProps> = ({
   entity,
@@ -12,8 +61,32 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
 }) => {
   const detail = (entity.detail || {}) as Record<string, unknown>;
   const status = String(detail.status || "unknown").toUpperCase();
-  const satnogsId = String(detail.satnogs_id || "N/A");
+  const satnogsId = String(detail.satnogs_id || "");
   const altitudeM = Number(detail.altitude_m ?? entity.altitude ?? 0);
+
+  const [transmitters, setTransmitters] = useState<SatnogsTransmitter[]>([]);
+  const [observations, setObservations] = useState<SatnogsObservation[]>([]);
+  const [txExpanded, setTxExpanded] = useState(true);
+  const [obsExpanded, setObsExpanded] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/satnogs/transmitters?limit=20")
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (!cancelled) setTransmitters(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!satnogsId || satnogsId === "N/A" || satnogsId === "") return;
+    let cancelled = false;
+    fetch(`/api/satnogs/observations?ground_station_id=${encodeURIComponent(satnogsId)}&hours=24&limit=10`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (!cancelled) setObservations(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [satnogsId]);
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -32,7 +105,7 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
               <div className="flex flex-col gap-0.5 text-[10px] text-white/60">
                 <div className="flex gap-2">
                   <span className="text-white/30 w-16">Node ID:</span>
-                  <span className="text-white/80">{satnogsId}</span>
+                  <span className="text-white/80">{satnogsId || "N/A"}</span>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-white/30 w-16">Status:</span>
@@ -65,6 +138,7 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
       </div>
 
       <div className="overflow-y-auto min-h-0 shrink border-x border-tactical-border bg-black/30 backdrop-blur-md p-3 space-y-3 scrollbar-none font-mono">
+        {/* Station Details */}
         <section className="space-y-2">
           <h3 className="text-[10px] text-white/50 font-bold uppercase tracking-wider">
             Station_Details
@@ -83,6 +157,72 @@ export const SatnogsView: React.FC<BaseViewProps> = ({
               <span className="text-teal-300 tabular-nums">{Math.round(altitudeM).toLocaleString()} m</span>
             </div>
           </div>
+        </section>
+
+        {/* Active Transmitters (GAP-01) */}
+        <section className="space-y-1">
+          <button
+            onClick={() => setTxExpanded(v => !v)}
+            className="flex items-center gap-1.5 text-[10px] text-white/50 font-bold uppercase tracking-wider w-full text-left hover:text-white/70 transition-colors"
+          >
+            {txExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            Active_Transmitters
+            <span className="ml-auto text-[9px] text-white/25 font-normal">({transmitters.length})</span>
+          </button>
+          {txExpanded && (
+            transmitters.length === 0 ? (
+              <div className="text-[9px] text-white/20 italic pl-3">No transmitter data available</div>
+            ) : (
+              <div className="space-y-0.5">
+                {transmitters.slice(0, 15).map((tx) => (
+                  <div key={tx.uuid} className="grid grid-cols-[1fr_auto_auto] gap-2 text-[9px] border-b border-white/5 pb-0.5">
+                    <span className="text-white/60 truncate" title={tx.sat_name}>{tx.sat_name}</span>
+                    <span className={modeColor(tx.mode)}>{tx.mode || "?"}</span>
+                    <span className="text-teal-300/70 tabular-nums text-right">{fmtMHz(tx.downlink_low)}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </section>
+
+        {/* Recent Observations (GAP-02) */}
+        <section className="space-y-1">
+          <button
+            onClick={() => setObsExpanded(v => !v)}
+            className="flex items-center gap-1.5 text-[10px] text-white/50 font-bold uppercase tracking-wider w-full text-left hover:text-white/70 transition-colors"
+          >
+            {obsExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            Recent_Observations
+            <span className="ml-auto text-[9px] text-white/25 font-normal">(24h)</span>
+          </button>
+          {obsExpanded && (
+            !satnogsId || satnogsId === "N/A" ? (
+              <div className="text-[9px] text-white/20 italic pl-3">No station ID available</div>
+            ) : observations.length === 0 ? (
+              <div className="text-[9px] text-white/20 italic pl-3">No observations in last 24h</div>
+            ) : (
+              <div className="space-y-0.5">
+                {observations.map((obs) => (
+                  <div key={obs.observation_id} className="flex flex-col gap-0.5 border-b border-white/5 pb-1">
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-white/40 tabular-nums">
+                        {new Date(obs.start_time).toUTCString().slice(5, 22)}
+                      </span>
+                      <span className={`font-bold ${obsStatusColor(obs.status)}`}>
+                        {(obs.status || "?").toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[8px] text-white/50">
+                      <span>NORAD {obs.norad_id}</span>
+                      <span className={modeColor(obs.mode)}>{obs.mode || "?"}</span>
+                      <span className="text-teal-300/60 tabular-nums ml-auto">{fmtMHz(obs.frequency)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
         </section>
       </div>
 

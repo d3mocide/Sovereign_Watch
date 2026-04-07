@@ -230,7 +230,10 @@ export function getOrbitalLayers({
             id: `satellite-ground-track${sfx}`,
             data: satellites,
             getPath: (d: CoTEntity): PathPoint3D[] => {
-              const trail = (d.smoothedTrail || []).map(
+              const trailRaw = d.smoothedTrail;
+              if (!Array.isArray(trailRaw) || trailRaw.length === 0) return [];
+              
+              const trail = trailRaw.map(
                 (pt) => [pt[0] ?? 0, pt[1] ?? 0, pt[2] ?? 0] as PathPoint3D,
               );
               if (projectionMode === "globe") {
@@ -268,9 +271,10 @@ export function getOrbitalLayers({
             id: `satellite-gap-bridge${sfx}`,
             data: satellites
               .filter((d) => {
-                if (!d.smoothedTrail || d.smoothedTrail.length === 0)
+                if (!Array.isArray(d.smoothedTrail) || d.smoothedTrail.length === 0)
                   return false;
                 const last = d.smoothedTrail[d.smoothedTrail.length - 1];
+                if (!last) return false;
                 const dist = Math.sqrt(
                   Math.pow(last[0] - d.lon, 2) + Math.pow(last[1] - d.lat, 2),
                 );
@@ -327,6 +331,7 @@ export function getOrbitalLayers({
             data: [predictedGroundTrack],
             // @ts-expect-error - deck.gl path type complexity
             getPath: (pts: GroundTrackPoint[]) => {
+              if (!Array.isArray(pts)) return [];
               if (projectionMode === "globe") {
                 const alt = selectedEntity.altitude || 0;
                 return pts.map((pt) => [pt.lon, pt.lat, alt]);

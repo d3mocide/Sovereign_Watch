@@ -74,36 +74,38 @@ export const OutageAlertPanel: React.FC = () => {
             No Outages Detected
           </div>
         ) : (
-          outages.map((o) => (
-            <div
-              key={o.country_code}
-              className="px-3 py-1.5 border-b border-white/[0.03] hover:bg-white/5"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] text-white/50 w-7 flex-shrink-0 tabular-nums font-bold">
-                  {o.country_code}
-                </span>
-                <span
-                  className={`text-[9px] flex-1 truncate ${severityColor(o.severity)}`}
-                >
-                  {o.country}
-                </span>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
+          <div className="grid grid-cols-2 divide-x divide-white/[0.03]">
+            {outages.map((o) => (
+              <div
+                key={o.country_code}
+                className="px-2.5 py-1.5 border-b border-white/[0.03] hover:bg-white/5"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-white/50 w-6 flex-shrink-0 tabular-nums font-bold">
+                    {o.country_code}
+                  </span>
+                  <span
+                    className={`text-[9px] flex-1 truncate ${severityColor(o.severity)}`}
+                  >
+                    {o.country}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 mt-0.5 pl-[1.875rem]">
+                  <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${severityBarClass(o.severity)}`}
                       style={{ width: `${Math.min(100, o.severity)}%` }}
                     />
                   </div>
                   <span
-                    className={`text-[8px] tabular-nums w-6 text-right ${severityColor(o.severity)}`}
+                    className={`text-[8px] tabular-nums w-5 text-right flex-shrink-0 ${severityColor(o.severity)}`}
                   >
                     {Math.round(o.severity)}
                   </span>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -221,3 +221,49 @@ export function buildGraticule(stepDeg: number = 30): GeoJSON.FeatureCollection 
   }
   return { type: "FeatureCollection", features };
 }
+
+/**
+ * Rough bbox-overlap test: does this NWS alert polygon intersect the AOT?
+ * The AOT is approximated as a bounding box around the mission centre circle.
+ * 1 NM ≈ 1/60° latitude; longitude is compensated for latitude convergence.
+ */
+export function alertIntersectsAOT(
+  feature: GeoJSON.Feature,
+  mission: { lat: number; lon: number; radius_nm: number },
+): boolean {
+  const radiusDeg = mission.radius_nm / 60;
+  const lonOffset = radiusDeg / Math.cos((mission.lat * Math.PI) / 180);
+
+  const aotMinLat = mission.lat - radiusDeg;
+  const aotMaxLat = mission.lat + radiusDeg;
+  const aotMinLon = mission.lon - lonOffset;
+  const aotMaxLon = mission.lon + lonOffset;
+
+  const geom = feature.geometry as any;
+  if (!geom) return false;
+
+  let allCoords: [number, number][] = [];
+  if (geom.type === "Polygon") {
+    allCoords = geom.coordinates[0] as [number, number][];
+  } else if (geom.type === "MultiPolygon") {
+    for (const poly of geom.coordinates) {
+      allCoords = allCoords.concat(poly[0] as [number, number][]);
+    }
+  }
+
+  if (allCoords.length === 0) return false;
+
+  const lons = allCoords.map((c) => c[0]);
+  const lats = allCoords.map((c) => c[1]);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+
+  return (
+    aotMinLat <= maxLat &&
+    aotMaxLat >= minLat &&
+    aotMinLon <= maxLon &&
+    aotMaxLon >= minLon
+  );
+}

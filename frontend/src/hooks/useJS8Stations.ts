@@ -24,12 +24,12 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const getJS8WSUrl = () => {
   const envUrl = import.meta.env.VITE_JS8_WS_URL;
   if (envUrl && !envUrl.includes("localhost")) {
-    return envUrl;
+    const base = envUrl.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
+    // If it already ends with the path, return it, otherwise append it
+    return base.endsWith("/js8/ws/js8") ? base : `${base}/js8/ws/js8`;
   }
   // Default to proxy-friendly relative URL based on current origin
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  // If we are on localhost, and env says localhost, we can use it,
-  // but simpler to always use window.location.host for consistency.
   return `${protocol}//${window.location.host}/js8/ws/js8`;
 };
 

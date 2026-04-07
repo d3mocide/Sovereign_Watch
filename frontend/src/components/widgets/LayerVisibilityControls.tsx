@@ -6,6 +6,8 @@ import {
   ChevronRight,
   ChevronUp,
   CloudRain,
+  GitBranch,
+  Globe,
   Layers,
   Network,
   Radio,
@@ -91,7 +93,7 @@ export const LayerVisibilityControls: React.FC<
     filters?.showNWSAlerts
   );
 
-  const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters);
+  const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters || filters?.showClausalChains);
 
   const hazardsIsOn =
     !!filters &&
@@ -153,9 +155,11 @@ export const LayerVisibilityControls: React.FC<
     if (analysisIsOn) {
       onFilterChange("showH3Risk", false);
       onFilterChange("showClusters", false);
+      onFilterChange("showClausalChains", false);
     } else {
       onFilterChange("showH3Risk", getFilterPref("showH3Risk", false));
       onFilterChange("showClusters", getFilterPref("showClusters", true));
+      onFilterChange("showClausalChains", getFilterPref("showClausalChains", false));
     }
   };
 
@@ -1195,6 +1199,55 @@ export const LayerVisibilityControls: React.FC<
                             : "bg-white/5 text-white/30 border-white/10 hover:bg-white/10 hover:text-white/50"
                         }`}
                         onClick={() => onFilterChange("clusterLookbackHours", h)}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Clausal Chains narrative layer */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showClausalChains ? "border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_8px_rgba(99,102,241,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch
+                      size={10}
+                      className={filters.showClausalChains ? "text-indigo-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showClausalChains ? "text-indigo-400/80" : "text-white/30"}`}
+                    >
+                      CLAUSAL CHAINS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showClausalChains}
+                    onChange={(e) =>
+                      handleSubFilterChange("showClausalChains", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showClausalChains ? "bg-indigo-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showClausalChains ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+                {filters.showClausalChains && (
+                  <div className="flex w-full gap-1 px-0.5">
+                    {([1, 6, 24] as const).map((h) => (
+                      <button
+                        key={h}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded border transition-all ${
+                          (filters.clausalLookbackHours ?? 6) === h
+                            ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/50 shadow-[0_0_6px_rgba(99,102,241,0.3)]"
+                            : "bg-white/5 text-white/30 border-white/10 hover:bg-white/10 hover:text-white/50"
+                        }`}
+                        onClick={() => onFilterChange("clausalLookbackHours", h)}
                       >
                         {h}h
                       </button>

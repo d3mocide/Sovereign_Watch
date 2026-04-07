@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.66.0] - 2026-04-06
+
+### Added
+
+- **Clausal Chain Layer — Full Activation**: The already-built clausal chain layer is now live. `buildClausalChainLayer` is wired into `composition.ts` (between GDELT and ISS), `useAnimationLoop` owns the internal fetch (mirrors the cluster pattern — mission H3 res 4, viewport fallback res 3, 30s refresh), and `LayerVisibilityControls` has a CLAUSAL CHAINS toggle under Analysis.
+- **Anomaly Color Hierarchy**: Clausal event dots are color-coded by reason — `EMERGENCY` bright red, `TYPE_CHANGE` red, `ALTITUDE_CHANGE` orange, `SPEED_TRANSITION` amber, `LOITER_DETECTED` yellow, zone-entry events cyan, default indigo. Halo alpha scales with confidence; radius scales with severity (900m–300m floor).
+- **Clausal Lookback Sub-Filter**: 1h / 6h / 24h pill row added to `LayerVisibilityControls` for the Clausal Chains toggle (indigo palette, default 6h). `MapFilters.clausalLookbackHours` drives the `lookback_hours` param passed to the backend fetch.
+- **ClausalView Right Sidebar**: New `ClausalView.tsx` panel — severity-themed header with confidence bar, Event Telemetry grid (time / speed / altitude / course), Chain Narrative section, Anomaly Classification badge, CENTER VIEW and ANALYSE buttons. Clicking any clausal event dot dispatches a synthetic `CoTEntity` with `type: "clausal-state-change"` and routes to this panel.
+- **Enriched Clausal Tooltip**: Hover tooltips for clausal events now show event type, confidence, time, speed, altitude, course, and narrative (conditional). Color accent matches the anomaly reason.
+- **ActiveConflictWidget**: New `ActiveConflictWidget.tsx` dashboard widget — self-fetching from `/api/gdelt/actors` every 5 minutes, filtered to CRITICAL/ELEVATED threat actors. Shows actor name, CRIT/ELEV badge, report count, material conflict indicator, and Goldstein score.
+- **Dashboard Internet Outages — 2-Column Layout**: `OutageAlertPanel` list now renders as a `grid-cols-2` with a subtle vertical divider, doubling information density in the same panel height.
+- **SpaceWeatherPanel — NOAA Scale Badges & Suppression Banner**: `SpaceWeatherPanel` now polls `/api/space-weather/alerts` every 5 minutes and renders color-coded R/S/G scale badges (quiet green → minor amber → moderate orange → strong red → severe/extreme dark red). A prominent amber banner is shown when signal-loss suppression is active, including reason text and expiry time.
+- **SatnogsView — Active Transmitters & Recent Observations**: The SatNOGS ground station sidebar panel now includes two collapsible sections: Active_Transmitters (fetches `/api/satnogs/transmitters`, shows sat_name / mode / downlink frequency, up to 15 entries) and Recent_Observations (fetches `/api/satnogs/observations?ground_station_id=...`, shows time / NORAD ID / status / frequency / mode for the past 24h). Both sections collapse/expand with chevron toggles.
+- **NWSAlertsWidget — Tactical Map HUD**: `NWSAlertsWidget` added as a floating glass-panel widget on the Tactical Map view. Filters active NWS alerts to the mission AOT, shows severity-bucketed counts (Extreme / Severe / Moderate / Minor), expands to a scrollable detail list, and fires `onEvent()` for newly appearing Severe/Extreme alerts within the mission area (with 30-minute re-notify debounce).
+
+### Changed
+
+- **Domain Intelligence — Consolidated into AIAnalystPanel**: Removed the Air / Sea / Orbital intel buttons from `MapContextMenu` and the `onAnalyzeDomain` prop chain (`TacticalMap`, `OrbitalMap`, `App.tsx`). Domain analysis is now exclusively triggered by selecting a tracked entity — the AIAnalystPanel RUN button label reflects the active domain (e.g. RUN AIR INTEL, RUN SEA INTEL) based on entity type. The floating `domainAnalysisUi` panel in `App.tsx` has been removed.
+- **Dashboard Layout — Widget Swap**: `OutageAlertPanel` relocated from the right column (below GDELT) to the bottom row center column, replacing Emergency Comm Sites. The right column now hosts `ActiveConflictWidget`. Emergency Comm Sites (`RFSiteSearchPanel`) is retired from the dashboard; its data feed continues to power the top-bar EMCOMM counter and minimap RF overlay.
+- **AIS / Sea Track Color**: All SEA-keyed labels, counters, and icons in `DashboardView` updated from `text-blue-500` to `text-sea-accent` (`#00ffff`), matching the maritime color contract already used in `ShipView`, `EventCategorizer`, and the speed-gradient on the tactical IconLayer.
+- **MapContextMenu**: Removed green glow — `border-hud-green/30` → `border-white/10`, dropped `shadow-[0_0_20px_rgba(0,255,65,0.15)]` in favor of neutral dark shadow, removed `bg-gradient-to-b from-hud-green/10` header gradient and `text-hud-green/60` label color.
+- **Run Intel Button**: Fixed layout overflow in `AIAnalystPanel` — added `shrink-0`, reduced `px-6` → `px-4`, tightened `tracking-[.4em]` → `tracking-[.25em]`, added `whitespace-nowrap`.
+- **Nginx WebSocket Proxy — Remote Host Support**: `nginx.conf` and `nginx-dev.conf` updated with explicit `Host` and `Connection` headers on `/ws/` proxy block for reliable WebSocket handshakes on remote deployments. Remote hosts must add their IP to `ALLOWED_ORIGINS` in `.env` and rebuild `sovereign-backend`.
+
+### Fixed
+
+- **Clausal Chains Backend — asyncpg JSONB String Coercion**: Added `_parse_adverbial_context()` helper to `ai_router.py` to handle asyncpg returning JSONB columns as raw JSON strings. Calling `dict()` on a string produced "dictionary update sequence element #0 has length 1; 2 is required" and silently returned `[]` on every clausal chains request.
+- **Clausal Chains Frontend — Missing Region Parameter**: The standalone `useClausalChains` hook was called without a `region` param, causing every fetch to bail immediately. Resolved by moving the fetch inside `useAnimationLoop` where H3 region context is available.
+- **Entity Selection Race Condition**: `handleEntityLiveUpdate` in `useEntitySelection.ts` previously called `setSelectedEntity(e)` unconditionally, allowing the animation loop to overwrite a synthetic clausal/cluster selection with a live telemetry update for the same UID. Fixed with a functional updater that returns `current` unchanged when `current.type !== e.type`.
+- **Array.isArray Guards on Layer Builders**: Added null / empty-array defensive guards to `buildISSLayer.ts`, `buildGdeltLayer.ts`, `OrbitalLayer.tsx`, and `buildClausalChainLayer.ts` to prevent `s.slice is not a function` crashes when data props arrive as `null`/`undefined` during connection failures.
+
+### Verification
+
+- Frontend lint: `pnpm run lint` — exit 0
+- Frontend tests: `pnpm run test` — 36/36 pass
+- Backend ruff: `uv tool run ruff check .` — clean
+- Backend tests: `uv run python -m pytest` — all pass
+
 ## [0.65.0] - 2026-04-05
 
 ### Added

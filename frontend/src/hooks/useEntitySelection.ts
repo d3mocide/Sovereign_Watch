@@ -73,7 +73,13 @@ export function useEntitySelection(
   );
 
   const handleEntityLiveUpdate = useCallback((e: CoTEntity) => {
-    setSelectedEntity(e);
+    setSelectedEntity((current) => {
+      // Never overwrite a synthetic selection (clausal, cluster, gdelt, etc.)
+      // with a live telemetry update for the same UID — those entity types are
+      // not real-time tracked entities and sharing a UID is coincidental.
+      if (current && current.type !== e.type) return current;
+      return e;
+    });
   }, []);
 
   return {

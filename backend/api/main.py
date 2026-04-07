@@ -160,6 +160,7 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 ]
+logger.info(f"CORS: Allowed Origins = {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,7 +207,7 @@ app.include_router(gdelt.router, dependencies=_viewer_auth)
 app.include_router(stats.router)
 app.include_router(buoys.router, dependencies=_viewer_auth)
 app.include_router(maritime.router, dependencies=_viewer_auth)
-app.include_router(iss.router, dependencies=_viewer_auth)
+app.include_router(iss.router)
 app.include_router(ai_router.router, dependencies=_viewer_auth)
 app.include_router(h3_risk.router, dependencies=_viewer_auth)
 

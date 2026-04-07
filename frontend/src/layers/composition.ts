@@ -35,6 +35,7 @@ import type { H3CellData } from "./buildH3CoverageLayer";
 import type { H3RiskCellData } from "../api/h3Risk";
 import type { ClusterInfo } from "../api/clusters";
 import { buildClusterLayer } from "./buildClusterLayer";
+import { buildClausalChainLayer, ClausalChain } from "./buildClausalChainLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -98,6 +99,8 @@ interface LayerCompositionOptions {
   satnogsStations?: SatNOGSStation[];
   /** ST-DBSCAN cluster centroids (Phase 2) */
   clusterData?: ClusterInfo[];
+  /** Clausal chain narrative traces (AI router medial clauses) */
+  clausalChainsData?: ClausalChain[];
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -148,6 +151,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     satnogsStations,
     holdingPatternData,
     clusterData,
+    clausalChainsData,
   } = options;
 
   // JS8 station layers
@@ -320,6 +324,17 @@ export function composeAllLayers(options: LayerCompositionOptions) {
           uidHash: 0,
         });
       },
+    ),
+    // Clausal chain narrative traces — sits above GDELT events, below ISS/orbital
+    ...buildClausalChainLayer(
+      clausalChainsData || null,
+      filters?.showClausalChains === true,
+      globeMode,
+      (entity, pos) => {
+        setHoveredEntity(entity);
+        setHoverPosition(pos);
+      },
+      onEntitySelect,
     ),
     // ISS real-time tracker — Navigation/Orbital group (Z-order 15–17)
     ...(filters?.showISS !== false

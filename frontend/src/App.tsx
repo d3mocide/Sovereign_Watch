@@ -858,6 +858,7 @@ function AuthenticatedApp() {
               onEntitySelect={handleEntitySelect}
               onAnalyzeRegionalRisk={handleAnalyzeRegionalRisk}
               missionArea={missionArea as any}
+              currentMission={(missionArea as any).currentMission ?? null}
               onMapActionsReady={setMapActions}
               showVelocityVectors={showVelocityVectors}
               showHistoryTails={showHistoryTails}
@@ -976,6 +977,8 @@ function AuthenticatedApp() {
             onSatellitesRefReady={(ref) => {
               orbitalSatellitesRef.current = ref;
             }}
+            issPosition={issPosition}
+            issTrack={issTrack}
             />
             {regionalRiskOverlay}
           </>
