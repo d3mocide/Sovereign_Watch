@@ -20,7 +20,7 @@ const SEVERITY_COLORS: Record<RiskSeverity, [number, number, number, number]> =
 function severityToColor(
   severity: RiskSeverity | undefined,
 ): [number, number, number, number] {
-  return SEVERITY_COLORS[severity ?? "LOW"];
+  return SEVERITY_COLORS[severity ?? "LOW"] ?? SEVERITY_COLORS["LOW"];
 }
 
 /**

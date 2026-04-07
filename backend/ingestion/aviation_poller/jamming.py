@@ -135,7 +135,7 @@ class JammingAnalyzer:
     def _assess(self, confidence: float, kp: float, affected_count: int) -> str:
         if affected_count <= 1:
             return "equipment"
-        if kp >= KP_HIGH_THRESHOLD and confidence < 0.4:
+        if kp >= KP_HIGH_THRESHOLD and confidence < 0.3:
             return "space_weather"
         if confidence >= 0.65 and kp < KP_HIGH_THRESHOLD:
             return "jamming"

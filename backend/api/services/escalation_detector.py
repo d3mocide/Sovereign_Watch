@@ -669,11 +669,17 @@ class EscalationDetector:
                 )
                 risk *= convergence_factor
 
-            # Domain-specific dampening / boosting (retain original logic).
-            for anomaly in active_context:
-                if anomaly.metric_type == "space_weather" and anomaly.score > 0.5:
-                    risk *= 0.9  # 10% dampening — expected behaviour during storms
-                elif anomaly.metric_type == "internet_outage" and anomaly.score > 0.7:
-                    risk *= 1.1  # 10% boost — unusual movement during major outages
+            # Domain-specific dampening / boosting — applied once per domain, not per
+            # anomaly, to avoid compounding when multiple signals of the same type fire.
+            if any(
+                a.metric_type == "space_weather" and a.score > 0.5
+                for a in active_context
+            ):
+                risk *= 0.9  # 10% dampening — expected behaviour during storms
+            if any(
+                a.metric_type == "internet_outage" and a.score > 0.7
+                for a in active_context
+            ):
+                risk *= 1.1  # 10% boost — unusual movement during major outages
 
         return min(risk, 1.0)
