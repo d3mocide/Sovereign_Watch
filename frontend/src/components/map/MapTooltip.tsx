@@ -1037,7 +1037,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               {detailProps.course_deg != null ? `${detailProps.course_deg}°` : "--"}
             </span>
           </div>
-          {detailProps.narrative && (
+          {!!detailProps.narrative && (
             <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
               <span className="text-[8px] text-white/40 block leading-tight">
                 NARRATIVE
