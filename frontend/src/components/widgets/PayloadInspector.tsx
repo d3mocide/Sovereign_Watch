@@ -49,8 +49,8 @@ export const PayloadInspector: React.FC<PayloadInspectorProps> = ({ entity, onCl
                     {entity.raw && (
                         <button
                             onClick={handleCopy}
-                            aria-label="Copy raw payload to clipboard"
-                            title="Copy payload"
+                            aria-label={copied ? "Copied to clipboard" : "Copy raw payload to clipboard"}
+                            title={copied ? "Copied!" : "Copy payload"}
                             className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-air-accent outline-none"
                         >
                             {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
