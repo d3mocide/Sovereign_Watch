@@ -15,8 +15,8 @@
  */
 
 import type { Layer, PickingInfo } from "@deck.gl/core";
-import { CollisionFilterExtension, PathStyleExtension } from "@deck.gl/extensions";
-import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { CollisionFilterExtension } from "@deck.gl/extensions";
+import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { CoTEntity } from "../types";
 
 /**
@@ -109,14 +109,6 @@ function getColorForType(
   if (t.includes("police"))   return [148, 163, 184, 200];   // Slate
 
   return [148, 163, 184, 180]; // Default — cool gray
-}
-
-/** Accent color for the state-change ring (brighter, full opacity) */
-function getAccentColor(
-  predicate_type: string,
-): [number, number, number, number] {
-  const base = getColorForType(predicate_type);
-  return [base[0], base[1], base[2], 255];
 }
 
 // ── Anomaly-keyed color palette ──────────────────────────────────────────────
