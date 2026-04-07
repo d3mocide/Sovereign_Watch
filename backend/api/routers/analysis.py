@@ -163,9 +163,7 @@ async def analyze_track(
                 track_summary = dict(row)
         except Exception as e:
             logger.error(f"Analysis track query failed for {uid}: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500, detail=f"Database query failed: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Internal server error")
 
         # 2.1 Fallbacks (Satellites, Infrastructure, GDELT)
         if not track_summary or track_summary.get("points") == 0:
