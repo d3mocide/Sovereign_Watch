@@ -1,4 +1,4 @@
-import { Crosshair, Radio } from "lucide-react";
+import { Crosshair, Radio, X } from "lucide-react";
 import React from "react";
 import { AnalysisWidget } from "../../widgets/AnalysisWidget";
 import { TimeTracked } from "../TimeTracked";
@@ -55,9 +55,9 @@ export const TowerView: React.FC<BaseViewProps> = ({
             onClick={onClose}
             aria-label="Close details"
             title="Close details"
-            className="p-1 text-white/30 hover:text-white transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group shrink-0 focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
           >
-            x
+            <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
         </div>
         <div className="flex gap-2 mt-2">
