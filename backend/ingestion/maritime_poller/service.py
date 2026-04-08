@@ -5,7 +5,7 @@ import os
 import random
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 import redis.asyncio as redis
 import websockets
@@ -13,6 +13,8 @@ import websockets.exceptions
 from aiokafka import AIOKafkaProducer
 
 from classification import classify_vessel
+from sources.base import AISSourceConfig
+from sources import aishub as aishub_source
 from utils import calculate_bboxes, calculate_distance_nm, AIS_HEADING_NOT_AVAILABLE
 
 # Configure Logging
@@ -24,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 # Environment Variables
 AISSTREAM_API_KEY = os.getenv("AISSTREAM_API_KEY", "")
+AISHUB_USERNAME = os.getenv("AISHUB_USERNAME", "")
+# Which source to try first.  Accepts "aisstream" (default) or "aishub".
+# AISHub can only be primary when AISHUB_USERNAME is also set.
+AIS_PRIMARY_SOURCE = os.getenv("AIS_PRIMARY_SOURCE", "aisstream").strip().lower()
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
 REDIS_HOST = os.getenv("REDIS_HOST", "sovereign-redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -48,6 +54,12 @@ CONNECTION_STABILITY_THRESHOLD_SECONDS = 60.0 # Time connected to reset backoff
 NO_DATA_TIMEOUT_SECONDS = 300.0
 NO_DATA_ERROR_CODE = "no_data_timeout"
 
+# Multi-source failover
+# Switch to the next source after this many consecutive reconnect attempts on the active source.
+SOURCE_SWITCH_AFTER_ATTEMPTS = 3
+# While running on a fallback, probe the primary source every N seconds to restore it.
+PRIMARY_PROBE_INTERVAL_SECONDS = 300.0
+
 
 class MaritimePollerService:
     def __init__(self):
@@ -65,11 +77,11 @@ class MaritimePollerService:
         self.last_reconnect_time: Optional[datetime] = None
         self.reconnect_attempts = 0
         self.connection_start_time: Optional[datetime] = None
-        
+
         self.bbox_update_needed = False
         self._bbox_debounce_task: Optional[asyncio.Task] = None
         self.vessel_static_cache: Dict[int, dict] = {}
-        
+
         # New: Event to signal that a reconnection is needed (e.g. area change)
         self.reconnect_event = asyncio.Event()
 
@@ -78,6 +90,97 @@ class MaritimePollerService:
 
         # Track raw AIS frame activity to detect silent upstream stalls.
         self.last_data_received_at: Optional[float] = None
+
+        # Multi-source failover state — populated in setup()
+        self._sources: List[AISSourceConfig] = []
+        self._active_source_idx: int = 0
+        # Wall-clock time when we switched away from the primary source
+        self._on_fallback_since: Optional[float] = None
+
+    # ── Multi-source helpers ──────────────────────────────────────────────────
+
+    def _active_source(self) -> AISSourceConfig:
+        return self._sources[self._active_source_idx]
+
+    def _select_next_source(self) -> bool:
+        """
+        Switch to the next healthy source in the list (wraps around).
+        Returns True if a different source was selected, False if only one source
+        is configured or all remaining sources are in cooldown (stays on current).
+        """
+        if len(self._sources) < 2:
+            return False
+
+        n = len(self._sources)
+        for offset in range(1, n):
+            candidate_idx = (self._active_source_idx + offset) % n
+            candidate = self._sources[candidate_idx]
+            if candidate.enabled and candidate.is_healthy():
+                old_name = self._active_source().name
+                self._active_source_idx = candidate_idx
+                self._on_fallback_since = time.time() if self._active_source_idx != 0 else None
+                logger.warning(
+                    "🔀 AIS source switched: %s → %s",
+                    old_name,
+                    self._active_source().name,
+                )
+                self.reconnect_attempts = 0
+                return True
+
+        # All alternatives in cooldown — stay on current source
+        logger.warning("🔀 All AIS sources in cooldown; staying on %s", self._active_source().name)
+        return False
+
+    def _should_probe_primary(self) -> bool:
+        """True when we are on a fallback source and the probe interval has elapsed."""
+        return (
+            self._active_source_idx != 0
+            and self._on_fallback_since is not None
+            and time.time() - self._on_fallback_since >= PRIMARY_PROBE_INTERVAL_SECONDS
+        )
+
+    def _restore_primary(self):
+        """Switch back to the primary source (index 0) and reset fallback tracking."""
+        if self._active_source_idx == 0:
+            return
+        logger.info("✅ Primary AIS source restored — switching back to %s", self._sources[0].name)
+        self._active_source_idx = 0
+        self._on_fallback_since = None
+        self.reconnect_attempts = 0
+
+    async def _connect_active_source(self) -> bool:
+        """
+        Connect (or reconnect) to whichever AIS source is currently active.
+        Returns True on success, False on failure (source is penalised on failure).
+        """
+        source = self._active_source()
+
+        if source.name == "aisstream":
+            success = await self.connect_aisstream()
+        elif source.name == "aishub":
+            self.ws = await aishub_source.connect(
+                AISHUB_USERNAME,
+                self.center_lat,
+                self.center_lon,
+                350,  # same 350nm wide subscription radius as AISStream
+            )
+            success = self.ws is not None
+        else:
+            logger.error("Unknown AIS source: %s", source.name)
+            success = False
+
+        if success:
+            source.reset_cooldown()
+            try:
+                await self.redis_client.set(
+                    "maritime:active_source", source.name, ex=600
+                )
+            except Exception:
+                pass
+        else:
+            source.penalize()
+
+        return success
 
     async def _write_heartbeat(self, now_ts: Optional[float] = None):
         """Update maritime heartbeat in Redis, throttled to avoid write spam."""
@@ -144,6 +247,28 @@ class MaritimePollerService:
 
         # Load active mission from Redis if exists
         await self.load_active_mission()
+
+        # Build source list — order determines priority (index 0 = primary)
+        all_sources = [AISSourceConfig(name="aisstream")]
+        if AISHUB_USERNAME:
+            all_sources.append(AISSourceConfig(name="aishub"))
+
+        if AIS_PRIMARY_SOURCE == "aishub":
+            if AISHUB_USERNAME:
+                # Move aishub to front so it is tried first
+                all_sources = sorted(all_sources, key=lambda s: 0 if s.name == "aishub" else 1)
+                logger.info("🔀 AISHub set as primary source (username=%s); AISStream is fallback", AISHUB_USERNAME)
+            else:
+                logger.warning(
+                    "⚠️ AIS_PRIMARY_SOURCE=aishub but AISHUB_USERNAME is not set — "
+                    "falling back to AISStream as primary"
+                )
+        elif AIS_PRIMARY_SOURCE != "aisstream":
+            logger.warning("⚠️ Unknown AIS_PRIMARY_SOURCE=%r — using aisstream", AIS_PRIMARY_SOURCE)
+
+        self._sources = all_sources
+        source_names = [s.name for s in self._sources]
+        logger.info("📡 AIS source order: %s", " → ".join(source_names))
 
     async def load_active_mission(self):
         """Load the active mission area from Redis on startup."""
@@ -506,10 +631,73 @@ class MaritimePollerService:
         except Exception as e:
             logger.error(f"❌ Failed to publish to Kafka: {e}")
 
+    async def _dispatch_ais_message(self, data: dict, now_ts: float):
+        """
+        Process one AISStream-format dict and publish resulting TAK events.
+        Used by both AISStream and AISHub paths (AISHub normalises its frames to this format).
+        """
+        msg_type = data.get("MessageType")
+        await self._clear_no_data_error()
+
+        if msg_type == "PositionReport":
+            tak_event = self.transform_to_tak(data)
+            if tak_event:
+                await self.publish_tak_event(tak_event)
+                await self._write_heartbeat(now_ts)
+        elif msg_type == "StandardClassBPositionReport":
+            tak_event = self.handle_class_b_position(data)
+            if tak_event:
+                await self.publish_tak_event(tak_event)
+                await self._write_heartbeat(now_ts)
+        elif msg_type == "ShipStaticData":
+            meta = data.get("MetaData", {})
+            mmsi = meta.get("MMSI")
+            msg_data = data.get("Message", {}).get("ShipStaticData", {})
+            if mmsi and msg_data:
+                self.handle_static_data(mmsi, msg_data)
+                await self._write_heartbeat(now_ts)
+        elif msg_type == "StaticDataReport":
+            meta = data.get("MetaData", {})
+            mmsi = meta.get("MMSI")
+            msg_data = data.get("Message", {}).get("StaticDataReport", {})
+            if mmsi and msg_data:
+                if "ReportA" in msg_data:
+                    self.handle_static_data(mmsi, msg_data["ReportA"])
+                if "ReportB" in msg_data:
+                    self.handle_static_data(mmsi, msg_data["ReportB"])
+                await self._write_heartbeat(now_ts)
+        else:
+            # AISStream sends error/status frames without a MessageType
+            # (e.g. rate-limit notices). Log them so they're visible.
+            error = data.get("Error") or data.get("error")
+            if error:
+                logger.warning("⚠️ %s error frame: %s", self._active_source().name, error)
+            else:
+                logger.debug("Unhandled frame from %s (type=%s): %s",
+                             self._active_source().name, msg_type, data)
+
     async def stream_loop(self):
         """Main streaming loop - receives AIS messages and publishes to Kafka."""
         while self.running:
             try:
+                # 0. While on fallback, periodically probe the primary source
+                if self._should_probe_primary():
+                    logger.info("🔍 Probing primary AIS source (%s)…", self._sources[0].name)
+                    saved_idx = self._active_source_idx
+                    self._active_source_idx = 0
+                    if await self._connect_active_source():
+                        self._restore_primary()
+                        # Fall through to the normal connect path with primary active
+                    else:
+                        # Primary still down — go back to fallback and reset probe timer
+                        logger.info("Primary still unavailable; staying on %s",
+                                    self._sources[saved_idx].name)
+                        self._active_source_idx = saved_idx
+                        self._on_fallback_since = time.time()
+                        if self.ws:
+                            await self.ws.close()
+                            self.ws = None
+
                 # 1. Rate-limit protection: enforce minimum interval between reconnects
                 now = datetime.utcnow()
                 if self.last_reconnect_time:
@@ -528,13 +716,21 @@ class MaritimePollerService:
                     )
                     jitter = delay * 0.1
                     actual_delay = delay + random.uniform(-jitter, jitter)
-                    logger.warning(f"🔄 AISStream retry backoff: attempt {self.reconnect_attempts}, waiting {actual_delay:.1f}s")
+                    logger.warning(
+                        "🔄 %s retry backoff: attempt %d, waiting %.1fs",
+                        self._active_source().name, self.reconnect_attempts, actual_delay,
+                    )
                     await asyncio.sleep(actual_delay)
+
+                    # After enough consecutive failures, try the next source
+                    if (self.reconnect_attempts >= SOURCE_SWITCH_AFTER_ATTEMPTS
+                            and len(self._sources) > 1):
+                        self._select_next_source()
 
                 self.last_reconnect_time = datetime.utcnow()
 
-                # 3. (Re)connect
-                if not await self.connect_aisstream():
+                # 3. (Re)connect to the active source
+                if not await self._connect_active_source():
                     self.reconnect_attempts += 1
                     continue
 
@@ -544,6 +740,7 @@ class MaritimePollerService:
 
                 # Inner message loop
                 message_task = None
+                active_source_name = self._active_source().name
 
                 while self.running and not self.reconnect_event.is_set():
                     try:
@@ -552,7 +749,7 @@ class MaritimePollerService:
                             message_task = asyncio.create_task(self.ws.recv())
 
                         reconnect_task = asyncio.create_task(self.reconnect_event.wait())
-                        
+
                         # Wait for either a message, a timeout (for ping), or a reconnect signal
                         done, pending = await asyncio.wait(
                             [message_task, reconnect_task],
@@ -574,52 +771,32 @@ class MaritimePollerService:
                             if self.reconnect_attempts > 0 and self.connection_start_time:
                                 connected_for = (datetime.utcnow() - self.connection_start_time).total_seconds()
                                 if connected_for >= CONNECTION_STABILITY_THRESHOLD_SECONDS:
-                                    logger.info(f"✅ AISStream stable for {connected_for:.0f}s — resetting backoff")
+                                    logger.info(
+                                        "✅ %s stable for %.0fs — resetting backoff",
+                                        active_source_name, connected_for,
+                                    )
                                     self.reconnect_attempts = 0
                                     self.connection_start_time = None
 
-                            message = message_task.result()
-                            data = json.loads(message)
-                            msg_type = data.get("MessageType")
+                            raw_message = message_task.result()
                             now_ts = time.time()
                             self.last_data_received_at = now_ts
-                            await self._clear_no_data_error()
 
-                            if msg_type == "PositionReport":
-                                tak_event = self.transform_to_tak(data)
-                                if tak_event:
-                                    await self.publish_tak_event(tak_event)
-                                    await self._write_heartbeat(now_ts)
-                            elif msg_type == "StandardClassBPositionReport":
-                                tak_event = self.handle_class_b_position(data)
-                                if tak_event:
-                                    await self.publish_tak_event(tak_event)
-                                    await self._write_heartbeat(now_ts)
-                            elif msg_type == "ShipStaticData":
-                                meta = data.get("MetaData", {})
-                                mmsi = meta.get("MMSI")
-                                msg_data = data.get("Message", {}).get("ShipStaticData", {})
-                                if mmsi and msg_data:
-                                    self.handle_static_data(mmsi, msg_data)
-                                    await self._write_heartbeat(now_ts)
-                            elif msg_type == "StaticDataReport":
-                                meta = data.get("MetaData", {})
-                                mmsi = meta.get("MMSI")
-                                msg_data = data.get("Message", {}).get("StaticDataReport", {})
-                                if mmsi and msg_data:
-                                    if "ReportA" in msg_data:
-                                        self.handle_static_data(mmsi, msg_data["ReportA"])
-                                    if "ReportB" in msg_data:
-                                        self.handle_static_data(mmsi, msg_data["ReportB"])
-                                    await self._write_heartbeat(now_ts)
+                            # Decode frames according to the active source's format
+                            if active_source_name == "aishub":
+                                # AISHub delivers JSON arrays; normalise each vessel entry
+                                normalized = aishub_source.parse_messages(raw_message)
+                                for msg_dict in normalized:
+                                    await self._dispatch_ais_message(msg_dict, now_ts)
                             else:
-                                # AISStream sends error/status frames without a MessageType
-                                # (e.g. rate-limit notices). Log them so they're visible.
-                                error = data.get("Error") or data.get("error")
-                                if error:
-                                    logger.warning(f"⚠️ AISStream error frame: {error}")
-                                else:
-                                    logger.debug(f"Unhandled AISStream frame (type={msg_type}): {data}")
+                                # AISStream delivers one JSON object per frame
+                                try:
+                                    data = json.loads(raw_message)
+                                except json.JSONDecodeError:
+                                    logger.warning("Non-JSON frame from %s ignored", active_source_name)
+                                    continue
+                                await self._dispatch_ais_message(data, now_ts)
+
                         else:
                             # Timeout elapsed — the websockets library's ping_interval
                             # already handles keepalives. Cancel reconnect_task.
@@ -644,7 +821,7 @@ class MaritimePollerService:
                                     break
 
                     except websockets.exceptions.ConnectionClosed:
-                        logger.warning("🌊 AISStream connection closed by server")
+                        logger.warning("🌊 %s connection closed by server", active_source_name)
                         break
                     except Exception as e:
                         logger.error(f"Error in message loop: {e}")
