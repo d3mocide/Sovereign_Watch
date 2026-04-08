@@ -222,7 +222,7 @@ export function IntelSidebar({
       </div>
 
       {/* Conflict Zones */}
-      <div className="flex flex-col min-h-[25%] bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative">
+      <div className="flex flex-col flex-none max-h-[35%] bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative">
         <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
           <div className="flex items-center gap-2">
             <AlertTriangle size={12} className="text-red-400 opacity-80" />

@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 # Add the api directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from test_stubs import install_common_test_stubs  # noqa: E402
+from .test_stubs import install_common_test_stubs  # noqa: E402
 
 # Mock heavy dependencies before importing main
 install_common_test_stubs(include_psutil=True)

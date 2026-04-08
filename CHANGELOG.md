@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0] - 2026-04-07
+
+### Added
+
+- **Multi-Domain Intelligence Fusion — GA Release**: Full activation of all-domain risk assessment across Maritime (AIS), Aviation (ADS-B), OSINT (GDELT), Space (SatNOGS/NOAA), and Infrastructure (IODA/PeeringDB).
+- **Cross-Domain Convergence Boost**: Implemented a multiplicative 20% risk escalation when threats co-occur across multiple domains in the same H3 region (e.g., GPS jamming + maritime distress).
+- **Temporal Risk Decay**: All track-derived risk hexes now respect a 4-hour exponential decay window, ensuring operational relevance of tactical intelligence.
+- **Fusion Stress Testing Suite**: Added `test_risk_fusion.py` to the core test battery to validate complex intelligence scoring scenarios and convergence logic.
+
+### Modified
+
+- **Test Infrastructure Standard**: Relocated standalone experimental scripts from the API root to `backend/api/tests/` for improved CI/CD discoverability.
+- **ActiveConflictWidget Layout**: Capped vertical height with scrollable overflow to maintain dashboard stability on smaller displays.
+
+### Fixed
+
+- **Information Disclosure Vulnerability**: Hardened the `/api/analyze` endpoint to prevent database exception leakage in AI analytic responses.
+
+
 ## [0.66.0] - 2026-04-06
 
 ### Added

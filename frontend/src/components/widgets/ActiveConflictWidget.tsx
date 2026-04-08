@@ -60,7 +60,7 @@ export const ActiveConflictWidget: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
         <AlertTriangle size={11} className="text-red-400/70" />
         <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">

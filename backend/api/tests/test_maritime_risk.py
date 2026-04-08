@@ -3,7 +3,7 @@
 import os
 import sys
 
-from test_stubs import install_common_test_stubs
+from .test_stubs import install_common_test_stubs
 
 # ── mock heavy deps before any project imports ──────────────────────────────
 install_common_test_stubs(include_web_stack=True)
