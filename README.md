@@ -75,6 +75,8 @@ CENTER_LON=-122.6784
 POSTGRES_PASSWORD=...     # Required — choose any strong password
 JWT_SECRET_KEY=...        # Required — generate with: openssl rand -hex 32
 AISSTREAM_API_KEY=...     # Free at aisstream.io (maritime data)
+AISHUB_USERNAME=...       # Optional — enables automatic AIS fallback via AISHub
+AIS_PRIMARY_SOURCE=aisstream  # Optional — aisstream or aishub
 VITE_MAPBOX_TOKEN=...     # mapbox.com (optional — for 3D terrain)
 ANTHROPIC_API_KEY=...     # For AI track analysis (optional)
 ```

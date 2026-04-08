@@ -98,6 +98,8 @@ Frontend: Display streaming response
     Risk: LOW | Confidence: 0.94"
 ```
 
+The AI Analyst panel now adapts the action label to the selected target domain. For example, operators will see labels such as `Run Air Intel`, `Run Sea Intel`, or `Run Orbital Intel` depending on the selected object type instead of a single generic run label.
+
 ---
 
 ## Endpoint Reference
@@ -526,10 +528,11 @@ const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 **Trigger Logic:**
 1. User selects lookback window
 2. User selects analysis mode
-3. User clicks "RUN" button (operator role required)
-4. Panel sends POST /api/analyze/{uid}
-5. Receives SSE stream, accumulates tokens
-6. Displays formatted markdown output
+3. Panel derives the target domain from the selected entity
+4. User clicks the domain-aware run button such as `Run Air Intel`, `Run Sea Intel`, or `Run Orbital Intel` (operator role required)
+5. Panel sends POST /api/analyze/{uid}
+6. Receives SSE stream, accumulates tokens
+7. Displays formatted markdown output
 
 ---
 

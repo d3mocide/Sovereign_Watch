@@ -51,6 +51,10 @@ JWT_SECRET_KEY=        # generate with: openssl rand -hex 32
 # Required for maritime data
 AISSTREAM_API_KEY=your-key-here
 
+# Optional maritime failover
+AISHUB_USERNAME=your-aishub-username
+AIS_PRIMARY_SOURCE=aisstream
+
 # Required for 3D terrain maps (optional — falls back to free CARTO)
 VITE_MAPBOX_TOKEN=your-token-here
 
@@ -60,6 +64,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 See [Configuration Reference](./Configuration.md) for the complete variable reference.
+
+If `AISHUB_USERNAME` is set, the maritime poller can fail over to AISHub automatically after repeated AISStream connection failures. Leaving it blank preserves the original AISStream-only behavior.
 
 ### 3. Build and Start
 
@@ -291,6 +297,35 @@ See `agent_docs/TIMESCALE_RETENTION.md` for the full retention reference includi
 - **API keys** (Anthropic, Mapbox, AISStream, RadioReference) are injected at container build time via environment variables — never commit them to the repository.
 - The API does not require authentication by default. Consider placing Nginx behind a VPN or adding HTTP Basic Auth via Nginx for any internet-facing deployment.
 
+### Remote Access and `ALLOWED_ORIGINS`
+
+When you open the UI from another machine, the browser sends the backend the exact frontend origin, for example `http://192.168.1.50` or `https://watch.example.com`. That origin must be present in `ALLOWED_ORIGINS` or the browser will block backend requests and WebSocket upgrades.
+
+Use the exact origin you type into the browser, including protocol and non-default ports:
+
+```bash
+# Remote IP on port 80
+ALLOWED_ORIGINS=http://192.168.1.50
+
+# Remote domain over HTTPS
+ALLOWED_ORIGINS=https://watch.example.com
+
+# Local + remote access during testing
+ALLOWED_ORIGINS=http://localhost,http://127.0.0.1,http://192.168.1.50
+```
+
+After changing `ALLOWED_ORIGINS` in `.env`, rebuild the backend so the new environment reaches FastAPI:
+
+```bash
+docker compose up -d --build sovereign-backend
+```
+
+Common symptoms of a bad `ALLOWED_ORIGINS` value:
+
+- Orbital or tactical panels load but fail to populate live data
+- Browser console shows CORS failures or rejected `/ws/` / API requests
+- WebSocket-backed views work on `localhost` but fail when accessed by remote IP or domain
+
 ---
 
 ## Troubleshooting
@@ -320,6 +355,7 @@ docker compose restart sovereign-backend
 2. Verify your AOR (`CENTER_LAT` / `CENTER_LON`) is in a populated area
 3. Check Redpanda is healthy: `docker compose logs sovereign-redpanda`
 4. Verify your `AISSTREAM_API_KEY` for maritime data
+5. If you enabled maritime failover, verify `AISHUB_USERNAME` and `AIS_PRIMARY_SOURCE`
 
 ### Frontend Not Loading
 

@@ -53,9 +53,13 @@ These three variables define your **monitoring area** and are consumed by the AD
 
 ## Maritime (AIS)
 
-| Variable            | Default   | Required | Description                                                                                                                         |
-| :------------------ | :-------- | :------- | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `AISSTREAM_API_KEY` | _(empty)_ | **Yes**  | AISStream.io WebSocket API key. Get a free key at [aisstream.io](https://aisstream.io). Without this, no maritime data is ingested. |
+The maritime poller supports an **active-passive** source model. By default it connects to **AISStream.io** first. If `AISHUB_USERNAME` is set, **AISHub** becomes an automatic fallback after repeated connection failures. You can also set `AIS_PRIMARY_SOURCE=aishub` to try AISHub first and keep AISStream as fallback.
+
+| Variable | Default | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `AISSTREAM_API_KEY` | _(empty)_ | **Yes** unless `AIS_PRIMARY_SOURCE=aishub` and AISHub is your intended primary | AISStream.io WebSocket API key. Get a free key at [aisstream.io](https://aisstream.io). Required for AISStream primary or fallback operation. |
+| `AISHUB_USERNAME` | _(empty)_ | No | Enables the optional AISHub WebSocket fallback. Leave empty to keep AISStream-only behavior. |
+| `AIS_PRIMARY_SOURCE` | `aisstream` | No | Which source to try first: `aisstream` or `aishub`. If set to `aishub`, `AISHUB_USERNAME` must also be set. |
 
 ---
 
@@ -123,9 +127,18 @@ Sovereign Watch uses **LiteLLM** as a unified AI gateway. It supports a triple-m
 
 ## Backend API
 
-| Variable          | Default                             | Description                                                                    |
-| :---------------- | :---------------------------------- | :----------------------------------------------------------------------------- |
-| `ALLOWED_ORIGINS` | `http://localhost,http://127.0.0.1` | CORS allowed origins (comma-separated). Add your domain if accessing remotely. |
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `ALLOWED_ORIGINS` | `http://localhost,http://127.0.0.1` | CORS allowed origins (comma-separated). Must include the exact frontend origin you use to open the UI, including protocol and port. |
+
+Examples:
+
+- Local Docker UI: `ALLOWED_ORIGINS=http://localhost,http://127.0.0.1`
+- Remote IP over plain HTTP: `ALLOWED_ORIGINS=http://192.168.1.50`
+- Remote domain over HTTPS: `ALLOWED_ORIGINS=https://watch.example.com`
+- Multiple allowed origins: `ALLOWED_ORIGINS=http://localhost,http://192.168.1.50,https://watch.example.com`
+
+If this value is wrong, browsers can reject backend requests and WebSocket handshakes even when the containers themselves are healthy.
 
 ---
 
@@ -180,6 +193,8 @@ VITE_ENABLE_MAPBOX=true
 
 # ── Maritime ───────────────────────────────────────────────────
 AISSTREAM_API_KEY=your-aisstream-key-here
+AISHUB_USERNAME=your-aishub-username
+AIS_PRIMARY_SOURCE=aisstream
 
 # ── AI Cognition ───────────────────────────────────────────────
 LITELLM_MODEL=secure-core

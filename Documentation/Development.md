@@ -42,6 +42,8 @@ cp .env.example .env
 
 Edit `.env` with your credentials. At minimum you need an AISStream API key for maritime data and at least one AI API key for the analyst. See [Configuration Reference](./Configuration.md) for the full variable list.
 
+If you also want maritime source failover, set `AISHUB_USERNAME`. Leave it blank to keep the original AISStream-only behavior. `AIS_PRIMARY_SOURCE` lets you choose whether `aisstream` or `aishub` is tried first.
+
 ---
 
 ## Local Dependencies (Recommended)
@@ -193,6 +195,8 @@ pnpm run lint          # ESLint
 pnpm run test          # Vitest unit tests
 pnpm tsc --noEmit      # Type check without building
 ```
+
+The frontend unit test suite now covers more than geometry helpers. Current high-value coverage includes alert engines, entity filtering, event categorisation, interpolation, and trail smoothing, so `pnpm run test` is useful for catching behavioral regressions rather than only utility breakage.
 
 ---
 

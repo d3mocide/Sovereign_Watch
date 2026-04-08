@@ -3,19 +3,32 @@
 > OSINT-centric 3D globe view for situational awareness at global scale.
 > Activated via the **INTEL** button in the TopBar.
 
+## Operator Workflow
+
+The INTEL workspace is the global analysis view used when the operator wants to pivot from individual tracks to broader geopolitical context.
+
+- The **left Intel sidebar** ranks conflict zones and actors, lets the operator refresh actor state, and changes the ranking window between 24, 48, and 72 hours.
+- Clicking a **conflict zone** or **actor** flies the globe to that centroid for fast regional focus.
+- The globe renders **GDELT events**, **country heat**, **conflict arcs**, and the shared **H3 risk layer** when the Risk Grid overlay is enabled.
+- The bottom HUD exposes **projection toggle**, **spin**, **style selection**, and **zoom** controls.
+- With no active selection, the right side of the application shows the live news stream; clicking a GDELT event opens the normal right-sidebar detail inspector.
+- Operators with the correct role can trigger **Generate AI SITREP**, which opens the AI Analyst panel with prebuilt Intel context from the current actor snapshot.
+
 ## Current Implementation (v1)
 
 | Component | File | Purpose |
 |---|---|---|
-| Globe map | `frontend/src/components/map/IntelGlobe.tsx` | Always-3D MapLibre globe with three deck.gl layer groups |
+| Globe map | `frontend/src/components/map/IntelGlobe.tsx` | MapLibre globe or mercator Intel canvas with GDELT, country heat, conflict arcs, and optional H3 risk |
 | Arc projections | `frontend/src/layers/buildGdeltArcLayer.ts` | ArcLayer beams from conflict-class GDELT events |
 | Country heat | `frontend/src/layers/buildCountryHeatLayer.ts` | GeoJsonLayer tinting countries by threat level derived from actor1-country avg Goldstein |
-| Left sidebar | `frontend/src/components/layouts/IntelSidebar.tsx` | Conflict zones + actors lists, map style selector, fly-to |
+| Left sidebar | `frontend/src/components/layouts/IntelSidebar.tsx` | Conflict zones, actor rankings, time-window control, refresh, fly-to, and AI SITREP trigger |
+| Shared map HUD | `frontend/src/components/map/MapControls.tsx` | Projection toggle, auto-spin, basemap style, zoom, and mercator camera controls |
 | Headline ticker | `frontend/src/components/widgets/OsintTicker.tsx` | CSS marquee from `/api/news/feed` |
+| Right-sidebar detail routing | `frontend/src/App.tsx` / `frontend/src/components/layouts/SidebarRight.tsx` | Opens GDELT detail views and source actions from Intel selections |
 | Actors API | `backend/api/routers/gdelt.py` | `GET /api/gdelt/actors` — top actors by event count |
 | Map styles | `frontend/src/components/map/intelMapStyles.ts` | Dark Matter / Satellite / Light / Toner tile configs |
 
-## Recommended Improvements (Priority Order)
+## Remaining Improvements (Priority Order)
 
 ### 1 — Real Actor-to-Actor Arc Geometry
 **What:** Replace the current golden-angle fan arcs with true Actor1→Actor2 geographic connections using GDELT's `actor2_country` field mapped to country centroid coordinates.
@@ -32,36 +45,7 @@
 
 ---
 
-### 2 — GDELT Event Detail Panel in Right Sidebar
-**What:** When a user clicks a GDELT dot on the Intel Globe, open the existing `GdeltView` detail panel in the right sidebar — the same panel that opens in TACTICAL mode.
-
-**Why:** Click targets are already wired (`onEntitySelect` → `handleEntitySelect`), but INTEL mode currently sets `rightSidebar={null}`. Wiring in `SidebarRight` for INTEL mode gives full event drill-down without any new code.
-
-**How:**
-- In `App.tsx`, extend the `rightSidebar` conditional to include `viewMode === "INTEL"` alongside `"TACTICAL" | "ORBITAL"`
-- The existing `GdeltView.tsx` and `SidebarRight.tsx` handle the rest
-- The "CENTER_VIEW" button in GdeltView will call `mapActions.flyTo` which already works
-
-**Files:** `frontend/src/App.tsx`
-
----
-
-### 3 — Globe Auto-Spin Toggle
-**What:** A slow continuous rotation of the globe when no interaction is happening — stops on user drag, resumes after a few seconds of inactivity.
-
-**Why:** Matches the GCMS aesthetic from the design reference; makes the view feel live even when no new events arrive.
-
-**How:**
-- Add a `spin` boolean state to `IntelGlobe.tsx`
-- In the rAF animation loop (already present for arc pulse), increment `viewState.longitude` by ~1°/sec when spin is enabled and no user drag is active
-- MapLibre's `onDragStart`/`onDragEnd` events gate the spin
-- Add a spin toggle button to `IntelSidebar` header
-
-**Files:** `frontend/src/components/map/IntelGlobe.tsx`, `frontend/src/components/layouts/IntelSidebar.tsx`
-
----
-
-### 4 — Country Click Drill-Down
+### 2 — Country Click Drill-Down
 **What:** Click a country polygon on the globe → zoom to that country + filter the sidebar actor list to that country's events + show a filtered news feed for that actor.
 
 **Why:** Turns the heat map from decorative to navigational. Mirrors the GCMS country info panel pattern from the design reference.
@@ -76,7 +60,7 @@
 
 ---
 
-### 5 — Time-Lapse Playback of GDELT Events
+### 3 — Time-Lapse Playback of GDELT Events
 **What:** A slider that scrubs through the last 24h of GDELT events, showing how conflict dots and arcs evolve over time.
 
 **Why:** The TACTICAL view already has a full replay system (`TimeControls.tsx`). A lighter version for GDELT would show event propagation patterns — useful for analyst briefings.
@@ -91,7 +75,7 @@
 
 ---
 
-### 6 — Satellite Overflight Alerts on Hot Zones
+### 4 — Satellite Overflight Alerts on Hot Zones
 **What:** When an intel-category or government satellite crosses a country polygon currently classified CRITICAL, flash a connection line from the satellite's ground-track position to the country centroid.
 
 **Why:** The ORBITAL view already tracks these satellites and fires alerts. The INTEL view has the country threat data. Joining them creates a "sensor-on-target" signal that is unique to this platform.
@@ -107,22 +91,7 @@
 
 ---
 
-### 7 — AI SITREP Generation Button
-**What:** A "GENERATE SITREP" button in the IntelSidebar that pre-populates the existing `AIAnalystPanel` with the current top conflict zones and actors as context.
-
-**Why:** The AI analyst panel already exists and accepts an entity as context. A SITREP prompt assembled from the actors list (top 5 conflict zones, their goldstein scores, material conflict counts) would produce immediately useful analyst output.
-
-**How:**
-- Add a "SITREP" button to the IntelSidebar footer
-- Construct a synthetic CoTEntity whose `detail` field carries the actors summary as a JSON blob
-- Pass it to `onOpenAnalystPanel` (already wired in App.tsx)
-- The AI analyst panel reads `entity.detail` as context for its prompt
-
-**Files:** `frontend/src/components/layouts/IntelSidebar.tsx`, `frontend/src/App.tsx`
-
----
-
-### 8 — Maritime Chokepoint Overlay
+### 5 — Maritime Chokepoint Overlay
 **What:** Render named strategic chokepoints (Strait of Hormuz, Malacca, Bab-el-Mandeb, etc.) as labelled markers with real-time AIS density derived from the existing maritime feed.
 
 **Why:** AIS data is already ingested. GDELT frequently references these locations. Overlaying them on the INTEL globe connects the news layer to the physical geography layer that security analysts care about.
