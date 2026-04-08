@@ -288,7 +288,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                             onTerminalClick?.();
                         }}
                         className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${isTerminalOpen ? 'bg-hud-green/20 text-hud-green border border-hud-green/30 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
-                        title="Raw Data Terminal"
+                        title={isTerminalOpen ? "Close Raw Data Terminal" : "Raw Data Terminal"}
                         aria-label="Toggle Raw Data Terminal"
                         aria-pressed={isTerminalOpen}
                     >
@@ -371,7 +371,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                                 ${isSystemHealthOpen ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'bg-hud-green/10 text-hud-green border border-hud-green/20 hover:bg-hud-green/20 focus-visible:ring-1 focus-visible:ring-hud-green'}
                             `}
                             aria-label="Toggle System Health"
-                            title="System Health & Data Streams"
+                            title={isSystemHealthOpen ? "Close System Health & Data Streams" : "System Health & Data Streams"}
                             aria-expanded={isSystemHealthOpen}
                         >
                             <HeartPulse size={15} className={isSystemHealthOpen ? "text-amber-500 drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]" : "text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]"} />
