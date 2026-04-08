@@ -17,7 +17,7 @@ when the pollers haven't run yet; they return safe empty payloads in that case.
 import logging
 
 from core.database import db
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from models.schemas import score_to_severity
 
 router = APIRouter()
@@ -84,6 +84,7 @@ LIMIT 10
 
 @router.get("/api/maritime/risk-assessment")
 async def get_risk_assessment(
+    request: Request,
     mmsi: str = Query(..., description="Vessel MMSI"),
     lat: float = Query(..., ge=-90.0, le=90.0),
     lon: float = Query(..., ge=-180.0, le=180.0),
@@ -103,6 +104,20 @@ async def get_risk_assessment(
     fields are returned as empty compatibility values while the buoy anomaly
     path remains active.
     """
+    if db.redis_client and request.client and request.client.host:
+        client_ip = request.client.host
+        rl_key = f"rate_limit:maritime_risk:{client_ip}"
+        try:
+            req_count = await db.redis_client.incr(rl_key)
+            if req_count == 1:
+                await db.redis_client.expire(rl_key, 60)
+            if req_count > 20:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
+
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
 
@@ -224,6 +239,7 @@ LIMIT 20
 
 @router.get("/api/maritime/sea-state-anomaly")
 async def get_sea_state_anomaly(
+    request: Request,
     lat: float = Query(..., ge=-90.0, le=90.0),
     lon: float = Query(..., ge=-180.0, le=180.0),
     radius_nm: float = Query(
@@ -236,6 +252,20 @@ async def get_sea_state_anomaly(
     than 2 standard deviations above the rolling hourly baseline — indicative
     of developing storm conditions or unusual sea state.
     """
+    if db.redis_client and request.client and request.client.host:
+        client_ip = request.client.host
+        rl_key = f"rate_limit:sea_state_anomaly:{client_ip}"
+        try:
+            req_count = await db.redis_client.incr(rl_key)
+            if req_count == 1:
+                await db.redis_client.expire(rl_key, 60)
+            if req_count > 20:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
+
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
 
