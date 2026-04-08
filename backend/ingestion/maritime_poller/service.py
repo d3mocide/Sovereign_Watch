@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 # Environment Variables
 AISSTREAM_API_KEY = os.getenv("AISSTREAM_API_KEY", "")
 AISHUB_USERNAME = os.getenv("AISHUB_USERNAME", "")
+# Which source to try first.  Accepts "aisstream" (default) or "aishub".
+# AISHub can only be primary when AISHUB_USERNAME is also set.
+AIS_PRIMARY_SOURCE = os.getenv("AIS_PRIMARY_SOURCE", "aisstream").strip().lower()
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
 REDIS_HOST = os.getenv("REDIS_HOST", "sovereign-redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -245,13 +248,27 @@ class MaritimePollerService:
         # Load active mission from Redis if exists
         await self.load_active_mission()
 
-        # Build source list — AISStream is always primary
-        self._sources = [AISSourceConfig(name="aisstream")]
+        # Build source list — order determines priority (index 0 = primary)
+        all_sources = [AISSourceConfig(name="aisstream")]
         if AISHUB_USERNAME:
-            self._sources.append(AISSourceConfig(name="aishub"))
-            logger.info("🔀 AISHub fallback source enabled (username=%s)", AISHUB_USERNAME)
-        else:
-            logger.info("ℹ️ AISHUB_USERNAME not set — running with AISStream as sole source")
+            all_sources.append(AISSourceConfig(name="aishub"))
+
+        if AIS_PRIMARY_SOURCE == "aishub":
+            if AISHUB_USERNAME:
+                # Move aishub to front so it is tried first
+                all_sources = sorted(all_sources, key=lambda s: 0 if s.name == "aishub" else 1)
+                logger.info("🔀 AISHub set as primary source (username=%s); AISStream is fallback", AISHUB_USERNAME)
+            else:
+                logger.warning(
+                    "⚠️ AIS_PRIMARY_SOURCE=aishub but AISHUB_USERNAME is not set — "
+                    "falling back to AISStream as primary"
+                )
+        elif AIS_PRIMARY_SOURCE != "aisstream":
+            logger.warning("⚠️ Unknown AIS_PRIMARY_SOURCE=%r — using aisstream", AIS_PRIMARY_SOURCE)
+
+        self._sources = all_sources
+        source_names = [s.name for s in self._sources]
+        logger.info("📡 AIS source order: %s", " → ".join(source_names))
 
     async def load_active_mission(self):
         """Load the active mission area from Redis on startup."""
