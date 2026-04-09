@@ -37,6 +37,7 @@ mock_hmm.classify_trajectory = _stub_classify_trajectory
 sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
+del sys.modules["services.hmm_trajectory"]
 
 
 class _FakeRedis:
