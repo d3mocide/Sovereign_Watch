@@ -4,7 +4,14 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from main import dms_to_decimal, parse_float, ioda_severity
+from main import (
+    build_cable_country_index,
+    dms_to_decimal,
+    extract_station_country,
+    ioda_severity,
+    normalize_country_label,
+    parse_float,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -137,3 +144,56 @@ def test_ioda_severity_threshold_1000():
     # min threshold used in IODA loop is 1000 — verify severity is non-zero
     result = ioda_severity(1000)
     assert result > 0.0
+
+
+# ---------------------------------------------------------------------------
+# cable-country topology helpers
+# ---------------------------------------------------------------------------
+
+
+def test_extract_station_country_uses_last_token():
+    assert extract_station_country("Alpha Landing, Country A") == "Country A"
+
+
+def test_normalize_country_label_strips_case_and_punctuation():
+    assert normalize_country_label("Côte d'Ivoire") == "côte d ivoire"
+
+
+def test_build_cable_country_index_links_endpoint_countries():
+    stations_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [-0.4, 0.0]},
+                "properties": {"name": "Alpha Landing, Country A"},
+            },
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [0.4, 0.0]},
+                "properties": {"name": "Beta Landing, Country B"},
+            },
+        ],
+    }
+    cables_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-0.4, 0.0], [0.0, 0.0], [0.4, 0.0]],
+                },
+                "properties": {"id": "a-b-cable", "name": "A-B Cable"},
+            }
+        ],
+    }
+
+    index = build_cable_country_index(cables_geojson, stations_geojson)
+
+    assert sorted(index["cables"]["a-b-cable"]["countries"]) == [
+        "country a",
+        "country b",
+    ]
+    assert index["countries"]["country a"]["cable_ids"] == ["a-b-cable"]
+    assert index["countries"]["country b"]["cable_ids"] == ["a-b-cable"]

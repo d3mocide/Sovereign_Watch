@@ -94,9 +94,13 @@ async def test_analyze_air_domain_uses_region_scoped_nws_alerts():
     assert response.context_snapshot["nws_alerts"]["count"] == 0
     assert response.context_snapshot["nws_alerts"]["severe_count"] == 0
     assert response.context_snapshot["nws_alerts"]["scope"] == "mission_area"
+    assert response.context_snapshot["context_scope"]["space_weather"]["scope"] == "impact_linked_external"
+    assert response.context_snapshot["space_weather_driver_summary"] == "below mission threshold"
     assert all("nationally" not in indicator for indicator in response.indicators)
 
     prompt = mock_generate.await_args.kwargs["user_prompt"]
     assert "NWS alerts in target region" in prompt
     assert "372" not in prompt
     assert "66" not in prompt
+    assert "1.0" not in prompt
+    assert "below mission threshold" in prompt

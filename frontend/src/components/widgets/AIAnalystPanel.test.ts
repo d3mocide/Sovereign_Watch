@@ -41,4 +41,22 @@ describe('formatAnalysisText', () => {
     expect(output).toContain('### NARRATIVE\n**CLASSIFICATION**');
     expect(output).toContain('Low. Benign operational profile.');
   });
+
+  it('heals wrapped bullet labels and collapses extra spacing between bullets', () => {
+    const input = [
+      '### RISK SIGNALS',
+      '- ADS-B',
+      'Tracks: Three tracks provide limited positional data.',
+      '',
+      '- Kp Index: A Kp index of 1.0 suggests normal conditions.',
+      '',
+      '',
+      '- No Alerts: Absence of NWS alerts removes weather-related risks.',
+    ].join('\n');
+
+    const output = formatAnalysisText(input);
+
+    expect(output).toContain('- ADS-B Tracks: Three tracks provide limited positional data.');
+    expect(output).toContain('- Kp Index: A Kp index of 1.0 suggests normal conditions.\n- No Alerts: Absence of NWS alerts removes weather-related risks.');
+  });
 });

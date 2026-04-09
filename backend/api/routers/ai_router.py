@@ -6,11 +6,14 @@ Implements spatial-temporal alignment, sequence evaluation, and escalation detec
 import asyncio
 import json
 import logging
-from typing import Dict, List, Optional
+import math
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Set, Tuple
 
 import h3
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from sgp4.api import Satrec, jday as sgp4_jday
 
 from services.escalation_detector import EscalationDetector
 from services.hmm_trajectory import HMMResult, classify_trajectory
@@ -37,6 +40,9 @@ _HEATMAP_MAX_CONCURRENCY = 4
 # Keep UI interactions responsive even if the model endpoint is slow/unreachable.
 _LLM_EVAL_TIMEOUT_SECONDS = 8.0
 _GDELT_SPATIAL_RADIUS_M = 250_000.0
+_SEA_CONTEXT_RADIUS_KM = 400.0
+_SEA_CABLE_PROXIMITY_KM = 250.0
+_SEA_CABLE_ENDPOINT_MATCH_KM = 75.0
 
 
 def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
@@ -72,6 +78,409 @@ def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
     return min(1.0, 0.6 * conflict_ratio + 0.3 * material_ratio + 0.1 * hostility)
 
 
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return great-circle distance in kilometers between two points."""
+    radius_km = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
+    return radius_km * 2 * math.asin(math.sqrt(a))
+
+
+def _normalize_country_label(value: Optional[str]) -> str:
+    """Normalize country labels for loose cross-source matching."""
+    if not value:
+        return ""
+    chars = [char.lower() if char.isalnum() else " " for char in value]
+    return " ".join("".join(chars).split())
+
+
+def _extract_station_country(name: Optional[str]) -> str:
+    """Extract the country token from a landing-point display name."""
+    if not name:
+        return ""
+    parts = [part.strip() for part in str(name).split(",") if part.strip()]
+    return parts[-1] if parts else ""
+
+
+def _h3_region_center(h3_region: str) -> Optional[Tuple[float, float]]:
+    """Return the center point of an H3 cell as (lat, lon)."""
+    try:
+        lat, lon = h3.cell_to_latlng(h3_region)
+        return float(lat), float(lon)
+    except Exception as exc:
+        logger.warning("Invalid H3 cell '%s' for sea analysis: %s", h3_region, exc)
+        return None
+
+
+def _jday_from_datetime(dt: datetime) -> Tuple[float, float]:
+    """Return the SGP4 Julian day pair for a UTC datetime."""
+    utc_dt = dt.astimezone(timezone.utc)
+    return sgp4_jday(
+        utc_dt.year,
+        utc_dt.month,
+        utc_dt.day,
+        utc_dt.hour,
+        utc_dt.minute,
+        utc_dt.second + utc_dt.microsecond / 1e6,
+    )
+
+
+def _point_in_h3_region(lat: float, lon: float, h3_region: str) -> bool:
+    """Return whether a lat/lon pair falls within the target H3 cell."""
+    try:
+        resolution = h3.get_resolution(h3_region)
+        return h3.latlng_to_cell(lat, lon, resolution) == h3_region
+    except Exception as exc:
+        logger.warning("Invalid H3 region '%s' for orbital relevance: %s", h3_region, exc)
+        return False
+
+
+def _satellite_subpoint_for_time(
+    tle_line1: str,
+    tle_line2: str,
+    event_time: datetime,
+) -> Optional[Tuple[float, float]]:
+    """Propagate a satellite TLE to the event time and return its subpoint."""
+    try:
+        satrec = Satrec.twoline2rv(tle_line1, tle_line2)
+        jd, fr = _jday_from_datetime(event_time)
+        err, position_teme, _ = satrec.sgp4(jd, fr)
+        if err != 0:
+            return None
+        position_ecef = _teme_to_ecef(position_teme, jd, fr)
+        lat, lon, _ = _ecef_to_lla(position_ecef)
+        return lat, lon
+    except Exception as exc:
+        logger.debug("Failed to propagate satellite subpoint: %s", exc)
+        return None
+
+
+def _teme_to_ecef(
+    r_teme: Tuple[float, float, float],
+    jd: float,
+    fr: float,
+) -> Tuple[float, float, float]:
+    """Rotate a TEME position vector into ECEF using GMST."""
+    d = (jd - 2451545.0) + fr
+    gmst = (18.697374558 + 24.06570982441908 * d) % 24.0
+    theta = gmst * 15.0 * math.pi / 180.0
+
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+
+    x, y, z = r_teme
+    return (
+        x * cos_t + y * sin_t,
+        -x * sin_t + y * cos_t,
+        z,
+    )
+
+
+def _ecef_to_lla(r_ecef: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """Convert a single ECEF point in km to geodetic lat, lon, alt."""
+    x, y, z = r_ecef
+    a = 6378.137
+    e2 = 0.00669437999014
+    b = a * math.sqrt(1 - e2)
+    ep2 = (a**2 - b**2) / b**2
+
+    p = math.sqrt(x**2 + y**2)
+    th = math.atan2(a * z, b * p)
+
+    lon = math.atan2(y, x)
+    lat = math.atan2(
+        z + ep2 * b * math.sin(th) ** 3,
+        p - e2 * a * math.cos(th) ** 3,
+    )
+
+    n = a / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+    safe_lat = max(min(lat, math.pi / 2 - 1e-9), -math.pi / 2 + 1e-9)
+    alt = p / math.cos(safe_lat) - n
+
+    return math.degrees(lat), math.degrees(lon), alt
+
+
+async def _fetch_aot_relevant_satnogs_events(
+    conn,
+    *,
+    h3_region: str,
+    lookback_hours: int,
+    signal_threshold: float = -10.0,
+    limit: int = 10,
+    candidate_limit: int = 40,
+) -> List[Dict]:
+    """Return only SatNOGS signal-loss events whose satellite subpoint intersects the AOT."""
+    candidate_rows = await conn.fetch(
+        """
+        SELECT norad_id, ground_station_name, signal_strength, time, modulation, frequency
+        FROM satnogs_signal_events
+        WHERE time > now() - ($1 * interval '1 hour')
+          AND signal_strength < $2
+        ORDER BY signal_strength ASC, time DESC
+        LIMIT $3
+        """,
+        lookback_hours,
+        signal_threshold,
+        candidate_limit,
+    )
+    if not candidate_rows:
+        return []
+
+    norad_ids = sorted({int(row["norad_id"]) for row in candidate_rows if row.get("norad_id") is not None})
+    if not norad_ids:
+        return []
+
+    satellite_rows = await conn.fetch(
+        """
+        SELECT norad_id, tle_line1, tle_line2
+        FROM satellites
+        WHERE norad_id = ANY($1::int[])
+        """,
+        norad_ids,
+    )
+    tle_by_norad = {
+        int(row["norad_id"]): (row["tle_line1"], row["tle_line2"])
+        for row in satellite_rows
+        if row.get("tle_line1") and row.get("tle_line2")
+    }
+
+    relevant_events: List[Dict] = []
+    for row in candidate_rows:
+        norad_id = row.get("norad_id")
+        if norad_id is None:
+            continue
+        tle = tle_by_norad.get(int(norad_id))
+        if not tle:
+            continue
+
+        event_time = row["time"]
+        if not isinstance(event_time, datetime):
+            continue
+
+        subpoint = _satellite_subpoint_for_time(tle[0], tle[1], event_time)
+        if not subpoint:
+            continue
+        subpoint_lat, subpoint_lon = subpoint
+        if not _point_in_h3_region(subpoint_lat, subpoint_lon, h3_region):
+            continue
+
+        relevant_events.append(
+            {
+                "time": event_time,
+                "norad_id": int(norad_id),
+                "ground_station_name": row.get("ground_station_name"),
+                "signal_strength": row.get("signal_strength"),
+                "modulation": row.get("modulation"),
+                "frequency": row.get("frequency"),
+                "subpoint_lat": round(subpoint_lat, 4),
+                "subpoint_lon": round(subpoint_lon, 4),
+                "scope": "mission_area",
+                "linkage_reason": "orbital_subpoint_in_aot",
+            }
+        )
+        if len(relevant_events) >= limit:
+            break
+
+    return relevant_events
+
+
+def _flatten_line_strings(geometry: Dict) -> List[List[List[float]]]:
+    """Return coordinate sequences for LineString or MultiLineString geometries."""
+    geom_type = geometry.get("type")
+    coords = geometry.get("coordinates") or []
+    if geom_type == "LineString":
+        return [coords] if len(coords) >= 2 else []
+    if geom_type == "MultiLineString":
+        return [line for line in coords if len(line) >= 2]
+    return []
+
+
+def _select_nearby_ndbc_features(
+    ndbc_data: Dict,
+    region_lat: float,
+    region_lon: float,
+    max_distance_km: float = _SEA_CONTEXT_RADIUS_KM,
+) -> List[Dict]:
+    """Filter cached NDBC observations down to the mission area."""
+    nearby_features: List[Dict] = []
+    for feature in ndbc_data.get("features", []):
+        geometry = feature.get("geometry", {})
+        coords = geometry.get("coordinates") or []
+        properties = feature.get("properties", {})
+        if len(coords) < 2:
+            continue
+        wave_height = properties.get("wvht_m")
+        if wave_height is None:
+            continue
+        buoy_lon, buoy_lat = coords[0], coords[1]
+        distance_km = haversine_km(region_lat, region_lon, buoy_lat, buoy_lon)
+        if distance_km > max_distance_km:
+            continue
+        nearby_features.append(
+            {
+                "buoy_id": properties.get("buoy_id"),
+                "wvht_m": float(wave_height),
+                "distance_km": round(distance_km, 1),
+                "time": properties.get("time"),
+            }
+        )
+    nearby_features.sort(key=lambda feature: feature["distance_km"])
+    return nearby_features
+
+
+def _derive_cable_relevant_countries(
+    stations_data: Dict,
+    cables_data: Dict,
+    region_lat: float,
+    region_lon: float,
+) -> Set[str]:
+    """Infer landing countries relevant to the AOT from nearby landings and cables."""
+    station_points: List[Dict] = []
+    relevant_countries: Set[str] = set()
+
+    for feature in stations_data.get("features", []):
+        geometry = feature.get("geometry", {})
+        coords = geometry.get("coordinates") or []
+        if geometry.get("type") != "Point" or len(coords) < 2:
+            continue
+        name = feature.get("properties", {}).get("name", "")
+        country = _extract_station_country(name)
+        station = {
+            "name": name,
+            "country": country,
+            "lat": float(coords[1]),
+            "lon": float(coords[0]),
+        }
+        station_points.append(station)
+        if country and haversine_km(region_lat, region_lon, station["lat"], station["lon"]) <= _SEA_CABLE_PROXIMITY_KM:
+            relevant_countries.add(country)
+
+    if not station_points:
+        return relevant_countries
+
+    for cable_feature in cables_data.get("features", []):
+        line_strings = _flatten_line_strings(cable_feature.get("geometry", {}))
+        if not line_strings:
+            continue
+
+        min_distance_km: Optional[float] = None
+        endpoints: List[List[float]] = []
+        for line in line_strings:
+            endpoints.append(line[0])
+            endpoints.append(line[-1])
+            for point in line:
+                if len(point) < 2:
+                    continue
+                point_lon, point_lat = point[0], point[1]
+                point_distance = haversine_km(region_lat, region_lon, point_lat, point_lon)
+                min_distance_km = point_distance if min_distance_km is None else min(min_distance_km, point_distance)
+
+        if min_distance_km is None or min_distance_km > _SEA_CABLE_PROXIMITY_KM:
+            continue
+
+        for endpoint in endpoints:
+            if len(endpoint) < 2:
+                continue
+            endpoint_lon, endpoint_lat = endpoint[0], endpoint[1]
+            for station in station_points:
+                if not station["country"]:
+                    continue
+                if haversine_km(endpoint_lat, endpoint_lon, station["lat"], station["lon"]) <= _SEA_CABLE_ENDPOINT_MATCH_KM:
+                    relevant_countries.add(station["country"])
+
+    return relevant_countries
+
+
+def _filter_cable_correlated_outages(
+    outages_data: Dict,
+    relevant_countries: Set[str],
+) -> List[Dict]:
+    """Return only outages tied to landing countries relevant to the mission area."""
+    normalized_countries = {
+        _normalize_country_label(country)
+        for country in relevant_countries
+        if _normalize_country_label(country)
+    }
+    correlated: List[Dict] = []
+    for feature in outages_data.get("features", []):
+        properties = feature.get("properties", {})
+        if not properties.get("nearby_cable_landings"):
+            continue
+        country_name = properties.get("country") or properties.get("region")
+        if _normalize_country_label(country_name) not in normalized_countries:
+            continue
+        correlated.append(
+            {
+                "country": country_name,
+                "country_code": properties.get("country_code"),
+                "severity": properties.get("severity"),
+                "landing_count": len(properties.get("nearby_cable_landings") or []),
+            }
+        )
+    correlated.sort(
+        key=lambda outage: (
+            -(float(outage["severity"]) if outage.get("severity") is not None else 0.0),
+            str(outage.get("country") or ""),
+        )
+    )
+    return correlated
+
+
+def _derive_cable_relevant_countries_from_index(
+    cable_index: Dict,
+    cables_data: Dict,
+    region_lat: float,
+    region_lon: float,
+) -> Set[str]:
+    """Infer AOT-relevant landing countries from persisted cable-country topology."""
+    relevant_country_keys: Set[str] = set()
+    cable_entries = cable_index.get("cables", {}) if isinstance(cable_index, dict) else {}
+    country_entries = cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+
+    for cable_feature in cables_data.get("features", []):
+        cable_props = cable_feature.get("properties", {})
+        cable_id = cable_props.get("id") or cable_props.get("feature_id") or cable_props.get("name")
+        if not cable_id:
+            continue
+        min_distance_km: Optional[float] = None
+        for line in _flatten_line_strings(cable_feature.get("geometry", {})):
+            for point in line:
+                if len(point) < 2:
+                    continue
+                point_lon, point_lat = point[0], point[1]
+                point_distance = haversine_km(region_lat, region_lon, point_lat, point_lon)
+                min_distance_km = point_distance if min_distance_km is None else min(min_distance_km, point_distance)
+
+        if min_distance_km is None or min_distance_km > _SEA_CABLE_PROXIMITY_KM:
+            continue
+
+        for country_key in cable_entries.get(cable_id, {}).get("countries", []):
+            if country_key in country_entries:
+                relevant_country_keys.add(country_key)
+
+    for country_key, country_entry in country_entries.items():
+        for station in country_entry.get("station_points", []):
+            station_lat = station.get("lat")
+            station_lon = station.get("lon")
+            if station_lat is None or station_lon is None:
+                continue
+            if haversine_km(region_lat, region_lon, float(station_lat), float(station_lon)) <= _SEA_CABLE_PROXIMITY_KM:
+                relevant_country_keys.add(country_key)
+                break
+
+    return {
+        country_entries[country_key].get("country", country_key)
+        for country_key in relevant_country_keys
+        if country_key in country_entries
+    }
+
+
 class EvaluationRequest(BaseModel):
     """Request for regional escalation evaluation."""
 
@@ -96,6 +505,7 @@ class RiskAssessmentResponse(BaseModel):
     confidence: float
     pattern_detected: bool
     anomaly_count: int
+    source_scope: Optional[Dict] = None
 
 
 def _h3_cell_to_wkt(h3_cell: str) -> Optional[str]:
@@ -114,6 +524,59 @@ def _h3_cell_to_wkt(h3_cell: str) -> Optional[str]:
     except Exception as exc:
         logger.warning("Invalid H3 cell '%s': %s", h3_cell, exc)
         return None
+
+
+def _build_spatial_filter_clause(
+    geom_expr: str,
+    *,
+    region: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    radius_nm: Optional[float] = None,
+    start_param_idx: int = 1,
+) -> Tuple[Optional[str], List[object], int, str]:
+    """Build a reusable spatial SQL predicate for H3 or radius AOT filters."""
+    if lat is not None and lon is not None and radius_nm is not None:
+        radius_m = radius_nm * 1852.0
+        clause = (
+            f"ST_DWithin("
+            f"  {geom_expr}::geography,"
+            f"  ST_SetSRID(ST_MakePoint(${start_param_idx + 1}, ${start_param_idx}), 4326)::geography,"
+            f"  ${start_param_idx + 2}"
+            f")"
+        )
+        return clause, [lat, lon, radius_m], start_param_idx + 3, "radius"
+
+    if region:
+        wkt_polygon = _h3_cell_to_wkt(region)
+        if wkt_polygon:
+            clause = f"ST_Within({geom_expr}, ST_GeomFromText(${start_param_idx}, 4326))"
+            return clause, [wkt_polygon], start_param_idx + 1, "h3"
+        logger.warning("Invalid H3 region '%s' – skipping spatial filter", region)
+
+    return None, [], start_param_idx, "global"
+
+
+def _build_scope_descriptor(
+    scope: str,
+    linkage_reason: str,
+    *,
+    lookback_hours: Optional[int] = None,
+    time_scope: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> Dict:
+    """Build a consistent source-scope metadata payload."""
+    descriptor: Dict[str, object] = {
+        "scope": scope,
+        "linkage_reason": linkage_reason,
+    }
+    if lookback_hours is not None:
+        descriptor["lookback_hours"] = lookback_hours
+    if time_scope is not None:
+        descriptor["time_scope"] = time_scope
+    if notes:
+        descriptor["notes"] = notes
+    return descriptor
 
 
 def _parse_adverbial_context(value: object) -> Dict:
@@ -300,6 +763,36 @@ async def evaluate_regional_escalation(
         """
         signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
         signal_events = [dict(row) for row in signal_rows]
+
+    source_scope = {
+        "tak": _build_scope_descriptor(
+            "mission_area" if wkt_polygon else "global",
+            "h3_intersection" if wkt_polygon else "missing_spatial_filter",
+            lookback_hours=lookback_hours,
+        ),
+        "gdelt": _build_scope_descriptor(
+            "mission_area" if wkt_polygon else "global",
+            "h3_centroid_radius_proxy" if wkt_polygon else "missing_spatial_filter",
+            lookback_hours=lookback_hours,
+            notes="Proxy filter only; explicit geopolitical linkage rules are still pending.",
+        ),
+        "internet_outages": _build_scope_descriptor(
+            "mission_area" if wkt_polygon else "global",
+            "h3_intersection" if wkt_polygon else "missing_spatial_filter",
+            lookback_hours=lookback_hours,
+        ),
+        "space_weather": _build_scope_descriptor(
+            "impact_linked_external",
+            "global_propagation",
+            lookback_hours=lookback_hours,
+        ),
+        "satnogs": _build_scope_descriptor(
+            "global",
+            "ungated_signal_loss_feed",
+            lookback_hours=lookback_hours,
+            notes="Still unfiltered in evaluate; mission-area relevance rules are pending.",
+        ),
+    }
 
     # Check space-weather signal-loss suppression key (set by NOAA-scales poller
     # when R3+ Radio Blackout or G3+ Geomagnetic Storm is active).  When suppressed,
@@ -589,6 +1082,7 @@ async def evaluate_regional_escalation(
         confidence=confidence,
         pattern_detected=pattern_match is not None,
         anomaly_count=len(active_anomalies),
+        source_scope=source_scope,
     )
 
 
@@ -681,39 +1175,24 @@ async def get_clausal_chains(
     """
     try:
         async with db.pool.acquire() as conn:
+            spatial_clause, spatial_params, _, spatial_mode = _build_spatial_filter_clause(
+                "geom",
+                region=region,
+                lat=lat,
+                lon=lon,
+                radius_nm=radius_nm,
+                start_param_idx=2,
+            )
+
             where_clauses = [
                 "time > now() - ($1 * interval '1 hour')",
             ]
             params: list = [lookback_hours]
-            param_idx = 2
+            params.extend(spatial_params)
+            param_idx = 2 + len(spatial_params)
 
-            if lat is not None and lon is not None and radius_nm is not None:
-                # Radius mode — ST_DWithin on geography for accurate AOT coverage
-                radius_m = radius_nm * 1852.0
-                where_clauses.append(
-                    f"ST_DWithin("
-                    f"  geom::geography,"
-                    f"  ST_SetSRID(ST_MakePoint(${param_idx + 1}, ${param_idx}), 4326)::geography,"
-                    f"  ${param_idx + 2}"
-                    f")"
-                )
-                params.append(lat)
-                params.append(lon)
-                params.append(radius_m)
-                param_idx += 3
-            elif region:
-                # H3 mode — build WKT polygon from cell and use ST_Within + GIST
-                wkt_polygon = _h3_cell_to_wkt(region)
-                if wkt_polygon:
-                    where_clauses.append(
-                        f"ST_Within(geom, ST_GeomFromText(${param_idx}, 4326))"
-                    )
-                    params.append(wkt_polygon)
-                    param_idx += 1
-                else:
-                    logger.warning(
-                        "Invalid H3 region '%s' – skipping spatial filter", region
-                    )
+            if spatial_clause:
+                where_clauses.append(spatial_clause)
 
             if source:
                 where_clauses.append(f"source = ${param_idx}")
@@ -733,6 +1212,110 @@ async def get_clausal_chains(
 
             rows = await conn.fetch(query, *params)
 
+            context_where = ["time > now() - ($1 * interval '1 hour')"]
+            context_params: List[object] = [lookback_hours]
+            context_spatial_clause, context_spatial_params, _, _ = _build_spatial_filter_clause(
+                "geom",
+                region=region,
+                lat=lat,
+                lon=lon,
+                radius_nm=radius_nm,
+                start_param_idx=2,
+            )
+            if context_spatial_clause:
+                context_where.append(context_spatial_clause)
+                context_params.extend(context_spatial_params)
+            context_where_sql = " AND ".join(context_where)
+
+            outage_rows = await conn.fetch(
+                f"""
+                SELECT time, country_code, severity, asn_name, affected_nets
+                FROM internet_outages
+                WHERE {context_where_sql}
+                ORDER BY severity DESC, time DESC
+                LIMIT 5
+                """,
+                *context_params,
+            )
+            space_weather_row = await conn.fetchrow(
+                """
+                SELECT time, kp_index, kp_category, dst_index, explanation
+                FROM space_weather_context
+                WHERE time > now() - ($1 * interval '1 hour')
+                ORDER BY kp_index DESC, time DESC
+                LIMIT 1
+                """,
+                lookback_hours,
+            )
+            signal_rows = await conn.fetch(
+                """
+                SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
+                FROM satnogs_signal_events
+                WHERE time > now() - ($1 * interval '1 hour')
+                ORDER BY time DESC
+                LIMIT 5
+                """,
+                lookback_hours,
+            )
+
+            context_scope = {
+                "spatial_mode": spatial_mode,
+                "lookback_hours": lookback_hours,
+                "clausal_chains": _build_scope_descriptor(
+                    "mission_area" if spatial_mode != "global" else "global",
+                    f"{spatial_mode}_filter" if spatial_mode != "global" else "missing_spatial_filter",
+                    lookback_hours=lookback_hours,
+                ),
+                "outages": _build_scope_descriptor(
+                    "mission_area" if spatial_mode != "global" else "global",
+                    f"{spatial_mode}_filter" if spatial_mode != "global" else "missing_spatial_filter",
+                    lookback_hours=lookback_hours,
+                ),
+                "space_weather": _build_scope_descriptor(
+                    "impact_linked_external",
+                    "global_propagation",
+                    lookback_hours=lookback_hours,
+                ),
+                "satnogs": _build_scope_descriptor(
+                    "global",
+                    "ungated_signal_loss_feed",
+                    lookback_hours=lookback_hours,
+                    notes="Still unfiltered in clausal enrichment; mission-area relevance rules are pending.",
+                ),
+            }
+            outage_context = [
+                {
+                    "time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
+                    "country_code": row["country_code"],
+                    "severity": row["severity"],
+                    "asn_name": row["asn_name"],
+                    "affected_nets": row["affected_nets"],
+                }
+                for row in outage_rows
+            ]
+            space_weather_context = (
+                {
+                    "time": space_weather_row["time"].isoformat() if hasattr(space_weather_row["time"], "isoformat") else str(space_weather_row["time"]),
+                    "kp_index": space_weather_row["kp_index"],
+                    "kp_category": space_weather_row["kp_category"],
+                    "dst_index": space_weather_row["dst_index"],
+                    "explanation": space_weather_row["explanation"],
+                }
+                if space_weather_row
+                else None
+            )
+            satnogs_context = [
+                {
+                    "time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
+                    "norad_id": row["norad_id"],
+                    "ground_station_name": row["ground_station_name"],
+                    "signal_strength": row["signal_strength"],
+                    "modulation": row["modulation"],
+                    "frequency": row["frequency"],
+                }
+                for row in signal_rows
+            ]
+
             # Group by UID to form chains
             chains_by_uid: Dict[str, Dict] = {}
             for row in rows:
@@ -743,6 +1326,10 @@ async def get_clausal_chains(
                         "source": row["source"],
                         "predicate_type": row["predicate_type"],
                         "narrative_summary": row.get("narrative_summary"),
+                        "context_scope": context_scope,
+                        "outage_context": outage_context,
+                        "space_weather_context": space_weather_context,
+                        "satnogs_context": satnogs_context,
                         "clauses": [],
                     }
 
@@ -1135,6 +1722,17 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     """
     indicators: List[str] = []
     context: Dict = {"domain": "air", "h3_region": request.h3_region}
+    context["signal_scope"] = "mission_area_with_impact_linked_external"
+    context["context_scope"] = {
+        "adsb": _build_scope_descriptor("mission_area", "h3_intersection", lookback_hours=request.lookback_hours),
+        "nws": _build_scope_descriptor("mission_area", "geometry_intersection", lookback_hours=request.lookback_hours),
+        "space_weather": _build_scope_descriptor(
+            "impact_linked_external",
+            "global_propagation",
+            time_scope="current_state",
+            notes="Only surfaced in air analysis when Kp reaches the mission relevance threshold.",
+        ),
+    }
 
     wkt_polygon = _h3_cell_to_wkt(request.h3_region)
 
@@ -1195,14 +1793,26 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         )
 
     # Space weather (GPS/comms impact)
+    space_weather_summary = "below mission threshold"
     if db.redis_client:
         kp_raw = await db.redis_client.get("space_weather:kp_current")
         if kp_raw:
             import json as _j2
             kp_data = _j2.loads(kp_raw)
-            context["kp_index"] = kp_data.get("kp")
-            if kp_data.get("kp", 0) >= 5:
-                indicators.append(f"GPS degradation risk: Kp={kp_data['kp']} ({kp_data.get('storm_level','?')})")
+            kp_value = kp_data.get("kp")
+            storm_level = kp_data.get("storm_level", "?")
+            relevant_to_mission = kp_value is not None and float(kp_value) >= 5.0
+            context["space_weather_driver"] = {
+                "kp_index": kp_value,
+                "storm_level": storm_level,
+                "relevant_to_mission": relevant_to_mission,
+                "threshold": "kp>=5",
+            }
+            if relevant_to_mission:
+                space_weather_summary = f"Kp={kp_value} ({storm_level})"
+                indicators.append(f"Mission-impacting GPS/comms degradation risk: Kp={kp_value} ({storm_level})")
+
+    context["space_weather_driver_summary"] = space_weather_summary
 
     entity_count = len(set(r["uid"] for r in adsb_rows))
     risk_score = min(1.0, (len(emergency_squawks) * 0.4 + len(high_dwell) * 0.1 + entity_count * 0.005))
@@ -1215,7 +1825,7 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     user_prompt = (
         f"Air domain assessment for H3 region {request.h3_region}:\n"
         f"- {entity_count} ADS-B tracks in {request.lookback_hours}h window\n"
-        f"- Kp index: {context.get('kp_index', 'N/A')}\n"
+        f"- Space-weather driver: {context.get('space_weather_driver_summary', 'below mission threshold')}\n"
         f"- NWS alerts in target region: {context.get('nws_alerts', {})}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
@@ -1256,6 +1866,8 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     context: Dict = {"domain": "sea", "h3_region": request.h3_region}
 
     wkt_polygon = _h3_cell_to_wkt(request.h3_region)
+    region_center = _h3_region_center(request.h3_region)
+    context["signal_scope"] = "mission_area"
 
     # AIS snapshot
     ais_rows: List[Dict] = []
@@ -1290,38 +1902,72 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
 
     entity_count = len(set(r["uid"] for r in ais_rows))
 
-    # NDBC wave height context
-    if db.redis_client:
-        ndbc_raw = await db.redis_client.get("ndbc:latest_obs")
-        if ndbc_raw:
-            import json as _j
-            ndbc_data = _j.loads(ndbc_raw)
-            wave_heights = [
-                f["properties"]["wvht_m"]
-                for f in ndbc_data.get("features", [])
-                if f.get("properties", {}).get("wvht_m") is not None
-            ]
-            if wave_heights:
-                max_wvht = max(wave_heights)
-                context["max_wave_height_m"] = max_wvht
-                if max_wvht >= 4.0:
-                    indicators.append(f"High sea state: max wave height {max_wvht:.1f}m (NDBC)")
+    if db.redis_client and region_center is not None:
+        region_lat, region_lon = region_center
+        ndbc_raw, outages_raw, stations_raw, cables_raw, cable_index_raw = await asyncio.gather(
+            db.redis_client.get("ndbc:latest_obs"),
+            db.redis_client.get("infra:outages"),
+            db.redis_client.get("infra:stations"),
+            db.redis_client.get("infra:cables"),
+            db.redis_client.get("infra:cable_country_index"),
+        )
 
-    # IODA ↔ cable landing correlation
-    if db.redis_client:
-        outages_raw = await db.redis_client.get("infra:outages")
-        if outages_raw:
-            import json as _jj
-            outages_data = _jj.loads(outages_raw)
-            correlated = [
-                f for f in outages_data.get("features", [])
-                if f.get("properties", {}).get("nearby_cable_landings")
-            ]
-            if correlated:
-                indicators.append(
-                    f"Internet outages near submarine cable landings: {len(correlated)} regions affected"
+        if ndbc_raw:
+            ndbc_data = json.loads(ndbc_raw)
+            nearby_buoys = _select_nearby_ndbc_features(
+                ndbc_data,
+                region_lat,
+                region_lon,
+            )
+            if nearby_buoys:
+                max_wvht = max(buoy["wvht_m"] for buoy in nearby_buoys)
+                context["max_wave_height_m"] = max_wvht
+                context["wave_buoy_count"] = len(nearby_buoys)
+                context["wave_buoys"] = nearby_buoys[:5]
+                if max_wvht >= 4.0:
+                    indicators.append(
+                        f"High sea state in mission area: max wave height {max_wvht:.1f}m across {len(nearby_buoys)} nearby buoys"
+                    )
+
+        if outages_raw and stations_raw:
+            outages_data = json.loads(outages_raw)
+            stations_data = json.loads(stations_raw)
+            cables_data = json.loads(cables_raw) if cables_raw else {"features": []}
+            cable_index = json.loads(cable_index_raw) if cable_index_raw else {}
+            relevant_countries = _derive_cable_relevant_countries_from_index(
+                cable_index,
+                cables_data,
+                region_lat,
+                region_lon,
+            )
+            if not relevant_countries:
+                relevant_countries = _derive_cable_relevant_countries(
+                    stations_data,
+                    cables_data,
+                    region_lat,
+                    region_lon,
                 )
-                context["cable_correlated_outages"] = len(correlated)
+            if relevant_countries:
+                correlated_outages = _filter_cable_correlated_outages(
+                    outages_data,
+                    relevant_countries,
+                )
+                context["cable_relevant_countries"] = sorted(relevant_countries)
+                if correlated_outages:
+                    impacted_countries = sorted(
+                        {
+                            outage["country"]
+                            for outage in correlated_outages
+                            if outage.get("country")
+                        }
+                    )
+                    context["cable_correlated_outages"] = len(correlated_outages)
+                    context["cable_correlated_outage_countries"] = impacted_countries
+                    context["cable_outage_samples"] = correlated_outages[:5]
+                    indicators.append(
+                        "Cable-connected landing country outages in mission area: "
+                        f"{len(correlated_outages)} affected regions across {', '.join(impacted_countries[:4])}"
+                    )
 
     # Dark vessel detection (vessels with very infrequent AIS updates)
     uid_last: Dict[str, int] = {}
@@ -1378,6 +2024,19 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
     import json as _j
     indicators: List[str] = []
     context: Dict = {"domain": "orbital", "h3_region": request.h3_region}
+    context["signal_scope"] = "mission_area_with_impact_linked_external"
+    context["context_scope"] = {
+        "space_weather": {
+            "scope": "impact_linked_external",
+            "linkage_reason": "global_propagation",
+            "time_scope": "current_state",
+        },
+        "satnogs": {
+            "scope": "mission_area",
+            "linkage_reason": "orbital_subpoint_in_aot",
+            "lookback_hours": request.lookback_hours,
+        },
+    }
 
     # Space weather context from Redis
     kp_val: Optional[float] = None
@@ -1391,9 +2050,9 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
             context["kp_index"] = kp_val
             context["storm_level"] = storm_level
             if kp_val is not None and kp_val >= 6:
-                indicators.append(f"Significant geomagnetic storm: Kp={kp_val} ({storm_level})")
+                indicators.append(f"Mission-impacting geomagnetic storm driver: Kp={kp_val} ({storm_level})")
             elif kp_val is not None and kp_val >= 4:
-                indicators.append(f"Elevated Kp index: {kp_val} ({storm_level})")
+                indicators.append(f"Elevated space-weather driver for mission area systems: Kp={kp_val} ({storm_level})")
 
         scales_raw = await db.redis_client.get("space_weather:noaa_scales")
         if scales_raw:
@@ -1407,11 +2066,11 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
             g_lvl = int(g_scale[1:]) if len(g_scale) > 1 and g_scale[1:].isdigit() else 0
             s_lvl = int(s_scale[1:]) if len(s_scale) > 1 and s_scale[1:].isdigit() else 0
             if r_lvl >= 3:
-                indicators.append(f"Radio Blackout {r_scale}: HF comms degraded")
+                indicators.append(f"Global Radio Blackout {r_scale}: mission-area HF comms may degrade")
             if g_lvl >= 3:
-                indicators.append(f"Geomagnetic Storm {g_scale}: satellite drag/orientation risk")
+                indicators.append(f"Global Geomagnetic Storm {g_scale}: mission-area orbital assets may see drag/orientation risk")
             if s_lvl >= 2:
-                indicators.append(f"Solar Energetic Particle event {s_scale}: radiation hazard")
+                indicators.append(f"Global Solar Energetic Particle event {s_scale}: mission-area space systems may face radiation hazard")
 
         suppression_raw = await db.redis_client.get("space_weather:suppress_signal_loss")
         if suppression_raw:
@@ -1421,22 +2080,32 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
                 indicators.append(f"Signal-loss suppression active: {sup_data.get('reason', '')}")
 
     # SatNOGS signal loss events
-    signal_count = 0
+    signal_events: List[Dict] = []
     async with db.pool.acquire() as conn:
-        signal_rows = await conn.fetch(
-            """
-            SELECT norad_id, ground_station_name, signal_strength, time
-            FROM satnogs_signal_events
-            WHERE time > now() - ($1 * interval '1 hour')
-              AND signal_strength < -10.0
-            ORDER BY signal_strength ASC LIMIT 10
-            """,
-            request.lookback_hours,
+        signal_events = await _fetch_aot_relevant_satnogs_events(
+            conn,
+            h3_region=request.h3_region,
+            lookback_hours=request.lookback_hours,
         )
-        signal_count = len(signal_rows)
+        signal_count = len(signal_events)
+        context["signal_loss_count"] = signal_count
+        context["signal_loss_events"] = [
+            {
+                "time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
+                "norad_id": row["norad_id"],
+                "ground_station_name": row["ground_station_name"],
+                "signal_strength": row["signal_strength"],
+                "subpoint_lat": row["subpoint_lat"],
+                "subpoint_lon": row["subpoint_lon"],
+                "scope": row["scope"],
+                "linkage_reason": row["linkage_reason"],
+            }
+            for row in signal_events[:5]
+        ]
         if signal_count > 0 and not context.get("signal_loss_suppression", {}).get("active"):
-            indicators.append(f"Satellite signal loss events: {signal_count} observations below -10 dBm")
-            context["signal_loss_count"] = signal_count
+            indicators.append(
+                f"Mission-area satellite signal loss events: {signal_count} propagated overflight observations below -10 dBm"
+            )
 
     kp_risk = min(1.0, (kp_val or 0) / 9.0)
     scale_risk = 0.3 if any("Radio Blackout" in i or "Geomagnetic Storm" in i for i in indicators) else 0.0
@@ -1446,10 +2115,11 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
     # Build narrative via unified AIService (Space Weather / Orbital Analyst persona)
     signals_text = "\n".join(f"- {i}" for i in indicators) if indicators else "- Nominal conditions"
     user_prompt = (
-        f"Orbital / space-weather assessment for H3 region {request.h3_region}:\n"
+        f"Orbital / space-weather assessment for mission area {request.h3_region}:\n"
         f"- Kp index: {kp_val or 'N/A'} ({storm_level or 'unknown'})\n"
         f"- NOAA scales: {context.get('noaa_scales', {})}\n"
-        f"- SatNOGS signal-loss events: {signal_count}\n\n"
+        f"- Mission-area SatNOGS signal-loss events: {signal_count}\n"
+        f"- Scope contract: mission-area signals plus impact-linked external drivers only\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
     persona = ai_service.get_persona(mode="tactical")

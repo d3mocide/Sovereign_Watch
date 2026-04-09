@@ -2,6 +2,7 @@ import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Dict
 
 import h3
 from core.database import db
@@ -12,10 +13,47 @@ from services.risk_taxonomy import SOURCE_CONFIDENCE, score_to_severity, tempora
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.H3Risk")
 
-OMEGA_D = 0.6  # entity density weight
-OMEGA_S = 0.4  # GDELT sentiment weight
+OMEGA_D = 0.5  # entity density weight
+OMEGA_S = 0.3  # GDELT sentiment weight
+OMEGA_O = 0.2  # cable-landing outage weight
 
 VALID_RESOLUTIONS = {4, 6, 9}
+
+
+def _normalize_country_label(value: str | None) -> str:
+    """Normalize country labels for lookup against the cable-country index."""
+    if not value:
+        return ""
+    chars = [char.lower() if char.isalnum() else " " for char in str(value)]
+    return " ".join("".join(chars).split())
+
+
+def _build_outage_cell_map(
+    outages_data: Dict,
+    cable_index: Dict,
+    resolution: int,
+) -> dict[str, float]:
+    """Project outage severity onto H3 cells hosting cable landing points."""
+    outage_map: dict[str, float] = defaultdict(float)
+    countries = cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+    for feature in outages_data.get("features", []):
+        properties = feature.get("properties", {})
+        country_key = _normalize_country_label(properties.get("country") or properties.get("region"))
+        country_entry = countries.get(country_key)
+        if not country_entry:
+            continue
+        severity = properties.get("severity")
+        if severity is None:
+            continue
+        severity_norm = max(0.0, min(1.0, float(severity) / 100.0))
+        for station in country_entry.get("station_points", []):
+            lat = station.get("lat")
+            lon = station.get("lon")
+            if lat is None or lon is None:
+                continue
+            cell = h3.latlng_to_cell(float(lat), float(lon), resolution)
+            outage_map[cell] = max(outage_map.get(cell, 0.0), severity_norm)
+    return outage_map
 
 
 def _entity_domain(entity_id: str) -> str:
@@ -92,8 +130,22 @@ async def get_h3_risk(
         weight = SOURCE_CONFIDENCE[conf_key]
         sentiment_map[cell].append((float(row["goldstein"]), weight))
 
+    outage_map: dict[str, float] = {}
+    if db.redis_client:
+        outages_raw = await db.redis_client.get("infra:outages")
+        cable_index_raw = await db.redis_client.get("infra:cable_country_index")
+        if outages_raw and cable_index_raw:
+            try:
+                outage_map = _build_outage_cell_map(
+                    json.loads(outages_raw),
+                    json.loads(cable_index_raw),
+                    resolution,
+                )
+            except Exception as exc:
+                logger.warning("H3 outage projection failed: %s", exc)
+
     # --- Merge cells from both sources ---
-    all_cells = set(density_map.keys()) | set(sentiment_map.keys())
+    all_cells = set(density_map.keys()) | set(sentiment_map.keys()) | set(outage_map.keys())
     if not all_cells:
         return H3RiskResponse(
             cells=[],
@@ -120,7 +172,9 @@ async def get_h3_risk(
         else:
             sentiment_norm = 0.5  # neutral when no GDELT data for this cell
 
-        risk_score = OMEGA_D * density_norm + OMEGA_S * sentiment_norm
+        outage_norm = outage_map.get(cell, 0.0)
+
+        risk_score = OMEGA_D * density_norm + OMEGA_S * sentiment_norm + OMEGA_O * outage_norm
         risk_score = round(max(0.0, min(1.0, risk_score)), 4)
 
         lat, lon = h3.cell_to_latlng(cell)
@@ -131,6 +185,7 @@ async def get_h3_risk(
                 lon=lon,
                 density=round(density_norm, 4),
                 sentiment=round(sentiment_norm, 4),
+                outage=round(outage_norm, 4),
                 risk_score=risk_score,
                 severity=score_to_severity(risk_score),
             )

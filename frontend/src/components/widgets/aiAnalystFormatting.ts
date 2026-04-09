@@ -37,12 +37,15 @@ export const formatAnalysisText = (text: string) => {
     .replace(/^\s*[-*•]\s+(###\s+)/gm, '$1')
     // Demote immediately nested markdown headers so they don't render as two top-level sections.
     .replace(/^(###\s+[^\n]+)\n(###\s+[^\n]+)$/gm, (_match, parent, child) => `${parent}\n**${child.replace(/^###\s+/, '')}**`)
+    // Heal wrapped bullet labels like "- ADS-B\nTracks: ...".
+    .replace(/^(\s*[•*-]\s+[^\n]+)\n+((?!\s*[•*-]\s)[^\n]{1,24}:\s.*)$/gm, '$1 $2')
     .replace(/\s+([,.!?;:])/g, '$1')
     .replace(/(\w)\s*['\u2019'']\s*(\w)/g, "$1'$2")
     .replace(/(\s['\u2019'']|['\u2019'']\s)/g, (match) => match.trim())
     .split('\n')
     .map((line) => line.replace(/[ \t]+/g, ' ').trim())
     .join('\n')
+    .replace(/\n{2,}(?=\s*[•*-]\s)/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };

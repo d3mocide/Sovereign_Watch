@@ -48,6 +48,7 @@ class H3RiskCell(BaseModel):
     lon: float
     density: float
     sentiment: float
+    outage: float = 0.0
     risk_score: float
     severity: RiskSeverity = RiskSeverity.LOW
 

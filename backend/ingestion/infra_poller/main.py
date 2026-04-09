@@ -129,6 +129,110 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
+def normalize_country_label(value: str | None) -> str:
+    """Normalize country labels for cross-source matching."""
+    if not value:
+        return ""
+    chars = [char.lower() if char.isalnum() else " " for char in str(value)]
+    return " ".join("".join(chars).split())
+
+
+def extract_station_country(name: str | None) -> str:
+    """Extract the country portion from a landing-point display name."""
+    if not name:
+        return ""
+    parts = [part.strip() for part in str(name).split(",") if part.strip()]
+    return parts[-1] if parts else ""
+
+
+def flatten_line_strings(geometry: dict) -> list[list[list[float]]]:
+    """Return coordinate sequences for LineString or MultiLineString geometry."""
+    geom_type = geometry.get("type")
+    coords = geometry.get("coordinates") or []
+    if geom_type == "LineString":
+        return [coords] if len(coords) >= 2 else []
+    if geom_type == "MultiLineString":
+        return [line for line in coords if len(line) >= 2]
+    return []
+
+
+def build_cable_country_index(cables_geojson: dict, stations_geojson: dict) -> dict:
+    """Build a persisted cable-country topology index from landing points and cables."""
+    countries: dict[str, dict] = {}
+    cable_index: dict[str, dict] = {}
+    station_points: list[dict] = []
+
+    for feature in stations_geojson.get("features", []):
+        geometry = feature.get("geometry", {})
+        coords = geometry.get("coordinates") or []
+        if geometry.get("type") != "Point" or len(coords) < 2:
+            continue
+        name = feature.get("properties", {}).get("name", "")
+        country = extract_station_country(name)
+        country_key = normalize_country_label(country)
+        if not country_key:
+            continue
+        station = {
+            "name": name,
+            "lat": float(coords[1]),
+            "lon": float(coords[0]),
+        }
+        station_points.append({"country_key": country_key, **station})
+        bucket = countries.setdefault(
+            country_key,
+            {
+                "country": country,
+                "landing_names": [],
+                "station_points": [],
+                "cable_ids": [],
+            },
+        )
+        bucket["landing_names"].append(name)
+        bucket["station_points"].append(station)
+
+    for feature in cables_geojson.get("features", []):
+        properties = feature.get("properties", {})
+        cable_id = properties.get("id") or properties.get("feature_id") or properties.get("name")
+        if not cable_id:
+            continue
+
+        countries_for_cable: set[str] = set()
+        for line in flatten_line_strings(feature.get("geometry", {})):
+            endpoints = [line[0], line[-1]]
+            for endpoint in endpoints:
+                if len(endpoint) < 2:
+                    continue
+                endpoint_lon, endpoint_lat = float(endpoint[0]), float(endpoint[1])
+                for station in station_points:
+                    if haversine_km(endpoint_lat, endpoint_lon, station["lat"], station["lon"]) <= IODA_CABLE_CORRELATION_KM:
+                        countries_for_cable.add(station["country_key"])
+
+        cable_index[cable_id] = {
+            "name": properties.get("name") or cable_id,
+            "countries": sorted(countries_for_cable),
+        }
+        for country_key in countries_for_cable:
+            countries.setdefault(
+                country_key,
+                {
+                    "country": country_key,
+                    "landing_names": [],
+                    "station_points": [],
+                    "cable_ids": [],
+                },
+            )["cable_ids"].append(cable_id)
+
+    for entry in countries.values():
+        entry["landing_names"] = sorted(set(entry["landing_names"]))
+        entry["cable_ids"] = sorted(set(entry["cable_ids"]))
+
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "countries": countries,
+        "cables": cable_index,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Blocking helpers — called via asyncio.to_thread
 # ---------------------------------------------------------------------------
@@ -726,6 +830,20 @@ class InfraPollerService:
                 stations_text = await stations_resp.text()
                 await self.redis.set("infra:stations", stations_text)
             logger.info("Stored landing stations in Redis")
+
+        try:
+            cable_index = build_cable_country_index(
+                json.loads(cables_text),
+                json.loads(stations_text),
+            )
+            await self.redis.set("infra:cable_country_index", json.dumps(cable_index))
+            logger.info(
+                "Stored cable-country index in Redis (%d cables, %d countries)",
+                len(cable_index.get("cables", {})),
+                len(cable_index.get("countries", {})),
+            )
+        except Exception as exc:
+            logger.warning("Failed to build cable-country index: %s", exc)
 
     # -----------------------------------------------------------------------
     # IODA loop — 30-minute interval
