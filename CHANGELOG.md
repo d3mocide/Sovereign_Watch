@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Fusion Audit Storage Metrics**: The backend `/api/stats/fusion` storage calculation now includes Timescale chunk relations in addition to the parent `tracks` hypertable, preventing severe under-reporting of database size on larger deployments.
+- **Fusion Audit Velocity Modeling**: Replaced the previous hardcoded ingest velocity baseline with a measured estimate derived from recent track ingest volume and sampled row size.
+- **Fusion Audit UI Readability**: Dashboard storage and ingest velocity now auto-format to MB/GB/TB and MB/HR or GB/HR, and the projection subtitle now labels the chart as a linear estimate from current velocity.
+
+### Fixed
+
+- **Air Analyst Weather Context Scope**: Air-domain AI analysis now intersects `nws:alerts:active` with the requested H3 region and passes mission-area alert counts to the model prompt/context instead of national summary counts, eliminating false local weather escalation narratives.
+- **Fusion Audit Retention Bar Guardrail**: Retention burn bar width is capped at 100% to avoid overrun artifacts when usage exceeds quota.
+
 ## [1.0.0] - 2026-04-07
 
 ### Added

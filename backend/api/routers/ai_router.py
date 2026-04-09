@@ -1018,6 +1018,113 @@ def _coerce_context_map(value: object) -> Dict:
     return {}
 
 
+async def _summarize_nws_alerts_for_region(wkt_polygon: Optional[str]) -> Dict:
+    """Return active NWS alert counts intersecting the requested H3 region.
+
+    The infra poller stores two Redis artifacts:
+      - ``nws:alerts:active``: full GeoJSON of all active U.S. alerts
+      - ``nws:alerts:summary``: national counts for dashboard-style displays
+
+    The analyst path must stay region-scoped, so this helper intersects the
+    active alert geometries with the target H3 cell and returns only local
+    counts. ``fetched_at`` is preserved from the summary blob because it is the
+    same polling cycle metadata rather than a national signal.
+    """
+    summary: Dict = {
+        "count": 0,
+        "severe_count": 0,
+        "extreme_count": 0,
+        "fetched_at": None,
+        "scope": "mission_area",
+    }
+
+    if not db.redis_client:
+        return summary
+
+    try:
+        summary_raw = await db.redis_client.get("nws:alerts:summary")
+        if summary_raw:
+            decoded = json.loads(summary_raw)
+            if isinstance(decoded, dict):
+                summary["fetched_at"] = decoded.get("fetched_at")
+    except Exception as exc:
+        logger.debug("Failed to load NWS summary metadata: %s", exc)
+
+    if not wkt_polygon or not db.pool:
+        return summary
+
+    try:
+        active_raw = await db.redis_client.get("nws:alerts:active")
+        if not active_raw:
+            return summary
+
+        active_data = json.loads(active_raw)
+        if not isinstance(active_data, dict):
+            return summary
+
+        features = active_data.get("features", [])
+        if not isinstance(features, list) or not features:
+            return summary
+
+        async with db.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                WITH region AS (
+                    SELECT ST_GeomFromText($1, 4326) AS geom
+                ),
+                alerts AS (
+                    SELECT
+                        feat->'properties'->>'severity' AS severity,
+                        CASE
+                            WHEN feat ? 'geometry'
+                              AND feat->'geometry' IS NOT NULL
+                              AND jsonb_typeof(feat->'geometry') = 'object'
+                            THEN ST_MakeValid(
+                                ST_SetSRID(
+                                    ST_GeomFromGeoJSON((feat->'geometry')::text),
+                                    4326
+                                )
+                            )
+                            ELSE NULL
+                        END AS geom
+                    FROM jsonb_array_elements($2::jsonb) AS feat
+                )
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE geom IS NOT NULL AND ST_Intersects(geom, region.geom)
+                    ) AS count,
+                    COUNT(*) FILTER (
+                        WHERE geom IS NOT NULL
+                          AND ST_Intersects(geom, region.geom)
+                          AND severity IN ('Severe', 'Extreme')
+                    ) AS severe_count,
+                    COUNT(*) FILTER (
+                        WHERE geom IS NOT NULL
+                          AND ST_Intersects(geom, region.geom)
+                          AND severity = 'Extreme'
+                    ) AS extreme_count
+                FROM alerts
+                CROSS JOIN region
+                """,
+                wkt_polygon,
+                json.dumps(features),
+            )
+
+        if row:
+            if isinstance(row, dict):
+                summary["count"] = int(row.get("count") or 0)
+                summary["severe_count"] = int(row.get("severe_count") or 0)
+                summary["extreme_count"] = int(row.get("extreme_count") or 0)
+            else:
+                summary["count"] = int(row["count"] or 0)
+                summary["severe_count"] = int(row["severe_count"] or 0)
+                summary["extreme_count"] = int(row["extreme_count"] or 0)
+    except Exception as exc:
+        logger.warning("Failed to summarize regional NWS alerts: %s", exc)
+
+    return summary
+
+
 @router.post("/analyze/air")
 async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisResponse:
     """
@@ -1080,16 +1187,12 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         indicators.append(f"Possible holding patterns: {len(high_dwell)} UIDs with ≥5 observations")
 
     # NWS severe weather context
-    nws_summary: Optional[str] = None
-    if db.redis_client:
-        nws_raw = await db.redis_client.get("nws:alerts:summary")
-        if nws_raw:
-            import json as _j
-            nws_data = _j.loads(nws_raw)
-            context["nws_alerts"] = nws_data
-            if nws_data.get("severe_count", 0) > 0:
-                nws_summary = f"{nws_data['severe_count']} severe NWS weather alerts active nationally"
-                indicators.append(nws_summary)
+    nws_data = await _summarize_nws_alerts_for_region(wkt_polygon)
+    context["nws_alerts"] = nws_data
+    if nws_data.get("severe_count", 0) > 0:
+        indicators.append(
+            f"{nws_data['severe_count']} severe NWS weather alerts intersect the target region"
+        )
 
     # Space weather (GPS/comms impact)
     if db.redis_client:
@@ -1113,7 +1216,7 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         f"Air domain assessment for H3 region {request.h3_region}:\n"
         f"- {entity_count} ADS-B tracks in {request.lookback_hours}h window\n"
         f"- Kp index: {context.get('kp_index', 'N/A')}\n"
-        f"- NWS alerts: {context.get('nws_alerts', {})}\n\n"
+        f"- NWS alerts in target region: {context.get('nws_alerts', {})}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
     persona = ai_service.get_persona(mode="tactical")

@@ -20,7 +20,7 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
   };
 
   const storageOptions = useMemo(() => {
-    // Simulated forecast (current usage + velocity)
+    // 24h straight-line estimate based on current measured ingest velocity.
     const base = defaultMetrics.storage.total_mb;
     const vel = defaultMetrics.storage.velocity_mb_hr;
     const data = Array.from({ length: 24 }, (_, i) => base + (vel * i));
@@ -57,6 +57,17 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
       }]
     };
   }, [defaultMetrics]);
+
+  const formatStorage = (mb: number): string => {
+    if (mb >= 1024 * 1024) return `${(mb / (1024 * 1024)).toFixed(2)} TB`;
+    if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+    return `${mb.toFixed(2)} MB`;
+  };
+
+  const formatVelocity = (mbPerHour: number): string => {
+    if (mbPerHour >= 1024) return `~${(mbPerHour / 1024).toFixed(2)} GB/HR`;
+    return `~${mbPerHour.toFixed(2)} MB/HR`;
+  };
 
   return (
     <div className="flex-1 flex flex-col p-6 min-w-0 overflow-y-auto custom-scrollbar font-headline">
@@ -128,7 +139,7 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
             <div className="h-2 bg-surface-container-highest w-full rounded-full overflow-hidden border border-primary/10">
               <div 
                 className="h-full bg-tertiary transition-all duration-1000" 
-                style={{ width: `${defaultMetrics.storage.retention_full_pct}%` }}
+                style={{ width: `${Math.min(100, defaultMetrics.storage.retention_full_pct)}%` }}
               ></div>
             </div>
           </div>
@@ -143,7 +154,7 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
               <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
                 <BarChart3 size={16} /> Storage Projection (24H)
               </h3>
-              <p className="text-[9px] text-on-surface-variant uppercase">Predicted Growth Velocity</p>
+              <p className="text-[9px] text-on-surface-variant uppercase">Linear Estimate From Current Ingest Velocity</p>
             </div>
           </div>
           <div className="flex-1 relative">
@@ -163,11 +174,11 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
           <div className="space-y-4">
              <div className="flex justify-between items-center p-3 bg-surface-container-high border border-primary/5">
                 <span className="text-[10px] text-on-surface-variant uppercase">Current Size</span>
-                <span className="text-sm font-bold text-primary font-mono">{defaultMetrics.storage.total_mb.toLocaleString()} MB</span>
+               <span className="text-sm font-bold text-primary font-mono">{formatStorage(defaultMetrics.storage.total_mb)}</span>
              </div>
              <div className="flex justify-between items-center p-3 bg-surface-container-high border border-primary/5">
                 <span className="text-[10px] text-on-surface-variant uppercase">Ingest Velocity</span>
-                <span className="text-sm font-bold text-primary font-mono">~{defaultMetrics.storage.velocity_mb_hr} MB/HR</span>
+               <span className="text-sm font-bold text-primary font-mono">{formatVelocity(defaultMetrics.storage.velocity_mb_hr)}</span>
              </div>
              <div className="flex justify-between items-center p-3 bg-surface-container-high border border-primary/5">
                 <span className="text-[10px] text-on-surface-variant uppercase">Cleanup Cycles</span>
