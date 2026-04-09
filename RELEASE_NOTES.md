@@ -10,6 +10,7 @@ This patch release tightens the fidelity of analytical output across tactical in
 
 ## Technical Details
 
+- **Domain AI Maneuver Mode**: Tactical, OSINT, and SAR mode toggles are now actively passed fully through to Air, Sea, and Orbital domain agents.
 - **Fusion Audit Scaling**: Auto-formats to MB/GB/TB and clarifies size definitions to specifically represent temporal storage tracks.
 - **Clausal Chain & Regional Scoping**: Regional risk tools now distinctly surface "impact-linked external context", distinguishing local causality from external dependencies.
 - **Markdown AI Analyst Resilience**: Healed wrapped bullet labels and tightened the parsing logic so formatted intelligence cards gracefully export over constrained mediums.

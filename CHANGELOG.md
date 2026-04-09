@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- **Domain AI Maneuver Mode**: The active UI Maneuver Mode (Tactical, OSINT, SAR) is now correctly passed through the frontend domain analysis hooks and enforced by the backend `/api/ai_router/analyze/{domain}` agents.
 - **Air Analyst Weather Context Scope**: Air-domain AI analysis now intersects `nws:alerts:active` with the requested H3 region and passes mission-area alert counts to the model prompt/context instead of national summary counts, eliminating false local weather escalation narratives.
 - **Fusion Audit Retention Bar Guardrail**: Retention burn bar width is capped at 100% to avoid overrun artifacts when usage exceeds quota.
 - **Sea Analyst Mission-Area Drift**: Sea-domain analysis now scopes wave height to nearby buoys and limits cable-outage correlation to landing countries materially connected to the mission area.

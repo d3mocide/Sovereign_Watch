@@ -1581,6 +1581,7 @@ class DomainAnalysisRequest(BaseModel):
     """Shared request body for all three domain agents."""
     h3_region: str
     lookback_hours: int = 24
+    mode: str = "tactical"
 
 
 class DomainAnalysisResponse(BaseModel):
@@ -1825,11 +1826,12 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     user_prompt = (
         f"Air domain assessment for H3 region {request.h3_region}:\n"
         f"- {entity_count} ADS-B tracks in {request.lookback_hours}h window\n"
+        f"- Target Objective / View: {request.mode.upper()}\n"
         f"- Space-weather driver: {context.get('space_weather_driver_summary', 'below mission threshold')}\n"
         f"- NWS alerts in target region: {context.get('nws_alerts', {})}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
-    persona = ai_service.get_persona(mode="tactical")
+    persona = ai_service.get_persona(mode=request.mode)
     logger.info("🧠 [UNIFIED-BRAIN] Air domain analysis for %s", request.h3_region)
     try:
         narrative = await ai_service.generate_static(
@@ -1985,11 +1987,12 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     user_prompt = (
         f"Maritime domain assessment for H3 region {request.h3_region}:\n"
         f"- {entity_count} AIS tracks in {request.lookback_hours}h window\n"
+        f"- Target Objective / View: {request.mode.upper()}\n"
         f"- Max wave height: {context.get('max_wave_height_m', 'N/A')}m (NDBC)\n"
         f"- Cable-correlated outages: {context.get('cable_correlated_outages', 0)}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
-    persona = ai_service.get_persona(mode="tactical")
+    persona = ai_service.get_persona(mode=request.mode)
     logger.info("🧠 [UNIFIED-BRAIN] Sea domain analysis for %s", request.h3_region)
     try:
         narrative = await ai_service.generate_static(
@@ -2116,13 +2119,14 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
     signals_text = "\n".join(f"- {i}" for i in indicators) if indicators else "- Nominal conditions"
     user_prompt = (
         f"Orbital / space-weather assessment for mission area {request.h3_region}:\n"
+        f"- Target Objective / View: {request.mode.upper()}\n"
         f"- Kp index: {kp_val or 'N/A'} ({storm_level or 'unknown'})\n"
         f"- NOAA scales: {context.get('noaa_scales', {})}\n"
         f"- Mission-area SatNOGS signal-loss events: {signal_count}\n"
         f"- Scope contract: mission-area signals plus impact-linked external drivers only\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
-    persona = ai_service.get_persona(mode="tactical")
+    persona = ai_service.get_persona(mode=request.mode)
     logger.info("🧠 [UNIFIED-BRAIN] Orbital domain analysis for %s", request.h3_region)
     try:
         narrative = await ai_service.generate_static(

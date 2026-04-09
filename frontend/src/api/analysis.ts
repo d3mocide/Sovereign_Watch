@@ -18,6 +18,7 @@ type DomainKind = "air" | "sea" | "orbital";
 export interface DomainAnalysisRequest {
   h3_region: string;
   lookback_hours: number;
+  mode?: string;
 }
 
 export interface DomainAnalysisResponse {
@@ -93,6 +94,7 @@ function formatDomainAnalysisText(resp: DomainAnalysisResponse): string {
 export async function runDomainAnalysis(
   entity: CoTEntity,
   lookbackHours: number,
+  mode: string = "tactical",
 ): Promise<string | null> {
   const domain = inferDomainFromEntity(entity);
   if (!domain) return null;
@@ -101,6 +103,7 @@ export async function runDomainAnalysis(
   const body: DomainAnalysisRequest = {
     h3_region: h3Region,
     lookback_hours: lookbackHours,
+    mode: mode,
   };
 
   const response = await fetch(`/api/ai_router/analyze/${domain}`, {
