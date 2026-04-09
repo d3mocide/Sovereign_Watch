@@ -152,9 +152,9 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
-                <BarChart3 size={16} /> Storage Projection (24H)
+                <BarChart3 size={16} /> Tracks Projection (24H)
               </h3>
-              <p className="text-[9px] text-on-surface-variant uppercase">Linear Estimate From Current Ingest Velocity</p>
+              <p className="text-[9px] text-on-surface-variant uppercase">Linear Estimate For Tracks Ingest Velocity</p>
             </div>
           </div>
           <div className="flex-1 relative">
@@ -169,11 +169,11 @@ export default function FusionAuditTab({ metrics, loading }: Props) {
         {/* System Health / Vitals */}
         <div className="bg-surface-container p-6 border border-primary/10 flex flex-col">
           <h3 className="font-bold text-sm tracking-widest text-primary uppercase mb-6 flex items-center gap-2">
-            <HardDrive size={16} /> Database Stats
+            <HardDrive size={16} /> Tracks Storage Stats
           </h3>
           <div className="space-y-4">
              <div className="flex justify-between items-center p-3 bg-surface-container-high border border-primary/5">
-                <span className="text-[10px] text-on-surface-variant uppercase">Current Size</span>
+                <span className="text-[10px] text-on-surface-variant uppercase">Tracks Footprint</span>
                <span className="text-sm font-bold text-primary font-mono">{formatStorage(defaultMetrics.storage.total_mb)}</span>
              </div>
              <div className="flex justify-between items-center p-3 bg-surface-container-high border border-primary/5">

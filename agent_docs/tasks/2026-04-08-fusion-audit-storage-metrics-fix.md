@@ -18,6 +18,7 @@ Update the backend fusion metrics endpoint to compute total storage from both th
   - Added storage and velocity formatters for MB/GB/TB readability.
   - Capped retention bar width at 100% to prevent overrun artifacts.
   - Updated chart subtitle to indicate it is a linear estimate from current ingest velocity.
+  - Clarified labels so the panel refers to `Tracks Projection`, `Tracks Storage Stats`, and `Tracks Footprint` rather than implying it is the full database size.
 
 ## Verification
 

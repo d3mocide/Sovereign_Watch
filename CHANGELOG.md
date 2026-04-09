@@ -2,11 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Pre-Release Summary Prompt**: Added a reusable workspace prompt for one-shot GO/HOLD pre-release reporting so v1.x patch decisions can be documented consistently before cutting a release.
+
 ### Changed
 
 - **Fusion Audit Storage Metrics**: The backend `/api/stats/fusion` storage calculation now includes Timescale chunk relations in addition to the parent `tracks` hypertable, preventing severe under-reporting of database size on larger deployments.
 - **Fusion Audit Velocity Modeling**: Replaced the previous hardcoded ingest velocity baseline with a measured estimate derived from recent track ingest volume and sampled row size.
-- **Fusion Audit UI Readability**: Dashboard storage and ingest velocity now auto-format to MB/GB/TB and MB/HR or GB/HR, and the projection subtitle now labels the chart as a linear estimate from current velocity.
+- **Fusion Audit UI Readability**: Dashboard storage and ingest velocity now auto-format to MB/GB/TB and MB/HR or GB/HR, the projection subtitle now labels the chart as a linear estimate from current velocity, and the panel copy now explicitly labels the metric as tracks storage rather than full database size.
 
 ### Fixed
 
