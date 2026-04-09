@@ -1,35 +1,23 @@
-# Release - v1.0.0 - Convergence
+# Release - v1.0.1 - Fusion Polish & Regional Intelligence Consistency
 
-Sovereign Watch has reached its first major milestone. Version 1.0.0, codenamed **"Convergence"**, formalizes the platform's shift from a multi-sensor tracker to an active Intelligence Fusion engine. 
-
-## High-Level Summary
-
-This release activates the cross-domain risk assessment framework, enabling the platform to automatically detect and escalate high-threat scenarios where electronic warfare, maritime distress, and OSINT signals align. By correlating GPS integrity losses with physical movement and global news events, Sovereign Watch provides a unified "Strategic Sitrep" that was previously fragmented across separate views.
+This patch release tightens the fidelity of analytical output across tactical intelligence routes by strictly enforcing mission-area boundary constraints for external variables. AI assessments for the Sea, Air, and Orbital domains now properly distinguish between localized incidents, impact-linked external drivers like space weather, and global context, preventing false-positive escalations and out-of-bounds geographic correlations. The dashboard audit metrics have been updated to capture the true footprint of historical tracks storage across Timescale relations for more accurate velocity and projection analysis.
 
 ## Key Features
 
-- **Multi-Domain Risk Fusion**: Full integration of Maritime (AIS), Aviation (ADS-B), OSINT (GDELT), Space (SatNOGS/NOAA), and Infrastructure (IODA/PeeringDB) into a single H3-based scoring model.
-- **Convergence Boost logic**: Automatic 1.2x multiplier for risk scores in cells where multiple threat domains overlap.
-- **Temporal Memory**: Implemented a 4-hour exponential decay window for data-derived risk, ensuring the map reflects immediate operational reality.
-- **Security Baseline**: Hardened API error handling to prevent sensitive database metadata leakage.
+- **Mission Area AI Context Fencing**: Weather context scope is now intercepted using true `ST_Within` intersections with your targeted H3 resolution instead of aggregating national averages. Orbital tracking and GDELT assessments similarly ignore noisy global activity when operating out-of-scope for the designated region.
+- **Improved Storage Observability**: The `Stats/Audit` panel's Tracks DB Size now accurately measures storage size across hypertable chunk relations, ensuring the presented linear projection burn rates accurately reflect host disk pressure.
+- **Pre-Release Analytics Skill**: Operators now have access to a reusable pre-release prompt template for consistently documenting pre-release QA reporting before marking branch stabilization.
 
 ## Technical Details
 
-- **Database**: TimescaleDB hypertables optimized for multi-domain risk persistence and cross-region correlation.
-- **Redpanda**: Real-time event bus now handles high-concurrency cross-domain evaluation requests via `EscalationDetector`.
-- **Relocated Tests**: Stress testing for risk fusion is now part of the core CI battery (`backend/api/tests/test_risk_fusion.py`).
+- **Fusion Audit Scaling**: Auto-formats to MB/GB/TB and clarifies size definitions to specifically represent temporal storage tracks.
+- **Clausal Chain & Regional Scoping**: Regional risk tools now distinctly surface "impact-linked external context", distinguishing local causality from external dependencies.
+- **Markdown AI Analyst Resilience**: Healed wrapped bullet labels and tightened the parsing logic so formatted intelligence cards gracefully export over constrained mediums.
 
 ## Upgrade Instructions
 
-To upgrade to the first major stable release:
-
 ```bash
-# Pull latest changes
-git pull origin dev
-
-# Rebuild and restart services
-make dev
+git pull origin main
+docker compose build sovereign-backend
+docker compose up -d
 ```
-
----
-*Sovereign Watch — Unified Intelligence for a Distributed World.*

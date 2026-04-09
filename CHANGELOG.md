@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-04-09
+
 ### Added
 
 - **Pre-Release Summary Prompt**: Added a reusable workspace prompt for one-shot GO/HOLD pre-release reporting so v1.x patch decisions can be documented consistently before cutting a release.
