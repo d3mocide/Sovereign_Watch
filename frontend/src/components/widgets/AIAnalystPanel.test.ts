@@ -22,4 +22,23 @@ describe('formatAnalysisText', () => {
     expect(formatAnalysisText(input)).toContain('**Risk Score:** 7%');
     expect(formatAnalysisText(input)).toContain('**Region:** 8728f00a5ffffff');
   });
+
+  it('removes stray dash artifacts and demotes consecutive headers', () => {
+    const input = [
+      '### AIR DOMAIN ASSESSMENT',
+      '-',
+      '**Risk Score:** 13% -',
+      '### NARRATIVE',
+      '### CLASSIFICATION',
+      '',
+      'Low. Benign operational profile.',
+    ].join('\n');
+
+    const output = formatAnalysisText(input);
+
+    expect(output).not.toContain('\n-\n');
+    expect(output).toContain('**Risk Score:** 13%');
+    expect(output).toContain('### NARRATIVE\n**CLASSIFICATION**');
+    expect(output).toContain('Low. Benign operational profile.');
+  });
 });

@@ -29,6 +29,14 @@ export const formatAnalysisText = (text: string) => {
 
   return processed
     .replace(/^(#+)([^\s#])/gm, '$1 $2')
+    // Drop stray bullet marker lines that survive streaming cleanup.
+    .replace(/^\s*[-*•]\s*$/gm, '')
+    // Remove trailing dash artifacts from non-bullet scalar lines.
+    .replace(/^(?!\s*[•*-]\s)(.+?)\s+-\s*$/gm, '$1')
+    // If a stray bullet marker lands in front of a header, keep the header.
+    .replace(/^\s*[-*•]\s+(###\s+)/gm, '$1')
+    // Demote immediately nested markdown headers so they don't render as two top-level sections.
+    .replace(/^(###\s+[^\n]+)\n(###\s+[^\n]+)$/gm, (_match, parent, child) => `${parent}\n**${child.replace(/^###\s+/, '')}**`)
     .replace(/\s+([,.!?;:])/g, '$1')
     .replace(/(\w)\s*['\u2019'']\s*(\w)/g, "$1'$2")
     .replace(/(\s['\u2019'']|['\u2019'']\s)/g, (match) => match.trim())
