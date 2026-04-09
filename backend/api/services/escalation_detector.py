@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 import h3
 from services.hmm_trajectory import classify_trajectory
+from services.risk_taxonomy import CONVERGENCE_BOOST_PER_DOMAIN
 from services.stdbscan import detect_clusters
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,24 @@ class EscalationDetector:
     # Space weather & comms context
     KP_INDEX_THRESHOLD = 6.0  # Kp >= 6 = significant geomagnetic storm
     SATNOGS_SIGNAL_LOSS_DBM = -10.0  # Threshold for signal loss event
+
+    # Maps anomaly metric_type to its intelligence domain.
+    # "multi" means the signal is domain-agnostic (behavioural / positional).
+    # Only domain-specific signals (non-"multi") count toward convergence boosting.
+    ANOMALY_DOMAIN_MAP: Dict[str, str] = {
+        "clustering":            "multi",
+        "directional_change":    "multi",
+        "emergency":             "aviation",
+        "rendezvous":            "multi",
+        "holding_pattern":       "multi",
+        "maneuvering":           "multi",
+        "converging":            "multi",
+        "stdbscan_cluster":      "multi",
+        "hmm_trajectory":        "multi",
+        "satellite_signal_loss": "orbital",
+        "space_weather":         "orbital",
+        "internet_outage":       "infrastructure",
+    }
 
     def __init__(self):
         pass
@@ -602,49 +621,65 @@ class EscalationDetector:
         """
         Compute composite risk score from pattern matching and anomalies.
 
+        Uses a multiplicative cross-domain convergence model: when anomalies from
+        two or more distinct intelligence domains (aviation, orbital, infrastructure)
+        co-occur, a multiplicative boost is applied rather than a simple additive sum.
+        This reflects the operational reality that multi-domain threat convergence
+        is disproportionately significant compared to single-domain spikes.
+
         Args:
             pattern_confidence: GDELT escalation pattern confidence (0.0 - 1.0)
             anomaly_score: TAK behavioral anomaly score (0.0 - 1.0)
             alignment_score: Spatial-temporal alignment score (0.0 - 1.0)
-            anomaly_count: Number of distinct anomalies detected
+            anomaly_count: Number of distinct anomalies detected (unused; kept for compat)
             context_anomalies: Optional list of contextual anomalies (outages, space weather)
 
         Returns:
             Composite risk score (0.0 - 1.0)
         """
-        # Weighted combination of primary signal sources.
+        # Base additive weighted sum of primary signal sources.
         pattern_weight = 0.4
         anomaly_weight = 0.35
         alignment_weight = 0.25
 
-        # Boost score if multiple anomalies
-        anomaly_multiplier = 1.0 + (0.1 * min(anomaly_count, 5))
-
         risk = (
             pattern_weight * pattern_confidence
-            + anomaly_weight * anomaly_score * anomaly_multiplier
+            + anomaly_weight * anomaly_score
             + alignment_weight * alignment_score
         )
 
-        # Apply contextual dampening or boosting
         if context_anomalies:
             active_context = [a for a in context_anomalies if a.score > 0.0]
+
             if active_context:
-                context_score = sum(a.score for a in active_context) / len(
-                    active_context
-                )
-                # Blend in contextual score so context-only risk is non-zero when warranted.
-                # This keeps context supportive (not dominant) while avoiding hard zeroes.
+                context_score = sum(a.score for a in active_context) / len(active_context)
+                # Blend context score to avoid hard zeroes when only context signals fire.
                 context_weight = 0.2
                 risk = (1.0 - context_weight) * risk + context_weight * context_score
 
-            # If strong context (e.g., major outage), slightly boost TAK anomaly confidence
-            # If space weather explains behavior, slightly lower risk (likely false positive)
-            for anomaly in context_anomalies:
-                if anomaly.metric_type == "space_weather" and anomaly.score > 0.5:
-                    risk *= 0.9  # 10% dampening for expected behavior during storms
-                elif anomaly.metric_type == "internet_outage" and anomaly.score > 0.7:
-                    risk *= 1.1  # 10% boost for unusual movement during major outages
+            # Cross-domain convergence: count distinct non-generic domains active.
+            active_domains = {
+                self.ANOMALY_DOMAIN_MAP.get(a.metric_type, "multi")
+                for a in active_context
+            } - {"multi"}
+            if len(active_domains) >= 2:
+                # Each domain beyond the first adds a multiplicative boost.
+                convergence_factor = 1.0 + CONVERGENCE_BOOST_PER_DOMAIN * (
+                    len(active_domains) - 1
+                )
+                risk *= convergence_factor
 
-        # Normalize to 0.0 - 1.0
+            # Domain-specific dampening / boosting — applied once per domain, not per
+            # anomaly, to avoid compounding when multiple signals of the same type fire.
+            if any(
+                a.metric_type == "space_weather" and a.score > 0.5
+                for a in active_context
+            ):
+                risk *= 0.9  # 10% dampening — expected behaviour during storms
+            if any(
+                a.metric_type == "internet_outage" and a.score > 0.7
+                for a in active_context
+            ):
+                risk *= 1.1  # 10% boost — unusual movement during major outages
+
         return min(risk, 1.0)

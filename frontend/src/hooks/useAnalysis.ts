@@ -61,7 +61,7 @@ export function useAnalysis(): UseAnalysisReturn {
       // Use domain personas for air/sea/orbital CoT entities.
       if (!isSitrep && entity) {
         try {
-          const domainText = await runDomainAnalysis(entity, lookbackHours);
+          const domainText = await runDomainAnalysis(entity, lookbackHours, mode);
           if (domainText) {
             setState({
               text: domainText,

@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.0.1] - 2026-04-09
+
+### Added
+
+- **Pre-Release Summary Prompt**: Added a reusable workspace prompt for one-shot GO/HOLD pre-release reporting so v1.x patch decisions can be documented consistently before cutting a release.
+- **Mission-Area Scope Diagnostics**: Regional risk and clausal-chain responses now expose per-source scope metadata so operators can distinguish mission-area signals, impact-linked external drivers, and still-global context.
+
+### Changed
+
+- **Fusion Audit Storage Metrics**: The backend `/api/stats/fusion` storage calculation now includes Timescale chunk relations in addition to the parent `tracks` hypertable, preventing severe under-reporting of database size on larger deployments.
+- **Fusion Audit Velocity Modeling**: Replaced the previous hardcoded ingest velocity baseline with a measured estimate derived from recent track ingest volume and sampled row size.
+- **Fusion Audit UI Readability**: Dashboard storage and ingest velocity now auto-format to MB/GB/TB and MB/HR or GB/HR, the projection subtitle now labels the chart as a linear estimate from current velocity, and the panel copy now explicitly labels the metric as tracks storage rather than full database size.
+- **Air Analyst External Driver Gating**: Air-domain analysis now treats space weather as an impact-linked external driver and only surfaces it in the local narrative when mission relevance crosses the Kp threshold.
+- **Orbital Mission-Area Filtering**: Orbital analysis now filters SatNOGS signal-loss events to satellites propagated over the requested mission area instead of treating all recent global signal-loss events as locally relevant.
+- **H3 Risk Infrastructure Weighting**: The H3 risk composite now includes cable-landing outage pressure in addition to density and GDELT sentiment.
+
+### Fixed
+
+- **Domain AI Maneuver Mode**: The active UI Maneuver Mode (Tactical, OSINT, SAR) is now correctly passed through the frontend domain analysis hooks and enforced by the backend `/api/ai_router/analyze/{domain}` agents.
+- **Air Analyst Weather Context Scope**: Air-domain AI analysis now intersects `nws:alerts:active` with the requested H3 region and passes mission-area alert counts to the model prompt/context instead of national summary counts, eliminating false local weather escalation narratives.
+- **Fusion Audit Retention Bar Guardrail**: Retention burn bar width is capped at 100% to avoid overrun artifacts when usage exceeds quota.
+- **Sea Analyst Mission-Area Drift**: Sea-domain analysis now scopes wave height to nearby buoys and limits cable-outage correlation to landing countries materially connected to the mission area.
+- **Regional Risk Context Ambiguity**: Regional risk and clausal-chain enrichment now label space weather as impact-linked external context and make remaining ungated global SatNOGS context explicit.
+- **AI Analyst Markdown Cleanup**: The analyst panel now heals wrapped bullet labels, collapses excess bullet spacing, and preserves cleaner tactical formatting during render/export.
+
+## [1.0.0] - 2026-04-07
+
+### Added
+
+- **Multi-Domain Intelligence Fusion — GA Release**: Full activation of all-domain risk assessment across Maritime (AIS), Aviation (ADS-B), OSINT (GDELT), Space (SatNOGS/NOAA), and Infrastructure (IODA/PeeringDB).
+- **Cross-Domain Convergence Boost**: Implemented a multiplicative 20% risk escalation when threats co-occur across multiple domains in the same H3 region (e.g., GPS jamming + maritime distress).
+- **Temporal Risk Decay**: All track-derived risk hexes now respect a 4-hour exponential decay window, ensuring operational relevance of tactical intelligence.
+- **Fusion Stress Testing Suite**: Added `test_risk_fusion.py` to the core test battery to validate complex intelligence scoring scenarios and convergence logic.
+
+### Modified
+
+- **Test Infrastructure Standard**: Relocated standalone experimental scripts from the API root to `backend/api/tests/` for improved CI/CD discoverability.
+- **ActiveConflictWidget Layout**: Capped vertical height with scrollable overflow to maintain dashboard stability on smaller displays.
+
+### Fixed
+
+- **Information Disclosure Vulnerability**: Hardened the `/api/analyze` endpoint to prevent database exception leakage in AI analytic responses.
+
+
 ## [0.66.0] - 2026-04-06
 
 ### Added

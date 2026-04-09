@@ -65,6 +65,8 @@ services:
     container_name: sovereign-ais-poller
     environment:
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
+      - AISHUB_USERNAME=${AISHUB_USERNAME}
+      - AIS_PRIMARY_SOURCE=${AIS_PRIMARY_SOURCE:-aisstream}
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379

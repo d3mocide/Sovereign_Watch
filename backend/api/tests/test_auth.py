@@ -28,7 +28,7 @@ from httpx import ASGITransport, AsyncClient
 # ---------------------------------------------------------------------------
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from test_stubs import install_common_test_stubs  # noqa: E402
+from .test_stubs import install_common_test_stubs  # noqa: E402
 
 install_common_test_stubs()
 

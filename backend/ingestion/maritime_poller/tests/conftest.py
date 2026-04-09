@@ -44,6 +44,6 @@ _stub("redis")
 redis_async_stub = _stub("redis.asyncio")
 redis_async_stub.Redis = MagicMock
 
-# websockets — used by service.py
+# websockets — used by service.py and sources/aishub.py
 _stub("websockets")
 _stub("websockets.exceptions")

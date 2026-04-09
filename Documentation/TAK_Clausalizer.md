@@ -317,19 +317,9 @@ Stream LLM analysis to frontend
 - **Triggering:** User-initiated (click "RUN" button)
 - **Lookback Window:** 1h, 6h, 12h, 24h, 48h, 72h, **7d** (NEW)
 - **Analysis Modes:** TACTICAL, OSINT, SAR
+- **Domain Awareness:** The run action adapts to the selected target, for example `Run Air Intel`, `Run Sea Intel`, or `Run Orbital Intel`
 - **Role Gating:** Operator role minimum
 - **Output:** Real-time streaming LLM narrative via SSE
-
-### **Regional Risk Analysis** (NEW)
-- **Entry Point:** Right-click context menu on map → "Analyze Regional Risk"
-- **Triggering:** Operator-only, manual click
-- **Behavior:**
-  1. Right-click on map coordinate
-  2. Select "Analyze Regional Risk"
-  3. Frontend converts to H3-7 region
-  4. Calls `POST /api/ai_router/evaluate`
-  5. Receives regional risk assessment
-  6. Displays risk score + heatmap + narrative
 
 ### **Context Indicators**
 - **Space Weather Panel:** Real-time Kp-index + GPS degradation warning

@@ -32,6 +32,7 @@ Each poller is a standalone microservice that ingests data from external sources
 
 | Document                                                | Description                                                       |
 | :------------------------------------------------------ | :---------------------------------------------------------------- |
+| [Analyst Layer Architecture](./Analyst_Layer.md)        | Risk taxonomy, HMM, escalation detector, scoring formulas, domain model pattern |
 | [TAK Clausalizer & Threat Detection](./TAK_Clausalizer.md) | Autonomous 4-phase semantic state-change analysis system         |
 | [Regional Risk Analysis](./Regional_Risk_Analysis.md)   | Multi-INT regional threat assessment and AI router                |
 

@@ -280,14 +280,71 @@ async def get_fusion_audit():
             FROM (SELECT time FROM tracks ORDER BY time DESC LIMIT 100) s
         """
 
-        # 2. Storage Velocity (Daily growth rate)
-        query_storage = "SELECT pg_total_relation_size('tracks') as total_bytes"
+        # 2. Storage size (include Timescale chunks, not just hypertable parent)
+        query_storage = """
+            SELECT
+              COALESCE(
+                (
+                  SELECT SUM(
+                    pg_total_relation_size(
+                      to_regclass(format('%I.%I', c.chunk_schema, c.chunk_name))
+                    )
+                  )
+                  FROM timescaledb_information.chunks c
+                  WHERE c.hypertable_schema = 'public'
+                    AND c.hypertable_name = 'tracks'
+                ),
+                0
+              ) + pg_total_relation_size('public.tracks'::regclass) AS total_bytes
+        """
+
+        # 3. Ingest velocity estimate from recent rows and sampled row-size
+        velocity_window_hours = 6
+        query_velocity = """
+            WITH recent AS (
+                SELECT *
+                FROM tracks
+                WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
+            ),
+            sampled AS (
+                SELECT AVG(pg_column_size(r)) AS avg_row_bytes
+                FROM (
+                    SELECT *
+                    FROM recent
+                    ORDER BY time DESC
+                    LIMIT 2000
+                ) r
+            )
+            SELECT
+                (SELECT COUNT(*) FROM recent) AS row_count,
+                COALESCE((SELECT avg_row_bytes FROM sampled), 0) AS avg_row_bytes
+        """
 
         async with db.pool.acquire() as conn:
             latency = await conn.fetchval(query_latency)
-            storage_bytes = await conn.fetchval(query_storage)
+            try:
+                storage_bytes = await conn.fetchval(query_storage)
+            except Exception as exc:
+                logger.warning(
+                    "Timescale chunk-aware size query failed, using parent table size: %s",
+                    exc,
+                )
+                storage_bytes = await conn.fetchval(
+                    "SELECT pg_total_relation_size('public.tracks'::regclass)"
+                )
 
-        # 3. Deduplication Stats (from Redis counters)
+            velocity_row = await conn.fetchrow(query_velocity, velocity_window_hours)
+
+        storage_bytes = int(storage_bytes or 0)
+        row_count = int(velocity_row["row_count"] or 0) if velocity_row else 0
+        avg_row_bytes = float(velocity_row["avg_row_bytes"] or 0) if velocity_row else 0.0
+        estimated_velocity_mb_hr = 0.0
+        if row_count > 0 and avg_row_bytes > 0:
+            estimated_velocity_mb_hr = (
+                (row_count * avg_row_bytes) / (1024 * 1024)
+            ) / velocity_window_hours
+
+        # 4. Deduplication Stats (from Redis counters)
         raw_polled = int(await db.redis_client.get("metrics:ingest:raw_count") or 0)
         deduped = int(await db.redis_client.get("metrics:ingest:dedup_count") or 0)
         efficiency = round((deduped / raw_polled * 100), 1) if raw_polled > 0 else 88.4
@@ -297,8 +354,8 @@ async def get_fusion_audit():
             "latency_ms": round(latency or 145.0, 1),
             "dedup_efficiency": efficiency,
             "storage": {
-                "total_mb": round(storage_bytes / (1024 * 1024), 1),
-                "velocity_mb_hr": 14.2,  # Simulated baseline for now
+                "total_mb": round(storage_bytes / (1024 * 1024), 2),
+                "velocity_mb_hr": round(estimated_velocity_mb_hr, 2),
                 "retention_full_pct": round(
                     (storage_bytes / (50 * 1024**3)) * 100, 1
                 ),  # Against 50GB quota

@@ -1,6 +1,19 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from services.risk_taxonomy import RiskSeverity, score_to_severity  # noqa: F401 — re-exported for callers
+
+__all__ = [
+    "RiskSeverity",
+    "score_to_severity",
+    "AIModelRequest",
+    "AnalyzeRequest",
+    "MissionLocation",
+    "WatchlistAddRequest",
+    "H3RiskCell",
+    "H3RiskResponse",
+]
+
 
 class AIModelRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
@@ -35,7 +48,9 @@ class H3RiskCell(BaseModel):
     lon: float
     density: float
     sentiment: float
+    outage: float = 0.0
     risk_score: float
+    severity: RiskSeverity = RiskSeverity.LOW
 
 
 class H3RiskResponse(BaseModel):

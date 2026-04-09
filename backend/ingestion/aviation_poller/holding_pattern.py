@@ -81,6 +81,9 @@ H3_RESOLUTION = 6
 # Redis TTL for active zones (2x the detection window)
 ACTIVE_ZONES_TTL = HOLDING_WINDOW_S * 2
 
+# Hard ceiling on aircraft state entries tracked simultaneously.
+HP_MAX_AIRCRAFT = 10_000
+
 
 class HoldingPatternDetector:
     """
@@ -214,6 +217,14 @@ class HoldingPatternDetector:
 
         # Initialize state if new aircraft
         if hex_id not in self._aircraft_state:
+            if len(self._aircraft_state) >= HP_MAX_AIRCRAFT:
+                # Evict the stalest aircraft (oldest last observation) to stay within cap.
+                def _last_obs(s: Dict) -> float:
+                    h = s.get("heading_history")
+                    return h[-1][0] if h else 0.0
+
+                oldest = min(self._aircraft_state, key=lambda k: _last_obs(self._aircraft_state[k]))
+                del self._aircraft_state[oldest]
             self._aircraft_state[hex_id] = {
                 "heading_history": deque(),
                 "last_recorded_heading": heading,

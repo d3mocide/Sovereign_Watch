@@ -9,7 +9,7 @@ Containers may not be running during Claude sessions. Run lint and unit tests on
 **IMPORTANT:** Always follow the **Targeted Verification** rule (Section 5 of `AGENTS.md`): Only run the suites for the components/languages you have actually modified.
 
 ```bash
-cd frontend && pnpm run lint && pnpm run test
+cd frontend && pnpm run lint && pnpm run typecheck && pnpm run test
 cd backend/api && uv tool run ruff check . && uv run python -m pytest
 cd backend/ingestion/<poller> && uv tool run ruff check . && uv run python -m pytest
 cd js8call && uv tool run ruff check . && uv run python -m pytest
@@ -18,7 +18,7 @@ cd js8call && uv tool run ruff check . && uv run python -m pytest
 If containers ARE already running, prefer:
 
 ```bash
-docker compose exec sovereign-frontend pnpm run lint
+docker compose exec sovereign-frontend pnpm run lint && docker compose exec sovereign-frontend pnpm run typecheck
 docker compose exec sovereign-backend uv tool run ruff check .
 docker compose exec sovereign-adsb-poller uv tool run ruff check .
 docker compose exec sovereign-ais-poller uv tool run ruff check .
