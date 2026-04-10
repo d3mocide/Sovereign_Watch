@@ -512,7 +512,7 @@ function AuthenticatedApp() {
                     )}
                   </div>
                 )}
-                <div>
+                <div className="max-h-56 overflow-y-auto rounded border border-cyan-400/15 bg-cyan-500/[0.03] p-2 pr-1">
                   <AnalysisFormatter
                     text={regionalRiskUi.result?.narrative_summary?.trim() || "No AI narrative available. Heuristic signals and mission H3 risk are shown above."}
                     accentColor="text-cyan-300"
