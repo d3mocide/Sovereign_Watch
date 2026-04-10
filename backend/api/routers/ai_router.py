@@ -1007,7 +1007,8 @@ async def evaluate_regional_escalation(
                 timeout=_LLM_EVAL_TIMEOUT_SECONDS,
             )
 
-            narrative_summary = assessment.narrative_summary
+            if assessment.narrative_summary.strip():
+                narrative_summary = assessment.narrative_summary
             confidence = assessment.confidence
             # Risk score from LLM can override if confidence is high
             if confidence > 0.7:

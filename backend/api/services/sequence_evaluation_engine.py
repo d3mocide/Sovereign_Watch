@@ -95,12 +95,12 @@ class SequenceEvaluationEngine:
             risk_assessment.raw_response = response
             return risk_assessment
 
-        except Exception as e:
-            logger.error(f"Error in sequence evaluation: {e}")
+        except Exception:
+            logger.exception("Error in sequence evaluation for region %s", h3_region)
             return RiskAssessment(
                 h3_region_id=h3_region,
                 risk_score=0.0,
-                narrative_summary="Evaluation error",
+                narrative_summary="",
                 anomalous_uids=anomalous_uids,
                 escalation_indicators=[],
                 confidence=0.0,

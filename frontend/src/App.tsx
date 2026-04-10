@@ -65,7 +65,7 @@ function AuthenticatedApp() {
   };
 
   type RegionalRiskUiState = {
-    status: "loading" | "success" | "error";
+    status: "loading" | "success" | "partial" | "error";
     h3Region: string;
     lat: number;
     lon: number;
@@ -77,6 +77,7 @@ function AuthenticatedApp() {
       linkageNotes?: string;
     };
     error?: string;
+    warning?: string;
     updatedAt: number;
   };
 
@@ -364,13 +365,16 @@ function AuthenticatedApp() {
 
         const result = (await response.json()) as RegionalRiskResponse;
         const riskPct = Math.round((result.risk_score ?? 0) * 100);
+        const narrativeSummary = (result.narrative_summary || "").trim();
+        const llmNarrativeUnavailable = (result.confidence ?? 0) <= 0;
+        const hasNarrative = narrativeSummary.length > 0 && narrativeSummary !== "Evaluation error";
         const peakMissionRiskCell = missionRiskResponse?.cells.reduce(
           (peak, cell) => (peak && peak.risk_score >= cell.risk_score ? peak : cell),
           missionRiskResponse?.cells[0],
         );
 
         setRegionalRiskUi({
-          status: "success",
+          status: hasNarrative && !llmNarrativeUnavailable ? "success" : "partial",
           h3Region,
           lat,
           lon,
@@ -383,11 +387,15 @@ function AuthenticatedApp() {
                 linkageNotes: missionRiskResponse.source_scope?.notes,
               }
             : undefined,
+          warning:
+            hasNarrative && !llmNarrativeUnavailable
+              ? undefined
+              : "Mission risk computed, but the AI narrative was unavailable. Showing heuristic results only.",
           updatedAt: Date.now(),
         });
 
         addEvent({
-          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | mission-cells=${missionRiskResponse?.cells.length ?? 0} | ${result.narrative_summary}`,
+          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | mission-cells=${missionRiskResponse?.cells.length ?? 0} | ${hasNarrative && !llmNarrativeUnavailable ? narrativeSummary : "heuristic-only"}`,
           type: riskPct >= 70 ? "alert" : "new",
           entityType: "infra",
         });
@@ -472,14 +480,23 @@ function AuthenticatedApp() {
               </div>
             ) : (
               <div className="px-3 pb-3 space-y-2">
-                <div className="flex items-center gap-2 text-[11px] text-emerald-300">
-                  <CheckCircle2 size={13} className="shrink-0" />
-                  Completed
+                <div className={`flex items-center gap-2 text-[11px] ${regionalRiskUi.status === "partial" ? "text-amber-300" : "text-emerald-300"}`}>
+                  {regionalRiskUi.status === "partial" ? (
+                    <AlertTriangle size={13} className="shrink-0" />
+                  ) : (
+                    <CheckCircle2 size={13} className="shrink-0" />
+                  )}
+                  {regionalRiskUi.status === "partial" ? "Partial" : "Completed"}
                 </div>
                 <div className="text-[11px] text-white/80">
                   Risk: <span className="font-semibold text-amber-300">{Math.round((regionalRiskUi.result?.risk_score ?? 0) * 100)}%</span>
                   <span className="text-white/50"> | anomalies: {regionalRiskUi.result?.anomaly_count ?? 0}</span>
                 </div>
+                {regionalRiskUi.warning && (
+                  <div className="rounded border border-amber-400/20 bg-amber-500/5 px-2 py-2 text-[10px] text-amber-100/85">
+                    {regionalRiskUi.warning}
+                  </div>
+                )}
                 {regionalRiskUi.missionRisk && (
                   <div className="rounded border border-red-400/20 bg-red-500/5 px-2 py-2 text-[10px] text-white/75">
                     <div>
@@ -494,7 +511,7 @@ function AuthenticatedApp() {
                   </div>
                 )}
                 <div className="text-[11px] text-white/70 leading-relaxed">
-                  {regionalRiskUi.result?.narrative_summary || "No narrative available."}
+                  {regionalRiskUi.result?.narrative_summary?.trim() || "No AI narrative available. Heuristic signals and mission H3 risk are shown above."}
                 </div>
                 {(regionalRiskUi.result?.escalation_indicators?.length ?? 0) > 0 && (
                   <div className="flex items-start gap-2 text-[10px] text-amber-200/90">

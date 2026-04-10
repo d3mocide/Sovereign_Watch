@@ -89,6 +89,11 @@ class _FakeEscalationDetector:
         return 0.0
 
 
+class _ElevatedRiskEscalationDetector(_FakeEscalationDetector):
+    def compute_risk_score(self, **kwargs):
+        return 0.4
+
+
 @pytest.mark.asyncio
 async def test_evaluate_regional_escalation_returns_scope_metadata():
     mock_conn = MagicMock()
@@ -130,3 +135,52 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
     assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint"
     assert response.source_scope["space_weather"]["scope"] == "impact_linked_external"
     assert response.source_scope["satnogs"]["scope"] == "global"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_regional_escalation_preserves_heuristic_narrative_when_llm_fails():
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    failed_assessment = ai_router.RiskAssessment(
+        h3_region_id="8728f2ba8ffffff",
+        risk_score=0.0,
+        narrative_summary="",
+        anomalous_uids=[],
+        escalation_indicators=[],
+        confidence=0.0,
+    )
+    mock_sequence_engine = MagicMock()
+    mock_sequence_engine.evaluate_escalation = AsyncMock(return_value=failed_assessment)
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", None),
+        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(ai_router, "EscalationDetector", _ElevatedRiskEscalationDetector),
+        patch.object(ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine),
+    ):
+        response = await ai_router.evaluate_regional_escalation(
+            ai_router.EvaluationRequest(
+                h3_region="8728f2ba8ffffff",
+                lookback_hours=24,
+                include_gdelt=True,
+                include_tak=True,
+                lightweight=False,
+            )
+        )
+
+    assert response.narrative_summary == "No significant escalation detected"
+    assert response.confidence == 0.0
