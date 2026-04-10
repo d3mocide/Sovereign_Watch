@@ -490,6 +490,7 @@ class EvaluationRequest(BaseModel):
 
     h3_region: str  # H3-7 hexagonal cell
     lookback_hours: int = 24
+    mode: str = "tactical"
     include_gdelt: bool = True
     include_tak: bool = True
     # When True the LLM narrative step is skipped (used internally for heatmaps
@@ -1002,6 +1003,7 @@ async def evaluate_regional_escalation(
                     tak_summary=tak_summary,
                     anomalous_uids=anomalous_uids,
                     behavioral_signals=behavioral_signals,
+                    mode=request.mode,
                     is_sitrep=request.is_sitrep,
                 ),
                 timeout=_LLM_EVAL_TIMEOUT_SECONDS,

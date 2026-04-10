@@ -46,6 +46,7 @@ class SequenceEvaluationEngine:
         tak_summary: str,
         anomalous_uids: List[str],
         behavioral_signals: List[str] = None,
+        mode: str = "tactical",
         is_sitrep: bool = True,
     ) -> RiskAssessment:
         """
@@ -60,7 +61,10 @@ class SequenceEvaluationEngine:
 
         try:
             # 1. Fetch official persona with markdown rules
-            persona = ai_service.get_persona(mode="osint", is_sitrep=is_sitrep)
+            persona = ai_service.get_persona(
+                mode=mode,
+                context={"is_sitrep": is_sitrep},
+            )
 
             # 2. Inject the MUST-BE-JSON requirement for structured parsing
             json_requirement = (
@@ -77,7 +81,11 @@ class SequenceEvaluationEngine:
             sem_cache = await get_semantic_cache(redis_url)
             cached = await sem_cache.check(user_prompt)
             if cached is not None:
-                logger.info("SemanticCache HIT — skipping LLM call for region %s", h3_region)
+                logger.info(
+                    "SemanticCache HIT — skipping LLM call for region %s (mode=%s)",
+                    h3_region,
+                    mode,
+                )
                 risk_assessment = self._parse_response(cached, h3_region)
                 risk_assessment.raw_response = cached
                 return risk_assessment
@@ -96,7 +104,11 @@ class SequenceEvaluationEngine:
             return risk_assessment
 
         except Exception:
-            logger.exception("Error in sequence evaluation for region %s", h3_region)
+            logger.exception(
+                "Error in sequence evaluation for region %s (mode=%s)",
+                h3_region,
+                mode,
+            )
             return RiskAssessment(
                 h3_region_id=h3_region,
                 risk_score=0.0,
@@ -158,7 +170,12 @@ Based on this data, synthesize a regional risk assessment. Connect the tactical 
                 confidence=float(data.get("confidence", 0.5)),
             )
         except Exception as e:
-            logger.warning(f"Error parsing LLM response: {e}")
+            logger.warning(
+                "Error parsing LLM response for region %s: %s | raw=%r",
+                h3_region,
+                e,
+                response_text[:300],
+            )
             return RiskAssessment(
                 h3_region_id=h3_region,
                 risk_score=0.5,

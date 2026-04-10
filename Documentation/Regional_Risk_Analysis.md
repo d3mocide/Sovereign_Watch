@@ -30,6 +30,7 @@ Frontend: POST /api/ai_router/evaluate
     {
       "h3_region": "872abc123def",
       "lookback_hours": 24,
+      "mode": "tactical",
       "include_gdelt": true,
       "include_tak": true
     }
@@ -46,6 +47,7 @@ Backend: Execute evaluation pipeline
     ↓
 Frontend: Display response in risk assessment panel
     • Risk score: 0.62 (ELEVATED)
+  • Mission H3 risk: 0.71 (HIGH), 4 cells
     • Narrative: "Multiple entities clustering in region during minor geomagnetic storm..."
     • Indicators: ["Entity clustering detected", "Space weather event (G1)"]
     • Confidence: 0.88
@@ -123,6 +125,7 @@ The AI Analyst panel now adapts the action label to the selected target domain. 
 |-----------|------|-------|---------|-------------|
 | h3_region | string | H3 cell ID | Required | Target region at resolution 7 |
 | lookback_hours | integer | 1-168 | 24 | Analysis time window |
+| mode | string | tactical\|osint\|sar | tactical | Persona/maneuver mode for the narrative step |
 | include_gdelt | boolean | true/false | true | Include GDELT events |
 | include_tak | boolean | true/false | true | Include TAK clauses |
 
@@ -154,6 +157,24 @@ The AI Analyst panel now adapts the action label to the selected target domain. 
 | confidence | number | 0.0-1.0 | How confident the assessment is |
 | pattern_detected | boolean | — | GDELT pattern matched |
 | anomaly_count | integer | 0-N | Number of detected anomalies |
+
+### Mission-Risk Overlay Notes
+
+The right-click regional risk panel now requests mission-scoped H3 risk in parallel with the AI router evaluation.
+
+Operators should expect the overlay to show:
+
+- overall regional risk percentage from `/api/ai_router/evaluate`
+- anomaly count and narrative summary
+- a compact mission H3 risk block showing:
+  - mission cell count
+  - peak mission risk percentage
+  - peak mission severity
+  - linkage notes derived from explicit GDELT linkage metadata
+
+This mission-risk block is intended as a local risk-surface summary, not a replacement for the global H3 risk layer.
+
+Regional risk now defaults to the `tactical` persona path so the LLM interaction is aligned with the main AI Analyst conventions instead of a hardcoded OSINT-only evaluator path.
 
 **Error Responses:**
 ```json

@@ -184,3 +184,53 @@ async def test_evaluate_regional_escalation_preserves_heuristic_narrative_when_l
 
     assert response.narrative_summary == "No significant escalation detected"
     assert response.confidence == 0.0
+
+
+@pytest.mark.asyncio
+async def test_evaluate_regional_escalation_passes_mode_to_sequence_engine():
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    successful_assessment = ai_router.RiskAssessment(
+        h3_region_id="8728f2ba8ffffff",
+        risk_score=0.4,
+        narrative_summary="### CLASSIFICATION\n- Stable local picture.",
+        anomalous_uids=[],
+        escalation_indicators=[],
+        confidence=0.8,
+    )
+    mock_sequence_engine = MagicMock()
+    mock_sequence_engine.evaluate_escalation = AsyncMock(return_value=successful_assessment)
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", None),
+        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(ai_router, "EscalationDetector", _ElevatedRiskEscalationDetector),
+        patch.object(ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine),
+    ):
+        await ai_router.evaluate_regional_escalation(
+            ai_router.EvaluationRequest(
+                h3_region="8728f2ba8ffffff",
+                lookback_hours=24,
+                mode="tactical",
+                include_gdelt=True,
+                include_tak=True,
+                lightweight=False,
+            )
+        )
+
+    _, kwargs = mock_sequence_engine.evaluate_escalation.await_args
+    assert kwargs["mode"] == "tactical"

@@ -351,6 +351,7 @@ function AuthenticatedApp() {
             body: JSON.stringify({
               h3_region: h3Region,
               lookback_hours: 24,
+              mode: "tactical",
               include_gdelt: true,
               include_tak: true,
             }),
