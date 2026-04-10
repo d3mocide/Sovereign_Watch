@@ -16,6 +16,7 @@ import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
 import { LoginView } from "./components/views/LoginView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
+import { AnalysisFormatter } from "./components/widgets/AnalysisFormatter";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
 import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
@@ -511,8 +512,11 @@ function AuthenticatedApp() {
                     )}
                   </div>
                 )}
-                <div className="text-[11px] text-white/70 leading-relaxed">
-                  {regionalRiskUi.result?.narrative_summary?.trim() || "No AI narrative available. Heuristic signals and mission H3 risk are shown above."}
+                <div>
+                  <AnalysisFormatter
+                    text={regionalRiskUi.result?.narrative_summary?.trim() || "No AI narrative available. Heuristic signals and mission H3 risk are shown above."}
+                    accentColor="text-cyan-300"
+                  />
                 </div>
                 {(regionalRiskUi.result?.escalation_indicators?.length ?? 0) > 0 && (
                   <div className="flex items-start gap-2 text-[10px] text-amber-200/90">
