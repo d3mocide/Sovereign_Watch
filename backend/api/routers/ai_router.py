@@ -16,6 +16,11 @@ from pydantic import BaseModel
 from sgp4.api import Satrec, jday as sgp4_jday
 
 from services.escalation_detector import EscalationDetector
+from services.gdelt_linkage import (
+    GDELT_LINKAGE_REASON,
+    fetch_linked_gdelt_events,
+    format_gdelt_linkage_notes,
+)
 from services.hmm_trajectory import HMMResult, classify_trajectory
 from services.sequence_evaluation_engine import (
     RiskAssessment,
@@ -39,7 +44,6 @@ _HEATMAP_MAX_CONCURRENCY = 4
 
 # Keep UI interactions responsive even if the model endpoint is slow/unreachable.
 _LLM_EVAL_TIMEOUT_SECONDS = 8.0
-_GDELT_SPATIAL_RADIUS_M = 250_000.0
 _SEA_CONTEXT_RADIUS_KM = 400.0
 _SEA_CABLE_PROXIMITY_KM = 250.0
 _SEA_CABLE_ENDPOINT_MATCH_KM = 75.0
@@ -640,34 +644,22 @@ async def evaluate_regional_escalation(
         # GDELT events – sourced from gdelt_events with aliases expected by
         # SpatialTemporalAlignment (event_latitude/event_longitude/event_date).
         gdelt_events = []
+        gdelt_linkage_counts = {
+            "in_aot": 0,
+            "state_actor": 0,
+            "cable_infra": 0,
+            "chokepoint": 0,
+        }
         if request.include_gdelt:
             if wkt_polygon:
-                gdelt_query = """
-                    SELECT
-                        event_id AS event_id_cnty,
-                        to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
-                        lat AS event_latitude,
-                        lon AS event_longitude,
-                        event_code,
-                        headline AS event_text,
-                        quad_class,
-                        tone,
-                        goldstein
-                    FROM gdelt_events
-                    WHERE time > now() - ($1 * interval '1 hour')
-                      AND ST_DWithin(
-                        geom::geography,
-                        ST_Centroid(ST_GeomFromText($2, 4326))::geography,
-                        $3
-                      )
-                    ORDER BY time DESC
-                """
-                rows = await conn.fetch(
-                    gdelt_query,
-                    lookback_hours,
-                    wkt_polygon,
-                    _GDELT_SPATIAL_RADIUS_M,
+                linkage_result = await fetch_linked_gdelt_events(
+                    conn,
+                    db.redis_client,
+                    h3_region=request.h3_region,
+                    lookback_hours=lookback_hours,
                 )
+                gdelt_events = linkage_result.events
+                gdelt_linkage_counts = linkage_result.linkage_counts
             else:
                 gdelt_query = """
                     SELECT
@@ -677,6 +669,8 @@ async def evaluate_regional_escalation(
                         lon AS event_longitude,
                         event_code,
                         headline AS event_text,
+                        actor1_country,
+                        actor2_country,
                         quad_class,
                         tone,
                         goldstein
@@ -685,7 +679,7 @@ async def evaluate_regional_escalation(
                     ORDER BY time DESC
                 """
                 rows = await conn.fetch(gdelt_query, lookback_hours)
-            gdelt_events = [dict(row) for row in rows]
+                gdelt_events = [dict(row) for row in rows]
 
         # TAK events – filtered to the H3 region when possible
         tak_events = []
@@ -771,10 +765,23 @@ async def evaluate_regional_escalation(
             lookback_hours=lookback_hours,
         ),
         "gdelt": _build_scope_descriptor(
-            "mission_area" if wkt_polygon else "global",
-            "h3_centroid_radius_proxy" if wkt_polygon else "missing_spatial_filter",
+            (
+                "global"
+                if not wkt_polygon
+                else (
+                    "impact_linked_external"
+                    if sum(gdelt_linkage_counts.values()) > gdelt_linkage_counts["in_aot"]
+                    and gdelt_linkage_counts["in_aot"] == 0
+                    else "mission_area"
+                )
+            ),
+            GDELT_LINKAGE_REASON if wkt_polygon else "missing_spatial_filter",
             lookback_hours=lookback_hours,
-            notes="Proxy filter only; explicit geopolitical linkage rules are still pending.",
+            notes=(
+                format_gdelt_linkage_notes(gdelt_linkage_counts)
+                if wkt_polygon
+                else None
+            ),
         ),
         "internet_outages": _build_scope_descriptor(
             "mission_area" if wkt_polygon else "global",

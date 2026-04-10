@@ -2,6 +2,7 @@ import type { FeatureCollection } from "geojson";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Radar, X, XCircle } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getSetupStatus } from "./api/auth";
+import { fetchMissionH3Risk, type RiskSeverity } from "./api/h3Risk";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { MainHud } from "./components/layouts/MainHud";
@@ -69,6 +70,12 @@ function AuthenticatedApp() {
     lat: number;
     lon: number;
     result?: RegionalRiskResponse;
+    missionRisk?: {
+      cellCount: number;
+      peakRiskScore: number;
+      peakSeverity: RiskSeverity | "UNKNOWN";
+      linkageNotes?: string;
+    };
     error?: string;
     updatedAt: number;
   };
@@ -335,17 +342,20 @@ function AuthenticatedApp() {
       });
 
       try {
-        const response = await fetch("/api/ai_router/evaluate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            h3_region: h3Region,
-            lookback_hours: 24,
-            include_gdelt: true,
-            include_tak: true,
+        const [response, missionRiskResponse] = await Promise.all([
+          fetch("/api/ai_router/evaluate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              h3_region: h3Region,
+              lookback_hours: 24,
+              include_gdelt: true,
+              include_tak: true,
+            }),
           }),
-        });
+          fetchMissionH3Risk(6, { h3Region }, 24),
+        ]);
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => response.statusText);
@@ -354,6 +364,10 @@ function AuthenticatedApp() {
 
         const result = (await response.json()) as RegionalRiskResponse;
         const riskPct = Math.round((result.risk_score ?? 0) * 100);
+        const peakMissionRiskCell = missionRiskResponse?.cells.reduce(
+          (peak, cell) => (peak && peak.risk_score >= cell.risk_score ? peak : cell),
+          missionRiskResponse?.cells[0],
+        );
 
         setRegionalRiskUi({
           status: "success",
@@ -361,11 +375,19 @@ function AuthenticatedApp() {
           lat,
           lon,
           result,
+          missionRisk: missionRiskResponse
+            ? {
+                cellCount: missionRiskResponse.cells.length,
+                peakRiskScore: peakMissionRiskCell?.risk_score ?? 0,
+                peakSeverity: peakMissionRiskCell?.severity ?? "UNKNOWN",
+                linkageNotes: missionRiskResponse.source_scope?.notes,
+              }
+            : undefined,
           updatedAt: Date.now(),
         });
 
         addEvent({
-          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | ${result.narrative_summary}`,
+          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | mission-cells=${missionRiskResponse?.cells.length ?? 0} | ${result.narrative_summary}`,
           type: riskPct >= 70 ? "alert" : "new",
           entityType: "infra",
         });
@@ -458,6 +480,19 @@ function AuthenticatedApp() {
                   Risk: <span className="font-semibold text-amber-300">{Math.round((regionalRiskUi.result?.risk_score ?? 0) * 100)}%</span>
                   <span className="text-white/50"> | anomalies: {regionalRiskUi.result?.anomaly_count ?? 0}</span>
                 </div>
+                {regionalRiskUi.missionRisk && (
+                  <div className="rounded border border-red-400/20 bg-red-500/5 px-2 py-2 text-[10px] text-white/75">
+                    <div>
+                      Mission H3 risk: <span className="font-semibold text-red-300">{Math.round(regionalRiskUi.missionRisk.peakRiskScore * 100)}%</span>
+                      <span className="text-white/45"> | cells: {regionalRiskUi.missionRisk.cellCount} | peak: {regionalRiskUi.missionRisk.peakSeverity}</span>
+                    </div>
+                    {regionalRiskUi.missionRisk.linkageNotes && (
+                      <div className="mt-1 text-white/55 leading-relaxed">
+                        {regionalRiskUi.missionRisk.linkageNotes}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="text-[11px] text-white/70 leading-relaxed">
                   {regionalRiskUi.result?.narrative_summary || "No narrative available."}
                 </div>

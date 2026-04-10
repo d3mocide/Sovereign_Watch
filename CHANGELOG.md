@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Mission-Aware GDELT Linkage Service**: Added a shared backend linkage service plus generated country-code bridge data so GDELT mission filtering can admit in-AOT, state-actor, cable-infrastructure, and chokepoint-linked events using explicit geopolitical rules.
+- **Mission-Aware GDELT API Modes**: `/api/gdelt/events` and `/api/gdelt/actors` now support opt-in mission filtering by H3 cell or lat/lon radius while preserving their default global behavior for existing dashboard consumers.
+- **Mission-Scoped H3 Risk**: `/api/h3/risk` now supports opt-in mission-scoped analysis with explicit source-scope metadata so regional workflows can request a local risk surface instead of relying only on global aggregates.
+- **Regional Risk Mission Overlay**: The right-click regional analysis panel now fetches mission-scoped H3 risk in parallel with the AI regional evaluation and shows mission cell count, peak risk, peak severity, and linkage notes.
+- **Pre-Release Skill Migration**: Moved the Sovereign Watch pre-release skill and summary prompt into the repo-local `.agent/` path so release-readiness workflows remain available from the workspace.
+
+### Changed
+
+- **Regional Risk GDELT Scope Metadata**: `evaluate_regional_escalation()` now reports explicit GDELT linkage counts and replaces the old centroid-radius proxy label with `explicit_geopolitical_linkage` metadata.
+- **Roadmap Backlog Split**: Added a backlog item for a dedicated mission stats namespace while keeping the current backend stats dashboard global.
+
+### Fixed
+
+- **Mission-Area GDELT Admission Drift**: Regional risk no longer relies on a centroid-radius proxy for mission GDELT admission, reducing unrelated external events in local risk narratives.
+- **Direct-Call Mission Query Validation**: Mission-mode parameter validation now handles FastAPI query defaults correctly in router/test direct-call paths, preventing false 400 errors outside the request parser.
+
 ## [1.0.1] - 2026-04-09
 
 ### Added

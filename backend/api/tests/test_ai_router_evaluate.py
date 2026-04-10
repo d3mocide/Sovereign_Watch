@@ -126,6 +126,7 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
 
     assert response.source_scope is not None
     assert response.source_scope["tak"]["scope"] == "mission_area"
-    assert response.source_scope["gdelt"]["linkage_reason"] == "h3_centroid_radius_proxy"
+    assert response.source_scope["gdelt"]["linkage_reason"] == "explicit_geopolitical_linkage"
+    assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint"
     assert response.source_scope["space_weather"]["scope"] == "impact_linked_external"
     assert response.source_scope["satnogs"]["scope"] == "global"
