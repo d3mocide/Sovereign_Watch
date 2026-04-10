@@ -5,7 +5,11 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from services.sequence_evaluation_engine import RiskAssessment, SequenceEvaluationEngine
+from services.sequence_evaluation_engine import (
+    RiskAssessment,
+    SequenceEvaluationEngine,
+    format_heuristic_fallback_narrative,
+)
 
 
 def test_build_context_window_includes_binding_heuristics() -> None:
@@ -46,8 +50,27 @@ def test_apply_consistency_guard_rewrites_contradictory_summary() -> None:
         heuristic_risk_score=0.43,
         escalation_indicators=["GDELT conflict intensity elevated", "Entity clustering detected"],
         gdelt_linkage_notes="1 in-AOT, 3 maritime-chokepoint",
+        mode="tactical",
+        is_sitrep=True,
     )
 
-    assert "Heuristic signals indicate elevated regional pressure" in guarded.narrative_summary
-    assert "GDELT conflict intensity elevated" in guarded.narrative_summary
-    assert "Linked GDELT context: 1 in-AOT, 3 maritime-chokepoint." in guarded.narrative_summary
+    assert "### ACTIVE ZONES" in guarded.narrative_summary
+    assert "Elevated regional pressure is active" in guarded.narrative_summary
+    assert "GDELT conflict intensity elevated." in guarded.narrative_summary
+    assert "maritime chokepoint reporting" in guarded.narrative_summary
+
+
+def test_format_heuristic_fallback_narrative_produces_structured_analysis() -> None:
+    narrative = format_heuristic_fallback_narrative(
+        heuristic_risk_score=0.31,
+        escalation_indicators=["GDELT conflict intensity elevated"],
+        gdelt_linkage_notes="0 in-AOT, 222 state-actor/border, 0 cable-infra, 644 maritime-chokepoint",
+        anomalous_count=0,
+        mode="tactical",
+        is_sitrep=True,
+    )
+
+    assert "### ACTIVE ZONES" in narrative
+    assert "context-driven rather than entity-specific" in narrative
+    assert "spillover risk into the mission area" in narrative
+    assert "### CONFIDENCE" in narrative

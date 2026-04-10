@@ -25,6 +25,7 @@ from services.hmm_trajectory import HMMResult, classify_trajectory
 from services.sequence_evaluation_engine import (
     RiskAssessment,
     SequenceEvaluationEngine,
+    format_heuristic_fallback_narrative,
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
 from services.stdbscan import detect_clusters
@@ -86,24 +87,18 @@ def _build_heuristic_narrative(
     risk_score: float,
     escalation_indicators: List[str],
     gdelt_linkage_notes: Optional[str] = None,
+    anomalous_count: int = 0,
+    mode: str = "tactical",
+    is_sitrep: bool = True,
 ) -> str:
-    if risk_score < 0.15 and not escalation_indicators:
-        return "No significant escalation detected"
-
-    if risk_score >= 0.7:
-        pressure = "high"
-    elif risk_score >= 0.3:
-        pressure = "elevated"
-    else:
-        pressure = "low-level"
-
-    summary_parts = [f"Heuristic signals indicate {pressure} regional pressure"]
-    if escalation_indicators:
-        summary_parts.append(f"Key drivers: {'; '.join(escalation_indicators[:3])}")
-    if gdelt_linkage_notes and gdelt_linkage_notes != "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint":
-        summary_parts.append(f"Linked GDELT context: {gdelt_linkage_notes}")
-
-    return ". ".join(summary_parts) + "."
+    return format_heuristic_fallback_narrative(
+        heuristic_risk_score=risk_score,
+        escalation_indicators=escalation_indicators,
+        gdelt_linkage_notes=gdelt_linkage_notes,
+        anomalous_count=anomalous_count,
+        mode=mode,
+        is_sitrep=is_sitrep,
+    )
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -1071,6 +1066,9 @@ async def evaluate_regional_escalation(
         risk_score,
         escalation_indicators,
         gdelt_linkage_notes=gdelt_linkage_notes,
+        anomalous_count=len(anomalous_uids),
+        mode=request.mode,
+        is_sitrep=request.is_sitrep,
     )
     confidence = 0.5
 
