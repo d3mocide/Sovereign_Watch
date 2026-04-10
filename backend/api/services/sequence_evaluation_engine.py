@@ -46,6 +46,9 @@ class SequenceEvaluationEngine:
         tak_summary: str,
         anomalous_uids: List[str],
         behavioral_signals: List[str] = None,
+        heuristic_risk_score: float = 0.0,
+        escalation_indicators: List[str] | None = None,
+        gdelt_linkage_notes: str | None = None,
         mode: str = "tactical",
         is_sitrep: bool = True,
     ) -> RiskAssessment:
@@ -56,11 +59,18 @@ class SequenceEvaluationEngine:
         and stores the response for future near-identical prompts.
         """
         user_prompt = self._build_context_window(
-            h3_region, gdelt_summary, tak_summary, anomalous_uids, behavioral_signals
+            h3_region,
+            gdelt_summary,
+            tak_summary,
+            anomalous_uids,
+            behavioral_signals,
+            heuristic_risk_score,
+            escalation_indicators,
+            gdelt_linkage_notes,
+            mode,
         )
 
         try:
-            # 1. Fetch official persona with markdown rules
             persona = ai_service.get_persona(
                 mode=mode,
                 context={"is_sitrep": is_sitrep},
@@ -88,7 +98,12 @@ class SequenceEvaluationEngine:
                 )
                 risk_assessment = self._parse_response(cached, h3_region)
                 risk_assessment.raw_response = cached
-                return risk_assessment
+                return self._apply_consistency_guard(
+                    risk_assessment,
+                    heuristic_risk_score=heuristic_risk_score,
+                    escalation_indicators=escalation_indicators or [],
+                    gdelt_linkage_notes=gdelt_linkage_notes,
+                )
 
             # 4. Route through unified AIService
             response = await ai_service.generate_static(
@@ -101,7 +116,12 @@ class SequenceEvaluationEngine:
 
             risk_assessment = self._parse_response(response, h3_region)
             risk_assessment.raw_response = response
-            return risk_assessment
+            return self._apply_consistency_guard(
+                risk_assessment,
+                heuristic_risk_score=heuristic_risk_score,
+                escalation_indicators=escalation_indicators or [],
+                gdelt_linkage_notes=gdelt_linkage_notes,
+            )
 
         except Exception:
             logger.exception(
@@ -125,15 +145,26 @@ class SequenceEvaluationEngine:
         tak_summary: str,
         anomalous_uids: List[str],
         behavioral_signals: List[str] = None,
+        heuristic_risk_score: float = 0.0,
+        escalation_indicators: List[str] | None = None,
+        gdelt_linkage_notes: str | None = None,
+        mode: str = "tactical",
     ) -> str:
         """Build the user prompt with scaled contextual data."""
         signals_text = "None detected"
         if behavioral_signals:
             signals_text = "\n".join([f"- {s}" for s in behavioral_signals])
 
+        indicators_text = "None"
+        if escalation_indicators:
+            indicators_text = "\n".join([f"- {item}" for item in escalation_indicators])
+
+        gdelt_linkage_text = gdelt_linkage_notes or "No explicit linked-external GDELT notes"
+
         prompt = f"""Analyze the following multi-INT data for regional risk:
 
 REGION: H3 Cell {h3_region}
+TARGET OBJECTIVE / VIEW: {mode.upper()}
 
 GEOPOLITICAL CONTEXT (GDELT):
 {gdelt_summary if gdelt_summary else "No recent GDELT events in region"}
@@ -144,11 +175,52 @@ TACTICAL TELEMETRY (TAK):
 HEURISTIC BEHAVIORAL SIGNALS (GROUND TRUTH):
 {signals_text}
 
+PRECOMPUTED HEURISTICS (BINDING EVIDENCE):
+- Heuristic regional risk score: {heuristic_risk_score:.2f}
+- Escalation indicators:
+{indicators_text}
+- GDELT linkage notes: {gdelt_linkage_text}
+
 ANOMALOUS ENTITIES:
 {", ".join(anomalous_uids) if anomalous_uids else "None identified"}
 
-Based on this data, synthesize a regional risk assessment. Connect the tactical ground-truth signals to the geopolitical context where relevant."""
+Based on this data, synthesize a regional risk assessment. Connect the tactical ground-truth signals to the geopolitical context where relevant.
+
+Decision rules:
+- Treat the precomputed heuristics as binding evidence, not optional hints.
+- If the heuristic regional risk score is 0.25 or higher, do not conclude that there is no significant escalation.
+- If escalation indicators are present, narrative_summary must explain them directly.
+- If GDELT linkage notes show state-actor or maritime chokepoint pressure, reflect that in the assessment when relevant.
+- Resolve contradictions explicitly instead of giving a generic neutral conclusion."""
         return prompt
+
+    def _apply_consistency_guard(
+        self,
+        assessment: RiskAssessment,
+        *,
+        heuristic_risk_score: float,
+        escalation_indicators: List[str],
+        gdelt_linkage_notes: str | None,
+    ) -> RiskAssessment:
+        narrative = (assessment.narrative_summary or "").strip()
+        lowered = narrative.lower()
+        has_contradiction = (
+            heuristic_risk_score >= 0.25 or bool(escalation_indicators)
+        ) and "no significant escalation detected" in lowered
+
+        if has_contradiction or not narrative:
+            drivers = "; ".join(escalation_indicators[:3]) if escalation_indicators else "localized multi-INT pressure"
+            linkage = (
+                f" Linked GDELT context: {gdelt_linkage_notes}."
+                if gdelt_linkage_notes
+                and gdelt_linkage_notes
+                != "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint"
+                else ""
+            )
+            assessment.narrative_summary = (
+                f"Heuristic signals indicate elevated regional pressure. Key drivers: {drivers}.{linkage}"
+            )
+        return assessment
 
     def _parse_response(self, response_text: str, h3_region: str) -> RiskAssessment:
         """Parse LLM response into RiskAssessment."""

@@ -82,6 +82,30 @@ def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
     return min(1.0, 0.6 * conflict_ratio + 0.3 * material_ratio + 0.1 * hostility)
 
 
+def _build_heuristic_narrative(
+    risk_score: float,
+    escalation_indicators: List[str],
+    gdelt_linkage_notes: Optional[str] = None,
+) -> str:
+    if risk_score < 0.15 and not escalation_indicators:
+        return "No significant escalation detected"
+
+    if risk_score >= 0.7:
+        pressure = "high"
+    elif risk_score >= 0.3:
+        pressure = "elevated"
+    else:
+        pressure = "low-level"
+
+    summary_parts = [f"Heuristic signals indicate {pressure} regional pressure"]
+    if escalation_indicators:
+        summary_parts.append(f"Key drivers: {'; '.join(escalation_indicators[:3])}")
+    if gdelt_linkage_notes and gdelt_linkage_notes != "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint":
+        summary_parts.append(f"Linked GDELT context: {gdelt_linkage_notes}")
+
+    return ". ".join(summary_parts) + "."
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return great-circle distance in kilometers between two points."""
     radius_km = 6371.0
@@ -980,50 +1004,6 @@ async def evaluate_regional_escalation(
         [a.description for a in context_anomalies if a.score > 0.1]
     )
 
-    # Initialize LLM-based sequence evaluation if risk is elevated.
-    # Lightweight mode (used by the heatmap endpoint) skips the LLM call to
-    # avoid fanning out expensive model requests per heatmap cell.
-    narrative_summary = "No significant escalation detected"
-    confidence = 0.5
-
-    if risk_score > 0.3 and not request.lightweight:
-        try:
-            logger.info(
-                "🧠 [UNIFIED-BRAIN] Evaluating region %s with %d behavioral signals detected",
-                request.h3_region,
-                len(behavioral_signals),
-            )
-            evaluation_engine = SequenceEvaluationEngine()
-
-            # Call LLM for detailed analysis
-            assessment: RiskAssessment = await asyncio.wait_for(
-                evaluation_engine.evaluate_escalation(
-                    h3_region=request.h3_region,
-                    gdelt_summary=gdelt_summary,
-                    tak_summary=tak_summary,
-                    anomalous_uids=anomalous_uids,
-                    behavioral_signals=behavioral_signals,
-                    mode=request.mode,
-                    is_sitrep=request.is_sitrep,
-                ),
-                timeout=_LLM_EVAL_TIMEOUT_SECONDS,
-            )
-
-            if assessment.narrative_summary.strip():
-                narrative_summary = assessment.narrative_summary
-            confidence = assessment.confidence
-            # Risk score from LLM can override if confidence is high
-            if confidence > 0.7:
-                risk_score = assessment.risk_score
-
-        except TimeoutError:
-            logger.warning(
-                "LLM evaluation timed out after %.1fs, using heuristic scoring",
-                _LLM_EVAL_TIMEOUT_SECONDS,
-            )
-        except Exception as e:
-            logger.warning(f"LLM evaluation failed, using heuristic scoring: {e}")
-
     # Detect escalation indicators
     escalation_indicators = []
     if pattern_match:
@@ -1082,6 +1062,56 @@ async def evaluate_regional_escalation(
             f"HIGH RISK detected in region {request.h3_region}: {risk_score:.2f}"
         )
         escalation_indicators.append("ESCALATE_TO_TIER3")
+
+    # Initialize LLM-based sequence evaluation if risk is elevated.
+    # Lightweight mode (used by the heatmap endpoint) skips the LLM call to
+    # avoid fanning out expensive model requests per heatmap cell.
+    gdelt_linkage_notes = source_scope["gdelt"].get("notes") if source_scope.get("gdelt") else None
+    narrative_summary = _build_heuristic_narrative(
+        risk_score,
+        escalation_indicators,
+        gdelt_linkage_notes=gdelt_linkage_notes,
+    )
+    confidence = 0.5
+
+    if risk_score > 0.3 and not request.lightweight:
+        try:
+            logger.info(
+                "🧠 [UNIFIED-BRAIN] Evaluating region %s with %d behavioral signals detected",
+                request.h3_region,
+                len(behavioral_signals),
+            )
+            evaluation_engine = SequenceEvaluationEngine()
+
+            assessment: RiskAssessment = await asyncio.wait_for(
+                evaluation_engine.evaluate_escalation(
+                    h3_region=request.h3_region,
+                    gdelt_summary=gdelt_summary,
+                    tak_summary=tak_summary,
+                    anomalous_uids=anomalous_uids,
+                    behavioral_signals=behavioral_signals,
+                    heuristic_risk_score=risk_score,
+                    escalation_indicators=escalation_indicators,
+                    gdelt_linkage_notes=gdelt_linkage_notes,
+                    mode=request.mode,
+                    is_sitrep=request.is_sitrep,
+                ),
+                timeout=_LLM_EVAL_TIMEOUT_SECONDS,
+            )
+
+            if assessment.narrative_summary.strip():
+                narrative_summary = assessment.narrative_summary
+            confidence = assessment.confidence
+            if confidence > 0.7:
+                risk_score = assessment.risk_score
+
+        except TimeoutError:
+            logger.warning(
+                "LLM evaluation timed out after %.1fs, using heuristic scoring",
+                _LLM_EVAL_TIMEOUT_SECONDS,
+            )
+        except Exception as e:
+            logger.warning(f"LLM evaluation failed, using heuristic scoring: {e}")
 
     return RiskAssessmentResponse(
         h3_region_id=request.h3_region,

@@ -182,7 +182,7 @@ async def test_evaluate_regional_escalation_preserves_heuristic_narrative_when_l
             )
         )
 
-    assert response.narrative_summary == "No significant escalation detected"
+    assert response.narrative_summary == "Heuristic signals indicate elevated regional pressure."
     assert response.confidence == 0.0
 
 
