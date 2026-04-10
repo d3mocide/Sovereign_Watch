@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-04-10
+
 ### Added
 
 - **Mission-Aware GDELT Linkage Service**: Added a shared backend linkage service plus generated country-code bridge data so GDELT mission filtering can admit in-AOT, state-actor, cable-infrastructure, and chokepoint-linked events using explicit geopolitical rules.
@@ -13,12 +15,18 @@
 ### Changed
 
 - **Regional Risk GDELT Scope Metadata**: `evaluate_regional_escalation()` now reports explicit GDELT linkage counts and replaces the old centroid-radius proxy label with `explicit_geopolitical_linkage` metadata.
+- **Regional Risk Persona Alignment**: The right-click regional risk flow now sends `mode: tactical` and uses the same persona-selection path as the main AI Analyst workflow.
+- **Regional Risk Fallback Analysis**: When the model response is empty, contradictory, or malformed, the regional risk panel now falls back to a structured analyst-style assessment instead of a flat heuristic sentence.
+- **Regional Risk Markdown Rendering**: The regional risk overlay now renders analyst markdown with the same lightweight formatter used by the AI Analyst panel, including bounded scrolling for smaller screens.
 - **Roadmap Backlog Split**: Added a backlog item for a dedicated mission stats namespace while keeping the current backend stats dashboard global.
 
 ### Fixed
 
 - **Mission-Area GDELT Admission Drift**: Regional risk no longer relies on a centroid-radius proxy for mission GDELT admission, reducing unrelated external events in local risk narratives.
 - **Direct-Call Mission Query Validation**: Mission-mode parameter validation now handles FastAPI query defaults correctly in router/test direct-call paths, preventing false 400 errors outside the request parser.
+- **Regional Risk False Success State**: The overlay now distinguishes complete success from partial success and no longer reports `Completed` while showing `Evaluation error` in the narrative area.
+- **Regional Risk Narrative Contradictions**: Regional risk assessments no longer emit `No significant escalation detected` when the precomputed mission and GDELT signals already indicate elevated pressure.
+- **Regional Risk Text Wrapping**: Analyst output now heals hard-wrapped uppercase tokens such as `GDELT` and keeps long regional narratives contained inside a scrollable panel on narrow displays.
 
 ## [1.0.1] - 2026-04-09
 
