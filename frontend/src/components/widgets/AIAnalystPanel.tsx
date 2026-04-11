@@ -6,7 +6,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { CoTEntity } from '../../types';
 import { AnalysisFormatter } from './AnalysisFormatter';
 import { copyTextToClipboard, formatAnalysisText } from './aiAnalystFormatting.ts';
-import { getClausalSpaceWeatherPresentation } from '../layouts/sidebar-right/clausalContextPresentation';
 
 interface AIAnalystPanelProps {
   entity: CoTEntity | null;
@@ -78,9 +77,6 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   }
 
   const isSitrep = entityUid?.startsWith('sitrep-');
-  const clausalSpaceWeatherPresentation = entity?.type === 'clausal-state-change'
-    ? getClausalSpaceWeatherPresentation((entity.detail ?? {}) as Record<string, unknown>)
-    : null;
 
   // Handle auto-run when triggered from the sidebar
   const lastStateRef = useRef({ entityUid, autoRunTrigger, isOpen });
