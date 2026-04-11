@@ -40,3 +40,7 @@
 **Vulnerability:** Found Python string interpolation (`%s`) used with the modulo operator (`%`) to insert dynamically populated variables into a raw SQL query inside `backend/api/routers/stats.py` (e.g. `WHERE time >= NOW() - INTERVAL '%s hours' % hours`).
 **Learning:** Constructing SQL queries by inserting unescaped variables directly into the SQL string via string formatting makes the application susceptible to SQL injection attacks, even for supposedly safe parameters like integers. `asyncpg` protects against this by mapping positional parameters natively at the database level.
 **Prevention:** Never use Python string manipulation (`%s`, `.format()`, `f"..."`) to build parameterized SQL queries. Always use PostgreSQL native bind parameters (``, ``, etc.) and pass variables securely through the execution/fetch function arguments (e.g., `conn.fetch(query, arg1, arg2)`).
+## 2026-04-11 - [Fix Information Disclosure in API Error Response]
+**Vulnerability:** Raw exception strings (e.g., `exc`) were interpolated directly into the `HTTPException` detail response sent to clients upon failure.
+**Learning:** Returning unhandled or low-level internal error details to users can leak stack traces, implementation details, or sensitive system state, violating the principle of failing securely.
+**Prevention:** Catch exceptions, log the detailed error securely on the server (using `logger.warning` or `logger.error`), and return only a sanitized, generic error message (like 'Malformed TLE' or 'Internal server error') in the HTTP response.

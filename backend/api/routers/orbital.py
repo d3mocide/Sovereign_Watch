@@ -379,7 +379,8 @@ async def get_groundtrack(
     try:
         satrec = Satrec.twoline2rv(sat["tle_line1"], sat["tle_line2"])
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Malformed TLE: {exc}")
+        logger.warning(f"Malformed TLE for {norad_id}: {exc}")
+        raise HTTPException(status_code=422, detail="Malformed TLE")
 
     now = datetime.now(timezone.utc)
     end = now + timedelta(minutes=minutes)
