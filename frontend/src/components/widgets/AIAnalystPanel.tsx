@@ -390,6 +390,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             {text && !isStreaming && (
               <button
                 onClick={handleCopy}
+                aria-label={copyState === "copied" ? "Assessment Copied" : "Copy Assessment Data"}
                 className="flex items-center gap-2 group"
               >
                 <div className={`text-[8px] font-black tracking-widest uppercase transition-all ${copyState === 'copied'

@@ -241,12 +241,13 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
                 }}
                 className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
                 title="Open Performance Dashboard"
+                aria-label="Open Performance Dashboard"
               >
                 STATS
               </button>
             )}
             <button
-
+              aria-label="Close System Health"
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();

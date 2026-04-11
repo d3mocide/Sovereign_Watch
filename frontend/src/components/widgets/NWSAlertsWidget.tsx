@@ -158,6 +158,8 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
       {/* ── Header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? "Collapse NWS Alerts" : "Expand NWS Alerts"}
+        aria-expanded={expanded}
         className={`flex items-center justify-between p-2.5 backdrop-blur-md text-left w-full border ${
           expanded ? "rounded-t-sm border-b-0" : "rounded-sm"
         }`}
