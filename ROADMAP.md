@@ -48,6 +48,7 @@ Expanding the depth of our geospatial and infrastructure data sources.
 | **Infra-07** | CDN Edge Nodes | Data Eng | Mapping edge cache locations for major CDNs (Cloudflare, Akamai). |
 | **Space-05** | Satellite Constellations | Data Eng | Automated CelesTrak JSON ingestion for Starlink/OneWeb/Kuiper. |
 | **Ingest-07** | Drone Remote ID | Data Eng | OpenDroneID / FAA Remote ID SDR pipeline integration. |
+| **Analyt-02** | Mission Stats Namespace | Backend | Add mission-scoped stats endpoints for activity and TAK breakdown while keeping the existing stats dashboard global. |
 
 ---
 

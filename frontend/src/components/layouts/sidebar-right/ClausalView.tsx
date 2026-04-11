@@ -1,6 +1,7 @@
 import { Activity, Crosshair, X } from "lucide-react";
 import React from "react";
 import { BaseViewProps } from "./types";
+import { getClausalSpaceWeatherPresentation } from "./clausalContextPresentation";
 
 // ── Severity theme keyed on state-change reason ───────────────────────────────
 function getAnomalyTheme(reason: string) {
@@ -94,6 +95,7 @@ export const ClausalView: React.FC<BaseViewProps> = ({
   const courseDeg = detail?.course_deg != null ? Number(detail.course_deg) : null;
   const predicateType = String(detail?.predicate_type ?? "");
   const narrative = detail?.narrative ? String(detail.narrative) : null;
+  const spaceWeatherPresentation = getClausalSpaceWeatherPresentation(detail);
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-[calc(100vh-8rem)] overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -262,17 +264,61 @@ export const ClausalView: React.FC<BaseViewProps> = ({
           </div>
         )}
 
-        {/* Event badge */}
-        <div className="p-3">
-          <span className="text-[8px] text-white/30 uppercase tracking-widest mb-2 block">
-            Anomaly Classification
-          </span>
-          <span
-            className={`inline-block text-[9px] font-bold font-mono px-2 py-1 rounded border ${theme.badge} uppercase tracking-wider`}
-          >
-            {reason || "UNKNOWN"}
-          </span>
-        </div>
+        {spaceWeatherPresentation && (
+          <div className="p-3 border-b border-white/5">
+            <span className="text-[8px] text-white/30 uppercase tracking-widest mb-2 block">
+              External Driver Context
+            </span>
+            <div className={`rounded-sm border p-2.5 space-y-2 ${
+              spaceWeatherPresentation.isAdmitted 
+                ? "border-sky-400/30 bg-sky-400/10" 
+                : "border-white/10 bg-white/5"
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className={`inline-block text-[9px] font-bold font-mono px-2 py-1 rounded border uppercase tracking-wider ${
+                  spaceWeatherPresentation.isAdmitted
+                    ? "bg-sky-400/20 text-sky-300 border-sky-400/30"
+                    : "bg-white/10 text-white/50 border-white/20"
+                }`}>
+                  External Driver
+                </span>
+                <span className={`text-[9px] font-bold ${spaceWeatherPresentation.isAdmitted ? "text-sky-300" : "text-white/40"}`}>
+                  {spaceWeatherPresentation.isAdmitted ? "THRESHOLD PASSED" : "NOT ATTACHED / OMITTED"}
+                </span>
+              </div>
+              <div className="space-y-1 text-[10px]">
+                <div className="flex gap-2">
+                  <span className="text-white/30 w-16">Scope:</span>
+                  <span className="text-white/75">{spaceWeatherPresentation.scopeLabel}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-white/30 w-16">Linkage:</span>
+                  <span className="text-white/75">{spaceWeatherPresentation.linkageReasonLabel}</span>
+                </div>
+                {spaceWeatherPresentation.thresholdLabel && (
+                  <div className="flex gap-2">
+                    <span className="text-white/30 w-16">Gate:</span>
+                    <span className="text-white/75">{spaceWeatherPresentation.thresholdLabel}</span>
+                  </div>
+                )}
+              </div>
+              <div className="pt-1.5 border-t border-white/10 mt-1.5">
+                <p className={`text-[10px] font-mono leading-relaxed ${
+                  spaceWeatherPresentation.isAdmitted ? "text-sky-200" : "text-white/50"
+                }`}>
+                  {spaceWeatherPresentation.statusLabel}
+                </p>
+                {spaceWeatherPresentation.notes && (
+                  <p className="text-[9px] text-white/30 font-mono leading-relaxed mt-1">
+                    {spaceWeatherPresentation.notes}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+
       </div>
     </div>
   );

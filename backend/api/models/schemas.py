@@ -57,3 +57,4 @@ class H3RiskResponse(BaseModel):
     cells: list[H3RiskCell]
     resolution: int
     generated_at: str
+    source_scope: Optional[dict] = None

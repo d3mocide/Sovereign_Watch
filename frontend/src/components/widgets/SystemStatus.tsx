@@ -97,6 +97,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
       </div>
 
       <IntegrationStatus />
-    </div>
+      
+          </div>
   );
 };

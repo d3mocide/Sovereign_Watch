@@ -2,6 +2,7 @@ import type { FeatureCollection } from "geojson";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Radar, X, XCircle } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getSetupStatus } from "./api/auth";
+import { fetchMissionH3Risk, type RiskSeverity } from "./api/h3Risk";
 import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { MainHud } from "./components/layouts/MainHud";
@@ -15,6 +16,7 @@ import TacticalMap from "./components/map/TacticalMap";
 import { DashboardView } from "./components/views/DashboardView";
 import { LoginView } from "./components/views/LoginView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
+import { AnalysisFormatter } from "./components/widgets/AnalysisFormatter";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
 import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
@@ -49,6 +51,7 @@ interface IntelArticleContent {
 }
 
 const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
+const LinkageAuditView = lazy(() => import('./components/views/LinkageAuditView'));
 
 function AuthenticatedApp() {
 
@@ -64,12 +67,19 @@ function AuthenticatedApp() {
   };
 
   type RegionalRiskUiState = {
-    status: "loading" | "success" | "error";
+    status: "loading" | "success" | "partial" | "error";
     h3Region: string;
     lat: number;
     lon: number;
     result?: RegionalRiskResponse;
+    missionRisk?: {
+      cellCount: number;
+      peakRiskScore: number;
+      peakSeverity: RiskSeverity | "UNKNOWN";
+      linkageNotes?: string;
+    };
     error?: string;
+    warning?: string;
     updatedAt: number;
   };
 
@@ -185,6 +195,12 @@ function AuthenticatedApp() {
   );
   const [regionalRiskUi, setRegionalRiskUi] =
     useState<RegionalRiskUiState | null>(null);
+
+  // Clear persistent UI panels when switching between top-level views 
+  useEffect(() => {
+    setIsAIAnalystOpen(false);
+    setSelectedEntity(null);
+  }, [viewMode, setIsAIAnalystOpen, setSelectedEntity]);
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -335,17 +351,21 @@ function AuthenticatedApp() {
       });
 
       try {
-        const response = await fetch("/api/ai_router/evaluate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            h3_region: h3Region,
-            lookback_hours: 24,
-            include_gdelt: true,
-            include_tak: true,
+        const [response, missionRiskResponse] = await Promise.all([
+          fetch("/api/ai_router/evaluate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              h3_region: h3Region,
+              lookback_hours: 24,
+              mode: "tactical",
+              include_gdelt: true,
+              include_tak: true,
+            }),
           }),
-        });
+          fetchMissionH3Risk(6, { h3Region }, 24),
+        ]);
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => response.statusText);
@@ -354,18 +374,37 @@ function AuthenticatedApp() {
 
         const result = (await response.json()) as RegionalRiskResponse;
         const riskPct = Math.round((result.risk_score ?? 0) * 100);
+        const narrativeSummary = (result.narrative_summary || "").trim();
+        const llmNarrativeUnavailable = (result.confidence ?? 0) <= 0;
+        const hasNarrative = narrativeSummary.length > 0 && narrativeSummary !== "Evaluation error";
+        const peakMissionRiskCell = missionRiskResponse?.cells.reduce(
+          (peak, cell) => (peak && peak.risk_score >= cell.risk_score ? peak : cell),
+          missionRiskResponse?.cells[0],
+        );
 
         setRegionalRiskUi({
-          status: "success",
+          status: hasNarrative && !llmNarrativeUnavailable ? "success" : "partial",
           h3Region,
           lat,
           lon,
           result,
+          missionRisk: missionRiskResponse
+            ? {
+                cellCount: missionRiskResponse.cells.length,
+                peakRiskScore: peakMissionRiskCell?.risk_score ?? 0,
+                peakSeverity: peakMissionRiskCell?.severity ?? "UNKNOWN",
+                linkageNotes: missionRiskResponse.source_scope?.notes,
+              }
+            : undefined,
+          warning:
+            hasNarrative && !llmNarrativeUnavailable
+              ? undefined
+              : "Mission risk computed, but the AI narrative was unavailable. Showing heuristic results only.",
           updatedAt: Date.now(),
         });
 
         addEvent({
-          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | ${result.narrative_summary}`,
+          message: `RISK ${riskPct}% | ${result.h3_region_id} | anomalies=${result.anomaly_count} | mission-cells=${missionRiskResponse?.cells.length ?? 0} | ${hasNarrative && !llmNarrativeUnavailable ? narrativeSummary : "heuristic-only"}`,
           type: riskPct >= 70 ? "alert" : "new",
           entityType: "infra",
         });
@@ -450,16 +489,41 @@ function AuthenticatedApp() {
               </div>
             ) : (
               <div className="px-3 pb-3 space-y-2">
-                <div className="flex items-center gap-2 text-[11px] text-emerald-300">
-                  <CheckCircle2 size={13} className="shrink-0" />
-                  Completed
+                <div className={`flex items-center gap-2 text-[11px] ${regionalRiskUi.status === "partial" ? "text-amber-300" : "text-emerald-300"}`}>
+                  {regionalRiskUi.status === "partial" ? (
+                    <AlertTriangle size={13} className="shrink-0" />
+                  ) : (
+                    <CheckCircle2 size={13} className="shrink-0" />
+                  )}
+                  {regionalRiskUi.status === "partial" ? "Partial" : "Completed"}
                 </div>
                 <div className="text-[11px] text-white/80">
                   Risk: <span className="font-semibold text-amber-300">{Math.round((regionalRiskUi.result?.risk_score ?? 0) * 100)}%</span>
                   <span className="text-white/50"> | anomalies: {regionalRiskUi.result?.anomaly_count ?? 0}</span>
                 </div>
-                <div className="text-[11px] text-white/70 leading-relaxed">
-                  {regionalRiskUi.result?.narrative_summary || "No narrative available."}
+                {regionalRiskUi.warning && (
+                  <div className="rounded border border-amber-400/20 bg-amber-500/5 px-2 py-2 text-[10px] text-amber-100/85">
+                    {regionalRiskUi.warning}
+                  </div>
+                )}
+                {regionalRiskUi.missionRisk && (
+                  <div className="rounded border border-red-400/20 bg-red-500/5 px-2 py-2 text-[10px] text-white/75">
+                    <div>
+                      Mission H3 risk: <span className="font-semibold text-red-300">{Math.round(regionalRiskUi.missionRisk.peakRiskScore * 100)}%</span>
+                      <span className="text-white/45"> | cells: {regionalRiskUi.missionRisk.cellCount} | peak: {regionalRiskUi.missionRisk.peakSeverity}</span>
+                    </div>
+                    {regionalRiskUi.missionRisk.linkageNotes && (
+                      <div className="mt-1 text-white/55 leading-relaxed">
+                        {regionalRiskUi.missionRisk.linkageNotes}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="max-h-56 overflow-y-auto rounded border border-cyan-400/15 bg-cyan-500/[0.03] p-2 pr-1">
+                  <AnalysisFormatter
+                    text={regionalRiskUi.result?.narrative_summary?.trim() || "No AI narrative available. Heuristic signals and mission H3 risk are shown above."}
+                    accentColor="text-cyan-300"
+                  />
                 </div>
                 {(regionalRiskUi.result?.escalation_indicators?.length ?? 0) > 0 && (
                   <div className="flex items-start gap-2 text-[10px] text-amber-200/90">
@@ -1084,6 +1148,7 @@ function App() {
 
   if (authStatus === 'authenticated') {
     const isStatsRoute = window.location.pathname === '/stats';
+    const isLinkageRoute = window.location.pathname === '/linkage';
 
     if (isStatsRoute && hasRole('admin')) {
       return (
@@ -1093,6 +1158,17 @@ function App() {
           </div>
         }>
           <StatsDashboardView />
+        </Suspense>
+      );
+    }
+    if (isLinkageRoute && hasRole('admin')) {
+      return (
+        <Suspense fallback={
+          <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0ff] font-mono animate-pulse">
+            INITIALIZING LINKAGE AUDIT...
+          </div>
+        }>
+          <LinkageAuditView />
         </Suspense>
       );
     }

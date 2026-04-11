@@ -178,9 +178,9 @@ class AIService:
                 ],
             )
             return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"AI Static Error: {e}")
-            return f"Error: {str(e)}"
+        except Exception:
+            logger.exception("AI Static Error for model: %s", model_name)
+            raise
 
 
 # Singleton

@@ -23,6 +23,16 @@ describe('formatAnalysisText', () => {
     expect(formatAnalysisText(input)).toContain('**Region:** 8728f00a5ffffff');
   });
 
+  it('heals hard-wrapped uppercase tokens in analyst output', () => {
+    const input = [
+      '### RISK SIGNALS',
+      '- GDEL',
+      'T conflict intensity elevated.',
+    ].join('\n');
+
+    expect(formatAnalysisText(input)).toContain('- GDELT conflict intensity elevated.');
+  });
+
   it('removes stray dash artifacts and demotes consecutive headers', () => {
     const input = [
       '### AIR DOMAIN ASSESSMENT',

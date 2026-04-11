@@ -22,6 +22,8 @@ export const formatAnalysisText = (text: string) => {
     .replace(/([-•*])\s*\n\s*/g, '$1 ')
     // Heal split bold tags (e.g. "**High\nConfidence**").
     .replace(/\*\*([^*]+)\n+([^*]+)\*\*/g, '**$1 $2**')
+    // Heal hard-wrapped uppercase tokens like "GDEL\nT", including bullet-wrapped cases.
+    .replace(/(^\s*[•*-]?\s*[A-Z]{3,})\n+\s*([A-Z]{1,3}\b)/gm, '$1$2')
     // Heal short trailing word fragments like "NARRATIV\nE".
     .replace(/([A-Za-z])\n([A-Za-z]{1,3})(?=\n|$)/g, '$1$2')
     // Legacy header support (bold headers).

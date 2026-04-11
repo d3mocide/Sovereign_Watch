@@ -1,24 +1,22 @@
-# Release - v1.0.1 - Fusion Polish & Regional Intelligence Consistency
+# Release - v1.0.3 - Linkage Audit & UI Precision
 
-This patch release tightens the fidelity of analytical output across tactical intelligence routes by strictly enforcing mission-area boundary constraints for external variables. AI assessments for the Sea, Air, and Orbital domains now properly distinguish between localized incidents, impact-linked external drivers like space weather, and global context, preventing false-positive escalations and out-of-bounds geographic correlations. The dashboard audit metrics have been updated to capture the true footprint of historical tracks storage across Timescale relations for more accurate velocity and projection analysis.
+This release solidifies production intelligence auditing by graduating the legacy GDELT experimental comparison view into a permanent, 7-layer admission funnel diagnostic tool. Operators can now explicitly audit exactly how and why geopolitical OSINT signals are admitted or suppressed against mission borders. Additionally, we’ve corrected a significant geographical alignment glitch causing extreme northwestern US coordinates (such as Portland, Oregon) to incorrectly classify to Canada due to spherical centerline distortions, and polished the AI Analyst interface with modernized header badging and auto-closing ghost panels.
 
 ## Key Features
-
-- **Mission Area AI Context Fencing**: Weather context scope is now intercepted using true `ST_Within` intersections with your targeted H3 resolution instead of aggregating national averages. Orbital tracking and GDELT assessments similarly ignore noisy global activity when operating out-of-scope for the designated region.
-- **Improved Storage Observability**: The `Stats/Audit` panel's Tracks DB Size now accurately measures storage size across hypertable chunk relations, ensuring the presented linear projection burn rates accurately reflect host disk pressure.
-- **Pre-Release Analytics Skill**: Operators now have access to a reusable pre-release prompt template for consistently documenting pre-release QA reporting before marking branch stabilization.
+- **Persistent Linkage Audit Diagnostic**: A permanent, dedicated `/linkage` diagnostic funnel accessible natively from the dashboard system top-bar to verify GDELT/TAK mapping integrity.
+- **NA Boundary Distance Calibration**: Corrects massive-landmass geospatial drift errors mapping Oregon/Washington anomalies erroneously out of US control via new 49th-parallel bounding overrides.
+- **Header-Mounted AI Engine Displays**: Reduced UI footprint in the AI Analyst Panel by promoting processing engine labels natively into the title header, freeing up tactical screen real estate below.
+- **Ghost-View State Flush**: Top-level map routing now automatically resets floating panels (Clausal Context strings and AI Analyst popups), drastically smoothing map interaction tracking.
 
 ## Technical Details
-
-- **Domain AI Maneuver Mode**: Tactical, OSINT, and SAR mode toggles are now actively passed fully through to Air, Sea, and Orbital domain agents.
-- **Fusion Audit Scaling**: Auto-formats to MB/GB/TB and clarifies size definitions to specifically represent temporal storage tracks.
-- **Clausal Chain & Regional Scoping**: Regional risk tools now distinctly surface "impact-linked external context", distinguishing local causality from external dependencies.
-- **Markdown AI Analyst Resilience**: Healed wrapped bullet labels and tightened the parsing logic so formatted intelligence cards gracefully export over constrained mediums.
+- Adds new fallback mapping bounds inside the Haversine distance computations (`detect_mission_country`) bypassing centroid spherical checks.
+- Deprecates `/test` routing interfaces and moves API routing to `fetch_linkage_audit` definitions with new UI defaults synchronizing dynamically out of `.env` configurations.
 
 ## Upgrade Instructions
-
+Pull the latest tag into your production deployment and issue a fast teardown map to swap out the routing API blocks reliably:
 ```bash
-git pull origin main
-docker compose build sovereign-backend
-docker compose up -d
+git fetch --tags
+git checkout v1.0.3
+docker compose down
+make prod
 ```

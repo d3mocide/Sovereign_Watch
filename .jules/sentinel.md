@@ -14,12 +14,10 @@
 **Vulnerability:** Shell Injection
 **Learning:** `js8call/server.py` used `subprocess.Popen(cmd, shell=True)` with dynamically generated command strings containing shell operators (`|`). While `shlex.quote` was used, relying on `shell=True` introduces significant shell injection risks if user inputs or configuration bypass validation or quoting logic.
 **Prevention:** Avoid `shell=True` entirely. Refactor shell pipelines into multiple `subprocess.Popen` calls connected via standard Python I/O piping (e.g., `p2 = subprocess.Popen(..., stdin=p1.stdout)` and closing `p1.stdout` in the parent process) using array-based command arguments.
-
 ## 2026-03-04 - Eliminate SQL Injection vulnerability in TimescaleDB cleanup script
 **Vulnerability:** SQL Injection
 **Learning:** `backend/scripts/cleanup_timescale.py` used string interpolation (f-strings) to insert an environment variable (`RETENTION_HOURS`) directly into a SQL query. Even though the variable was previously cast to an integer, it is a critical security vulnerability to build SQL queries with string interpolation, as subsequent changes to the codebase might bypass the type coercion, exposing the application to injection attacks.
 **Prevention:** Never use string interpolation to construct SQL queries. Always use parameterized queries (e.g., passing variables as a tuple to `cursor.execute`) which delegates the safe escaping of variables to the database driver.
-
 ## 2026-03-05 - Missing Input Length Constraints Leads to DoS
 **Vulnerability:** Denial of Service (DoS)
 **Learning:** `backend/api/routers/analysis.py` accepted extremely long `uid` path parameters without bound, and `lookback_hours` was unbounded. Unbounded user inputs can be abused to process huge payloads, consuming memory or overwhelming the database.
@@ -40,8 +38,11 @@
 **Vulnerability:** Found Python string interpolation (`%s`) used with the modulo operator (`%`) to insert dynamically populated variables into a raw SQL query inside `backend/api/routers/stats.py` (e.g. `WHERE time >= NOW() - INTERVAL '%s hours' % hours`).
 **Learning:** Constructing SQL queries by inserting unescaped variables directly into the SQL string via string formatting makes the application susceptible to SQL injection attacks, even for supposedly safe parameters like integers. `asyncpg` protects against this by mapping positional parameters natively at the database level.
 **Prevention:** Never use Python string manipulation (`%s`, `.format()`, `f"..."`) to build parameterized SQL queries. Always use PostgreSQL native bind parameters (``, ``, etc.) and pass variables securely through the execution/fetch function arguments (e.g., `conn.fetch(query, arg1, arg2)`).
-
 ## 2026-05-24 - Log Injection vulnerability in the login endpoint
 **Vulnerability:** Log Injection / Missing Input Validation
 **Learning:** `backend/api/models/user.py` lacked a pattern constraint on the `username` field in `LoginRequest`. The `backend/api/routers/auth.py` endpoint directly logged this raw, unvalidated input during failed login attempts (e.g., `logger.warning("Failed login attempt for username '%s'...", body.username)`). An attacker could submit usernames containing newline characters (`\n`) to spoof legitimate log entries or inject misleading logging data, masking true malicious activity or corrupting log aggregators.
 **Prevention:** Consistently apply strict regular expression pattern validations (like `pattern=r"^[a-zA-Z0-9_\-]+$"` for alphanumeric IDs) to all data-transfer objects (DTOs) that accept user input, even simple fields like login usernames. Sanitize or strictly constrain all inputs before they are interpolated into log messages.
+## 2026-04-11 - [Fix Information Disclosure in API Error Response]
+**Vulnerability:** Raw exception strings (e.g., `exc`) were interpolated directly into the `HTTPException` detail response sent to clients upon failure.
+**Learning:** Returning unhandled or low-level internal error details to users can leak stack traces, implementation details, or sensitive system state, violating the principle of failing securely.
+**Prevention:** Catch exceptions, log the detailed error securely on the server (using `logger.warning` or `logger.error`), and return only a sanitized, generic error message (like 'Malformed TLE' or 'Internal server error') in the HTTP response.

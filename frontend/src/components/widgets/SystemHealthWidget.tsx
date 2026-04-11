@@ -234,16 +234,28 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
           </div>
           <div className="flex items-center gap-1">
             {hasRole("admin") && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open("/stats", "_blank");
-                }}
-                className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
-                title="Open Performance Dashboard"
-              >
-                STATS
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open("/linkage", "_blank");
+                  }}
+                  className="px-1.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/5 text-[8px] font-bold text-cyan-500 hover:bg-cyan-500/20 transition-colors"
+                  title="Open Linkage Diagnostic Audit"
+                >
+                  LINKAGE
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open("/stats", "_blank");
+                  }}
+                  className="px-1.5 py-0.5 rounded border border-hud-green/30 bg-hud-green/5 text-[8px] font-bold text-hud-green hover:bg-hud-green/20 transition-colors"
+                  title="Open Performance Dashboard"
+                >
+                  STATS
+                </button>
+              </div>
             )}
             <button
 

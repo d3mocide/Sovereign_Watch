@@ -43,6 +43,10 @@ export interface ClausalChain {
   time?: string;
   predicate_type: string;
   narrative_summary?: string;
+  context_scope?: Record<string, unknown>;
+  outage_context?: Record<string, unknown>[];
+  space_weather_context?: Record<string, unknown> | null;
+  satnogs_context?: Record<string, unknown>[];
   clauses: MedialClause[];
 }
 
@@ -83,6 +87,8 @@ interface EventDatum {
   altitude_m: number;  // metres HAE
   course: number;       // degrees
   narrative?: string;  // chain narrative_summary if present
+  context_scope?: Record<string, unknown>;
+  space_weather_context?: Record<string, unknown> | null;
 }
 
 interface TextDatum {
@@ -285,6 +291,8 @@ export function buildClausalChainLayer(
         altitude_m: clause.locative_hae ?? 0,
         course: clause.adverbial_context.course ?? 0,
         narrative: chain.narrative_summary,
+        context_scope: chain.context_scope,
+        space_weather_context: chain.space_weather_context,
       });
     }
   }
@@ -395,6 +403,8 @@ export function buildClausalChainLayer(
                 altitude_ft: Math.round((d.altitude_m ?? 0) * 3.28084),
                 course_deg: Math.round(d.course ?? 0),
                 narrative: d.narrative ?? null,
+                context_scope: d.context_scope,
+                space_weather_context: d.space_weather_context,
               },
             },
             { x: info.x, y: info.y },
@@ -426,6 +436,8 @@ export function buildClausalChainLayer(
             altitude_ft: Math.round((d.altitude_m ?? 0) * 3.28084),
             course_deg: Math.round(d.course ?? 0),
             narrative: d.narrative ?? null,
+            context_scope: d.context_scope,
+            space_weather_context: d.space_weather_context,
           },
           trail: [],
           uidHash: 0,

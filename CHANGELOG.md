@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-04-11
+
+### Added
+
+- **Linkage Audit Diagnostic Tool**: Promoted the GDELT experimental review surface to a persistent `/linkage` 7-tier admission funnel diagnostic view.
+- **GDELT Experimental Review Surface**: Added a mission-scoped comparison path that lets admins inspect live GDELT linkage results against review-only second-order and support-country candidates before widening the production trust boundary.
+- **Clausal External-Driver Labels**: Clausal sidebar, tooltip, and analyst-panel surfaces now expose thresholded space-weather context as explicit external-driver metadata instead of silently presenting it as local evidence.
+
+### Changed
+
+- **AI Analyst Panel Precision Setup**: Restructured the AI panel header to permanently anchor the engine selection badge and flushed out redundant labels to clean up the lower control actions.
+- **Map View Ghost State Flushing**: App-level state intercepts now actively cull stranded sidebars and ghost properties such as the Clausal Chains panel cleanly when the operator switches routing views.
+- **Mission-Scoped Clausal Context**: Clausal enrichment now scopes SatNOGS by propagated mission intersection, correlates outages through cable topology when available, and keeps space weather on the approved thresholded external-driver contract.
+- **Mission GDELT Prioritization**: Mission-aware GDELT consumers now retain deterministic admission tiers while ranking admitted events with linkage score and evidence, including theater-aware chokepoint weighting.
+
+### Fixed
+
+- **North America Spherical Distortion Fix**: Stabilized GDELT geo-center drift math dynamically via a constrained bounding-layer extraction explicitly scoped across the 49th parallel to resolve northern US cities mapping falsely into Canada.
+- **Clausal SatNOGS Global Drift**: Mission-scoped clausal views no longer attach unrelated global SatNOGS signal-loss rows when the propagated subpoint falls outside the active H3 or radius mission area.
+- **Clausal Outage Relevance Drift**: Clausal outage enrichment now prefers cable-topology-linked countries over coarse locality-only attachment, reducing unrelated outage pressure in mission narratives.
+- **Weak External-Driver Leakage**: Below-threshold space-weather rows no longer ride along in clausal mission context, and weaker linked GDELT events now contribute less to mission-mode prioritization and H3 risk.
+
+## [1.0.2] - 2026-04-10
+
+### Added
+
+- **Mission-Aware GDELT Linkage Service**: Added a shared backend linkage service plus generated country-code bridge data so GDELT mission filtering can admit in-AOT, state-actor, cable-infrastructure, and chokepoint-linked events using explicit geopolitical rules.
+- **Mission-Aware GDELT API Modes**: `/api/gdelt/events` and `/api/gdelt/actors` now support opt-in mission filtering by H3 cell or lat/lon radius while preserving their default global behavior for existing dashboard consumers.
+- **Mission-Scoped H3 Risk**: `/api/h3/risk` now supports opt-in mission-scoped analysis with explicit source-scope metadata so regional workflows can request a local risk surface instead of relying only on global aggregates.
+- **Regional Risk Mission Overlay**: The right-click regional analysis panel now fetches mission-scoped H3 risk in parallel with the AI regional evaluation and shows mission cell count, peak risk, peak severity, and linkage notes.
+- **Pre-Release Skill Migration**: Moved the Sovereign Watch pre-release skill and summary prompt into the repo-local `.agent/` path so release-readiness workflows remain available from the workspace.
+
+### Changed
+
+- **Regional Risk GDELT Scope Metadata**: `evaluate_regional_escalation()` now reports explicit GDELT linkage counts and replaces the old centroid-radius proxy label with `explicit_geopolitical_linkage` metadata.
+- **Regional Risk Persona Alignment**: The right-click regional risk flow now sends `mode: tactical` and uses the same persona-selection path as the main AI Analyst workflow.
+- **Regional Risk Fallback Analysis**: When the model response is empty, contradictory, or malformed, the regional risk panel now falls back to a structured analyst-style assessment instead of a flat heuristic sentence.
+- **Regional Risk Markdown Rendering**: The regional risk overlay now renders analyst markdown with the same lightweight formatter used by the AI Analyst panel, including bounded scrolling for smaller screens.
+- **Roadmap Backlog Split**: Added a backlog item for a dedicated mission stats namespace while keeping the current backend stats dashboard global.
+
+### Fixed
+
+- **Mission-Area GDELT Admission Drift**: Regional risk no longer relies on a centroid-radius proxy for mission GDELT admission, reducing unrelated external events in local risk narratives.
+- **Direct-Call Mission Query Validation**: Mission-mode parameter validation now handles FastAPI query defaults correctly in router/test direct-call paths, preventing false 400 errors outside the request parser.
+- **Regional Risk False Success State**: The overlay now distinguishes complete success from partial success and no longer reports `Completed` while showing `Evaluation error` in the narrative area.
+- **Regional Risk Narrative Contradictions**: Regional risk assessments no longer emit `No significant escalation detected` when the precomputed mission and GDELT signals already indicate elevated pressure.
+- **Regional Risk Text Wrapping**: Analyst output now heals hard-wrapped uppercase tokens such as `GDELT` and keeps long regional narratives contained inside a scrollable panel on narrow displays.
+
 ## [1.0.1] - 2026-04-09
 
 ### Added

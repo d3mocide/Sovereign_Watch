@@ -16,10 +16,17 @@ from pydantic import BaseModel
 from sgp4.api import Satrec, jday as sgp4_jday
 
 from services.escalation_detector import EscalationDetector
+from services.gdelt_linkage import (
+    GDELT_LINKAGE_REASON,
+    build_aot_context,
+    fetch_linked_gdelt_events,
+    format_gdelt_linkage_notes,
+)
 from services.hmm_trajectory import HMMResult, classify_trajectory
 from services.sequence_evaluation_engine import (
     RiskAssessment,
     SequenceEvaluationEngine,
+    format_heuristic_fallback_narrative,
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
 from services.stdbscan import detect_clusters
@@ -39,10 +46,10 @@ _HEATMAP_MAX_CONCURRENCY = 4
 
 # Keep UI interactions responsive even if the model endpoint is slow/unreachable.
 _LLM_EVAL_TIMEOUT_SECONDS = 8.0
-_GDELT_SPATIAL_RADIUS_M = 250_000.0
 _SEA_CONTEXT_RADIUS_KM = 400.0
 _SEA_CABLE_PROXIMITY_KM = 250.0
 _SEA_CABLE_ENDPOINT_MATCH_KM = 75.0
+_SPACE_WEATHER_MISSION_KP_THRESHOLD = 5.0
 
 
 def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
@@ -76,6 +83,46 @@ def _compute_gdelt_conflict_score(gdelt_events: List[Dict]) -> float:
     hostility = max(0.0, min(1.0, (-avg_tone) / 10.0))
 
     return min(1.0, 0.6 * conflict_ratio + 0.3 * material_ratio + 0.1 * hostility)
+
+
+def _build_heuristic_narrative(
+    risk_score: float,
+    escalation_indicators: List[str],
+    gdelt_linkage_notes: Optional[str] = None,
+    anomalous_count: int = 0,
+    mode: str = "tactical",
+    is_sitrep: bool = True,
+) -> str:
+    return format_heuristic_fallback_narrative(
+        heuristic_risk_score=risk_score,
+        escalation_indicators=escalation_indicators,
+        gdelt_linkage_notes=gdelt_linkage_notes,
+        anomalous_count=anomalous_count,
+        mode=mode,
+        is_sitrep=is_sitrep,
+    )
+
+
+def _coerce_float(value: object) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _space_weather_kp_meets_threshold(kp_value: object) -> bool:
+    kp_float = _coerce_float(kp_value)
+    return kp_float is not None and kp_float >= _SPACE_WEATHER_MISSION_KP_THRESHOLD
+
+
+def _sort_gdelt_events_by_linkage_score(gdelt_events: List[Dict]) -> List[Dict]:
+    return sorted(
+        gdelt_events,
+        key=lambda event: float(event.get("linkage_score", 0.0)),
+        reverse=True,
+    )
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -209,13 +256,21 @@ def _ecef_to_lla(r_ecef: Tuple[float, float, float]) -> Tuple[float, float, floa
 async def _fetch_aot_relevant_satnogs_events(
     conn,
     *,
-    h3_region: str,
+    h3_region: Optional[str] = None,
+    center_lat: Optional[float] = None,
+    center_lon: Optional[float] = None,
+    radius_nm: Optional[float] = None,
     lookback_hours: int,
     signal_threshold: float = -10.0,
     limit: int = 10,
     candidate_limit: int = 40,
 ) -> List[Dict]:
-    """Return only SatNOGS signal-loss events whose satellite subpoint intersects the AOT."""
+    """Return only SatNOGS signal-loss events whose satellite subpoint matches the mission AOT."""
+    if not h3_region and (
+        center_lat is None or center_lon is None or radius_nm is None
+    ):
+        return []
+
     candidate_rows = await conn.fetch(
         """
         SELECT norad_id, ground_station_name, signal_strength, time, modulation, frequency
@@ -267,8 +322,16 @@ async def _fetch_aot_relevant_satnogs_events(
         if not subpoint:
             continue
         subpoint_lat, subpoint_lon = subpoint
-        if not _point_in_h3_region(subpoint_lat, subpoint_lon, h3_region):
-            continue
+
+        if h3_region:
+            if not _point_in_h3_region(subpoint_lat, subpoint_lon, h3_region):
+                continue
+            linkage_reason = "orbital_subpoint_in_aot"
+        else:
+            distance_km = haversine_km(subpoint_lat, subpoint_lon, center_lat, center_lon)
+            if distance_km > radius_nm * 1.852:
+                continue
+            linkage_reason = "orbital_subpoint_in_radius"
 
         relevant_events.append(
             {
@@ -281,7 +344,7 @@ async def _fetch_aot_relevant_satnogs_events(
                 "subpoint_lat": round(subpoint_lat, 4),
                 "subpoint_lon": round(subpoint_lon, 4),
                 "scope": "mission_area",
-                "linkage_reason": "orbital_subpoint_in_aot",
+                "linkage_reason": linkage_reason,
             }
         )
         if len(relevant_events) >= limit:
@@ -481,11 +544,37 @@ def _derive_cable_relevant_countries_from_index(
     }
 
 
+def _derive_relevant_outage_country_codes(
+    outages_data: Dict,
+    relevant_countries: Set[str],
+) -> Set[str]:
+    """Map cable-relevant country names back to outage country codes."""
+    normalized_countries = {
+        _normalize_country_label(country)
+        for country in relevant_countries
+        if _normalize_country_label(country)
+    }
+    if not normalized_countries:
+        return set()
+
+    outage_country_codes: Set[str] = set()
+    for feature in outages_data.get("features", []):
+        properties = feature.get("properties", {})
+        country_name = properties.get("country") or properties.get("region")
+        if _normalize_country_label(country_name) not in normalized_countries:
+            continue
+        country_code = properties.get("country_code")
+        if country_code:
+            outage_country_codes.add(str(country_code))
+    return outage_country_codes
+
+
 class EvaluationRequest(BaseModel):
     """Request for regional escalation evaluation."""
 
     h3_region: str  # H3-7 hexagonal cell
     lookback_hours: int = 24
+    mode: str = "tactical"
     include_gdelt: bool = True
     include_tak: bool = True
     # When True the LLM narrative step is skipped (used internally for heatmaps
@@ -640,34 +729,22 @@ async def evaluate_regional_escalation(
         # GDELT events – sourced from gdelt_events with aliases expected by
         # SpatialTemporalAlignment (event_latitude/event_longitude/event_date).
         gdelt_events = []
+        gdelt_linkage_counts = {
+            "in_aot": 0,
+            "state_actor": 0,
+            "cable_infra": 0,
+            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0,
+        }
         if request.include_gdelt:
             if wkt_polygon:
-                gdelt_query = """
-                    SELECT
-                        event_id AS event_id_cnty,
-                        to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
-                        lat AS event_latitude,
-                        lon AS event_longitude,
-                        event_code,
-                        headline AS event_text,
-                        quad_class,
-                        tone,
-                        goldstein
-                    FROM gdelt_events
-                    WHERE time > now() - ($1 * interval '1 hour')
-                      AND ST_DWithin(
-                        geom::geography,
-                        ST_Centroid(ST_GeomFromText($2, 4326))::geography,
-                        $3
-                      )
-                    ORDER BY time DESC
-                """
-                rows = await conn.fetch(
-                    gdelt_query,
-                    lookback_hours,
-                    wkt_polygon,
-                    _GDELT_SPATIAL_RADIUS_M,
+                linkage_result = await fetch_linked_gdelt_events(
+                    conn,
+                    db.redis_client,
+                    h3_region=request.h3_region,
+                    lookback_hours=lookback_hours,
                 )
+                gdelt_events = _sort_gdelt_events_by_linkage_score(linkage_result.events)
+                gdelt_linkage_counts = linkage_result.linkage_counts
             else:
                 gdelt_query = """
                     SELECT
@@ -677,6 +754,8 @@ async def evaluate_regional_escalation(
                         lon AS event_longitude,
                         event_code,
                         headline AS event_text,
+                        actor1_country,
+                        actor2_country,
                         quad_class,
                         tone,
                         goldstein
@@ -685,7 +764,7 @@ async def evaluate_regional_escalation(
                     ORDER BY time DESC
                 """
                 rows = await conn.fetch(gdelt_query, lookback_hours)
-            gdelt_events = [dict(row) for row in rows]
+                gdelt_events = [dict(row) for row in rows]
 
         # TAK events – filtered to the H3 region when possible
         tak_events = []
@@ -751,18 +830,27 @@ async def evaluate_regional_escalation(
         if space_weather_row:
             space_weather_data = dict(space_weather_row)
 
-        # SatNOGS signal events (any signal loss detected)
-        signal_events = []
-        signal_query = """
-            SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
-            FROM satnogs_signal_events
-            WHERE time > now() - ($1 * interval '1 hour')
-              AND signal_strength < $2
-            ORDER BY signal_strength ASC, time DESC
-            LIMIT 10
-        """
-        signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
-        signal_events = [dict(row) for row in signal_rows]
+        # SatNOGS signal events — mission-area filtered when a polygon is available,
+        # otherwise fall back to the global feed.
+        _satnogs_mission_scoped = False
+        if wkt_polygon:
+            signal_events = await _fetch_aot_relevant_satnogs_events(
+                conn,
+                h3_region=request.h3_region,
+                lookback_hours=lookback_hours,
+            )
+            _satnogs_mission_scoped = True
+        else:
+            signal_query = """
+                SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
+                FROM satnogs_signal_events
+                WHERE time > now() - ($1 * interval '1 hour')
+                  AND signal_strength < $2
+                ORDER BY signal_strength ASC, time DESC
+                LIMIT 10
+            """
+            signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
+            signal_events = [dict(row) for row in signal_rows]
 
     source_scope = {
         "tak": _build_scope_descriptor(
@@ -771,10 +859,23 @@ async def evaluate_regional_escalation(
             lookback_hours=lookback_hours,
         ),
         "gdelt": _build_scope_descriptor(
-            "mission_area" if wkt_polygon else "global",
-            "h3_centroid_radius_proxy" if wkt_polygon else "missing_spatial_filter",
+            (
+                "global"
+                if not wkt_polygon
+                else (
+                    "impact_linked_external"
+                    if sum(gdelt_linkage_counts.values()) > gdelt_linkage_counts["in_aot"]
+                    and gdelt_linkage_counts["in_aot"] == 0
+                    else "mission_area"
+                )
+            ),
+            GDELT_LINKAGE_REASON if wkt_polygon else "missing_spatial_filter",
             lookback_hours=lookback_hours,
-            notes="Proxy filter only; explicit geopolitical linkage rules are still pending.",
+            notes=(
+                format_gdelt_linkage_notes(gdelt_linkage_counts)
+                if wkt_polygon
+                else None
+            ),
         ),
         "internet_outages": _build_scope_descriptor(
             "mission_area" if wkt_polygon else "global",
@@ -787,10 +888,9 @@ async def evaluate_regional_escalation(
             lookback_hours=lookback_hours,
         ),
         "satnogs": _build_scope_descriptor(
-            "global",
-            "ungated_signal_loss_feed",
+            "mission_area" if _satnogs_mission_scoped else "global",
+            "satellite_subpoint_intersection" if _satnogs_mission_scoped else "ungated_signal_loss_feed",
             lookback_hours=lookback_hours,
-            notes="Still unfiltered in evaluate; mission-area relevance rules are pending.",
         ),
     }
 
@@ -972,48 +1072,6 @@ async def evaluate_regional_escalation(
         [a.description for a in context_anomalies if a.score > 0.1]
     )
 
-    # Initialize LLM-based sequence evaluation if risk is elevated.
-    # Lightweight mode (used by the heatmap endpoint) skips the LLM call to
-    # avoid fanning out expensive model requests per heatmap cell.
-    narrative_summary = "No significant escalation detected"
-    confidence = 0.5
-
-    if risk_score > 0.3 and not request.lightweight:
-        try:
-            logger.info(
-                "🧠 [UNIFIED-BRAIN] Evaluating region %s with %d behavioral signals detected",
-                request.h3_region,
-                len(behavioral_signals),
-            )
-            evaluation_engine = SequenceEvaluationEngine()
-
-            # Call LLM for detailed analysis
-            assessment: RiskAssessment = await asyncio.wait_for(
-                evaluation_engine.evaluate_escalation(
-                    h3_region=request.h3_region,
-                    gdelt_summary=gdelt_summary,
-                    tak_summary=tak_summary,
-                    anomalous_uids=anomalous_uids,
-                    behavioral_signals=behavioral_signals,
-                    is_sitrep=request.is_sitrep,
-                ),
-                timeout=_LLM_EVAL_TIMEOUT_SECONDS,
-            )
-
-            narrative_summary = assessment.narrative_summary
-            confidence = assessment.confidence
-            # Risk score from LLM can override if confidence is high
-            if confidence > 0.7:
-                risk_score = assessment.risk_score
-
-        except TimeoutError:
-            logger.warning(
-                "LLM evaluation timed out after %.1fs, using heuristic scoring",
-                _LLM_EVAL_TIMEOUT_SECONDS,
-            )
-        except Exception as e:
-            logger.warning(f"LLM evaluation failed, using heuristic scoring: {e}")
-
     # Detect escalation indicators
     escalation_indicators = []
     if pattern_match:
@@ -1072,6 +1130,59 @@ async def evaluate_regional_escalation(
             f"HIGH RISK detected in region {request.h3_region}: {risk_score:.2f}"
         )
         escalation_indicators.append("ESCALATE_TO_TIER3")
+
+    # Initialize LLM-based sequence evaluation if risk is elevated.
+    # Lightweight mode (used by the heatmap endpoint) skips the LLM call to
+    # avoid fanning out expensive model requests per heatmap cell.
+    gdelt_linkage_notes = source_scope["gdelt"].get("notes") if source_scope.get("gdelt") else None
+    narrative_summary = _build_heuristic_narrative(
+        risk_score,
+        escalation_indicators,
+        gdelt_linkage_notes=gdelt_linkage_notes,
+        anomalous_count=len(anomalous_uids),
+        mode=request.mode,
+        is_sitrep=request.is_sitrep,
+    )
+    confidence = 0.5
+
+    if risk_score > 0.3 and not request.lightweight:
+        try:
+            logger.info(
+                "🧠 [UNIFIED-BRAIN] Evaluating region %s with %d behavioral signals detected",
+                request.h3_region,
+                len(behavioral_signals),
+            )
+            evaluation_engine = SequenceEvaluationEngine()
+
+            assessment: RiskAssessment = await asyncio.wait_for(
+                evaluation_engine.evaluate_escalation(
+                    h3_region=request.h3_region,
+                    gdelt_summary=gdelt_summary,
+                    tak_summary=tak_summary,
+                    anomalous_uids=anomalous_uids,
+                    behavioral_signals=behavioral_signals,
+                    heuristic_risk_score=risk_score,
+                    escalation_indicators=escalation_indicators,
+                    gdelt_linkage_notes=gdelt_linkage_notes,
+                    mode=request.mode,
+                    is_sitrep=request.is_sitrep,
+                ),
+                timeout=_LLM_EVAL_TIMEOUT_SECONDS,
+            )
+
+            if assessment.narrative_summary.strip():
+                narrative_summary = assessment.narrative_summary
+            confidence = assessment.confidence
+            if confidence > 0.7:
+                risk_score = assessment.risk_score
+
+        except TimeoutError:
+            logger.warning(
+                "LLM evaluation timed out after %.1fs, using heuristic scoring",
+                _LLM_EVAL_TIMEOUT_SECONDS,
+            )
+        except Exception as e:
+            logger.warning(f"LLM evaluation failed, using heuristic scoring: {e}")
 
     return RiskAssessmentResponse(
         h3_region_id=request.h3_region,
@@ -1183,6 +1294,16 @@ async def get_clausal_chains(
                 radius_nm=radius_nm,
                 start_param_idx=2,
             )
+            aot_context = (
+                build_aot_context(
+                    h3_region=region,
+                    lat=lat,
+                    lon=lon,
+                    radius_nm=radius_nm,
+                )
+                if spatial_mode != "global"
+                else None
+            )
 
             where_clauses = [
                 "time > now() - ($1 * interval '1 hour')",
@@ -1227,16 +1348,62 @@ async def get_clausal_chains(
                 context_params.extend(context_spatial_params)
             context_where_sql = " AND ".join(context_where)
 
-            outage_rows = await conn.fetch(
-                f"""
-                SELECT time, country_code, severity, asn_name, affected_nets
-                FROM internet_outages
-                WHERE {context_where_sql}
-                ORDER BY severity DESC, time DESC
-                LIMIT 5
-                """,
-                *context_params,
+            outage_scope = "mission_area" if spatial_mode != "global" else "global"
+            outage_linkage_reason = (
+                f"{spatial_mode}_filter" if spatial_mode != "global" else "missing_spatial_filter"
             )
+            outage_notes = None
+            outage_country_codes: Set[str] = set()
+            if db.redis_client and aot_context is not None:
+                cable_index_raw, cables_raw, outages_raw = await asyncio.gather(
+                    db.redis_client.get("infra:cable_country_index"),
+                    db.redis_client.get("infra:cables"),
+                    db.redis_client.get("infra:outages"),
+                )
+                if cable_index_raw and cables_raw and outages_raw:
+                    try:
+                        cable_relevant_countries = _derive_cable_relevant_countries_from_index(
+                            json.loads(cable_index_raw),
+                            json.loads(cables_raw),
+                            aot_context.region_lat,
+                            aot_context.region_lon,
+                        )
+                        outage_country_codes = _derive_relevant_outage_country_codes(
+                            json.loads(outages_raw),
+                            cable_relevant_countries,
+                        )
+                    except Exception as exc:
+                        logger.warning("Clausal outage topology correlation failed: %s", exc)
+
+            if outage_country_codes:
+                outage_rows = await conn.fetch(
+                    """
+                    SELECT time, country_code, severity, asn_name, affected_nets
+                    FROM internet_outages
+                    WHERE time > now() - ($1 * interval '1 hour')
+                      AND country_code = ANY($2::text[])
+                    ORDER BY severity DESC, time DESC
+                    LIMIT 5
+                    """,
+                    lookback_hours,
+                    sorted(outage_country_codes),
+                )
+                outage_scope = "impact_linked_external"
+                outage_linkage_reason = "cable_topology"
+                outage_notes = (
+                    f"Filtered to {len(outage_country_codes)} cable-relevant outage countries derived from mission topology."
+                )
+            else:
+                outage_rows = await conn.fetch(
+                    f"""
+                    SELECT time, country_code, severity, asn_name, affected_nets
+                    FROM internet_outages
+                    WHERE {context_where_sql}
+                    ORDER BY severity DESC, time DESC
+                    LIMIT 5
+                    """,
+                    *context_params,
+                )
             space_weather_row = await conn.fetchrow(
                 """
                 SELECT time, kp_index, kp_category, dst_index, explanation
@@ -1258,6 +1425,32 @@ async def get_clausal_chains(
                 lookback_hours,
             )
 
+            satnogs_scope = "global"
+            satnogs_linkage_reason = "ungated_signal_loss_feed"
+            satnogs_notes = "Still unfiltered in clausal enrichment; mission-area relevance rules are pending."
+            if spatial_mode == "h3" and region:
+                signal_rows = await _fetch_aot_relevant_satnogs_events(
+                    conn,
+                    h3_region=region,
+                    lookback_hours=lookback_hours,
+                    limit=5,
+                )
+                satnogs_scope = "mission_area"
+                satnogs_linkage_reason = "orbital_subpoint_in_aot"
+                satnogs_notes = None
+            elif spatial_mode == "radius" and lat is not None and lon is not None and radius_nm is not None:
+                signal_rows = await _fetch_aot_relevant_satnogs_events(
+                    conn,
+                    center_lat=lat,
+                    center_lon=lon,
+                    radius_nm=radius_nm,
+                    lookback_hours=lookback_hours,
+                    limit=5,
+                )
+                satnogs_scope = "mission_area"
+                satnogs_linkage_reason = "orbital_subpoint_in_radius"
+                satnogs_notes = None
+
             context_scope = {
                 "spatial_mode": spatial_mode,
                 "lookback_hours": lookback_hours,
@@ -1267,20 +1460,22 @@ async def get_clausal_chains(
                     lookback_hours=lookback_hours,
                 ),
                 "outages": _build_scope_descriptor(
-                    "mission_area" if spatial_mode != "global" else "global",
-                    f"{spatial_mode}_filter" if spatial_mode != "global" else "missing_spatial_filter",
+                    outage_scope,
+                    outage_linkage_reason,
                     lookback_hours=lookback_hours,
+                    notes=outage_notes,
                 ),
                 "space_weather": _build_scope_descriptor(
                     "impact_linked_external",
                     "global_propagation",
                     lookback_hours=lookback_hours,
+                    notes=f"Thresholded external-driver gate applied: kp>={_SPACE_WEATHER_MISSION_KP_THRESHOLD:g}",
                 ),
                 "satnogs": _build_scope_descriptor(
-                    "global",
-                    "ungated_signal_loss_feed",
+                    satnogs_scope,
+                    satnogs_linkage_reason,
                     lookback_hours=lookback_hours,
-                    notes="Still unfiltered in clausal enrichment; mission-area relevance rules are pending.",
+                    notes=satnogs_notes,
                 ),
             }
             outage_context = [
@@ -1293,17 +1488,18 @@ async def get_clausal_chains(
                 }
                 for row in outage_rows
             ]
-            space_weather_context = (
-                {
+            space_weather_context = None
+            if space_weather_row and _space_weather_kp_meets_threshold(space_weather_row.get("kp_index")):
+                space_weather_context = {
                     "time": space_weather_row["time"].isoformat() if hasattr(space_weather_row["time"], "isoformat") else str(space_weather_row["time"]),
                     "kp_index": space_weather_row["kp_index"],
                     "kp_category": space_weather_row["kp_category"],
                     "dst_index": space_weather_row["dst_index"],
                     "explanation": space_weather_row["explanation"],
+                    "relevant_to_mission": True,
+                    "threshold_passed": True,
+                    "threshold": f"kp>={_SPACE_WEATHER_MISSION_KP_THRESHOLD:g}",
                 }
-                if space_weather_row
-                else None
-            )
             satnogs_context = [
                 {
                     "time": row["time"].isoformat() if hasattr(row["time"], "isoformat") else str(row["time"]),
@@ -1312,6 +1508,10 @@ async def get_clausal_chains(
                     "signal_strength": row["signal_strength"],
                     "modulation": row["modulation"],
                     "frequency": row["frequency"],
+                    "scope": row.get("scope", satnogs_scope),
+                    "linkage_reason": row.get("linkage_reason", satnogs_linkage_reason),
+                    "subpoint_lat": row.get("subpoint_lat"),
+                    "subpoint_lon": row.get("subpoint_lon"),
                 }
                 for row in signal_rows
             ]
@@ -1802,12 +2002,12 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
             kp_data = _j2.loads(kp_raw)
             kp_value = kp_data.get("kp")
             storm_level = kp_data.get("storm_level", "?")
-            relevant_to_mission = kp_value is not None and float(kp_value) >= 5.0
+            relevant_to_mission = _space_weather_kp_meets_threshold(kp_value)
             context["space_weather_driver"] = {
                 "kp_index": kp_value,
                 "storm_level": storm_level,
                 "relevant_to_mission": relevant_to_mission,
-                "threshold": "kp>=5",
+                "threshold": f"kp>={_SPACE_WEATHER_MISSION_KP_THRESHOLD:g}",
             }
             if relevant_to_mission:
                 space_weather_summary = f"Kp={kp_value} ({storm_level})"
