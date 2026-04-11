@@ -56,7 +56,7 @@ export async function fetchGdeltLinkageAudit(
 
   const response = await fetch("/api/gdelt/linkage-audit?" + params.toString());
   if (!response.ok) {
-    const text = await response.text().catch((e) => response.statusText);
+    const text = await response.text().catch(() => response.statusText);
     throw new Error(`Linkage audit failed (${response.status}): ${text}`);
   }
 
