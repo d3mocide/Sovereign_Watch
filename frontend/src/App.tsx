@@ -51,6 +51,7 @@ interface IntelArticleContent {
 }
 
 const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
+const GdeltLinkageReviewView = lazy(() => import('./components/views/GdeltLinkageReviewView'));
 
 function AuthenticatedApp() {
 
@@ -1141,6 +1142,7 @@ function App() {
 
   if (authStatus === 'authenticated') {
     const isStatsRoute = window.location.pathname === '/stats';
+    const isTestRoute = window.location.pathname === '/test';
 
     if (isStatsRoute && hasRole('admin')) {
       return (
@@ -1150,6 +1152,17 @@ function App() {
           </div>
         }>
           <StatsDashboardView />
+        </Suspense>
+      );
+    }
+    if (isTestRoute && hasRole('admin')) {
+      return (
+        <Suspense fallback={
+          <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0ff] font-mono animate-pulse">
+            INITIALIZING REVIEW SURFACE...
+          </div>
+        }>
+          <GdeltLinkageReviewView />
         </Suspense>
       );
     }

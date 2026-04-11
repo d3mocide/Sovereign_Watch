@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { CoTEntity } from "../../types";
+import { getClausalSpaceWeatherPresentation } from "../layouts/sidebar-right/clausalContextPresentation";
 
 interface MapTooltipProps {
   entity: CoTEntity;
@@ -92,6 +93,9 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
     clausalReason === "LOITER_DETECTED" ? "border-yellow-400/50" :
     clausalReason === "ZONE_ENTRY" || clausalReason === "AIRSPACE_ENTRY" ? "border-cyan-400/50" :
     "border-violet-400/50";
+  const clausalSpaceWeather = isClausal
+    ? getClausalSpaceWeatherPresentation(detailProps)
+    : null;
   const jammingAssessment = String(
     (entity.detail as Record<string, unknown> | undefined)?.assessment ||
       "mixed",
@@ -1037,6 +1041,19 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               {detailProps.course_deg != null ? `${detailProps.course_deg}°` : "--"}
             </span>
           </div>
+          {clausalSpaceWeather && (
+            <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
+              <span className="text-[8px] text-white/40 block leading-tight">
+                EXTERNAL DRIVER
+              </span>
+              <span className="text-[9px] text-white/75 font-mono leading-snug block">
+                {clausalSpaceWeather.statusLabel}
+              </span>
+              <span className="text-[8px] text-white/45 font-mono leading-tight block mt-1">
+                {clausalSpaceWeather.scopeLabel} · {clausalSpaceWeather.linkageReasonLabel}
+              </span>
+            </div>
+          )}
           {!!detailProps.narrative && (
             <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
               <span className="text-[8px] text-white/40 block leading-tight">

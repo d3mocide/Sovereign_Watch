@@ -47,6 +47,8 @@ async def test_gdelt_events_mission_mode_returns_linkage_metadata(mock_fetch_lin
                 "goldstein": -7.0,
                 "tone": -4.0,
                 "linkage_tier": "chokepoint",
+                "linkage_score": 0.65,
+                "linkage_evidence": {"matched_chokepoint": "Strait of Hormuz"},
                 "linkage_chokepoint": "Strait of Hormuz",
             }
         ],
@@ -69,6 +71,8 @@ async def test_gdelt_events_mission_mode_returns_linkage_metadata(mock_fetch_lin
     assert result["source_scope"]["linkage_reason"] == "explicit_geopolitical_linkage"
     assert result["source_scope"]["scope"] == "impact_linked_external"
     assert result["features"][0]["properties"]["linkage_tier"] == "chokepoint"
+    assert result["features"][0]["properties"]["linkage_score"] == 0.65
+    assert result["features"][0]["properties"]["linkage_evidence"] == {"matched_chokepoint": "Strait of Hormuz"}
     assert result["features"][0]["properties"]["linkage_chokepoint"] == "Strait of Hormuz"
 
 
@@ -161,3 +165,34 @@ def test_gdelt_events_reject_partial_radius_parameters():
 
     assert exc_info.value.status_code == 400
     assert "required together" in str(exc_info.value.detail)
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@patch.object(gdelt_router, "fetch_experimental_linkage_review", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_gdelt_linkage_review_returns_side_by_side_payload(mock_review):
+    mock_review.return_value = {
+        "reference_version": "2026-04-11-v1",
+        "mission_country_code": "UKR",
+        "live": {
+            "counts": {"in_aot": 1, "state_actor": 1, "cable_infra": 0, "chokepoint": 0},
+            "sample": [{"event_id_cnty": "live-1", "linkage_tier": "state_actor", "linkage_score": 0.8}],
+        },
+        "experimental": {
+            "counts": {"second_order_only": 1, "alliance_support": 0, "basing_support": 0},
+            "sample": [{"event_id_cnty": "exp-1", "experimental_reasons": ["second_order_neighbor"], "live_admitted": False}],
+            "country_sets": {"second_order_only": ["DEU"], "alliance_support": [], "basing_support": []},
+        },
+        "comparison": {"overlap_count": 0, "live_only_count": 2, "experimental_only_count": 1},
+    }
+
+    mock_conn = MagicMock()
+
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_linkage_review(limit=10, hours=24, h3_region="8728f2ba8ffffff")
+
+    assert result["mission_country_code"] == "UKR"
+    assert result["live"]["counts"]["state_actor"] == 1
+    assert result["experimental"]["counts"]["second_order_only"] == 1
+    assert result["comparison"]["experimental_only_count"] == 1
+    mock_review.assert_awaited_once()

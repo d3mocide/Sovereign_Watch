@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- **GDELT Experimental Review Surface**: Added a mission-scoped comparison path that lets admins inspect live GDELT linkage results against review-only second-order and support-country candidates before widening the production trust boundary.
+- **Clausal External-Driver Labels**: Clausal sidebar, tooltip, and analyst-panel surfaces now expose thresholded space-weather context as explicit external-driver metadata instead of silently presenting it as local evidence.
+
+### Changed
+
+- **Mission-Scoped Clausal Context**: Clausal enrichment now scopes SatNOGS by propagated mission intersection, correlates outages through cable topology when available, and keeps space weather on the approved thresholded external-driver contract.
+- **Mission GDELT Prioritization**: Mission-aware GDELT consumers now retain deterministic admission tiers while ranking admitted events with linkage score and evidence, including theater-aware chokepoint weighting.
+
+### Fixed
+
+- **Clausal SatNOGS Global Drift**: Mission-scoped clausal views no longer attach unrelated global SatNOGS signal-loss rows when the propagated subpoint falls outside the active H3 or radius mission area.
+- **Clausal Outage Relevance Drift**: Clausal outage enrichment now prefers cable-topology-linked countries over coarse locality-only attachment, reducing unrelated outage pressure in mission narratives.
+- **Weak External-Driver Leakage**: Below-threshold space-weather rows no longer ride along in clausal mission context, and weaker linked GDELT events now contribute less to mission-mode prioritization and H3 risk.
+
 ## [1.0.2] - 2026-04-10
 
 ### Added

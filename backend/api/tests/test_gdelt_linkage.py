@@ -40,6 +40,7 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
             "event_latitude": 49.0,
             "event_longitude": 32.0,
             "in_aot": True,
+            "goldstein": -8.0,
         },
         {
             "event_id_cnty": "state",
@@ -48,6 +49,7 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
             "quad_class": 4,
             "actor1_country": "RUS",
             "in_aot": False,
+            "goldstein": -7.0,
         },
         {
             "event_id_cnty": "cable",
@@ -56,6 +58,7 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
             "quad_class": 4,
             "actor1_country": "GBR",
             "in_aot": False,
+            "goldstein": -6.0,
         },
         {
             "event_id_cnty": "chokepoint",
@@ -64,6 +67,7 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
             "quad_class": 4,
             "actor1_country": "BRA",
             "in_aot": False,
+            "goldstein": -4.0,
         },
         {
             "event_id_cnty": "excluded",
@@ -79,9 +83,12 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
         events,
         mission_country_codes={"UKR", "RUS", "BLR"},
         cable_country_codes={"GBR"},
+        primary_mission_country_code="UKR",
     )
 
     tiers = {event["event_id_cnty"]: event["linkage_tier"] for event in admitted}
+    scores = {event["event_id_cnty"]: event["linkage_score"] for event in admitted}
+    evidence = {event["event_id_cnty"]: event["linkage_evidence"] for event in admitted}
 
     assert tiers == {
         "in-aot": "in_aot",
@@ -96,3 +103,122 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
         "chokepoint": 1,
     }
     assert next(event for event in admitted if event["event_id_cnty"] == "chokepoint")["linkage_chokepoint"] == "Strait of Hormuz"
+    assert scores["in-aot"] == 1.0
+    assert scores["state"] == 0.8
+    assert scores["cable"] == 0.85
+    assert scores["chokepoint"] == 0.65
+    assert evidence["in-aot"] == {"matched_aot": True}
+    assert evidence["state"] == {"matched_country_codes": ["RUS"], "neighbor_depth": 1}
+    assert evidence["cable"] == {"matched_cable_country_codes": ["GBR"]}
+    assert evidence["chokepoint"] == {
+        "matched_chokepoint": "Strait of Hormuz",
+        "chokepoint_theaters": ["CENTCOM", "INDOPACOM"],
+    }
+
+
+def test_classify_gdelt_linkage_scores_direct_state_actor_above_neighbor_match():
+    events = [
+        {
+            "event_id_cnty": "direct",
+            "quad_class": 4,
+            "actor1_country": "UKR",
+            "goldstein": -7.0,
+            "in_aot": False,
+        },
+        {
+            "event_id_cnty": "neighbor",
+            "quad_class": 4,
+            "actor1_country": "RUS",
+            "goldstein": -7.0,
+            "in_aot": False,
+        },
+    ]
+
+    admitted, _ = gdelt_linkage.classify_gdelt_linkage(
+        events,
+        mission_country_codes={"UKR", "RUS", "BLR"},
+        cable_country_codes=set(),
+        primary_mission_country_code="UKR",
+    )
+
+    scores = {event["event_id_cnty"]: event["linkage_score"] for event in admitted}
+    evidence = {event["event_id_cnty"]: event["linkage_evidence"] for event in admitted}
+
+    assert scores["direct"] == 1.0
+    assert scores["neighbor"] == 0.8
+    assert evidence["direct"]["neighbor_depth"] == 0
+    assert evidence["neighbor"]["neighbor_depth"] == 1
+
+
+def test_classify_gdelt_linkage_orders_admitted_events_by_linkage_score():
+    events = [
+        {
+            "event_id_cnty": "lower-score",
+            "event_latitude": 49.0,
+            "event_longitude": 32.0,
+            "quad_class": 4,
+            "actor1_country": "RUS",
+            "goldstein": -3.0,
+            "in_aot": False,
+        },
+        {
+            "event_id_cnty": "higher-score",
+            "event_latitude": 49.1,
+            "event_longitude": 32.1,
+            "in_aot": True,
+            "goldstein": -8.0,
+        },
+    ]
+
+    admitted, _ = gdelt_linkage.classify_gdelt_linkage(
+        events,
+        mission_country_codes={"UKR", "RUS", "BLR"},
+        cable_country_codes=set(),
+        primary_mission_country_code="UKR",
+    )
+
+    assert [event["event_id_cnty"] for event in admitted] == ["higher-score", "lower-score"]
+
+
+def test_classify_gdelt_linkage_boosts_theater_aligned_chokepoint_score():
+    events = [
+        {
+            "event_id_cnty": "aligned",
+            "event_latitude": 26.5,
+            "event_longitude": 56.3,
+            "quad_class": 4,
+            "actor1_country": "BRA",
+            "goldstein": -4.0,
+            "in_aot": False,
+        },
+        {
+            "event_id_cnty": "non-aligned",
+            "event_latitude": 26.5,
+            "event_longitude": 56.3,
+            "quad_class": 4,
+            "actor1_country": "BRA",
+            "goldstein": -4.0,
+            "in_aot": False,
+        },
+    ]
+
+    admitted_aligned, _ = gdelt_linkage.classify_gdelt_linkage(
+        [events[0]],
+        mission_country_codes={"ARE"},
+        cable_country_codes=set(),
+        primary_mission_country_code="ARE",
+    )
+    admitted_non_aligned, _ = gdelt_linkage.classify_gdelt_linkage(
+        [events[1]],
+        mission_country_codes={"UKR", "RUS", "BLR"},
+        cable_country_codes=set(),
+        primary_mission_country_code="UKR",
+    )
+
+    assert admitted_aligned[0]["linkage_tier"] == "chokepoint"
+    assert admitted_non_aligned[0]["linkage_tier"] == "chokepoint"
+    assert admitted_aligned[0]["linkage_score"] == 0.85
+    assert admitted_non_aligned[0]["linkage_score"] == 0.65
+    assert admitted_aligned[0]["linkage_evidence"]["matched_theater"] == "CENTCOM"
+    assert admitted_aligned[0]["linkage_evidence"]["chokepoint_theaters"] == ["CENTCOM", "INDOPACOM"]
+    assert "matched_theater" not in admitted_non_aligned[0]["linkage_evidence"]

@@ -36,12 +36,27 @@ mock_hmm.classify_trajectory = _stub_classify_trajectory
 sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
+from services.gdelt_linkage import GdeltLinkageResult  # noqa: E402
 del sys.modules["services.hmm_trajectory"]
 
 
 class _FakeAlignment:
     async def align_clauses(self, *, h3_region, clausal_chains, gdelt_events, lookback_window):
         return types.SimpleNamespace(tak_clauses=[], gdelt_clauses=[], alignment_score=0.0)
+
+
+class _CapturingAlignment(_FakeAlignment):
+    def __init__(self):
+        self.gdelt_event_ids: list[str] = []
+
+    async def align_clauses(self, *, h3_region, clausal_chains, gdelt_events, lookback_window):
+        self.gdelt_event_ids = [event["event_id_cnty"] for event in gdelt_events]
+        return await super().align_clauses(
+            h3_region=h3_region,
+            clausal_chains=clausal_chains,
+            gdelt_events=gdelt_events,
+            lookback_window=lookback_window,
+        )
 
 
 class _FakeEscalationDetector:
@@ -304,6 +319,81 @@ async def test_evaluate_satnogs_mission_area_scope_when_polygon_set():
 
     assert response.source_scope["satnogs"]["scope"] == "mission_area"
     assert response.source_scope["satnogs"]["linkage_reason"] == "satellite_subpoint_intersection"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_regional_escalation_sorts_linked_gdelt_events_by_score():
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        if "FROM clausal_chains" in sql or "FROM satnogs_signal_events" in sql:
+            return []
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    alignment = _CapturingAlignment()
+    linkage_result = GdeltLinkageResult(
+        events=[
+            {
+                "event_id_cnty": "low-score",
+                "event_date": "20260410",
+                "event_latitude": 25.2,
+                "event_longitude": 55.3,
+                "event_text": "Lower priority linked event",
+                "event_code": "190",
+                "quad_class": 4,
+                "goldstein": -5.0,
+                "linkage_score": 0.4,
+            },
+            {
+                "event_id_cnty": "high-score",
+                "event_date": "20260410",
+                "event_latitude": 25.3,
+                "event_longitude": 55.4,
+                "event_text": "Higher priority linked event",
+                "event_code": "190",
+                "quad_class": 4,
+                "goldstein": -8.0,
+                "linkage_score": 0.9,
+            },
+        ],
+        linkage_counts={
+            "in_aot": 0,
+            "state_actor": 2,
+            "cable_infra": 0,
+            "chokepoint": 0,
+        },
+        mission_country_codes={"ARE"},
+        cable_country_codes=set(),
+    )
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", None),
+        patch.object(ai_router, "SpatialTemporalAlignment", return_value=alignment),
+        patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
+        patch.object(ai_router, "fetch_linked_gdelt_events", AsyncMock(return_value=linkage_result)),
+    ):
+        await ai_router.evaluate_regional_escalation(
+            ai_router.EvaluationRequest(
+                h3_region="8728f2ba8ffffff",
+                lookback_hours=24,
+                include_gdelt=True,
+                include_tak=True,
+                lightweight=True,
+            )
+        )
+
+    assert alignment.gdelt_event_ids == ["high-score", "low-score"]
 
 
 @pytest.mark.asyncio

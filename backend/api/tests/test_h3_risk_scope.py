@@ -161,3 +161,78 @@ async def test_h3_risk_rejects_partial_radius_parameters():
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "lat, lon, and radius_nm are required together"
+
+
+@pytest.mark.asyncio
+async def test_h3_risk_weights_mission_gdelt_sentiment_by_linkage_score():
+    resolution = 6
+    mission_lat = 25.2
+    mission_lon = 55.3
+
+    def _build_response(score: float) -> GdeltLinkageResult:
+        return GdeltLinkageResult(
+            events=[
+                {
+                    "event_id_cnty": f"evt-{score}",
+                    "event_latitude": mission_lat,
+                    "event_longitude": mission_lon,
+                    "goldstein": -8.0,
+                    "quad_class": 4,
+                    "linkage_tier": "state_actor",
+                    "linkage_score": score,
+                }
+            ],
+            linkage_counts={
+                "in_aot": 0,
+                "state_actor": 1,
+                "cable_infra": 0,
+                "chokepoint": 0,
+            },
+            mission_country_codes={"ARE"},
+            cable_country_codes=set(),
+        )
+
+    def _mock_pool_with_track():
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "time": datetime.now(timezone.utc),
+                    "entity_id": "icao-mission-1",
+                    "lat": mission_lat,
+                    "lon": mission_lon,
+                }
+            ]
+        )
+        mock_conn.executemany = AsyncMock(return_value=None)
+
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+        return mock_pool
+
+    with (
+        patch.object(h3_risk.db, "pool", _mock_pool_with_track()),
+        patch.object(h3_risk.db, "redis_client", None),
+        patch.object(h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=_build_response(1.0))),
+    ):
+        high_score_response = await h3_risk.get_h3_risk(
+            resolution=resolution,
+            hours=24,
+            h3_region="877b05c9cffffff",
+        )
+
+    with (
+        patch.object(h3_risk.db, "pool", _mock_pool_with_track()),
+        patch.object(h3_risk.db, "redis_client", None),
+        patch.object(h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=_build_response(0.25))),
+    ):
+        low_score_response = await h3_risk.get_h3_risk(
+            resolution=resolution,
+            hours=24,
+            h3_region="877b05c9cffffff",
+        )
+
+    assert len(high_score_response.cells) == 1
+    assert len(low_score_response.cells) == 1
+    assert high_score_response.cells[0].risk_score > low_score_response.cells[0].risk_score

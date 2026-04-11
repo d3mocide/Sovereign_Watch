@@ -9,6 +9,7 @@ from services.gdelt_linkage import (
     fetch_linked_gdelt_events,
     format_gdelt_linkage_notes,
 )
+from services.gdelt_phase2_experiments import fetch_experimental_linkage_review
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.GDELT")
@@ -82,6 +83,31 @@ def _resolve_mission_mode(
     if has_radius_args:
         return {"lat": float(lat), "lon": float(lon), "radius_nm": float(radius_nm)}
     return None
+
+
+@router.get("/api/gdelt/linkage-review")
+async def get_gdelt_linkage_review(
+    limit: int = Query(default=25, le=100, description="Max live and experimental samples to return"),
+    hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours"),
+    h3_region: str | None = Query(default=None, description="Mission H3 cell for side-by-side linkage review"),
+    lat: float | None = Query(default=None, description="Optional center latitude for radius mission review"),
+    lon: float | None = Query(default=None, description="Optional center longitude for radius mission review"),
+    radius_nm: float | None = Query(default=None, gt=0, description="Optional radius in nautical miles for mission review"),
+):
+    mission_mode = _resolve_mission_mode(h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm)
+    if mission_mode is None:
+        raise HTTPException(status_code=400, detail="Mission mode is required for linkage review")
+    if not db.pool:
+        return {"live": {"counts": {}, "sample": []}, "experimental": {"counts": {}, "sample": []}, "comparison": {}}
+
+    async with db.pool.acquire() as conn:
+        return await fetch_experimental_linkage_review(
+            conn,
+            db.redis_client,
+            lookback_hours=hours,
+            limit=limit,
+            **mission_mode,
+        )
 
 
 @router.get("/api/gdelt/events")
@@ -184,6 +210,8 @@ async def get_gdelt_events(
                     "num_sources": r.get("num_sources"),
                     "num_articles": r.get("num_articles"),
                     "linkage_tier": r.get("linkage_tier"),
+                    "linkage_score": r.get("linkage_score"),
+                    "linkage_evidence": r.get("linkage_evidence"),
                     "linkage_chokepoint": r.get("linkage_chokepoint"),
                 },
             }

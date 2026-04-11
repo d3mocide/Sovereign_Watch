@@ -1,6 +1,7 @@
 import { Activity, Crosshair, X } from "lucide-react";
 import React from "react";
 import { BaseViewProps } from "./types";
+import { getClausalSpaceWeatherPresentation } from "./clausalContextPresentation";
 
 // ── Severity theme keyed on state-change reason ───────────────────────────────
 function getAnomalyTheme(reason: string) {
@@ -94,6 +95,7 @@ export const ClausalView: React.FC<BaseViewProps> = ({
   const courseDeg = detail?.course_deg != null ? Number(detail.course_deg) : null;
   const predicateType = String(detail?.predicate_type ?? "");
   const narrative = detail?.narrative ? String(detail.narrative) : null;
+  const spaceWeatherPresentation = getClausalSpaceWeatherPresentation(detail);
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-[calc(100vh-8rem)] overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -259,6 +261,48 @@ export const ClausalView: React.FC<BaseViewProps> = ({
             <p className="text-[10px] text-white/70 font-mono leading-relaxed">
               {narrative}
             </p>
+          </div>
+        )}
+
+        {spaceWeatherPresentation && (
+          <div className="p-3 border-b border-white/5">
+            <span className="text-[8px] text-white/30 uppercase tracking-widest mb-2 block">
+              External Driver Context
+            </span>
+            <div className="rounded-sm border border-sky-400/20 bg-sky-400/5 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-block text-[9px] font-bold font-mono px-2 py-1 rounded border bg-sky-400/10 text-sky-300 border-sky-400/30 uppercase tracking-wider">
+                  External Driver
+                </span>
+                <span className={`text-[9px] font-bold ${spaceWeatherPresentation.isAdmitted ? "text-sky-300" : "text-white/50"}`}>
+                  {spaceWeatherPresentation.isAdmitted ? "THRESHOLD PASSED" : "NOT ATTACHED AS LOCAL EVIDENCE"}
+                </span>
+              </div>
+              <div className="space-y-1 text-[10px]">
+                <div className="flex gap-2">
+                  <span className="text-white/30 w-24">Scope:</span>
+                  <span className="text-white/75">{spaceWeatherPresentation.scopeLabel}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-white/30 w-24">Linkage:</span>
+                  <span className="text-white/75">{spaceWeatherPresentation.linkageReasonLabel}</span>
+                </div>
+                {spaceWeatherPresentation.thresholdLabel && (
+                  <div className="flex gap-2">
+                    <span className="text-white/30 w-24">Gate:</span>
+                    <span className="text-white/75">{spaceWeatherPresentation.thresholdLabel}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-white/70 font-mono leading-relaxed">
+                {spaceWeatherPresentation.statusLabel}
+              </p>
+              {spaceWeatherPresentation.notes && (
+                <p className="text-[9px] text-white/45 font-mono leading-relaxed">
+                  {spaceWeatherPresentation.notes}
+                </p>
+              )}
+            </div>
           </div>
         )}
 

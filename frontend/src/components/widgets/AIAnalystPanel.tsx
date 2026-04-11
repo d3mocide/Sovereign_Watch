@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { CoTEntity } from '../../types';
 import { AnalysisFormatter } from './AnalysisFormatter';
 import { copyTextToClipboard, formatAnalysisText } from './aiAnalystFormatting.ts';
+import { getClausalSpaceWeatherPresentation } from '../layouts/sidebar-right/clausalContextPresentation';
 
 interface AIAnalystPanelProps {
   entity: CoTEntity | null;
@@ -77,6 +78,9 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   }
 
   const isSitrep = entityUid?.startsWith('sitrep-');
+  const clausalSpaceWeatherPresentation = entity?.type === 'clausal-state-change'
+    ? getClausalSpaceWeatherPresentation((entity.detail ?? {}) as Record<string, unknown>)
+    : null;
 
   // Handle auto-run when triggered from the sidebar
   const lastStateRef = useRef({ entityUid, autoRunTrigger, isOpen });
@@ -301,6 +305,19 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
               <span className={`text-lg font-black tracking-tighter truncate ${accentColor} drop-shadow-[0_0_12px_currentColor] uppercase`}>
                 {entity?.callsign || entity?.uid || 'NONE SELECTED'}
               </span>
+              {clausalSpaceWeatherPresentation && (
+                <div className="mt-2 rounded-sm border border-sky-400/20 bg-sky-400/5 px-2.5 py-2 max-w-[240px]">
+                  <div className="text-[8px] font-black tracking-[.3em] text-sky-300/80 uppercase mb-1">
+                    External Driver Context
+                  </div>
+                  <div className="text-[10px] font-mono text-white/75 leading-snug">
+                    {clausalSpaceWeatherPresentation.statusLabel}
+                  </div>
+                  <div className="text-[8px] font-mono text-white/45 mt-1">
+                    {clausalSpaceWeatherPresentation.scopeLabel} · {clausalSpaceWeatherPresentation.linkageReasonLabel}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-4">

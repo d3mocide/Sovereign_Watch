@@ -21,21 +21,21 @@ GDELT_LINKAGE_REASON = "explicit_geopolitical_linkage"
 _GDELT_CHOKEPOINT_RADIUS_KM = 150.0
 _SEA_CABLE_PROXIMITY_KM = 250.0
 _STRATEGIC_CHOKEPOINTS = [
-    {"name": "Strait of Hormuz", "lat": 26.5, "lon": 56.3},
-    {"name": "Strait of Malacca", "lat": 1.25, "lon": 103.8},
-    {"name": "Suez Canal", "lat": 30.7, "lon": 32.3},
-    {"name": "Gibraltar", "lat": 36.0, "lon": -5.35},
-    {"name": "Bosphorus/Dardanelles", "lat": 41.0, "lon": 29.0},
-    {"name": "Bab-el-Mandeb", "lat": 12.6, "lon": 43.3},
-    {"name": "Luzon Strait", "lat": 20.5, "lon": 121.5},
-    {"name": "Taiwan Strait", "lat": 24.5, "lon": 119.5},
-    {"name": "English Channel", "lat": 50.9, "lon": 1.4},
-    {"name": "Cape of Good Hope", "lat": -34.4, "lon": 18.5},
-    {"name": "Drake Passage", "lat": -58.0, "lon": -68.0},
-    {"name": "Danish Straits", "lat": 55.5, "lon": 10.5},
-    {"name": "Sunda Strait", "lat": -6.0, "lon": 105.8},
-    {"name": "Lombok Strait", "lat": -8.8, "lon": 115.7},
-    {"name": "Panama Canal", "lat": 9.0, "lon": -79.6},
+    {"name": "Strait of Hormuz", "lat": 26.5, "lon": 56.3, "theaters": {"CENTCOM", "INDOPACOM"}},
+    {"name": "Strait of Malacca", "lat": 1.25, "lon": 103.8, "theaters": {"INDOPACOM"}},
+    {"name": "Suez Canal", "lat": 30.7, "lon": 32.3, "theaters": {"CENTCOM", "AFRICOM", "EUCOM"}},
+    {"name": "Gibraltar", "lat": 36.0, "lon": -5.35, "theaters": {"EUCOM", "AFRICOM"}},
+    {"name": "Bosphorus/Dardanelles", "lat": 41.0, "lon": 29.0, "theaters": {"EUCOM", "CENTCOM"}},
+    {"name": "Bab-el-Mandeb", "lat": 12.6, "lon": 43.3, "theaters": {"CENTCOM", "AFRICOM"}},
+    {"name": "Luzon Strait", "lat": 20.5, "lon": 121.5, "theaters": {"INDOPACOM"}},
+    {"name": "Taiwan Strait", "lat": 24.5, "lon": 119.5, "theaters": {"INDOPACOM"}},
+    {"name": "English Channel", "lat": 50.9, "lon": 1.4, "theaters": {"EUCOM"}},
+    {"name": "Cape of Good Hope", "lat": -34.4, "lon": 18.5, "theaters": {"AFRICOM"}},
+    {"name": "Drake Passage", "lat": -58.0, "lon": -68.0, "theaters": {"SOUTHCOM"}},
+    {"name": "Danish Straits", "lat": 55.5, "lon": 10.5, "theaters": {"EUCOM"}},
+    {"name": "Sunda Strait", "lat": -6.0, "lon": 105.8, "theaters": {"INDOPACOM"}},
+    {"name": "Lombok Strait", "lat": -8.8, "lon": 115.7, "theaters": {"INDOPACOM"}},
+    {"name": "Panama Canal", "lat": 9.0, "lon": -79.6, "theaters": {"SOUTHCOM", "NORTHCOM"}},
 ]
 
 
@@ -193,14 +193,101 @@ def extract_event_country_codes(event: Dict) -> Set[str]:
     return codes
 
 
-def match_chokepoint(event: Dict) -> Optional[str]:
+def _state_actor_neighbor_depth(
+    actor_country_codes: Set[str],
+    primary_mission_country_code: Optional[str],
+) -> Optional[int]:
+    if primary_mission_country_code and primary_mission_country_code in actor_country_codes:
+        return 0
+    if actor_country_codes:
+        return 1
+    return None
+
+
+def _mission_theaters_for_country_code(country_code: Optional[str]) -> Set[str]:
+    if not country_code:
+        return set()
+    center = COUNTRY_CENTER_BY_CODE.get(country_code)
+    if center is None:
+        return set()
+
+    lat, lon = center
+    theaters: Set[str] = set()
+
+    if -170.0 <= lon <= -30.0 and lat >= 15.0:
+        theaters.add("NORTHCOM")
+    if -120.0 <= lon <= -30.0 and -60.0 <= lat <= 35.0:
+        theaters.add("SOUTHCOM")
+    if -25.0 <= lon <= 60.0 and lat >= 35.0:
+        theaters.add("EUCOM")
+    if -25.0 <= lon <= 60.0 and -40.0 <= lat <= 38.0:
+        theaters.add("AFRICOM")
+    if 35.0 <= lon <= 80.0 and 10.0 <= lat <= 45.0:
+        theaters.add("CENTCOM")
+    if 60.0 <= lon <= 180.0 and -50.0 <= lat <= 60.0:
+        theaters.add("INDOPACOM")
+
+    return theaters
+
+
+def _score_linked_event(
+    event: Dict,
+    *,
+    linkage_tier: str,
+    actor_country_codes: Set[str],
+    mission_country_codes: Set[str],
+    cable_country_codes: Set[str],
+    primary_mission_country_code: Optional[str],
+) -> Tuple[float, Dict]:
+    evidence: Dict[str, object] = {}
+
+    if linkage_tier == "in_aot":
+        score = 1.0
+        evidence["matched_aot"] = True
+    elif linkage_tier == "state_actor":
+        matched_country_codes = sorted(mission_country_codes & actor_country_codes)
+        neighbor_depth = _state_actor_neighbor_depth(actor_country_codes, primary_mission_country_code)
+        score = 0.85 if neighbor_depth == 0 else 0.65
+        evidence["matched_country_codes"] = matched_country_codes
+        if neighbor_depth is not None:
+            evidence["neighbor_depth"] = neighbor_depth
+    elif linkage_tier == "cable_infra":
+        matched_cable_country_codes = sorted(cable_country_codes & actor_country_codes)
+        score = 0.70
+        evidence["matched_cable_country_codes"] = matched_cable_country_codes
+    else:
+        score = 0.55
+        mission_theaters = _mission_theaters_for_country_code(primary_mission_country_code)
+        chokepoint_name = event.get("linkage_chokepoint")
+        if chokepoint_name:
+            evidence["matched_chokepoint"] = chokepoint_name
+        chokepoint_theaters = sorted(set(event.get("linkage_chokepoint_theaters") or []))
+        if chokepoint_theaters:
+            evidence["chokepoint_theaters"] = chokepoint_theaters
+        matched_theaters = sorted(mission_theaters & set(chokepoint_theaters))
+        if matched_theaters:
+            score = 0.75
+            evidence["matched_theater"] = matched_theaters[0]
+
+    quad_class = event.get("quad_class")
+    if quad_class == 4:
+        score += 0.10
+
+    goldstein = event.get("goldstein")
+    if isinstance(goldstein, (int, float)) and float(goldstein) <= -5.0:
+        score += 0.05
+
+    return min(1.0, round(score, 3)), evidence
+
+
+def match_chokepoint(event: Dict) -> Optional[Dict]:
     lat = event.get("event_latitude")
     lon = event.get("event_longitude")
     if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
         return None
     for chokepoint in _STRATEGIC_CHOKEPOINTS:
         if haversine_km(float(lat), float(lon), chokepoint["lat"], chokepoint["lon"]) <= _GDELT_CHOKEPOINT_RADIUS_KM:
-            return str(chokepoint["name"])
+            return chokepoint
     return None
 
 
@@ -209,6 +296,7 @@ def classify_gdelt_linkage(
     *,
     mission_country_codes: Set[str],
     cable_country_codes: Set[str],
+    primary_mission_country_code: Optional[str] = None,
 ) -> Tuple[List[Dict], Dict[str, int]]:
     counts = {
         "in_aot": 0,
@@ -238,20 +326,35 @@ def classify_gdelt_linkage(
             elif cable_country_codes & actor_country_codes:
                 linkage_tier = "cable_infra"
             else:
-                chokepoint_name = match_chokepoint(event)
-                if chokepoint_name:
+                chokepoint = match_chokepoint(event)
+                if chokepoint:
                     linkage_tier = "chokepoint"
-                    event["linkage_chokepoint"] = chokepoint_name
+                    event["linkage_chokepoint"] = str(chokepoint["name"])
+                    event["linkage_chokepoint_theaters"] = sorted(chokepoint.get("theaters", set()))
 
         if not linkage_tier:
             continue
 
         event["linkage_tier"] = linkage_tier
+        linkage_score, linkage_evidence = _score_linked_event(
+            event,
+            linkage_tier=linkage_tier,
+            actor_country_codes=actor_country_codes,
+            mission_country_codes=mission_country_codes,
+            cable_country_codes=cable_country_codes,
+            primary_mission_country_code=primary_mission_country_code,
+        )
+        event["linkage_score"] = linkage_score
+        event["linkage_evidence"] = linkage_evidence
         admitted_events.append(event)
         counts[linkage_tier] += 1
         if event_id:
             seen_event_ids.add(event_id)
 
+    admitted_events.sort(
+        key=lambda event: float(event.get("linkage_score", 0.0)),
+        reverse=True,
+    )
     return admitted_events, counts
 
 
@@ -337,9 +440,8 @@ async def fetch_linked_gdelt_events(
     if aot_context is None:
         return GdeltLinkageResult([], empty_counts, set(), set())
 
-    mission_country_codes = build_mission_country_set(
-        detect_mission_country(aot_context.region_lat, aot_context.region_lon)
-    )
+    mission_country_code = detect_mission_country(aot_context.region_lat, aot_context.region_lon)
+    mission_country_codes = build_mission_country_set(mission_country_code)
     cable_country_codes: Set[str] = set()
     if redis_client:
         cable_index_raw = await redis_client.get("infra:cable_country_index")
@@ -444,6 +546,7 @@ async def fetch_linked_gdelt_events(
         [dict(row) for row in candidate_rows] + [dict(row) for row in chokepoint_rows],
         mission_country_codes=mission_country_codes,
         cable_country_codes=cable_country_codes,
+        primary_mission_country_code=mission_country_code,
     )
     return GdeltLinkageResult(
         events=events,

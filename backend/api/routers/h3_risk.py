@@ -220,7 +220,11 @@ async def get_h3_risk(
                 quad = event.get("quad_class") if event.get("quad_class") is not None else 0
                 conf_key = "gdelt_conflict" if quad in (3, 4) else "gdelt_verbal"
                 weight = SOURCE_CONFIDENCE[conf_key]
-                sentiment_map[cell].append((float(goldstein), weight))
+                linkage_score = event.get("linkage_score")
+                score_multiplier = 1.0
+                if isinstance(linkage_score, (int, float)):
+                    score_multiplier = max(0.0, min(1.0, float(linkage_score)))
+                sentiment_map[cell].append((float(goldstein) * score_multiplier, weight))
 
             source_scope = {
                 "scope": (
