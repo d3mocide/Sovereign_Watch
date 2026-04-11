@@ -32,10 +32,7 @@ logger = logging.getLogger("space_pulse")
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
 REDIS_HOST    = os.getenv("REDIS_HOST", "sovereign-redis")
 REDIS_PORT    = int(os.getenv("REDIS_PORT", "6379"))
-DATABASE_URL  = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:password@sovereign-timescaledb:5432/sovereign_watch",
-)
+DATABASE_URL  = os.getenv("DATABASE_URL")
 
 # Kafka topics
 TOPIC_ORBITAL      = "orbital_raw"

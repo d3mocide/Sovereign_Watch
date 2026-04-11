@@ -39,10 +39,7 @@ logger = logging.getLogger("InfraPoller")
 # Config
 # ---------------------------------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://sovereign-redis:6379/0")
-DB_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:password@sovereign-timescaledb:5432/sovereign_watch",
-)
+DB_URL = os.getenv("DATABASE_URL")
 POLL_FCC_START_HOUR = int(os.getenv("POLL_FCC_START_HOUR", "3"))
 POLL_INTERVAL_CABLES_DAYS = 7
 POLL_INTERVAL_IODA_MINUTES = 30

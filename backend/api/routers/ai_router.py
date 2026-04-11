@@ -765,18 +765,27 @@ async def evaluate_regional_escalation(
         if space_weather_row:
             space_weather_data = dict(space_weather_row)
 
-        # SatNOGS signal events (any signal loss detected)
-        signal_events = []
-        signal_query = """
-            SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
-            FROM satnogs_signal_events
-            WHERE time > now() - ($1 * interval '1 hour')
-              AND signal_strength < $2
-            ORDER BY signal_strength ASC, time DESC
-            LIMIT 10
-        """
-        signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
-        signal_events = [dict(row) for row in signal_rows]
+        # SatNOGS signal events — mission-area filtered when a polygon is available,
+        # otherwise fall back to the global feed.
+        _satnogs_mission_scoped = False
+        if wkt_polygon:
+            signal_events = await _fetch_aot_relevant_satnogs_events(
+                conn,
+                h3_region=request.h3_region,
+                lookback_hours=lookback_hours,
+            )
+            _satnogs_mission_scoped = True
+        else:
+            signal_query = """
+                SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
+                FROM satnogs_signal_events
+                WHERE time > now() - ($1 * interval '1 hour')
+                  AND signal_strength < $2
+                ORDER BY signal_strength ASC, time DESC
+                LIMIT 10
+            """
+            signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
+            signal_events = [dict(row) for row in signal_rows]
 
     source_scope = {
         "tak": _build_scope_descriptor(
@@ -814,10 +823,9 @@ async def evaluate_regional_escalation(
             lookback_hours=lookback_hours,
         ),
         "satnogs": _build_scope_descriptor(
-            "global",
-            "ungated_signal_loss_feed",
+            "mission_area" if _satnogs_mission_scoped else "global",
+            "satellite_subpoint_intersection" if _satnogs_mission_scoped else "ungated_signal_loss_feed",
             lookback_hours=lookback_hours,
-            notes="Still unfiltered in evaluate; mission-area relevance rules are pending.",
         ),
     }
 
