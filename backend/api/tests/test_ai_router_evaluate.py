@@ -134,7 +134,9 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
     assert response.source_scope["gdelt"]["linkage_reason"] == "explicit_geopolitical_linkage"
     assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint"
     assert response.source_scope["space_weather"]["scope"] == "impact_linked_external"
-    assert response.source_scope["satnogs"]["scope"] == "global"
+    # Valid H3 cell → wkt_polygon is set → mission-area SatNOGS path used
+    assert response.source_scope["satnogs"]["scope"] == "mission_area"
+    assert response.source_scope["satnogs"]["linkage_reason"] == "satellite_subpoint_intersection"
 
 
 @pytest.mark.asyncio
@@ -235,3 +237,111 @@ async def test_evaluate_regional_escalation_passes_mode_to_sequence_engine():
 
     _, kwargs = mock_sequence_engine.evaluate_escalation.await_args
     assert kwargs["mode"] == "tactical"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_satnogs_mission_area_scope_when_polygon_set():
+    """When a valid H3 cell produces a WKT polygon, only subpoint-intersecting
+    SatNOGS events should be used and source_scope.satnogs should reflect
+    mission_area scoping."""
+    from datetime import datetime, timezone
+
+    region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
+    event_time = datetime(2026, 4, 11, 12, 0, tzinfo=timezone.utc)
+
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        if "FROM satnogs_signal_events" in sql:
+            # Two events: one whose satellite will be over the AOT, one far away
+            return [
+                {"norad_id": 11111, "ground_station_name": "GS-LOCAL",
+                 "signal_strength": -16.0, "time": event_time,
+                 "modulation": "FM", "frequency": 145800000},
+                {"norad_id": 22222, "ground_station_name": "GS-FAR",
+                 "signal_strength": -18.0, "time": event_time,
+                 "modulation": "FM", "frequency": 145900000},
+            ]
+        if "FROM satellites" in sql:
+            return [
+                {"norad_id": 11111, "tle_line1": "L1-A", "tle_line2": "L2-A"},
+                {"norad_id": 22222, "tle_line1": "L1-B", "tle_line2": "L2-B"},
+            ]
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    # Subpoint map: NORAD 11111 is over (0,0) = inside AOT; 22222 is at (25,25) = outside
+    subpoints = {("L1-A", "L2-A"): (0.0, 0.0), ("L1-B", "L2-B"): (25.0, 25.0)}
+
+    def _fake_subpoint(tle_line1: str, tle_line2: str, event_time_arg):
+        return subpoints.get((tle_line1, tle_line2))
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", None),
+        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
+        patch.object(ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint),
+    ):
+        response = await ai_router.evaluate_regional_escalation(
+            ai_router.EvaluationRequest(
+                h3_region=region,
+                lookback_hours=24,
+                include_gdelt=False,
+                include_tak=True,
+                lightweight=True,
+            )
+        )
+
+    assert response.source_scope["satnogs"]["scope"] == "mission_area"
+    assert response.source_scope["satnogs"]["linkage_reason"] == "satellite_subpoint_intersection"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_satnogs_global_scope_when_no_polygon():
+    """When the H3 cell is invalid (wkt_polygon=None), the global fallback query
+    should be used and source_scope.satnogs should reflect global scoping."""
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", None),
+        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
+        # Force _h3_cell_to_wkt to return None (simulates an invalid H3 cell)
+        patch.object(ai_router, "_h3_cell_to_wkt", return_value=None),
+    ):
+        response = await ai_router.evaluate_regional_escalation(
+            ai_router.EvaluationRequest(
+                h3_region="invalid-cell",
+                lookback_hours=24,
+                include_gdelt=False,
+                include_tak=True,
+                lightweight=True,
+            )
+        )
+
+    assert response.source_scope["satnogs"]["scope"] == "global"
+    assert response.source_scope["satnogs"]["linkage_reason"] == "ungated_signal_loss_feed"
