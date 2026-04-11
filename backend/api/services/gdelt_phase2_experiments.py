@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Optional, Set
 
-from routers.gdelt_country_codes import COUNTRY_NEIGHBORS
+from routers.gdelt_country_codes import COUNTRY_NAME_BY_CODE, COUNTRY_NEIGHBORS
 from services.gdelt_linkage import (
     build_aot_context,
     detect_mission_country,
@@ -34,6 +34,54 @@ class ExperimentalCountrySets:
     mission_and_second_order: Set[str]
     alliance_support: Set[str]
     basing_support: Set[str]
+
+
+_MISSION_COUNTRY_TEXT_ALIASES: Dict[str, Set[str]] = {
+    "ARE": {"uae", "emirati", "emirates", "united arab emirates", "abu dhabi", "dubai"},
+    "USA": {"united states", "u.s.", "us", "america", "american"},
+    "GBR": {"united kingdom", "uk", "britain", "british"},
+}
+
+
+def _normalize_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.casefold().replace("-", " ").replace("/", " ").split())
+
+
+def _mission_country_terms(country_code: str | None) -> Set[str]:
+    if not country_code:
+        return set()
+
+    terms = set(_MISSION_COUNTRY_TEXT_ALIASES.get(country_code, set()))
+    country_name = COUNTRY_NAME_BY_CODE.get(country_code)
+    normalized_country_name = _normalize_text(country_name)
+    if normalized_country_name:
+        terms.add(normalized_country_name)
+    return {term for term in terms if term}
+
+
+def _headline_mentions_mission_country(event_text: object, mission_country_code: str | None) -> bool:
+    normalized_text = _normalize_text(event_text)
+    if not normalized_text:
+        return False
+    return any(term in normalized_text for term in _mission_country_terms(mission_country_code))
+
+
+def _support_matches_need_mission_relation(
+    *,
+    actor_country_codes: Set[str],
+    mission_country_code: str | None,
+    mission_and_first_order: Set[str],
+    event_text: object,
+) -> Dict[str, object]:
+    mission_relation = sorted(actor_country_codes & mission_and_first_order)
+    headline_mentions_mission = _headline_mentions_mission_country(event_text, mission_country_code)
+    return {
+        "mission_relation_country_codes": mission_relation,
+        "headline_mentions_mission": headline_mentions_mission,
+        "support_relation_confirmed": bool(mission_relation) or headline_mentions_mission,
+    }
 
 
 def expand_country_neighbors(country_code: str | None, *, max_depth: int = 1) -> Set[str]:
@@ -76,10 +124,24 @@ def build_experimental_country_sets(
 def evaluate_experimental_country_matches(
     actor_country_codes: Set[str],
     mission_country_code: str | None,
+    *,
+    event_text: object = None,
 ) -> Dict[str, object]:
     country_sets = build_experimental_country_sets(mission_country_code)
     first_order_matches = sorted(actor_country_codes & country_sets.mission_and_first_order)
     second_order_matches = sorted(actor_country_codes & country_sets.mission_and_second_order)
+    support_relation = _support_matches_need_mission_relation(
+        actor_country_codes=actor_country_codes,
+        mission_country_code=mission_country_code,
+        mission_and_first_order=country_sets.mission_and_first_order,
+        event_text=event_text,
+    )
+    alliance_matches = sorted(actor_country_codes & country_sets.alliance_support)
+    basing_matches = sorted(actor_country_codes & country_sets.basing_support)
+
+    if not support_relation["support_relation_confirmed"]:
+        alliance_matches = []
+        basing_matches = []
 
     return {
         "reference_version": EXPERIMENTAL_REFERENCE_VERSION,
@@ -87,8 +149,11 @@ def evaluate_experimental_country_matches(
         "second_order_only_matches": [
             code for code in second_order_matches if code not in country_sets.mission_and_first_order
         ],
-        "alliance_matches": sorted(actor_country_codes & country_sets.alliance_support),
-        "basing_matches": sorted(actor_country_codes & country_sets.basing_support),
+        "alliance_matches": alliance_matches,
+        "basing_matches": basing_matches,
+        **({
+            "support_relation": support_relation,
+        } if alliance_matches or basing_matches else {}),
     }
 
 
@@ -229,7 +294,11 @@ async def fetch_experimental_linkage_review(
         event = dict(row)
         event_id = str(event.get("event_id_cnty") or event.get("event_id") or "")
         actor_country_codes = extract_event_country_codes(event)
-        matches = evaluate_experimental_country_matches(actor_country_codes, mission_country_code)
+        matches = evaluate_experimental_country_matches(
+            actor_country_codes,
+            mission_country_code,
+            event_text=event.get("event_text"),
+        )
         reasons: list[str] = []
         if matches["second_order_only_matches"]:
             reasons.append("second_order_neighbor")

@@ -30,17 +30,37 @@ def test_evaluate_experimental_country_matches_flags_second_order_only_matches()
 
 
 def test_evaluate_experimental_country_matches_uses_explicit_alliance_reference():
-    matches = phase2_experiments.evaluate_experimental_country_matches({"USA"}, "POL")
+    matches = phase2_experiments.evaluate_experimental_country_matches(
+        {"USA", "POL"},
+        "POL",
+        event_text="US and Polish forces coordinate logistics support",
+    )
 
     assert matches["alliance_matches"] == ["USA"]
     assert matches["basing_matches"] == []
+    assert matches["support_relation"]["mission_relation_country_codes"] == ["POL"]
 
 
 def test_evaluate_experimental_country_matches_uses_explicit_basing_reference():
-    matches = phase2_experiments.evaluate_experimental_country_matches({"QAT"}, "ARE")
+    matches = phase2_experiments.evaluate_experimental_country_matches(
+        {"QAT"},
+        "ARE",
+        event_text="Qatar expands logistics support for UAE operations",
+    )
 
     assert matches["alliance_matches"] == []
     assert matches["basing_matches"] == ["QAT"]
+
+
+def test_evaluate_experimental_country_matches_rejects_support_country_without_mission_relation():
+    matches = phase2_experiments.evaluate_experimental_country_matches(
+        {"USA"},
+        "ARE",
+        event_text="United States issues regional warning after exchange with Iran",
+    )
+
+    assert matches["alliance_matches"] == []
+    assert matches["basing_matches"] == []
 
 
 def test_live_gdelt_classification_still_excludes_experimental_only_matches():
