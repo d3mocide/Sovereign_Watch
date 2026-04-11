@@ -14,6 +14,10 @@ from routers.gdelt_country_codes import (
     COUNTRY_NEIGHBORS,
     COUNTRY_NORMALIZED_NAME_BY_CODE,
 )
+from services.gdelt_phase2_experiments import (
+    build_experimental_country_sets,
+    evaluate_experimental_country_matches,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +170,14 @@ def detect_mission_country(lat: float, lon: float) -> Optional[str]:
         if best_distance_km is None or distance_km < best_distance_km:
             best_code = code
             best_distance_km = distance_km
+            
+    # Resolve North American spherical distance distortion (e.g. Portland mapping to Canada)
+    if best_code in ("USA", "CAN"):
+        if 24.0 <= lat <= 49.0 and -125.0 <= lon <= -66.0:
+            return "USA"
+        if 49.0 < lat <= 83.0 and -141.0 <= lon <= -52.0:
+            return "CAN"
+            
     return best_code
 
 
@@ -255,6 +267,12 @@ def _score_linked_event(
         matched_cable_country_codes = sorted(cable_country_codes & actor_country_codes)
         score = 0.70
         evidence["matched_cable_country_codes"] = matched_cable_country_codes
+    elif linkage_tier == "alliance_support":
+        score = 0.80
+    elif linkage_tier == "basing_support":
+        score = 0.75
+    elif linkage_tier == "second_order_neighbor":
+        score = 0.65
     else:
         score = 0.55
         mission_theaters = _mission_theaters_for_country_code(primary_mission_country_code)
@@ -301,6 +319,9 @@ def classify_gdelt_linkage(
     counts = {
         "in_aot": 0,
         "state_actor": 0,
+        "alliance_support": 0,
+        "basing_support": 0,
+        "second_order_neighbor": 0,
         "cable_infra": 0,
         "chokepoint": 0,
     }
@@ -331,6 +352,21 @@ def classify_gdelt_linkage(
                     linkage_tier = "chokepoint"
                     event["linkage_chokepoint"] = str(chokepoint["name"])
                     event["linkage_chokepoint_theaters"] = sorted(chokepoint.get("theaters", set()))
+                elif primary_mission_country_code:
+                    matches = evaluate_experimental_country_matches(
+                        actor_country_codes,
+                        primary_mission_country_code,
+                        event_text=event.get("event_text") or event.get("headline"),
+                    )
+                    if matches.get("alliance_matches"):
+                        linkage_tier = "alliance_support"
+                        event["linkage_experimental_matches"] = matches
+                    elif matches.get("basing_matches"):
+                        linkage_tier = "basing_support"
+                        event["linkage_experimental_matches"] = matches
+                    elif matches.get("second_order_only_matches"):
+                        linkage_tier = "second_order_neighbor"
+                        event["linkage_experimental_matches"] = matches
 
         if not linkage_tier:
             continue
@@ -362,6 +398,9 @@ def format_gdelt_linkage_notes(linkage_counts: Dict[str, int]) -> str:
     return (
         f"{linkage_counts['in_aot']} in-AOT, "
         f"{linkage_counts['state_actor']} state-actor/border, "
+        f"{linkage_counts['alliance_support']} exp:alliance, "
+        f"{linkage_counts['basing_support']} exp:basing, "
+        f"{linkage_counts['second_order_neighbor']} exp:proxy, "
         f"{linkage_counts['cable_infra']} cable-infra, "
         f"{linkage_counts['chokepoint']} maritime-chokepoint"
     )
@@ -428,6 +467,9 @@ async def fetch_linked_gdelt_events(
     empty_counts = {
         "in_aot": 0,
         "state_actor": 0,
+        "alliance_support": 0,
+        "basing_support": 0,
+        "second_order_neighbor": 0,
         "cable_infra": 0,
         "chokepoint": 0,
     }
@@ -442,6 +484,14 @@ async def fetch_linked_gdelt_events(
 
     mission_country_code = detect_mission_country(aot_context.region_lat, aot_context.region_lon)
     mission_country_codes = build_mission_country_set(mission_country_code)
+
+    candidate_country_codes = set(mission_country_codes)
+    if mission_country_code:
+        exp_sets = build_experimental_country_sets(mission_country_code)
+        candidate_country_codes.update(exp_sets.mission_and_second_order)
+        candidate_country_codes.update(exp_sets.alliance_support)
+        candidate_country_codes.update(exp_sets.basing_support)
+
     cable_country_codes: Set[str] = set()
     if redis_client:
         cable_index_raw = await redis_client.get("infra:cable_country_index")
@@ -493,7 +543,7 @@ async def fetch_linked_gdelt_events(
         candidate_query,
         lookback_hours,
         *aot_context.aot_sql_params,
-        sorted(mission_country_codes),
+        sorted(candidate_country_codes),
         sorted(cable_country_codes),
     )
 

@@ -21,7 +21,7 @@ def test_expand_country_neighbors_supports_second_order_review():
 
 
 def test_evaluate_experimental_country_matches_flags_second_order_only_matches():
-    matches = phase2_experiments.evaluate_experimental_country_matches({"DEU"}, "UKR")
+    matches = phase2_experiments.evaluate_experimental_country_matches({"DEU"}, "UKR", event_text="ukraine")
 
     assert matches["first_order_matches"] == []
     assert matches["second_order_only_matches"] == ["DEU"]
@@ -95,5 +95,5 @@ def test_live_gdelt_classification_still_excludes_experimental_only_matches():
         "in_aot": 0,
         "state_actor": 0,
         "cable_infra": 0,
-        "chokepoint": 0,
+        "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
     }

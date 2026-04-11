@@ -100,7 +100,7 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
         "in_aot": 1,
         "state_actor": 1,
         "cable_infra": 1,
-        "chokepoint": 1,
+        "chokepoint": 1, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
     }
     assert next(event for event in admitted if event["event_id_cnty"] == "chokepoint")["linkage_chokepoint"] == "Strait of Hormuz"
     assert scores["in-aot"] == 1.0

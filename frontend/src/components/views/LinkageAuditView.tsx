@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, GitCompareArrows, Radar, Search } from 'lucide-react';
+import { AlertTriangle, Filter, GitMerge, Radar, Search } from 'lucide-react';
 
 import {
-  fetchGdeltLinkageReview,
-  type GdeltLinkageReviewEvent,
-  type GdeltLinkageReviewResponse,
-} from '../../api/gdeltLinkageReview';
+  fetchGdeltLinkageAudit,
+  type GdeltLinkageAuditEvent,
+  type GdeltLinkageAuditResponse,
+} from '../../api/linkageAudit';
 
 type MissionMode = 'h3' | 'radius';
 
@@ -13,35 +13,21 @@ function formatCountLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatEventId(event: GdeltLinkageReviewEvent): string {
+function formatEventId(event: GdeltLinkageAuditEvent): string {
   return String(event.event_id_cnty ?? event.event_id ?? 'unknown');
 }
 
-function formatReasonList(values: string[] | undefined): string {
-  if (!values || values.length === 0) return '—';
-  return values.map(formatCountLabel).join(', ');
-}
-
-function SummaryCard({
+function FunnelCard({
   label,
   value,
-  tone,
 }: {
   label: string;
   value: string | number;
-  tone: 'emerald' | 'amber' | 'cyan';
 }) {
-  const toneClass =
-    tone === 'emerald'
-      ? 'border-emerald-400/30 text-emerald-300 bg-emerald-400/5'
-      : tone === 'amber'
-        ? 'border-amber-400/30 text-amber-300 bg-amber-400/5'
-        : 'border-cyan-400/30 text-cyan-300 bg-cyan-400/5';
-
   return (
-    <div className={`rounded-sm border p-3 ${toneClass}`}>
+    <div className="flex flex-col justify-between rounded-sm border border-cyan-400/20 text-cyan-300 bg-cyan-400/5 p-3">
       <div className="text-[10px] uppercase tracking-[0.25em] text-white/35">{label}</div>
-      <div className="mt-2 text-2xl font-black tracking-tight">{value}</div>
+      <div className="mt-2 text-xl font-black tracking-tight">{value}</div>
     </div>
   );
 }
@@ -50,12 +36,10 @@ function EventTable({
   title,
   subtitle,
   events,
-  showExperimental,
 }: {
   title: string;
   subtitle: string;
-  events: GdeltLinkageReviewEvent[];
-  showExperimental?: boolean;
+  events: GdeltLinkageAuditEvent[];
 }) {
   return (
     <div className="rounded-sm border border-white/10 bg-black/40 overflow-hidden">
@@ -71,13 +55,12 @@ function EventTable({
               <th className="px-4 py-2">Actors</th>
               <th className="px-4 py-2">Score</th>
               <th className="px-4 py-2">Tier</th>
-              {showExperimental && <th className="px-4 py-2">Experimental Reason</th>}
             </tr>
           </thead>
           <tbody>
             {events.length === 0 ? (
               <tr>
-                <td colSpan={showExperimental ? 5 : 4} className="px-4 py-4 text-white/35">
+                <td colSpan={4} className="px-4 py-4 text-white/35">
                   No events in this sample.
                 </td>
               </tr>
@@ -87,23 +70,18 @@ function EventTable({
                   <td className="px-4 py-3 text-white/80">
                     <div className="font-bold text-white/90">{formatEventId(event)}</div>
                     <div className="text-white/45 mt-1 max-w-[340px] whitespace-normal leading-relaxed">
-                      {event.event_text ?? 'No headline available'}
+                      {event.event_text ?? '-'}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-white/70">
-                    {event.actor1_country ?? '—'} / {event.actor2_country ?? '—'}
+                    {event.actor1_country ?? '-'} / {event.actor2_country ?? '-'}
                   </td>
                   <td className="px-4 py-3 text-white/80">
-                    {event.linkage_score ?? event.live_linkage_score ?? '—'}
+                    {event.linkage_score ?? '-'}
                   </td>
                   <td className="px-4 py-3 text-white/70">
-                    {event.linkage_tier ?? event.live_linkage_tier ?? '—'}
+                    {event.linkage_tier ? formatCountLabel(event.linkage_tier) : '-'}
                   </td>
-                  {showExperimental && (
-                    <td className="px-4 py-3 text-white/70">
-                      {formatReasonList(event.experimental_reasons)}
-                    </td>
-                  )}
                 </tr>
               ))
             )}
@@ -114,19 +92,19 @@ function EventTable({
   );
 }
 
-export default function GdeltLinkageReviewView() {
+export default function LinkageAuditView() {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const initialMode: MissionMode = initialParams.get('h3_region') ? 'h3' : 'radius';
 
   const [missionMode, setMissionMode] = useState<MissionMode>(initialMode);
   const [h3Region, setH3Region] = useState(initialParams.get('h3_region') ?? '');
-  const [lat, setLat] = useState(initialParams.get('lat') ?? '25.2048');
-  const [lon, setLon] = useState(initialParams.get('lon') ?? '55.2708');
-  const [radiusNm, setRadiusNm] = useState(initialParams.get('radius_nm') ?? '180');
+  const [lat, setLat] = useState(initialParams.get('lat') ?? '45.5152');
+  const [lon, setLon] = useState(initialParams.get('lon') ?? '-122.6784');
+  const [radiusNm, setRadiusNm] = useState(initialParams.get('radius_nm') ?? '150');
   const [hours, setHours] = useState(initialParams.get('hours') ?? '24');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<GdeltLinkageReviewResponse | null>(null);
+  const [data, setData] = useState<GdeltLinkageAuditResponse | null>(null);
 
   const executeSearch = async () => {
     setLoading(true);
@@ -143,7 +121,7 @@ export default function GdeltLinkageReviewView() {
               radiusNm: Number(radiusNm),
             };
 
-      const response = await fetchGdeltLinkageReview(request);
+      const response = await fetchGdeltLinkageAudit(request);
       setData(response);
 
       const params = new URLSearchParams({ hours: String(hoursValue) });
@@ -154,7 +132,7 @@ export default function GdeltLinkageReviewView() {
         params.set('lon', lon);
         params.set('radius_nm', radiusNm);
       }
-      window.history.replaceState(null, '', `/test?${params.toString()}`);
+      window.history.replaceState(null, '', `/linkage?` + params.toString());
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : String(caughtError));
     } finally {
@@ -173,29 +151,32 @@ export default function GdeltLinkageReviewView() {
     await executeSearch();
   };
 
+  const getCount = (key: string) => data?.counts[key] ?? 0;
+
   return (
-    <div className="min-h-screen bg-[#0b0e12] text-white font-sans">
+    <div className="h-screen overflow-y-auto custom-scrollbar bg-[#0b0e12] text-white font-sans">
       <header className="border-b border-cyan-400/10 bg-black/50 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.35em] text-cyan-300/70 font-black">Test Surface</div>
-          <h1 className="text-2xl font-black tracking-tight mt-1">GDELT Linkage Review</h1>
+          <div className="text-[11px] uppercase tracking-[0.35em] text-cyan-300/70 font-black">AI Pipeline Diagnostics</div>
+          <h1 className="text-2xl font-black tracking-tight mt-1">Linkage Provenance Audit</h1>
         </div>
         <nav className="flex gap-4 text-[11px] uppercase tracking-[0.25em] font-black">
           <a href="/" className="text-white/50 hover:text-white">Tactical Map</a>
           <a href="/stats" className="text-white/50 hover:text-white">Stats</a>
-          <a href="/test" className="text-cyan-300">Test</a>
+          <a href="/linkage" className="text-cyan-300">Linkage Audit</a>
         </nav>
       </header>
 
       <main className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto">
         <section className="rounded-sm border border-white/10 bg-black/40 p-4">
           <div className="flex items-center gap-2 text-cyan-300 mb-3">
-            <GitCompareArrows size={16} />
-            <span className="text-sm font-black uppercase tracking-[0.2em]">How To Compare</span>
+            <Filter size={16} />
+            <span className="text-sm font-black uppercase tracking-[0.2em]">Data Provenance</span>
           </div>
           <p className="text-sm text-white/75 max-w-[1100px] leading-relaxed">
-            This page compares the same mission query across two models: the live deterministic linkage set and the review-only experimental candidate set.
-            Focus on <span className="text-cyan-300 font-bold">experimental only count</span> to see what would widen if second-order or support-country rules were promoted, and inspect the experimental reasons column to see exactly why each candidate is outside the live trust boundary.
+            This surface exposes the active 7-tier admission funnel backing the Sovereign AI linkage graph. 
+            All intelligence events processed for the target mission region are routed through this pipeline, scoring 
+            physical AOT limits, state actor bindings, alliance support, basing, and secondary network infrastructure proxies.
           </p>
         </section>
 
@@ -252,10 +233,10 @@ export default function GdeltLinkageReviewView() {
           <div className="flex items-center gap-3">
             <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-4 py-2 rounded-sm border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 text-xs font-black uppercase tracking-[0.25em] disabled:opacity-50">
               <Search size={14} />
-              {loading ? 'Running Review' : 'Run Review'}
+              {loading ? 'Running Audit' : 'Run Audit'}
             </button>
             {data?.mission_country_code && (
-              <span className="text-[11px] font-mono text-white/45">Mission country: {data.mission_country_code}</span>
+              <span className="text-[11px] font-mono text-white/45">Mission Core: {data.mission_country_code}</span>
             )}
           </div>
 
@@ -269,69 +250,47 @@ export default function GdeltLinkageReviewView() {
 
         {data && (
           <>
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SummaryCard label="Overlap" value={data.comparison.overlap_count} tone="emerald" />
-              <SummaryCard label="Live Only" value={data.comparison.live_only_count} tone="cyan" />
-              <SummaryCard label="Experimental Only" value={data.comparison.experimental_only_count} tone="amber" />
+            <section>
+                <div className="text-[11px] uppercase tracking-[0.2em] text-white/50 mb-3 flex items-center gap-2">
+                    <GitMerge size={14}/> 7-Layer Admission Funnel
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+                <FunnelCard label="In AOT" value={getCount('in_aot')} />
+                <FunnelCard label="State Actor" value={getCount('state_actor')} />
+                <FunnelCard label="Alliance" value={getCount('alliance_support')} />
+                <FunnelCard label="Basing" value={getCount('basing_support')} />
+                <FunnelCard label="2nd Order" value={getCount('second_order_neighbor')} />
+                <FunnelCard label="Chokepoint" value={getCount('chokepoint')} />
+                <FunnelCard label="Cable Infra" value={getCount('cable_infra')} />
+                </div>
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="rounded-sm border border-white/10 bg-black/40 p-4">
-                <div className="text-[11px] uppercase tracking-[0.25em] text-white/40 font-black">Live Counts</div>
-                <div className="mt-3 space-y-2 text-sm font-mono">
-                  {Object.entries(data.live.counts).map(([key, value]) => (
-                    <div key={key} className="flex justify-between gap-4">
-                      <span className="text-white/55">{formatCountLabel(key)}</span>
-                      <span className="text-white/85">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-sm border border-white/10 bg-black/40 p-4">
-                <div className="text-[11px] uppercase tracking-[0.25em] text-white/40 font-black">Experimental Counts</div>
-                <div className="mt-3 space-y-2 text-sm font-mono">
-                  {Object.entries(data.experimental.counts).map(([key, value]) => (
-                    <div key={key} className="flex justify-between gap-4">
-                      <span className="text-white/55">{formatCountLabel(key)}</span>
-                      <span className="text-white/85">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-sm border border-white/10 bg-black/40 p-4">
-                <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] text-white/40 font-black">
-                  <ArrowLeftRight size={14} />
-                  Review Sets
-                </div>
+                <div className="text-[11px] uppercase tracking-[0.25em] text-white/40 font-black">Evaluated Country Targets</div>
                 <div className="mt-3 space-y-3 text-sm font-mono text-white/75">
                   <div>
-                    <div className="text-white/40 mb-1">Second-order only</div>
-                    <div>{data.experimental.country_sets.second_order_only.join(', ') || '—'}</div>
+                    <div className="text-white/40 mb-1">Second-order Neighbors</div>
+                    <div>{data.country_sets.second_order.join(', ') || '-'}</div>
                   </div>
                   <div>
-                    <div className="text-white/40 mb-1">Alliance support</div>
-                    <div>{data.experimental.country_sets.alliance_support.join(', ') || '—'}</div>
+                    <div className="text-white/40 mb-1">Assessed Alliance Network</div>
+                    <div>{data.country_sets.alliance_support.join(', ') || '-'}</div>
                   </div>
                   <div>
-                    <div className="text-white/40 mb-1">Basing support</div>
-                    <div>{data.experimental.country_sets.basing_support.join(', ') || '—'}</div>
+                    <div className="text-white/40 mb-1">Identified Basing Network</div>
+                    <div>{data.country_sets.basing_support.join(', ') || '-'}</div>
                   </div>
                 </div>
               </div>
-            </section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <EventTable
-                title="Live Admitted Sample"
-                subtitle="Current production linkage set for this mission query"
-                events={data.live.sample}
-              />
-              <EventTable
-                title="Experimental Candidate Sample"
-                subtitle="Review-only candidates that would widen scope if promoted"
-                events={data.experimental.sample}
-                showExperimental
-              />
+              <div className="xl:col-span-2">
+                <EventTable
+                    title="Funnel Sample Results"
+                    subtitle="Admitted event intelligence ordered by severity"
+                    events={data.sample}
+                />
+              </div>
             </section>
           </>
         )}

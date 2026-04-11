@@ -733,7 +733,7 @@ async def evaluate_regional_escalation(
             "in_aot": 0,
             "state_actor": 0,
             "cable_infra": 0,
-            "chokepoint": 0,
+            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0,
         }
         if request.include_gdelt:
             if wkt_polygon:

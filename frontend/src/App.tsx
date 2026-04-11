@@ -51,7 +51,7 @@ interface IntelArticleContent {
 }
 
 const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
-const GdeltLinkageReviewView = lazy(() => import('./components/views/GdeltLinkageReviewView'));
+const LinkageAuditView = lazy(() => import('./components/views/LinkageAuditView'));
 
 function AuthenticatedApp() {
 
@@ -195,6 +195,12 @@ function AuthenticatedApp() {
   );
   const [regionalRiskUi, setRegionalRiskUi] =
     useState<RegionalRiskUiState | null>(null);
+
+  // Clear persistent UI panels when switching between top-level views 
+  useEffect(() => {
+    setIsAIAnalystOpen(false);
+    setSelectedEntity(null);
+  }, [viewMode, setIsAIAnalystOpen, setSelectedEntity]);
 
   // Background entity cleanup + counting (runs regardless of viewMode)
   useEffect(() => {
@@ -1142,7 +1148,7 @@ function App() {
 
   if (authStatus === 'authenticated') {
     const isStatsRoute = window.location.pathname === '/stats';
-    const isTestRoute = window.location.pathname === '/test';
+    const isLinkageRoute = window.location.pathname === '/linkage';
 
     if (isStatsRoute && hasRole('admin')) {
       return (
@@ -1155,14 +1161,14 @@ function App() {
         </Suspense>
       );
     }
-    if (isTestRoute && hasRole('admin')) {
+    if (isLinkageRoute && hasRole('admin')) {
       return (
         <Suspense fallback={
           <div className="flex h-screen w-screen items-center justify-center bg-black text-[#0ff] font-mono animate-pulse">
-            INITIALIZING REVIEW SURFACE...
+            INITIALIZING LINKAGE AUDIT...
           </div>
         }>
-          <GdeltLinkageReviewView />
+          <LinkageAuditView />
         </Suspense>
       );
     }

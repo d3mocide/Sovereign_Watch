@@ -226,6 +226,10 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5 relative z-10">
+            <div className="flex items-center gap-2 mr-2 border border-white/5 bg-white/5 px-2 py-0.5 rounded-sm">
+               <span className="text-[7px] font-black text-white/20 tracking-[.2em] uppercase mt-px">Engine</span>
+               <span className={`${accentColor} text-[8px] font-black tracking-widest opacity-80 uppercase`}>{activeModelLabel}</span>
+            </div>
             {isAdmin && (
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -295,54 +299,25 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
         )}
 
         {/* Target Info & Controls */}
+        {/* Target Info & Controls */}
         <div className="px-5 py-4 border-b border-white/5 bg-white/[0.03] space-y-4">
-          <div className="flex justify-between items-end">
-            <div className="flex flex-col min-w-0">
+          {/* Row 1: Target Entity and Run Button */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col min-w-0 flex-1 pr-4">
               <span className="text-[8px] font-black tracking-[.4em] text-white/30 uppercase mb-1.5 flex items-center gap-1.5">
                  <div className="w-1.5 h-[1px] bg-white/20" />
                  {isSitrep ? 'Mission Intelligence' : 'Target Entity'}
               </span>
-              <span className={`text-lg font-black tracking-tighter truncate ${accentColor} drop-shadow-[0_0_12px_currentColor] uppercase`}>
+              <span className={`text-xl font-black tracking-tighter truncate ${accentColor} drop-shadow-[0_0_12px_currentColor] uppercase`}>
                 {entity?.callsign || entity?.uid || 'NONE SELECTED'}
               </span>
-              {clausalSpaceWeatherPresentation && (
-                <div className="mt-2 rounded-sm border border-sky-400/20 bg-sky-400/5 px-2.5 py-2 max-w-[240px]">
-                  <div className="text-[8px] font-black tracking-[.3em] text-sky-300/80 uppercase mb-1">
-                    External Driver Context
-                  </div>
-                  <div className="text-[10px] font-mono text-white/75 leading-snug">
-                    {clausalSpaceWeatherPresentation.statusLabel}
-                  </div>
-                  <div className="text-[8px] font-mono text-white/45 mt-1">
-                    {clausalSpaceWeatherPresentation.scopeLabel} · {clausalSpaceWeatherPresentation.linkageReasonLabel}
-                  </div>
-                </div>
-              )}
             </div>
-
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col gap-1 items-end">
-                  <span className="text-[7px] font-black text-white/20 tracking-widest uppercase mb-0.5 mr-1 text-right">Scan_Window</span>
-                  <div className="flex items-center bg-black/60 border border-white/5 rounded-sm p-0.5">
-                    {LOOKBACK_OPTIONS.map(opt => (
-                        <button
-                            key={opt.value}
-                            onClick={() => setLookback(opt.value)}
-                            disabled={isStreaming}
-                            className={`px-2 py-0.5 text-[8px] font-black tracking-tighter rounded-sm transition-all ${lookback === opt.value 
-                                ? `${accentColor} ${accentColor.replace('text-', 'bg-')}/20 shadow-[0_0_10px_currentColor]/10` 
-                                : 'text-white/20 hover:text-white/40'}`}
-                        >
-                            {opt.label.toUpperCase()}
-                        </button>
-                    ))}
-                  </div>
-              </div>
-
+            
+            <div className="shrink-0 flex items-center pt-1">
               {isStreaming ? (
                 <button
                   onClick={reset}
-                  className="group relative flex items-center justify-center h-9 px-4 bg-red-500/10 border border-red-500/40 rounded-sm text-red-500 hover:bg-red-500/20 transition-all shadow-[0_0_20px_rgba(239,68,68,0.1)]"
+                  className="group relative flex items-center justify-center h-10 px-5 bg-red-500/10 border border-red-500/40 rounded-sm text-red-500 hover:bg-red-500/20 transition-all shadow-[0_0_20px_rgba(239,68,68,0.1)]"
                 >
                   <div className="absolute top-0 left-0 w-full h-[1px] bg-red-400 group-hover:animate-pulse" />
                   <span className="text-[10px] font-black tracking-[.4em] uppercase">Halt</span>
@@ -351,7 +326,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
                 <button
                   onClick={handleRun}
                   disabled={!entity || !isOperator}
-                  className={`group relative flex items-center justify-center h-9 px-4 shrink-0 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`group relative flex items-center justify-center h-10 px-5 bg-white/5 border ${accentBorder} rounded-sm ${accentColor} hover:bg-white/10 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <div className={`absolute top-0 left-0 w-full h-[1px] ${accentColor.replace('text-', 'bg-')} group-hover:animate-pulse opacity-50`} />
                   {!isOperator && <Lock size={10} className="mr-2 opacity-50" />}
@@ -362,14 +337,29 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
               )}
             </div>
           </div>
-          
-          <div className="flex items-center justify-between h-5">
-             <div className="flex items-center gap-3">
-                <span className="text-[8px] font-black text-white/20 tracking-[.2em] uppercase">Engine</span>
-                <span className={`${accentColor} text-[9px] font-bold tracking-widest opacity-80 uppercase`}>{activeModelLabel}</span>
-             </div>
-             <div className="flex items-center gap-4">
-                <span className="text-[8px] font-black text-white/20 tracking-[.2em] uppercase text-right">Maneuver_Mode</span>
+
+          {/* Row 2: Configuration Options */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1 items-start">
+                <span className="text-[7px] font-black text-white/20 tracking-[.2em] uppercase mb-0.5 ml-1">Scan_Window</span>
+                <div className="flex items-center bg-black/60 border border-white/5 rounded-sm p-0.5">
+                  {LOOKBACK_OPTIONS.map(opt => (
+                      <button
+                          key={opt.value}
+                          onClick={() => setLookback(opt.value)}
+                          disabled={isStreaming}
+                          className={`px-2 py-0.5 text-[8px] font-black tracking-tighter rounded-sm transition-all ${lookback === opt.value 
+                              ? `${accentColor} ${accentColor.replace('text-', 'bg-')}/20 shadow-[0_0_10px_currentColor]/10` 
+                              : 'text-white/20 hover:text-white/40'}`}
+                      >
+                          {opt.label.toUpperCase()}
+                      </button>
+                  ))}
+                </div>
+            </div>
+            
+            <div className="flex flex-col gap-1 items-end">
+                <span className="text-[7px] font-black text-white/20 tracking-[.2em] uppercase mb-0.5 mr-1">Maneuver_Mode</span>
                 <div className={`flex items-center bg-white/[0.04] border border-white/5 rounded-sm p-0.5 ${isSitrep ? 'opacity-40 cursor-not-allowed' : ''}`}>
                     {MODE_OPTIONS.map(opt => (
                         <button
@@ -384,8 +374,9 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
                         </button>
                     ))}
                 </div>
-             </div>
+            </div>
           </div>
+
         </div>
 
         {/* Output Area */}
@@ -404,23 +395,25 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
                   : 'Ready for Tasking'}
               </span>
             </div>
-            {text && !isStreaming && (
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-2 group"
-              >
-                <div className={`text-[8px] font-black tracking-widest uppercase transition-all ${copyState === 'copied'
-                  ? 'text-hud-green'
-                  : copyState === 'failed'
-                    ? 'text-red-400'
-                    : 'text-white/30 group-hover:text-white/60'}`}>
-                   {copyState === 'copied' ? 'SYSTEM_COPIED' : copyState === 'failed' ? 'COPY_FAILED' : 'EXPORT_DATA'}
-                </div>
-                {copyState === 'copied'
-                  ? <Check size={10} className="text-hud-green" />
-                  : <Copy size={10} className={`${copyState === 'failed' ? 'text-red-400' : 'text-white/20 group-hover:text-white/40'} transition-colors`} />}
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {text && !isStreaming && (
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-2 group ml-1"
+                >
+                  <div className={`text-[8px] font-black tracking-widest uppercase transition-all ${copyState === 'copied'
+                    ? 'text-hud-green'
+                    : copyState === 'failed'
+                      ? 'text-red-400'
+                      : 'text-white/30 group-hover:text-white/60'}`}>
+                     {copyState === 'copied' ? 'SYSTEM_COPIED' : copyState === 'failed' ? 'COPY_FAILED' : 'EXPORT_DATA'}
+                  </div>
+                  {copyState === 'copied'
+                    ? <Check size={10} className="text-hud-green" />
+                    : <Copy size={10} className={`${copyState === 'failed' ? 'text-red-400' : 'text-white/20 group-hover:text-white/40'} transition-colors`} />}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Scrollable text body */}

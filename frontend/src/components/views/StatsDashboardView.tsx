@@ -161,6 +161,7 @@ export default function StatsDashboardView() {
           <nav className="hidden md:flex gap-6 items-center">
             <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="/">TACTICAL MAP</a>
             <a className="font-headline uppercase tracking-wider text-xs text-primary border-b border-primary/50 pb-1" href="/stats">SYSTEM STATS</a>
+            <a className="font-headline uppercase tracking-wider text-xs text-[#8eff71]/60 hover:text-primary transition-colors" href="/linkage">LINKAGE AUDIT</a>
           </nav>
         </div>
         <div className="flex items-center gap-2">

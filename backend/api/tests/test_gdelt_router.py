@@ -56,7 +56,7 @@ async def test_gdelt_events_mission_mode_returns_linkage_metadata(mock_fetch_lin
             "in_aot": 0,
             "state_actor": 0,
             "cable_infra": 0,
-            "chokepoint": 1,
+            "chokepoint": 1, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
         },
         mission_country_codes={"OMN"},
         cable_country_codes={"ARE"},
@@ -103,7 +103,7 @@ async def test_gdelt_actors_mission_mode_aggregates_linked_events(mock_fetch_lin
             "in_aot": 1,
             "state_actor": 1,
             "cable_infra": 0,
-            "chokepoint": 0,
+            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
         },
         mission_country_codes={"UKR", "RUS", "BLR"},
         cable_country_codes=set(),
@@ -133,7 +133,7 @@ async def test_gdelt_events_radius_mode_uses_shared_linkage_fetch(mock_fetch_lin
             "in_aot": 0,
             "state_actor": 0,
             "cable_infra": 0,
-            "chokepoint": 0,
+            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
         },
         mission_country_codes=set(),
         cable_country_codes=set(),
@@ -168,14 +168,14 @@ def test_gdelt_events_reject_partial_radius_parameters():
 
 
 @patch.object(gdelt_router.db, "redis_client", None)
-@patch.object(gdelt_router, "fetch_experimental_linkage_review", new_callable=AsyncMock)
+@patch.object(gdelt_router, "fetch_linkage_audit", new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_gdelt_linkage_review_returns_side_by_side_payload(mock_review):
+async def test_gdelt_linkage_audit_returns_side_by_side_payload(mock_review):
     mock_review.return_value = {
         "reference_version": "2026-04-11-v1",
         "mission_country_code": "UKR",
         "live": {
-            "counts": {"in_aot": 1, "state_actor": 1, "cable_infra": 0, "chokepoint": 0},
+            "counts": {"in_aot": 1, "state_actor": 1, "cable_infra": 0, "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0},
             "sample": [{"event_id_cnty": "live-1", "linkage_tier": "state_actor", "linkage_score": 0.8}],
         },
         "experimental": {
@@ -189,7 +189,7 @@ async def test_gdelt_linkage_review_returns_side_by_side_payload(mock_review):
     mock_conn = MagicMock()
 
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
-        result = await gdelt_router.get_gdelt_linkage_review(limit=10, hours=24, h3_region="8728f2ba8ffffff")
+        result = await gdelt_router.get_gdelt_linkage_audit(limit=10, hours=24, h3_region="8728f2ba8ffffff")
 
     assert result["mission_country_code"] == "UKR"
     assert result["live"]["counts"]["state_actor"] == 1

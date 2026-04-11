@@ -9,7 +9,7 @@ from services.gdelt_linkage import (
     fetch_linked_gdelt_events,
     format_gdelt_linkage_notes,
 )
-from services.gdelt_phase2_experiments import fetch_experimental_linkage_review
+from services.gdelt_phase2_experiments import fetch_linkage_audit
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.GDELT")
@@ -85,8 +85,8 @@ def _resolve_mission_mode(
     return None
 
 
-@router.get("/api/gdelt/linkage-review")
-async def get_gdelt_linkage_review(
+@router.get("/api/gdelt/linkage-audit")
+async def get_gdelt_linkage_audit(
     limit: int = Query(default=25, le=100, description="Max live and experimental samples to return"),
     hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours"),
     h3_region: str | None = Query(default=None, description="Mission H3 cell for side-by-side linkage review"),
@@ -101,7 +101,7 @@ async def get_gdelt_linkage_review(
         return {"live": {"counts": {}, "sample": []}, "experimental": {"counts": {}, "sample": []}, "comparison": {}}
 
     async with db.pool.acquire() as conn:
-        return await fetch_experimental_linkage_review(
+        return await fetch_linkage_audit(
             conn,
             db.redis_client,
             lookback_hours=hours,

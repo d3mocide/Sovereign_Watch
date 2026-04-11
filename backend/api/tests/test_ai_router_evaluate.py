@@ -147,7 +147,7 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
     assert response.source_scope is not None
     assert response.source_scope["tak"]["scope"] == "mission_area"
     assert response.source_scope["gdelt"]["linkage_reason"] == "explicit_geopolitical_linkage"
-    assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 cable-infra, 0 maritime-chokepoint"
+    assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 exp:alliance, 0 exp:basing, 0 exp:proxy, 0 cable-infra, 0 maritime-chokepoint"
     assert response.source_scope["space_weather"]["scope"] == "impact_linked_external"
     # Valid H3 cell → wkt_polygon is set → mission-area SatNOGS path used
     assert response.source_scope["satnogs"]["scope"] == "mission_area"
@@ -370,7 +370,7 @@ async def test_evaluate_regional_escalation_sorts_linked_gdelt_events_by_score()
             "in_aot": 0,
             "state_actor": 2,
             "cable_infra": 0,
-            "chokepoint": 0,
+            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
         },
         mission_country_codes={"ARE"},
         cable_country_codes=set(),
