@@ -269,7 +269,6 @@ export interface MapFilters {
   showGdelt: boolean;
   showGdeltLabels?: boolean;
   showHoldingPatterns?: boolean;
-  showNOTAMs?: boolean;
   geodent?: boolean; // Geodent toggle synonym
   // Infrastructure
   showCables?: boolean;

@@ -22,7 +22,6 @@ from routers import (
     maritime,
     metrics,
     news,
-    notam,
     orbital,
     rf,
     satnogs,
@@ -203,7 +202,6 @@ app.include_router(news.router, dependencies=_viewer_auth)
 app.include_router(space_weather.router, dependencies=_viewer_auth)
 app.include_router(jamming.router, dependencies=_viewer_auth)
 app.include_router(holding_patterns.router, dependencies=_viewer_auth)
-app.include_router(notam.router, dependencies=_viewer_auth)
 app.include_router(satnogs.router, dependencies=_viewer_auth)
 app.include_router(gdelt.router, dependencies=_viewer_auth)
 app.include_router(stats.router)

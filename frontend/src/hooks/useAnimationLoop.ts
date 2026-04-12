@@ -121,8 +121,6 @@ interface UseAnimationLoopOptions {
   satnogsStationsRef?: MutableRefObject<SatNOGSStation[]>;
   /** Aviation holding pattern GeoJSON (from /api/holding-patterns/active) */
   holdingPatternData?: FeatureCollection | null;
-  /** FAA NOTAM active zones GeoJSON (from /api/notam/active) */
-  notamData?: FeatureCollection | null;
   /** H3 resolution tier (4/6/9) derived from map zoom; drives risk layer refetch */
   h3RiskResolution?: number;
 }
@@ -186,7 +184,6 @@ export function useAnimationLoop({
   historySegmentsRef,
   satnogsStationsRef,
   holdingPatternData,
-  notamData,
   h3RiskResolution,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
@@ -270,9 +267,6 @@ export function useAnimationLoop({
 
   const holdingPatternDataRef = useRef(holdingPatternData);
   holdingPatternDataRef.current = holdingPatternData;
-
-  const notamDataRef = useRef(notamData);
-  notamDataRef.current = notamData;
 
   // ── Clausal chain data ───────────────────────────────────────────────────
   // Managed internally (same pattern as cluster fetch) so the region is always
@@ -761,7 +755,6 @@ export function useAnimationLoop({
         historySegments: historySegmentsRef?.current,
         satnogsStations: satnogsStationsRef?.current || [],
         holdingPatternData: holdingPatternDataRef.current,
-        notamData: notamDataRef.current,
         clusterData: clusterDataRef.current,
         clausalChainsData: clausalChainsDataRef.current,
       });
