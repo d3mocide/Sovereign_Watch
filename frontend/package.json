@@ -10,9 +10,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "pnpm run lint && pnpm run typecheck",
     "preview": "vite preview",
-    "test": "vitest --run",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test": "vitest --run"
   },
   "dependencies": {
     "@deck.gl/core": "9.2.11",

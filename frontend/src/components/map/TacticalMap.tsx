@@ -314,7 +314,6 @@ export function TacticalMap({
   const [jammingData, setJammingData] = useState<any>(null);
   const [holdingPatternData, setHoldingPatternData] =
     useState<FeatureCollection | null>(null);
-  const [notamData, setNotamData] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,28 +334,6 @@ export function TacticalMap({
       clearInterval(id);
     };
   }, [filters?.showHoldingPatterns]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchNOTAMs = async () => {
-      try {
-        if (filters?.showNOTAMs) {
-          const r = await fetch("/api/notam/active");
-          if (r.ok && !cancelled) setNotamData(await r.json());
-        } else {
-          setNotamData(null);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-    fetchNOTAMs();
-    const id = setInterval(fetchNOTAMs, 10 * 60_000); // 10 min cadence
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [filters?.showNOTAMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -797,7 +774,6 @@ export function TacticalMap({
         : undefined,
     historySegmentsRef,
     holdingPatternData,
-    notamData,
     h3RiskResolution,
   });
 
