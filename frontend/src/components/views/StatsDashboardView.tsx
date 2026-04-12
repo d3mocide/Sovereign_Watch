@@ -167,9 +167,10 @@ export default function StatsDashboardView() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setAlertCount(0)}
-            className="p-2 text-primary hover:bg-surface-container-highest transition-all relative group"
+            aria-label={alertCount > 0 ? `Clear ${alertCount} System Alerts` : "System Alerts"}
+            className="p-2 text-primary hover:bg-surface-container-highest focus-visible:ring-1 focus-visible:ring-primary outline-none transition-all relative group"
           >
-            <Bell size={18} />
+            <Bell size={18} aria-hidden="true" />
             {alertCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-error text-surface text-[8px] font-black flex items-center justify-center rounded-full border border-[#0e0e0e] animate-pulse">
                 {alertCount}
@@ -181,14 +182,21 @@ export default function StatsDashboardView() {
           </button>
           <button
             onClick={() => setIsLogsExpanded(v => !v)}
-            className={`p-2 transition-all group relative ${isLogsExpanded ? 'text-primary bg-primary/10' : 'text-primary hover:bg-surface-container-highest'}`}
+            aria-label="Toggle Logs"
+            aria-pressed={isLogsExpanded}
+            className={`p-2 transition-all group relative focus-visible:ring-1 focus-visible:ring-primary outline-none ${isLogsExpanded ? 'text-primary bg-primary/10' : 'text-primary hover:bg-surface-container-highest'}`}
           >
-            <Terminal size={18} />
+            <Terminal size={18} aria-hidden="true" />
             <div className="absolute -bottom-8 right-0 bg-[#0e0e0e] border border-primary/20 p-1.5 hidden group-hover:block whitespace-nowrap z-50">
               <p className="text-[8px] text-primary uppercase font-bold tracking-tighter">Toggle Logs [CTRL+L]</p>
             </div>
           </button>
-          <button className="p-2 text-primary hover:bg-surface-container-highest transition-all"><Settings size={18} /></button>
+          <button
+            aria-label="System Settings"
+            className="p-2 text-primary hover:bg-surface-container-highest focus-visible:ring-1 focus-visible:ring-primary outline-none transition-all"
+          >
+            <Settings size={18} aria-hidden="true" />
+          </button>
         </div>
       </header>
 
