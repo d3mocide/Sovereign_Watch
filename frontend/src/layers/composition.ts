@@ -35,8 +35,8 @@ import type { H3CellData } from "./buildH3CoverageLayer";
 import type { H3RiskCellData } from "../api/h3Risk";
 import type { ClusterInfo } from "../api/clusters";
 import { buildClusterLayer } from "./buildClusterLayer";
+import { buildAirspaceLayer } from "./buildAirspaceLayer";
 import { buildClausalChainLayer, ClausalChain } from "./buildClausalChainLayer";
-import { buildNOTAMLayer } from "./buildNOTAMLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -102,8 +102,8 @@ interface LayerCompositionOptions {
   clusterData?: ClusterInfo[];
   /** Clausal chain narrative traces (AI router medial clauses) */
   clausalChainsData?: ClausalChain[];
-  /** FAA NOTAM active zones GeoJSON (from /api/notam/active) */
-  notamData?: FeatureCollection | null;
+  /** OpenAIP global restricted/danger/prohibited airspace zones GeoJSON */
+  airspaceZonesData?: FeatureCollection | null;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -155,7 +155,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     holdingPatternData,
     clusterData,
     clausalChainsData,
-    notamData,
+    airspaceZonesData,
   } = options;
 
   // JS8 station layers
@@ -457,18 +457,13 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       historyTails,
     ),
-    // FAA NOTAMs — airspace notices, TFRs, GPS outages, obstacles
-    ...buildNOTAMLayer({
-      data: notamData ?? null,
-      enabled: !!filters?.showNOTAMs,
+    // OpenAIP global airspace zones — restricted/danger/prohibited polygon overlays
+    ...buildAirspaceLayer({
+      data: airspaceZonesData ?? null,
+      enabled: !!filters?.showAirspaceZones,
       globeMode,
-      now,
-      onHover: (info: unknown) => {
-        setHoveredInfra(info);
-      },
-      onSelect: (info: unknown) => {
-        setSelectedInfra(info);
-      },
+      onHover: setHoveredInfra,
+      onSelect: setSelectedInfra,
     }),
     // Aviation Holding Patterns - Pulsed Amber tactical zones
     ...buildHoldingPatternLayer(

@@ -1,10 +1,10 @@
 """
-Unit tests for the FAA NOTAM router (/api/notam/*).
+Unit tests for the OpenAIP Airspace Zones router (/api/airspace/*).
 
 Covers:
-  - GET /api/notam/active     — Redis cache hit, miss, and not-ready
-  - GET /api/notam/history    — DB query success, optional filters, not-ready
-  - GET /api/notam/{notam_id} — detail lookup, 404 case, DB not-ready
+  - GET /api/airspace/zones     — Redis cache hit, miss, not-ready
+  - GET /api/airspace/history   — DB query, type/country filters, not-ready
+  - GET /api/airspace/types     — type summary, DB not-ready
 """
 
 import json
@@ -26,35 +26,32 @@ from main import app  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-_SAMPLE_NOTAM_ROW = {
-    "time": datetime(2026, 4, 11, 12, 0, 0, tzinfo=timezone.utc),
-    "notam_id": "7/7894",
-    "icao_id": "KORD",
-    "feature_name": "CHICAGO",
-    "classification": "DOM",
-    "keyword": "TFR",
-    "effective_start": datetime(2026, 4, 11, 10, 0, 0, tzinfo=timezone.utc),
-    "effective_end": datetime(2026, 4, 12, 10, 0, 0, tzinfo=timezone.utc),
-    "lat": 41.98,
-    "lon": -87.90,
-    "radius_nm": 5.0,
-    "min_alt_ft": 0,
-    "max_alt_ft": 18000,
-    "raw_text": "!ORD 04/123 ORD AIRSPACE TFR ...",
-    "geom_type": "POINT",
+_POLYGON_GEOM = {
+    "type": "Polygon",
+    "coordinates": [
+        [[-87.5, 41.5], [-87.5, 42.5], [-88.5, 42.5], [-88.5, 41.5], [-87.5, 41.5]]
+    ],
 }
 
-_SAMPLE_GEOJSON = {
+_SAMPLE_ROW = {
+    "time": datetime(2026, 4, 11, 12, 0, 0, tzinfo=timezone.utc),
+    "zone_id": "abc123",
+    "name": "Chicago Restricted",
+    "type": "RESTRICTED",
+    "icao_class": None,
+    "country": "US",
+    "upper_limit": "FL 180",
+    "lower_limit": "GND",
+    "geometry_json": json.dumps(_POLYGON_GEOM),
+}
+
+_SAMPLE_FC = {
     "type": "FeatureCollection",
     "features": [
         {
             "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [-87.90, 41.98]},
-            "properties": {
-                "notam_id": "7/7894",
-                "keyword": "TFR",
-                "category": "TFR",
-            },
+            "geometry": _POLYGON_GEOM,
+            "properties": {"zone_id": "abc123", "type": "RESTRICTED", "country": "US"},
         }
     ],
 }
@@ -72,42 +69,42 @@ def override_auth():
     app.dependency_overrides.clear()
 
 
-# ── /api/notam/active ─────────────────────────────────────────────────────────
+# ── /api/airspace/zones ───────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_active_notams_redis_not_ready():
+async def test_airspace_zones_redis_not_ready():
     """503 when Redis is unavailable."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.redis_client", None):
-            response = await client.get("/api/notam/active")
+            response = await client.get("/api/airspace/zones")
     assert response.status_code == 503
 
 
 @pytest.mark.asyncio
-async def test_active_notams_redis_hit():
-    """Returns parsed GeoJSON from Redis cache on hit."""
+async def test_airspace_zones_redis_hit():
+    """Returns parsed GeoJSON FeatureCollection from Redis on hit."""
     mock_redis = MagicMock()
-    mock_redis.get = AsyncMock(return_value=json.dumps(_SAMPLE_GEOJSON))
+    mock_redis.get = AsyncMock(return_value=json.dumps(_SAMPLE_FC))
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.redis_client", mock_redis):
-            response = await client.get("/api/notam/active")
+            response = await client.get("/api/airspace/zones")
 
     assert response.status_code == 200
     body = response.json()
     assert body["type"] == "FeatureCollection"
     assert len(body["features"]) == 1
-    assert body["features"][0]["properties"]["keyword"] == "TFR"
+    assert body["features"][0]["properties"]["type"] == "RESTRICTED"
 
 
 @pytest.mark.asyncio
-async def test_active_notams_redis_miss():
-    """Returns empty FeatureCollection when Redis key is absent."""
+async def test_airspace_zones_redis_miss():
+    """Returns empty FeatureCollection when key is absent."""
     mock_redis = MagicMock()
     mock_redis.get = AsyncMock(return_value=None)
 
@@ -115,33 +112,31 @@ async def test_active_notams_redis_miss():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.redis_client", mock_redis):
-            response = await client.get("/api/notam/active")
+            response = await client.get("/api/airspace/zones")
 
     assert response.status_code == 200
-    body = response.json()
-    assert body["type"] == "FeatureCollection"
-    assert body["features"] == []
+    assert response.json() == {"type": "FeatureCollection", "features": []}
 
 
-# ── /api/notam/history ────────────────────────────────────────────────────────
+# ── /api/airspace/history ─────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_notam_history_db_not_ready():
+async def test_airspace_history_db_not_ready():
     """503 when database pool is unavailable."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.pool", None):
-            response = await client.get("/api/notam/history")
+            response = await client.get("/api/airspace/history")
     assert response.status_code == 503
 
 
 @pytest.mark.asyncio
-async def test_notam_history_success():
-    """Returns GeoJSON FeatureCollection with correct geometry."""
+async def test_airspace_history_success():
+    """Returns GeoJSON FeatureCollection with correct polygon geometry."""
     mock_conn = MagicMock()
-    mock_conn.fetch = AsyncMock(return_value=[_SAMPLE_NOTAM_ROW])
+    mock_conn.fetch = AsyncMock(return_value=[_SAMPLE_ROW])
 
     mock_pool = MagicMock()
     mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -151,22 +146,21 @@ async def test_notam_history_success():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.pool", mock_pool):
-            response = await client.get("/api/notam/history?hours=24")
+            response = await client.get("/api/airspace/history?hours=24")
 
     assert response.status_code == 200
     body = response.json()
     assert body["type"] == "FeatureCollection"
     assert len(body["features"]) == 1
     feat = body["features"][0]
-    assert feat["geometry"]["type"] == "Point"
-    assert feat["geometry"]["coordinates"] == [-87.90, 41.98]
-    assert feat["properties"]["notam_id"] == "7/7894"
-    assert feat["properties"]["keyword"] == "TFR"
+    assert feat["geometry"]["type"] == "Polygon"
+    assert feat["properties"]["type"] == "RESTRICTED"
+    assert feat["properties"]["country"] == "US"
 
 
 @pytest.mark.asyncio
-async def test_notam_history_keyword_filter():
-    """keyword query param is accepted without error."""
+async def test_airspace_history_type_filter():
+    """zone_type query param is accepted without error."""
     mock_conn = MagicMock()
     mock_conn.fetch = AsyncMock(return_value=[])
 
@@ -178,56 +172,87 @@ async def test_notam_history_keyword_filter():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.pool", mock_pool):
-            response = await client.get("/api/notam/history?keyword=GPS")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["features"] == []
-
-
-@pytest.mark.asyncio
-async def test_notam_history_skips_missing_coords():
-    """Features without lat/lon are silently dropped."""
-    null_row = dict(_SAMPLE_NOTAM_ROW)
-    null_row["lat"] = None
-    null_row["lon"] = None
-
-    mock_conn = MagicMock()
-    mock_conn.fetch = AsyncMock(return_value=[null_row])
-
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        with patch("core.database.db.pool", mock_pool):
-            response = await client.get("/api/notam/history")
+            response = await client.get("/api/airspace/history?zone_type=DANGER")
 
     assert response.status_code == 200
     assert response.json()["features"] == []
 
 
-# ── /api/notam/{notam_id} ─────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_airspace_history_country_filter():
+    """country query param is accepted without error."""
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        with patch("core.database.db.pool", mock_pool):
+            response = await client.get("/api/airspace/history?country=DE")
+
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_notam_detail_db_not_ready():
+async def test_airspace_history_skips_bad_geometry():
+    """Rows with unparseable geometry_json are silently dropped."""
+    bad_row = dict(_SAMPLE_ROW)
+    bad_row["geometry_json"] = "not valid json {"
+
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[bad_row])
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        with patch("core.database.db.pool", mock_pool):
+            response = await client.get("/api/airspace/history")
+
+    assert response.status_code == 200
+    assert response.json()["features"] == []
+
+
+@pytest.mark.asyncio
+async def test_airspace_history_rejects_hours_too_large():
+    """hours > 720 should return 422 (FastAPI validation)."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/airspace/history?hours=9999")
+    assert response.status_code == 422
+
+
+# ── /api/airspace/types ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_airspace_types_db_not_ready():
     """503 when database pool is unavailable."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.pool", None):
-            response = await client.get("/api/notam/7%2F7894")
+            response = await client.get("/api/airspace/types")
     assert response.status_code == 503
 
 
 @pytest.mark.asyncio
-async def test_notam_detail_found():
-    """Returns full NOTAM detail object for a known ID."""
+async def test_airspace_types_success():
+    """Returns type summary list."""
+    mock_rows = [
+        {"type": "RESTRICTED", "count": 42},
+        {"type": "DANGER", "count": 17},
+    ]
     mock_conn = MagicMock()
-    mock_conn.fetchrow = AsyncMock(return_value=_SAMPLE_NOTAM_ROW)
+    mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
     mock_pool = MagicMock()
     mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -237,30 +262,9 @@ async def test_notam_detail_found():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         with patch("core.database.db.pool", mock_pool):
-            response = await client.get("/api/notam/7%2F7894")
+            response = await client.get("/api/airspace/types")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["notam_id"] == "7/7894"
-    assert body["icao_id"] == "KORD"
-    assert body["lat"] == 41.98
-    assert body["lon"] == -87.90
-
-
-@pytest.mark.asyncio
-async def test_notam_detail_not_found():
-    """Returns 404 when NOTAM ID is unknown."""
-    mock_conn = MagicMock()
-    mock_conn.fetchrow = AsyncMock(return_value=None)
-
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        with patch("core.database.db.pool", mock_pool):
-            response = await client.get("/api/notam/UNKNOWN")
-
-    assert response.status_code == 404
+    assert "types" in body
+    assert body["types"][0] == {"type": "RESTRICTED", "count": 42}

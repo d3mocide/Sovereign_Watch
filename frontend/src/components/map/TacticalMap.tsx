@@ -314,7 +314,8 @@ export function TacticalMap({
   const [jammingData, setJammingData] = useState<any>(null);
   const [holdingPatternData, setHoldingPatternData] =
     useState<FeatureCollection | null>(null);
-  const [notamData, setNotamData] = useState<FeatureCollection | null>(null);
+  const [airspaceZonesData, setAirspaceZonesData] =
+    useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,25 +339,25 @@ export function TacticalMap({
 
   useEffect(() => {
     let cancelled = false;
-    const fetchNOTAMs = async () => {
+    const fetchAirspaceZones = async () => {
       try {
-        if (filters?.showNOTAMs) {
-          const r = await fetch("/api/notam/active");
-          if (r.ok && !cancelled) setNotamData(await r.json());
+        if (filters?.showAirspaceZones) {
+          const r = await fetch("/api/airspace/zones");
+          if (r.ok && !cancelled) setAirspaceZonesData(await r.json());
         } else {
-          setNotamData(null);
+          setAirspaceZonesData(null);
         }
       } catch {
         /* ignore */
       }
     };
-    fetchNOTAMs();
-    const id = setInterval(fetchNOTAMs, 10 * 60_000); // 10 min cadence
+    fetchAirspaceZones();
+    const id = setInterval(fetchAirspaceZones, 6 * 60 * 60_000); // 6-hour cadence
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [filters?.showNOTAMs]);
+  }, [filters?.showAirspaceZones]);
 
   useEffect(() => {
     let cancelled = false;
@@ -797,7 +798,7 @@ export function TacticalMap({
         : undefined,
     historySegmentsRef,
     holdingPatternData,
-    notamData,
+    airspaceZonesData,
     h3RiskResolution,
   });
 

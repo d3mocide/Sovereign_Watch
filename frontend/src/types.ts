@@ -269,7 +269,7 @@ export interface MapFilters {
   showGdelt: boolean;
   showGdeltLabels?: boolean;
   showHoldingPatterns?: boolean;
-  showNOTAMs?: boolean;
+  showAirspaceZones?: boolean;
   geodent?: boolean; // Geodent toggle synonym
   // Infrastructure
   showCables?: boolean;
