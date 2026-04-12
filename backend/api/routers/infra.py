@@ -261,3 +261,46 @@ async def get_facilities(
     except Exception as e:
         logger.error(f"Error fetching facilities: {e}")
         raise HTTPException(status_code=500, detail="Database error")
+
+
+@router.get("/api/infra/dns-root")
+async def get_dns_root_health():
+    """Returns the latest health probe results for all 13 root DNS server clusters.
+
+    Sourced from ``dns:root:health`` in Redis (refreshed every 5 minutes by the
+    infra poller).  Each entry contains: letter, operator, ip, lat, lon,
+    reachable (bool), latency_ms, checked_at (ISO-8601).
+    """
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        data = await db.redis_client.get("dns:root:health")
+        if data:
+            return {"status": "ok", "servers": json.loads(data)}
+        return {"status": "ok", "servers": []}
+    except Exception as e:
+        logger.error(f"Failed to fetch DNS root health: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/infra/cdn-nodes")
+async def get_cdn_edge_nodes():
+    """Returns CDN edge node (PoP) locations from Redis.
+
+    Currently covers Cloudflare's global anycast network sourced from
+    speed.cloudflare.com/locations (refreshed every 6 hours by the infra
+    poller).  Each node contains: provider, iata, city, country, region,
+    lat, lon.
+    """
+    if not db.redis_client:
+        raise HTTPException(status_code=503, detail="Redis not ready")
+
+    try:
+        data = await db.redis_client.get("cdn:edge:nodes")
+        if data:
+            return {"status": "ok", **json.loads(data)}
+        return {"status": "ok", "nodes": [], "count": 0, "fetched_at": None}
+    except Exception as e:
+        logger.error(f"Failed to fetch CDN edge nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

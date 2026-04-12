@@ -40,15 +40,15 @@ Hardening the platform for autonomous deployment on low-power edge devices (Jets
 
 Expanding the depth of our geospatial and infrastructure data sources.
 
-| ID | Task Name | Component | Description |
-| :--- | :--- | :--- | :--- |
-| **Geo-04** | FAA NOTAM Integration | Data Eng | Ingest FAA airspace restrictions (TFRs, MOAs, GPS Tests). |
-| **FE-43** | Airspace Analytics | Frontend | Pulsing NOTAM markers and real-time aircraft/TFR intersection alerts. |
-| **Infra-06** | DNS Root Instances | Data Eng | Monitoring health and latency of the 13 root DNS server clusters. |
-| **Infra-07** | CDN Edge Nodes | Data Eng | Mapping edge cache locations for major CDNs (Cloudflare, Akamai). |
-| **Space-05** | Satellite Constellations | Data Eng | Automated CelesTrak JSON ingestion for Starlink/OneWeb/Kuiper. |
-| **Ingest-07** | Drone Remote ID | Data Eng | OpenDroneID / FAA Remote ID SDR pipeline integration. |
-| **Analyt-02** | Mission Stats Namespace | Backend | Add mission-scoped stats endpoints for activity and TAK breakdown while keeping the existing stats dashboard global. |
+| ID | Task Name | Component | Status | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Geo-04** | FAA NOTAM Integration | Data Eng | ✅ Done | Replaced with OpenAIP global airspace zones (v1.0.4). |
+| **FE-43** | Airspace Analytics | Frontend | ✅ Done | 12-type zone filter, event-driven sync, z-order unification (v1.0.4). |
+| **Space-05** | Satellite Constellations | Data Eng | ✅ Done | Starlink, OneWeb, Iridium-NEXT already in orbital groups; Kuiper deferred (no public TLEs yet). |
+| **Infra-06** | DNS Root Instances | Data Eng | ✅ Done | `dns_root_loop` probes all 13 clusters every 5 min → `dns:root:health`; `GET /api/infra/dns-root`. |
+| **Infra-07** | CDN Edge Nodes | Data Eng | ✅ Done | `cdn_edge_loop` fetches Cloudflare PoPs every 6 h → `cdn:edge:nodes`; `GET /api/infra/cdn-nodes`. |
+| **Analyt-02** | Mission Stats Namespace | Backend | ✅ Done | `GET /api/stats/mission/activity` and `/tak-breakdown` filter tracks by active mission `ST_DWithin`. |
+| **Ingest-07** | Drone Remote ID | Data Eng | 🔜 Deferred | Requires SDR hardware; deferred to SDR-mode milestone. |
 
 ---
 
@@ -64,4 +64,4 @@ Future-looking features for distributed operations.
 
 ---
 
-- **Last Updated**: 2026-04-07 (All P0 blockers verified complete; v1.0.0 ready to tag).
+- **Last Updated**: 2026-04-12 (All P2 items complete except Ingest-07 deferred to SDR milestone).
