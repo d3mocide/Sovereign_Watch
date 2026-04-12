@@ -24,14 +24,14 @@
     "@deck.gl/react": "^9.2.11",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
+    "h3-js": "^4.1.0",
     "lucide-react": "0.577.0",
     "mapbox-gl": "3.20.0",
     "maplibre-gl": "5.20.1",
     "protobufjs": "8.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-map-gl": "8.1.0",
-    "h3-js": "^4.1.0"
+    "react-map-gl": "8.1.0"
   },
   "pnpm": {
     "overrides": {
@@ -43,6 +43,8 @@
     "@eslint/js": "9.39.4",
     "@playwright/test": "1.58.2",
     "@tailwindcss/vite": "4.2.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/geojson": "7946.0.16",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
@@ -55,6 +57,7 @@
     "eslint-plugin-react-hooks": "7.0.1",
     "eslint-plugin-react-refresh": "0.5.2",
     "globals": "17.4.0",
+    "jsdom": "^29.0.2",
     "playwright": "1.58.2",
     "postcss": "8.5.8",
     "tailwindcss": "4.2.1",
