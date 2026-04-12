@@ -5,6 +5,10 @@ import { defineConfig } from "vite";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    // Exclude Playwright E2E specs — those run via `pnpm exec playwright test`
+    exclude: ["e2e/**", "node_modules/**"],
+  },
   server: {
     port: 3700,
     host: true, // Listen on all interfaces (required for Docker)
