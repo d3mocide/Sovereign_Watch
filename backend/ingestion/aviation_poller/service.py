@@ -252,6 +252,12 @@ class PollerService:
                             await self.h3_manager.initialize_region(
                                 self.center_lat, self.center_lon, self.radius_nm * 1.852
                             )
+
+                            # Notify OpenAIP source to trigger instant re-poll for the new area
+                            if self.openaip_source:
+                                await self.openaip_source.update_mission_area(
+                                    self.center_lat, self.center_lon, self.radius_nm
+                                )
                         except Exception as e:
                             logger.error(f"Failed to parse mission update: {e}")
             except (redis.ConnectionError, asyncio.CancelledError):

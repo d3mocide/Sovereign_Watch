@@ -123,7 +123,7 @@ export function buildJammingLayer(
       filled: false,
       pickable: true,
       wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -30.0 : 0 },
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -110.0 : 0 },
       onHover: handleHover,
       onClick: handleClick,
       updateTriggers: {
@@ -149,7 +149,7 @@ export function buildJammingLayer(
       filled: true,
       pickable: true,
       wrapLongitude: !globeMode,
-      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -25.0 : 0 },
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -115.0 : 0 },
       onHover: handleHover,
       onClick: handleClick,
     }),

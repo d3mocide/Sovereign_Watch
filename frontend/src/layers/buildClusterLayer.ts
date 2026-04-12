@@ -60,6 +60,7 @@ function clusterToEntity(c: ClusterInfo): CoTEntity {
 export function buildClusterLayer(
   clusters: ClusterInfo[],
   visible: boolean,
+  globeMode: boolean,
   setHoveredEntity?: (entity: CoTEntity | null) => void,
   setHoverPosition?: (pos: { x: number; y: number } | null) => void,
   onEntitySelect?: (entity: CoTEntity | null) => void,
@@ -112,6 +113,7 @@ export function buildClusterLayer(
       pickable: true,
       onHover: handleHover,
       onClick: handleClick,
+      parameters: { depthTest: !!globeMode, depthBias: globeMode ? -110.0 : 0 } as any,
     }),
     new TextLayer<ClusterWithPoly>({
       id: "stdbscan-cluster-label",

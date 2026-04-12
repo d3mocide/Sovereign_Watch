@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import time
 from datetime import datetime, timezone
@@ -41,14 +42,67 @@ _REDIS_TTL_S = 90_000  # 25 hours
 
 # Airspace types to fetch by default (tactical relevance)
 _DEFAULT_TYPES = [
-    "RESTRICTED",   # Temporary restricted areas
-    "DANGER",       # Danger zones (military exercises, firing ranges)
-    "PROHIBITED",   # No-fly zones (capital airspace, nuclear sites, etc.)
-    "WARNING",      # Warning areas (airspace with potential hazards)
-    "TRA",          # Temporary Reserved Airspace
-    "TSA",          # Temporary Segregated Area
-    "ADIZ",         # Air Defense Identification Zone
+    "RESTRICTED",   # 0
+    "DANGER",       # 1
+    "PROHIBITED",   # 2
+    "WARNING",      # 6
+    "TRA",          # 15
+    "TSA",          # 16
+    "ADIZ",         # 7
 ]
+
+# Mapping integers to strings for OpenAIP V2 API
+_AIRSPACE_TYPES: dict[int, str] = {
+    0: "RESTRICTED",
+    1: "DANGER",
+    2: "PROHIBITED",
+    3: "CTR",
+    4: "TMA",
+    5: "RMZ",
+    6: "TMZ",
+    7: "ADIZ",
+    8: "ATZ",
+    9: "FIS",
+    10: "VFR",
+    11: "HELICOPTER",
+    12: "GLIDER",
+    13: "AEROBATICS",
+    14: "OVERFLYING",
+    15: "TRA",
+    16: "TSA",
+    17: "VOLCANO",
+    18: "CORRIDOR",
+    19: "PROTECT",
+    20: "GLIDING",
+    21: "TRP",
+    22: "PLANNED",
+    23: "MAX_ALT",
+    24: "CAUTION",
+    25: "MOD_CAUTION",
+    26: "MILITARY",
+    27: "FIR",
+    28: "UIR",
+    29: "CONTROL",
+    30: "AIRWAY",
+    31: "OUTSIDE_60NM",
+    32: "CLASS",
+    33: "TMA_P",
+    34: "TIZ",
+    35: "TIA",
+    36: "OTHER",
+}
+
+_ICAO_CLASSES: dict[int, str] = {
+    0: "CLASS_A",
+    1: "CLASS_B",
+    2: "CLASS_C",
+    3: "CLASS_D",
+    4: "CLASS_E",
+    5: "CLASS_F",
+    6: "CLASS_G",
+    7: "UNCLASSIFIED",
+    8: "OTHER",
+}
 
 # Display colours by type (used as properties in GeoJSON for frontend layer)
 _TYPE_COLORS: dict[str, str] = {
@@ -56,9 +110,14 @@ _TYPE_COLORS: dict[str, str] = {
     "RESTRICTED": "#f97316",   # orange-500
     "DANGER":     "#eab308",   # yellow-500
     "WARNING":    "#f59e0b",   # amber-500
+    "CAUTION":    "#f59e0b",
     "TRA":        "#8b5cf6",   # violet-500
     "TSA":        "#a855f7",   # purple-500
     "ADIZ":       "#06b6d4",   # cyan-500
+    "CTR":        "#3b82f6",   # blue-500
+    "TMA":        "#3b82f6",
+    "CLASS":      "#3b82f6",
+    "CONTROL":    "#3b82f6",
 }
 
 
@@ -93,12 +152,25 @@ def _parse_zone(item: dict[str, Any]) -> dict[str, Any] | None:
     if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
         return None
 
-    zone_type = item.get("type", "UNKNOWN")
+    zone_type_raw = item.get("type", "UNKNOWN")
+    zone_type = (
+        _AIRSPACE_TYPES.get(zone_type_raw, str(zone_type_raw))
+        if isinstance(zone_type_raw, int)
+        else zone_type_raw
+    )
+
+    icao_class_raw = item.get("icaoClass", "UNCLASSIFIED")
+    icao_class = (
+        _ICAO_CLASSES.get(icao_class_raw, str(icao_class_raw))
+        if isinstance(icao_class_raw, int)
+        else icao_class_raw
+    )
+
     return {
         "zone_id":      item.get("_id") or item.get("id", ""),
         "name":         item.get("name"),
         "type":         zone_type,
-        "icao_class":   item.get("icaoClass"),
+        "icao_class":   icao_class,
         "country":      item.get("country"),
         "upper_limit":  _format_limit(item.get("upperLimit")),
         "lower_limit":  _format_limit(item.get("lowerLimit")),
@@ -148,6 +220,8 @@ class OpenAIPSource:
         self.radius_nm = radius_nm
         self.running = False
 
+        self._trigger_event = asyncio.Event()
+
         self._api_key = os.environ.get("OPENAIP_API_KEY", "")
         self._bbox_expand = float(os.environ.get("OPENAIP_BBOX_EXPAND_DEG", "2.0"))
         raw_types = os.environ.get("OPENAIP_TYPES", ",".join(_DEFAULT_TYPES))
@@ -163,27 +237,45 @@ class OpenAIPSource:
     def _credentials_available(self) -> bool:
         return bool(self._api_key)
 
-    def update_mission_area(
+    async def update_mission_area(
         self, center_lat: float, center_lon: float, radius_nm: float
     ) -> None:
         """Called by the service when the mission area changes."""
         self.center_lat = center_lat
         self.center_lon = center_lon
         self.radius_nm = radius_nm
+        # Signal clearing *before* deleting so the frontend can immediately react
+        await self.redis.publish(_REDIS_KEY, json.dumps({"status": "clearing"}))
+        # Clear the stale cache
+        await self.redis.delete(_REDIS_KEY)
+        self._trigger_event.set()
 
     # ── Public interface ──────────────────────────────────────────────────────
 
     async def run(self) -> None:
         self.running = True
         logger.info("OpenAIPSource started (interval=%dh)", _POLL_INTERVAL_S // 3600)
-        # Fetch immediately on startup, then on cadence
+        
         while self.running:
             if self._credentials_available:
                 try:
                     await self._poll_and_publish()
                 except Exception as exc:
                     logger.error("OpenAIP poll cycle failed: %s", exc)
-            await asyncio.sleep(_POLL_INTERVAL_S)
+
+            try:
+                # Wait for either the 24h timeout OR a force-poll trigger (mission update)
+                await asyncio.wait_for(
+                    self._trigger_event.wait(), 
+                    timeout=_POLL_INTERVAL_S
+                )
+                self._trigger_event.clear()
+                logger.info("OpenAIP: Instant re-poll triggered by mission area update")
+            except asyncio.TimeoutError:
+                # Normal cycle
+                pass
+            except asyncio.CancelledError:
+                break
 
     async def shutdown(self) -> None:
         self.running = False
@@ -200,10 +292,10 @@ class OpenAIPSource:
         """
         deg_per_nm = 1.0 / 60.0
         lat_delta = self.radius_nm * deg_per_nm + self._bbox_expand
-        lon_delta = (
-            self.radius_nm * deg_per_nm / max(0.01, abs(float(f"{self.center_lat:.4f}")) or 1)
-            + self._bbox_expand
-        )
+        
+        # Proper longitude expansion using cos(lat)
+        lon_scale = 1.0 / math.cos(math.radians(self.center_lat))
+        lon_delta = (self.radius_nm * deg_per_nm * lon_scale) + self._bbox_expand
         min_lat = max(-90.0,  self.center_lat - lat_delta)
         max_lat = min( 90.0,  self.center_lat + lat_delta)
         min_lon = max(-180.0, self.center_lon - lon_delta)
@@ -268,18 +360,17 @@ class OpenAIPSource:
                 page += 1
                 await asyncio.sleep(0.3)  # gentle pacing between pages
 
-        if not all_zones:
-            logger.warning("No airspace zones parsed this cycle (failed=%d)", failed_parse)
-            return
-
         feature_collection = {
             "type": "FeatureCollection",
             "features": [_to_geojson_feature(z) for z in all_zones],
         }
         payload = json.dumps(feature_collection)
         await self.redis.set(_REDIS_KEY, payload, ex=_REDIS_TTL_S)
+        
+        # Notify API listeners that new data is available
+        await self.redis.publish(_REDIS_KEY, json.dumps({"status": "updated"}))
 
-        if self.db_pool:
+        if all_zones and self.db_pool:
             await self._archive_to_db(all_zones)
 
         elapsed = time.monotonic() - t0

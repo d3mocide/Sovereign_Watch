@@ -49,7 +49,8 @@ export function buildInfraLayers(
     ixpData: any = null,
     facilityData: any = null,
 ) {
-    const layers = [];
+    const outages: any[] = [];
+    const assets: any[] = [];
 
     // Country Outage Shading Layer
     if (worldCountriesData && (outagesData || countryOutageMap) && filters?.showOutages === true) {
@@ -68,7 +69,7 @@ export function buildInfraLayers(
             return map;
         })() : {});
 
-        layers.push(
+        outages.push(
             new GeoJsonLayer({
                 id: `country-outages-layer-${globeMode ? "globe" : "merc"}`,
                 data: worldCountriesData,
@@ -144,7 +145,7 @@ export function buildInfraLayers(
 
     // Submarine Cables Layer - uses GeoJsonLayer
     if (cablesData && filters?.showCables !== false) {
-        layers.push(
+        assets.push(
             new GeoJsonLayer({
                 id: `submarine-cables-layer-${globeMode ? "globe" : "merc"}`,
                 data: cablesData,
@@ -176,7 +177,7 @@ export function buildInfraLayers(
                 parameters: { 
                     depthTest: !!globeMode, 
                     depthMask: !!globeMode,
-                    depthBias: globeMode ? -30.0 : 0 
+                    depthBias: globeMode ? -70.0 : 0 
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
@@ -196,7 +197,7 @@ export function buildInfraLayers(
             });
         }
 
-        layers.push(
+        assets.push(
             new ScatterplotLayer({
                 id: `cable-stations-layer-${globeMode ? "globe" : "merc"}`,
                 data: stationsData.features || [],
@@ -228,7 +229,7 @@ export function buildInfraLayers(
                 parameters: { 
                     depthTest: !!globeMode, 
                     depthMask: !!globeMode,
-                    depthBias: globeMode ? -40.0 : 0 
+                    depthBias: globeMode ? -80.0 : 0 
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
@@ -238,7 +239,7 @@ export function buildInfraLayers(
 
     // PeeringDB IXP Layer — cyan diamonds
     if (ixpData && filters?.showIXPs !== false) {
-        layers.push(
+        assets.push(
             new ScatterplotLayer({
                 id: `peeringdb-ixp-layer-${globeMode ? "globe" : "merc"}`,
                 data: ixpData.features || [],
@@ -256,7 +257,7 @@ export function buildInfraLayers(
                 parameters: {
                     depthTest: !!globeMode,
                     depthMask: !!globeMode,
-                    depthBias: globeMode ? -35.0 : 0,
+                    depthBias: globeMode ? -85.0 : 0,
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
@@ -266,7 +267,7 @@ export function buildInfraLayers(
 
     // PeeringDB Facilities (Data Centers) Layer — purple dots
     if (facilityData && filters?.showFacilities !== false) {
-        layers.push(
+        assets.push(
             new ScatterplotLayer({
                 id: `peeringdb-fac-layer-${globeMode ? "globe" : "merc"}`,
                 data: facilityData.features || [],
@@ -284,7 +285,7 @@ export function buildInfraLayers(
                 parameters: {
                     depthTest: !!globeMode,
                     depthMask: !!globeMode,
-                    depthBias: globeMode ? -35.0 : 0,
+                    depthBias: globeMode ? -85.0 : 0,
                 },
                 onHover: setHoveredInfra,
                 onClick: setSelectedInfra,
@@ -292,5 +293,5 @@ export function buildInfraLayers(
         );
     }
 
-    return layers;
+    return { outages, assets };
 }

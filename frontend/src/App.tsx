@@ -158,6 +158,7 @@ function AuthenticatedApp() {
     loadedTrackCount,
   } = useReplayController();
 
+  const [wsSignal, setWsSignal] = useState<any>(null);
   // ── Core entity worker ────────────────────────────────────────────────────
   const currentMissionRef = useRef<{
     lat: number;
@@ -174,7 +175,11 @@ function AuthenticatedApp() {
     prevCourseRef,
     alertedEmergencyRef,
     streamConnectedRef,
-  } = useEntityWorker({ onEvent: addEvent, currentMissionRef });
+  } = useEntityWorker({ 
+    onEvent: addEvent, 
+    onWsMessage: setWsSignal,
+    currentMissionRef 
+  });
 
   const countsRef = useRef({ air: 0, sea: 0, orbital: 0 });
 
@@ -962,6 +967,7 @@ function AuthenticatedApp() {
               facilityData={facilityData}
               issPosition={issPosition}
               issTrack={issTrack}
+              wsSignal={wsSignal}
             />
 
             {articleViewerOverlay}

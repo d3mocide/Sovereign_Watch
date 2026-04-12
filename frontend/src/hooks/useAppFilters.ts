@@ -62,13 +62,16 @@ const DEFAULT_FILTERS: MapFilters = {
   showH3Coverage: false,
   showH3Risk: false,
   showAurora: false,
-  showNWSAlerts: false,
+  showNWSAlerts: true,
   showJamming: true,
   showGdelt: false,
   showGdeltLabels: false,
   showTerminator: true,
   showHoldingPatterns: true,
   showAirspaceZones: false,
+  airspaceZoneTypes: ["PROHIBITED", "RESTRICTED", "DANGER", "WARNING", "TRA", "TSA", "ADIZ", "MILITARY"],
+  showClusters: true,
+  clusterLookbackHours: 24,
 };
 
 const DEFAULT_ORBITAL_SAT_FILTERS = {
@@ -173,11 +176,11 @@ export function useAppFilters(
   }, [viewMode]);
 
   const handleFilterChange = useCallback(
-    (key: string, value: boolean) => {
+    (key: string, value: boolean | string[]) => {
       setFilters((prev: MapFilters) => {
         const next = { ...prev, [key]: value };
         localStorage.setItem("mapFilters", JSON.stringify(next));
-        if (key === "showH3Risk") {
+        if (key === "showH3Risk" && typeof value === "boolean") {
           localStorage.setItem(
             `${H3_RISK_MODE_PREF_KEY_PREFIX}${viewMode}`,
             String(value),
@@ -185,7 +188,7 @@ export function useAppFilters(
         }
 
         if (prev[key] !== value) {
-          if (key === "showAir") {
+          if (key === "showAir" && typeof value === "boolean") {
             addEvent({
               message: value
                 ? "Aviation Tracking Uplink Established"
@@ -193,7 +196,7 @@ export function useAppFilters(
               type: value ? "new" : "lost",
               entityType: "air",
             });
-          } else if (key === "showSea") {
+          } else if (key === "showSea" && typeof value === "boolean") {
             addEvent({
               message: value
                 ? "Maritime AIS Ingestion Subsystem Active"
@@ -201,7 +204,7 @@ export function useAppFilters(
               type: value ? "new" : "lost",
               entityType: "sea",
             });
-          } else if (key === "showSatellites") {
+          } else if (key === "showSatellites" && typeof value === "boolean") {
             addEvent({
               message: value
                 ? "Orbital Surveillance Network Synchronized"

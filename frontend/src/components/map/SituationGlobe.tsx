@@ -266,7 +266,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         // Night-side overlay — rendered after country heat so the shadow tints over it;
         // depthTest:false on the layer ensures it never occludes surface layers.
         getTerminatorLayer(!!showTerminator),
-        ...infra,
+        ...infra.outages,
+        ...infra.assets,
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
         ...buildGdeltLayer(
           gdeltData,

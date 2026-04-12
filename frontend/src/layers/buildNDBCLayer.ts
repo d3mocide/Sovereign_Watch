@@ -76,7 +76,11 @@ export function buildNDBCLayer(
       getLineWidth: 1,
       lineWidthUnits: "pixels",
 
-      parameters: { depthTest: !!globeMode, depthMask: !!globeMode },
+      parameters: { 
+        depthTest: !!globeMode, 
+        depthMask: !!globeMode,
+        depthBias: globeMode ? -90.0 : 0,
+      },
 
       onHover: (info: unknown) => setHoveredInfra(info),
       onClick: (info: unknown) => setSelectedInfra(info),

@@ -163,6 +163,7 @@ interface UseEntityWorkerOptions {
         classification?: EntityClassification;
       }) => void)
     | undefined;
+  onWsMessage: ((data: any) => void) | undefined;
   currentMissionRef: MutableRefObject<{
     lat: number;
     lon: number;
@@ -184,6 +185,7 @@ interface UseEntityWorkerReturn {
 
 export function useEntityWorker({
   onEvent,
+  onWsMessage,
   currentMissionRef,
 }: UseEntityWorkerOptions): UseEntityWorkerReturn {
   const entitiesRef = useRef<Map<string, CoTEntity>>(new Map());
@@ -650,6 +652,7 @@ export function useEntityWorker({
       workerRef,
       watchedIcaosRef,
       onEntityUpdate: processEntityUpdate,
+      onWsMessage,
       onSocketStateChange: (state) => {
         streamConnectedRef.current = state.connected;
 

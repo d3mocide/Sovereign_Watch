@@ -1,7 +1,7 @@
 # Sovereign Watch — Layer Depth & Z-Ordering Reference
 
-**Last Updated:** 2026-03-14 (added animation loop data threading rules)
-**Applies To:** `useAnimationLoop.ts`, all `build*Layers.ts` files, `OrbitalLayer.tsx`
+**Last Updated:** 2026-04-12 (Global 7-Tier Synchronization)
+**Applies To:** `composition.ts`, all `build*Layers.ts` files, `OrbitalLayer.tsx`
 
 ---
 
@@ -82,56 +82,30 @@ to `0`.
 
 ---
 
-## Draw Order and Depth Matrix
+## Draw Order and Depth Matrix (7-Tier System)
 
-Layers are appended to the `layers` array in `useAnimationLoop.ts` in this order. Within the
-same nominal draw slot, the last entry wins for same-depth fragments.
+Layers are appended to the `layers` array in `composition.ts` in this order. Within the same tier, draw order is the tiebreaker for `depthTest: false` layers.
 
-| Slot | Layer ID | Layer Type | `depthTest` | `depthBias` | z pos | File |
-|------|----------|------------|-------------|-------------|-------|------|
-| 1 | `h3-coverage-layer` | H3HexagonLayer | `false` | — | surface | `buildH3CoverageLayer.ts` |
-| 2 | `terminator-layer` | GeoJsonLayer | `false` | — | surface | `TerminatorLayer.tsx` |
-| 3 | `country-outages-layer-{merc\|globe}` | GeoJsonLayer | `true` | `-50.0` | surface | `buildInfraLayers.ts` |
-| 3 | `submarine-cables-layer-{merc\|globe}` | GeoJsonLayer | `true` | `-100.0` | surface | `buildInfraLayers.ts` |
-| 3 | `cable-stations-layer-{merc\|globe}` | ScatterplotLayer | `true` | `-110.0` | z=0 | `buildInfraLayers.ts` |
-| 4 | `satellite-footprint-{merc\|globe}` | ScatterplotLayer | `true` | `+50.0` | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-footprint-label-{merc\|globe}` | TextLayer | `false` | — | z=0 | `OrbitalLayer.tsx` |
-| 4 | `satellite-ground-track-{merc\|globe}` | PathLayer | `true` | `+50.0` | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-gap-bridge-{merc\|globe}` | PathLayer | `true` | `+50.0` | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-predicted-track-{merc\|globe}` | PathLayer | `true` | `+60.0` | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-markers-merc-{sfx}` | IconLayer | `true` | `0` | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-markers-globe-{sfx}` | SolidPolygonLayer | `true` | — | z=alt | `OrbitalLayer.tsx` |
-| 4 | `satellite-selection-ring-{uid}` | ScatterplotLayer | `true` | `-201.0` | z=alt | `OrbitalLayer.tsx` |
-| 5 | `aot-maritime-{merc\|globe}` | PathLayer | `!!globeMode` | globe:`-200.0` merc:`0` | z=0 | `buildAOTLayers.ts` |
-| 5 | `aot-aviation-{merc\|globe}` | PathLayer | `!!globeMode` | globe:`-200.0` merc:`0` | z=0 | `buildAOTLayers.ts` |
-| 5 | `aot-orbital-horizon-{merc\|globe}` | PathLayer | `!!globeMode` | globe:`-200.0` merc:`0` | z=0 | `buildAOTLayers.ts` |
-| 5 | `aot-orbital-observer-{merc\|globe}` | ScatterplotLayer | `false` | — | z=0 | `buildAOTLayers.ts` |
-| 5 | `aot-rf-horizon-{merc\|globe}` | PathLayer | `!!globeMode` | globe:`-200.0` merc:`0` | z=0 | `buildAOTLayers.ts` |
-| 6 | `rf-cluster-halo-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-100.0` merc:`0` | z=0 | `buildRFLayers.ts` |
-| 6 | `rf-clusters-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-100.0` merc:`0` | z=0 | `buildRFLayers.ts` |
-| 6 | `rf-cluster-labels-{merc\|globe}` | TextLayer | `!!globeMode` | globe:`-100.0` merc:`0` | z=0 | `buildRFLayers.ts` |
-| 6 | `rf-halo-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-100.0` merc:`0` | z=0 | `buildRFLayers.ts` |
-| 6 | `rf-dots-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-100.0` merc:`0` | z=0 | `buildRFLayers.ts` |
-| 6 | `rf-labels-{merc\|globe}` | TextLayer (billboard) | `true` | `-100.0` | z=0 | `buildRFLayers.ts` |
-| 7 | `kiwi-node-glow` | ScatterplotLayer | default (`false`) | — | z=0 | `useAnimationLoop.ts` (inline) |
-| 7 | `kiwi-node-ring-outer` | ScatterplotLayer | default (`false`) | — | z=0 | `useAnimationLoop.ts` (inline) |
-| 7 | `kiwi-node-core` | ScatterplotLayer | default (`false`) | — | z=0 | `useAnimationLoop.ts` (inline) |
-| 7 | `kiwi-node-label` | TextLayer (billboard) | default (`false`) | — | z=0 | `useAnimationLoop.ts` (inline) |
-| 8 | `all-history-trails-{merc\|globe}` | PathLayer | `true` | `-50.0` | z=alt | `buildTrailLayers.ts` |
-| 8 | `history-gap-bridge-{merc\|globe}` | PathLayer | `true` | `-50.0` | z=alt | `buildTrailLayers.ts` |
-| 8 | `selected-trail-{uid}-{merc\|globe}` | PathLayer | `true` | `-50.0` | z=alt | `buildTrailLayers.ts` |
-| 8 | `selected-gap-bridge-{uid}-{merc\|globe}` | LineLayer | `true` | `-50.0` | z=alt | `buildTrailLayers.ts` |
-| 9 | `altitude-stems-{merc\|globe}` | LineLayer | `true` | `-1.0` | z=0→alt | `buildEntityLayers.ts` |
-| 9 | `ground-shadows-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-195.0` merc:`0` | z=0 | `buildEntityLayers.ts` |
-| 9 | `entity-tactical-halo-{merc\|globe}` | IconLayer | `true` | `-150.0` | z=alt | `buildEntityLayers.ts` |
-| 9 | `heading-arrows-globe` | PolygonLayer | `true` | `-200.0` | z=alt | `buildEntityLayers.ts` |
-| 9 | `heading-arrows-merc` | IconLayer | `true` | `-100.0` | z=alt | `buildEntityLayers.ts` |
-| 9 | `entity-glow-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-210.0` merc:`0` | z=alt | `buildEntityLayers.ts` |
-| 9 | `selection-ring-{uid}-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-210.0` merc:`0` | z=alt | `buildEntityLayers.ts` |
-| 9 | `velocity-vectors-{merc\|globe}` | PathLayer | `true` | `-250.0` | z=alt | `buildEntityLayers.ts` |
-| 10 | `js8-bearing-lines-{merc\|globe}` | LineLayer | `!!globeMode` | globe:`-210.0` merc:`0` | z=0 | `buildJS8Layers.ts` |
-| 10 | `js8-stations-{merc\|globe}` | ScatterplotLayer | `!!globeMode` | globe:`-210.0` merc:`0` | z=0 | `buildJS8Layers.ts` |
-| 10 | `js8-labels-{merc\|globe}` | TextLayer (billboard) | `true` | `-210.0` | z=0 | `buildJS8Layers.ts` |
+| Tier | Slot | Layer ID | `depthBias` (Globe) | logic |
+|:-----|:-----|:---------|:-------------------|:------|
+| **1 — Global Tints** | 1 | `h3-coverage-layer`, `terminator-layer` | `0` | Base map overlays |
+| | 1 | `aurora-oval-*` | `-5.0` | Atmospheric glow |
+| **2 — Shading** | 2 | `country-outages-layer-*` | `-20.0` | Broad country context |
+| | 3 | `nws-alerts-*` | `-30.0` | Regional weather boundaries |
+| **3 — Restricted** | 4 | `airspace-zones-*` | `-45.0` | **Restricted/Danger Boundaries** |
+| **4 — Infra Assets** | 5 | `submarine-cables-layer-*` | `-70.0` | Subsea lines |
+| | 5 | `cable-stations-layer-*` | `-80.0` | Landing points |
+| | 5 | `peeringdb-ixp-layer-*`, `fac-layer-*` | `-85.0` | Data exchange points |
+| | 5 | `ndbc-buoys-*` | `-90.0` | Oceanic sensors |
+| **5 — Dynamic** | 6 | `jamming-pulse-*`, `stdbscan-cluster-*` | `-110.0` | Active signal interference |
+| | 6 | `jamming-fill-*` | `-115.0` | Static interference zones |
+| **6 — Boundaries** | 7 | `aot-maritime-*`, `aviation-*`, `horizon-*` | `-200.0` | Mission AOR boundaries |
+| **7 — Tactical** | 8 | `all-history-trails-*` | `-150.0` | Entity paths |
+| | 9 | `ground-shadows-*` | `-195.0` | Surface projections |
+| | 9 | `entity-tactical-halo-*` | `-150.0` | Detection halos |
+| | 9 | `heading-arrows-globe` | `-200.0` | Directional icons |
+| | 9 | `entity-glow-*`, `selection-ring-*` | `-210.0` | Selection/Status glow |
+| | 9 | `velocity-vectors-*` | `-250.0` | Predicted movement (top) |
 
 ---
 
@@ -139,26 +113,22 @@ same nominal draw slot, the last entry wins for same-depth fragments.
 
 ```
 -250  velocity-vectors              ← always topmost
--210  heading-arrows-globe
--210  entity-glow (globe)
--210  selection-ring (globe)
--210  js8-stations (globe)
--210  js8-labels
--210  js8-bearing-lines (globe)
--201  satellite-selection-ring
--200  heading-arrows-globe (polygon)
--200  aot-* boundaries (globe)
--195  ground-shadows (globe)
--150  entity-tactical-halo
--110  cable-stations
--100  rf-* layers (globe)
--100  submarine-cables
- -50  country-outages
- -50  history trails
-  -1  altitude-stems
-   0  satellite-markers-merc
-  +50  satellite-footprint / ground-track  ← pushed furthest back
-  +60  satellite-predicted-track           ← furthest back of all
+-210  entity-glow / selection-ring
+-205  holding-patterns (aviation)
+-200  mission-aot-boundaries / observer-horizon
+-195  ground-shadows
+-150  entity-tactical-halo / history-trails
+-115  jamming-fill-halo
+-110  jamming-pulse-ring / stdbscan-clusters
+-90   ndbc-buoy-sensors
+-85   peeringdb-ixps / facilities
+-80   cable-landing-stations
+-70   submarine-cables
+-45   open-airspace-zones
+-30   nws-weather-alerts
+-20   internet-outage-shading
+ -5   aurora-oval
+  0   h3-grid / terminator
 ```
 
 ---
@@ -235,8 +205,8 @@ Missing **step 3** means the hook receives `undefined` — the guard `if (showRe
 | `buildEntityLayers` | `useAnimationLoop` | `entitiesRef`, `visualStateRef` (refs) | always called |
 | `buildAOTLayers` | `useAnimationLoop` | `aotShapes` (state via ref), `currentMissionRef` | always called |
 | `getOrbitalLayers` | `useAnimationLoop` | `satellitesRef` (ref, pre-filtered) | always called |
-| `buildTrailLayers` | `useAnimationLoop` | `entitiesRef` (ref, pre-filtered) | always called |
-| `kiwi-node-*` (inline) | `useAnimationLoop` | `kiwiNodeRef` (ref) | `kiwiNode && kiwiNode.lat !== 0` |
+| `buildTrailLayers` | `composition.ts` | `interpolatedEntities` | always called |
+| `kiwi-node-*` (inline) | `composition.ts` | `kiwiNode` | `kiwiNode && kiwiNode.lat !== 0` |
 
 ---
 
@@ -265,7 +235,7 @@ Missing **step 3** means the hook receives `undefined` — the guard `if (showRe
 
 ## Source Files
 
-- `frontend/src/hooks/useAnimationLoop.ts` — final `layers` array composition (lines ~796–874)
+- `frontend/src/layers/composition.ts` — final `layers` array composition
 - `frontend/src/layers/buildRFLayers.ts`
 - `frontend/src/layers/buildEntityLayers.ts`
 - `frontend/src/layers/buildInfraLayers.ts`
@@ -273,6 +243,10 @@ Missing **step 3** means the hook receives `undefined` — the guard `if (showRe
 - `frontend/src/layers/buildAOTLayers.ts`
 - `frontend/src/layers/buildJS8Layers.ts`
 - `frontend/src/layers/buildH3CoverageLayer.ts`
+- `frontend/src/layers/buildAirspaceLayer.ts`
+- `frontend/src/layers/buildWeatherAlertsLayer.ts`
+- `frontend/src/layers/buildClusterLayer.ts`
+- `frontend/src/layers/buildJammingLayer.ts`
 - `frontend/src/layers/OrbitalLayer.tsx`
 - `frontend/src/components/map/TerminatorLayer.tsx`
 - `frontend/src/components/map/MapboxAdapter.tsx` — `_full3d: true` (Mercator + Mapbox token)

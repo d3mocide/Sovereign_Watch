@@ -8,6 +8,7 @@ import {
   Plane,
   Radio,
   Satellite,
+  Shield,
   Ship,
   Signal,
   Waves,
@@ -75,6 +76,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isGdelt = entity.type === "gdelt";
   const isJamming = entity.type === "jamming";
   const isCluster = entity.type === "cluster";
+  const isAirspace = entity.type === "airspace";
   const isClausal = entity.type === "clausal-state-change";
   const clausalReason = String(detailProps.state_change_reason ?? "");
   const clausalAccentText =
@@ -150,9 +152,21 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? jammingColor
                               : isCluster
                                 ? "text-amber-400"
-                                : isClausal
-                                  ? clausalAccentText
-                                  : "text-air-accent";
+                                : isAirspace
+                                  ? (detailProps.type === "PROHIBITED" ? "text-rose-400" :
+                                     detailProps.type === "RESTRICTED" ? "text-orange-400" :
+                                     detailProps.type === "DANGER"     ? "text-yellow-400" :
+                                     detailProps.type === "WARNING" || detailProps.type === "CAUTION" ? "text-amber-400" :
+                                     detailProps.type === "TRA"        ? "text-violet-400" :
+                                     detailProps.type === "TSA"        ? "text-fuchsia-400" :
+                                     detailProps.type === "ADIZ"       ? "text-cyan-400" :
+                                     detailProps.type === "CTR" || detailProps.type === "TMA" || detailProps.type === "CONTROL" || detailProps.type === "CLASS" ? "text-blue-400" :
+                                     detailProps.type === "FIR"        ? "text-indigo-400" :
+                                     detailProps.type === "FIS" || detailProps.type === "VFR" ? "text-emerald-400" :
+                                     "text-slate-400")
+                                  : isClausal
+                                    ? clausalAccentText
+                                    : "text-air-accent";
 
   const borderColor = isRepeater
     ? "border-emerald-400/50"
@@ -188,9 +202,16 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? "border-amber-400/50"
                               : isCluster
                                 ? "border-amber-400/50"
-                                : isClausal
-                                  ? clausalBorderClass
-                                  : "border-air-accent/50";
+                                : isAirspace
+                                  ? (detailProps.type === "PROHIBITED" ? "border-rose-400/50" :
+                                     detailProps.type === "RESTRICTED" ? "border-orange-400/50" :
+                                     detailProps.type === "DANGER"     ? "border-yellow-400/50" :
+                                     detailProps.type === "WARNING" || detailProps.type === "CAUTION" ? "border-amber-400/50" :
+                                     detailProps.type === "CTR" || detailProps.type === "TMA" || detailProps.type === "CONTROL" || detailProps.type === "CLASS" ? "border-blue-400/50" :
+                                     "border-slate-400/50")
+                                  : isClausal
+                                    ? clausalBorderClass
+                                    : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
     ? Radio
@@ -226,9 +247,11 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? Crosshair
                               : isCluster
                                 ? HexagonIcon
-                                : isClausal
-                                  ? Activity
-                                  : Plane;
+                                : isAirspace
+                                  ? Shield
+                                  : isClausal
+                                    ? Activity
+                                    : Plane;
 
   return (
     <div
@@ -280,9 +303,11 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                               ? "SIGINT"
                               : isCluster
                                 ? "CLUSTER"
-                                : isClausal
-                                  ? "CLAUSAL"
-                                  : "LIVE"}
+                                : isAirspace
+                                  ? "AIRSPACE"
+                                  : isClausal
+                                    ? "CLAUSAL"
+                                    : "LIVE"}
           </span>
         </div>
       </div>
@@ -982,6 +1007,49 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                 (entity.detail as Record<string, unknown>)?.kp_at_event ??
                   "unknown",
               )}
+            </span>
+          </div>
+        </div>
+      ) : isAirspace ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight uppercase">
+              {String(detailProps.type || "ZONE")}
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight uppercase ${accentColor}`}>
+              {String(detailProps.name || "UNNAMED SECTOR")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              UPPER LIMIT
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.upper_limit || "UNLIMITED")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LOWER LIMIT
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.lower_limit || "GND")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COUNTRY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.country || "GLOBAL")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CLASS
+            </span>
+            <span className="text-[10px] text-hud-green font-mono font-bold leading-tight">
+              {String(detailProps.icao_class || "N/A")}
             </span>
           </div>
         </div>

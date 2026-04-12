@@ -17,7 +17,7 @@ import {
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number; orbital: number };
   filters: import("../../types").MapFilters;
-  onFilterChange: (key: string, value: boolean | number) => void;
+  onFilterChange: (key: string, value: boolean | number | string[]) => void;
   events: IntelEvent[];
   missionProps: MissionProps | null;
   health?: SystemHealth;

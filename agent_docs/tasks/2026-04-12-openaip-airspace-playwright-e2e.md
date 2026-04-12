@@ -64,6 +64,8 @@ Added `e2e/airspace-layer.spec.ts` replacing the deleted `e2e/notam-layer.spec.t
 | `backend/db/migrations/V003__airspace_zones.sql` | New — TimescaleDB hypertable, 30-day retention, indexes on zone_id/type/country |
 | `backend/ingestion/aviation_poller/openaip_source.py` | New — `OpenAIPSource` class; 24h poll, bbox from mission center, pagination, Redis + DB archive |
 | `backend/ingestion/aviation_poller/service.py` | Wired `OpenAIPSource` into `__init__`, `setup()`, `loop()`, `shutdown()` |
+| `.env.example` | [FIX] Added `OPENAIP_API_KEY`, `OPENAIP_BBOX_EXPAND_DEG`, and `OPENAIP_TYPES` documentation |
+| `docker-compose.yml` | [FIX] Passed OpenAIP variables to `sovereign-adsb-poller` container environment |
 | `backend/api/routers/airspace.py` | New — `GET /api/airspace/zones`, `/api/airspace/history`, `/api/airspace/types` |
 | `backend/api/main.py` | Imported `airspace` router; registered with `_viewer_auth` |
 | `backend/api/tests/test_airspace_router.py` | New — 11 unit tests (all passing) |

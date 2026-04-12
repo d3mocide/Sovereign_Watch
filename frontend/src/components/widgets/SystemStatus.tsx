@@ -6,7 +6,7 @@ import { LayerVisibilityControls } from "./LayerVisibilityControls";
 interface SystemStatusProps {
   trackCounts: { air: number; sea: number; orbital?: number };
   filters?: MapFilters;
-  onFilterChange?: (key: string, value: boolean | number) => void;
+  onFilterChange?: (key: string, value: boolean | number | string[]) => void;
 }
 
 export const SystemStatus: React.FC<SystemStatusProps> = ({

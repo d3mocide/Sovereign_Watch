@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Added
+
+- **OpenAIP Global Airspace Zones**: Replaced the deprecated FAA NOTAM pipeline with an OpenAIP-based ingestion loop (`OpenAIPSource`). Polls every 24 hours, computes a bbox from the active mission area, paginates with `limit=1000`, writes a GeoJSON FeatureCollection to Redis (`airspace:zones`, 25h TTL), and archives to TimescaleDB. Covers PROHIBITED, RESTRICTED, DANGER, WARNING, TRA, TSA, ADIZ, CTR, FIR, and more — globally.
+- **Airspace Zone Sub-Filter**: New 2-column grid of zone type toggles under the Airspace Zones layer control. Operators can selectively enable/disable individual zone types (PROHIB, RESTRI, DANGER, WARN, TRA, TSA, ADIZ, MIL, CTR, FIR, FIS, VFR) using the same tile-and-toggle aesthetic as the AIR/SEA entity filters. Filtering is instant — client-side, no refetch.
+- **Airspace API Endpoints**: Three new endpoints — `GET /api/airspace/zones` (Redis fast-path), `/api/airspace/history` (TimescaleDB with type/country filters, 1–720h window), `/api/airspace/types` (type summary).
+- **Airspace Sidebar & Tooltips**: Dedicated `AirspaceView.tsx` sidebar with vertical limits, ICAO class, and zone metadata. Hover tooltips and click-through interaction match the existing entity patterns.
+- **Playwright E2E Test Suite**: Frontend E2E testing foundation with Chromium, auto dev-server, and CI-compatible config. Includes `golden-path.spec.ts` (6 smoke tests) and `airspace-layer.spec.ts` (9 tests covering all three API endpoint contracts and the UI toggle).
+- **TimescaleDB Migration V003**: Airspace zones hypertable, 30-day retention, indexes on `zone_id`/`type`/`country`.
+
+### Changed
+
+- **Event-Driven Airspace Sync**: Replaced timing-based tactical layer polling with a deterministic two-signal WebSocket pattern. Backend publishes `"clearing"` (before cache wipe) and `"updated"` (after new data is written) Redis signals. Frontend wipes state immediately on `"clearing"` and fetches only when `"updated"` is received — eliminating stale polygon artifacts during mission area shift.
+- **Global Z-Order Synchronization**: Implemented a unified 7-tier visual hierarchy for all tactical map layers (`composition.ts`). Standardized `depthBias` values: shading tiers (−20/−30) → tactical zones (−45) → fixed assets (−70/−80) → signals (−110/−115). Airspace polygons now correctly render above outage fills but below jamming rings and entity chevrons.
+- **Airspace Type Classification**: Backend `openaip_source.py` now maps OpenAIP numeric type IDs (0–36) and ICAO class IDs (0–8) to human-readable strings (`DANGER`, `RESTRICTED`, `CLASS_B`, etc.) before caching, eliminating raw-integer display artifacts.
+- **`onFilterChange` Type Chain Widened**: The `handleFilterChange` callback and all downstream prop types (`SidebarLeft`, `SystemStatus`, `LayerVisibilityControls`) now accept `boolean | number | string[]` to support array-typed filter values (e.g., `airspaceZoneTypes`).
+
+### Fixed
+
+- **Stale Airspace Polygons on Mission Shift**: The two-signal event model means the UI wipes zone state the instant the backend begins cache rotation, with no timing dependency.
+- **Airspace Enum Display**: Zone types now display as `DANGER`, `PROHIBITED`, etc. instead of raw integers (`"TYPE: 2"`).
+- **React Compiler Memoization Lint**: Fixed `react-hooks/preserve-manual-memoization` errors in `TacticalMap.tsx` by using `filters` (full object) instead of `filters?.showX` in `useCallback` dependency arrays.
+- **Stale ESLint-Disable Comment**: Removed unused `// eslint-disable-next-line react-hooks/exhaustive-deps` from `TacticalMap.tsx`.
+- **Unit Test Alpha Constants**: Updated `buildAirspaceLayer.test.ts` to reflect current `TYPE_FILL_ALPHA=65` and `TYPE_LINE_ALPHA=255` constants (stale from previous sprint).
+
 ## [1.0.3] - 2026-04-11
 
 ### Added

@@ -140,6 +140,7 @@ interface TacticalMapProps {
   showTerminator?: boolean;
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
+  wsSignal?: any;
 }
 
 type InfraPickObject = {
@@ -210,6 +211,7 @@ export function TacticalMap({
   issTrack,
   historySegments,
   currentMission,
+  wsSignal,
 }: TacticalMapProps) {
   // State for UI interactions
   const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -254,6 +256,7 @@ export function TacticalMap({
       const isTower = obj.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
       const isISS = props.entity_type === "iss";
+      const isAirspace = props.zone_id !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -262,26 +265,30 @@ export function TacticalMap({
             ? "nws_alert"
           : isOutage
             ? "outage"
-            : isISS
-              ? "iss"
-              : "infra";
+          : isISS
+            ? "iss"
+          : isAirspace
+            ? "airspace"
+            : "infra";
       const entity: CoTEntity = {
         uid: String(
-          props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
+          props.zone_id || props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
         ),
         type: entityType,
         callsign: String(
-          props.buoy_id ||
+          props.name ||
+            props.buoy_id ||
             props.event ||
             props.headline ||
-            props.name ||
             props.region ||
             props.fcc_id ||
             (isOutage
               ? "INTERNET OUTAGE"
               : isTower
                 ? "FCC TOWER"
-                : "Unknown Infra"),
+                : isAirspace
+                  ? "AIRSPACE ZONE"
+                  : "INFRA"),
         ),
         lat,
         lon,
@@ -289,9 +296,9 @@ export function TacticalMap({
         course: 0,
         speed: 0,
         lastSeen: Date.now(),
-        uidHash: 0,
+        detail: obj as any,
         trail: [],
-        detail: obj,
+        uidHash: 0,
       };
       setHoveredEntity(entity);
       setHoverPosition({ x: info.x || 0, y: info.y || 0 });
@@ -317,71 +324,102 @@ export function TacticalMap({
   const [airspaceZonesData, setAirspaceZonesData] =
     useState<FeatureCollection | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const fetchAviationAlerts = async () => {
-      try {
-        if (filters?.showHoldingPatterns !== false) {
-          const r = await fetch("/api/holding-patterns/active");
-          if (r.ok && !cancelled) setHoldingPatternData(await r.json());
-        }
-      } catch {
-        /* ignore */
+  // ── Fetching logic (Event-driven) ──────────────────────────────────────────
+
+  const fetchAviationAlerts = useCallback(async () => {
+    try {
+      if (filters?.showHoldingPatterns !== false) {
+        const r = await fetch("/api/holding-patterns/active");
+        if (r.ok) setHoldingPatternData(await r.json());
       }
-    };
-    fetchAviationAlerts();
-    const id = setInterval(fetchAviationAlerts, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [filters?.showHoldingPatterns]);
+    } catch { /* ignore */ }
+  }, [filters, currentMission]);
+
+  const fetchAirspaceZones = useCallback(async () => {
+    try {
+      if (filters?.showAirspaceZones) {
+        const r = await fetch("/api/airspace/zones");
+        if (r.ok) setAirspaceZonesData(await r.json());
+      } else {
+        setAirspaceZonesData(null);
+      }
+    } catch { /* ignore */ }
+  }, [filters, currentMission]);
+
+  const fetchSpaceWeather = useCallback(async () => {
+    try {
+      const fetchList = [];
+      if (filters?.showAurora) {
+        fetchList.push(fetch("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json")
+          .then(async r => { if (r.ok) setAuroraData(await r.json()); }));
+      }
+      if (filters?.showJamming) {
+        fetchList.push(fetch("/api/jamming/active")
+          .then(async r => { if (r.ok) setJammingData(await r.json()); }));
+      }
+      if (fetchList.length > 0) await Promise.all(fetchList);
+    } catch { /* ignore */ }
+  }, [filters, currentMission]);
+
+  // 1. Initial load / page refresh — only fires once per mission value
+  //    Uses a 500ms delay to avoid fetching before any in-flight poller cycle
+  //    has cleared the old cache (belt-and-suspenders for cold start).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAviationAlerts();
+      fetchAirspaceZones();
+      fetchSpaceWeather();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []); // intentionally empty — runs once on mount only
+
+  // 2. Mission change — clear immediately, let WS signals drive re-population
+  useEffect(() => {
+    setHoldingPatternData(null);
+    setAirspaceZonesData(null);
+    setJammingData(null);
+    // NOTE: No fetch here. We rely exclusively on:
+    //   a) The 'clearing' signal (backend confirms wipe)
+    //   b) The 'updated' signal (backend confirms new data is ready)
+  }, [JSON.stringify(currentMission)]);
+
+  // 3. Reactive updates from WebSocket signals
+  useEffect(() => {
+    if (!wsSignal || wsSignal.type !== "alert") return;
+
+    const channel = wsSignal.channel;
+    const signalData = wsSignal.data as { status?: string } | undefined;
+
+    if (channel === "airspace:zones") {
+      if (signalData?.status === "clearing") {
+        // Backend has cleared the cache — wipe our local state immediately
+        setAirspaceZonesData(null);
+      } else if (signalData?.status === "updated") {
+        // New data is ready in Redis — fetch it now
+        fetchAirspaceZones();
+      }
+    } else if (channel === "jamming:active_zones") {
+      if (signalData?.status === "updated") fetchSpaceWeather();
+    } else if (channel === "holding_pattern:active_zones") {
+      if (signalData?.status === "updated") fetchAviationAlerts();
+    }
+  }, [wsSignal, fetchAirspaceZones, fetchAviationAlerts, fetchSpaceWeather]);
+
+  // 4. Periodic polling fallbacks (conservative intervals — WS signals are primary)
+  useEffect(() => {
+    const id = setInterval(fetchAviationAlerts, 60_000);
+    return () => clearInterval(id);
+  }, [fetchAviationAlerts]);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetchAirspaceZones = async () => {
-      try {
-        if (filters?.showAirspaceZones) {
-          const r = await fetch("/api/airspace/zones");
-          if (r.ok && !cancelled) setAirspaceZonesData(await r.json());
-        } else {
-          setAirspaceZonesData(null);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-    fetchAirspaceZones();
-    const id = setInterval(fetchAirspaceZones, 6 * 60 * 60_000); // 6-hour cadence
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [filters?.showAirspaceZones]);
+    const id = setInterval(fetchAirspaceZones, 30 * 60_000);
+    return () => clearInterval(id);
+  }, [fetchAirspaceZones]);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetchSpaceWeather = async () => {
-      try {
-        if (filters?.showAurora) {
-          const r = await fetch("/api/space-weather/aurora");
-          if (r.ok && !cancelled) setAuroraData(await r.json());
-        }
-        if (filters?.showJamming) {
-          const r = await fetch("/api/jamming/active");
-          if (r.ok && !cancelled) setJammingData(await r.json());
-        }
-      } catch {
-        /* silently fail */
-      }
-    };
-    fetchSpaceWeather();
-    const id = setInterval(fetchSpaceWeather, 60_000); // refresh every 60 s
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [filters?.showAurora, filters?.showJamming]);
+    const id = setInterval(fetchSpaceWeather, 60_000);
+    return () => clearInterval(id);
+  }, [fetchSpaceWeather]);
 
   // GDELT geolocated news events
   const gdeltData = propGdeltData;
@@ -721,6 +759,7 @@ export function TacticalMap({
         info.object.type === "tower" || props.entity_type === "tower";
       const isBuoy = props.buoy_id !== undefined;
       const isISS = props.entity_type === "iss";
+      const isAirspace = props.zone_id !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -731,19 +770,23 @@ export function TacticalMap({
             ? "outage"
           : isISS
             ? "iss"
+          : isAirspace
+            ? "airspace"
             : "infra";
       const callsign = String(
-        props.buoy_id ||
+        props.name ||
+          props.buoy_id ||
           props.event ||
           props.headline ||
-          props.name ||
           props.region ||
           props.fcc_id ||
           (isOutage
             ? "INTERNET OUTAGE"
             : isTower
               ? "FCC TOWER"
-              : "INFRA"),
+              : isAirspace
+                ? "AIRSPACE ZONE"
+                : "INFRA"),
       );
 
       const infraEntity: CoTEntity = {

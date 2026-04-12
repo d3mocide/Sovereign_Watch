@@ -270,6 +270,7 @@ export interface MapFilters {
   showGdeltLabels?: boolean;
   showHoldingPatterns?: boolean;
   showAirspaceZones?: boolean;
+  airspaceZoneTypes?: string[];
   geodent?: boolean; // Geodent toggle synonym
   // Infrastructure
   showCables?: boolean;

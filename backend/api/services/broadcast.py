@@ -86,7 +86,7 @@ class BroadcastManager:
             )
             self.redis_pubsub = self.redis_client.pubsub()
             await self.redis_pubsub.subscribe(
-                "jamming:active_zones", "holding_pattern:active_zones"
+                "jamming:active_zones", "holding_pattern:active_zones", "airspace:zones"
             )
             logger.info("Redis pub/sub subscribed to alert channels")
             self.redis_task = asyncio.create_task(self._consume_redis_alerts())

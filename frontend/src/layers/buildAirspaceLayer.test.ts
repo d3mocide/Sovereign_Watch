@@ -202,11 +202,11 @@ describe("buildAirspaceLayer — colour functions", () => {
     const feature = makeFC("RESTRICTED").features[0];
     const color: [number, number, number, number] = layer.props.getFillColor(feature);
     expect(color).toHaveLength(4);
-    // RESTRICTED is orange-500 (#f97316) → [249, 115, 22, 45]
+    // RESTRICTED is orange-500 (#f97316) → [249, 115, 22, 65]
     expect(color[0]).toBe(249);
     expect(color[1]).toBe(115);
     expect(color[2]).toBe(22);
-    expect(color[3]).toBe(45); // TYPE_FILL_ALPHA
+    expect(color[3]).toBe(65); // TYPE_FILL_ALPHA
   });
 
   it("getLineColor returns a 4-element RGBA array with higher alpha", () => {
@@ -220,7 +220,7 @@ describe("buildAirspaceLayer — colour functions", () => {
     const layer = layers[0] as any;
     const feature = makeFC("RESTRICTED").features[0];
     const color: [number, number, number, number] = layer.props.getLineColor(feature);
-    expect(color[3]).toBe(200); // TYPE_LINE_ALPHA
+    expect(color[3]).toBe(255); // TYPE_LINE_ALPHA
   });
 
   it("getFillColor falls back to slate-400 for unknown type", () => {
@@ -261,7 +261,7 @@ describe("buildAirspaceLayer — colour functions", () => {
     const layer = layers[0] as any;
     const feature = fc.features[0];
     const color: [number, number, number, number] = layer.props.getFillColor(feature);
-    // #ff0000 → [255, 0, 0, 45]
+    // #ff0000 → [255, 0, 0, 65]
     expect(color[0]).toBe(255);
     expect(color[1]).toBe(0);
     expect(color[2]).toBe(0);

@@ -60,6 +60,27 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   expires?: string;
   instruction?: string;
   description?: string;
+  // Airspace additions
+  zone_id?: string;
+  upper_limit?: string;
+  lower_limit?: string;
+  icao_class?: string;
+  type?: string;
+}
+
+export interface AirspaceProperties {
+  zone_id: string;
+  name: string;
+  type: string;
+  icao_class?: string;
+  country?: string;
+  upper_limit?: string;
+  lower_limit?: string;
+  color?: string;
+}
+
+export interface AirspaceDetail {
+  properties: AirspaceProperties;
 }
 
 export interface InfraDetail {

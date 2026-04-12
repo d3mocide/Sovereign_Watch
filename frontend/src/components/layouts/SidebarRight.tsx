@@ -1,6 +1,7 @@
 import React from "react";
 import { CoTEntity, HistorySegment } from "../../types";
 import { AircraftView } from "./sidebar-right/AircraftView";
+import { AirspaceView } from "./sidebar-right/AirspaceView";
 import { ClausalView } from "./sidebar-right/ClausalView";
 import { ClusterView } from "./sidebar-right/ClusterView";
 import { GdeltView } from "./sidebar-right/GdeltView";
@@ -108,6 +109,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   }
   if (entity.type === "iss") {
     return <InfraView key={entity.uid} {...baseProps} />;
+  }
+  if (entity.type === "airspace") {
+    return <AirspaceView key={entity.uid} {...baseProps} />;
   }
 
   // Trackable domain: satellite / ship / aircraft

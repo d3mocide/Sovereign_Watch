@@ -44,7 +44,11 @@ export function buildNWSAlertsLayer(
         const [r, g, b] = severityColor(f.properties?.severity);
         return [r, g, b, 220];
       },
-      parameters: { depthTest: !!globeMode, depthMask: !!globeMode },
+      parameters: { 
+        depthTest: !!globeMode, 
+        depthMask: !!globeMode,
+        depthBias: globeMode ? -30.0 : 0,
+      },
       onHover: (info: unknown) => setHoveredInfra(info),
       onClick: (info: unknown) => setSelectedInfra(info),
       updateTriggers: {

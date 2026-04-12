@@ -190,7 +190,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
   }
 
   // Submarine Cables & Stations Layers (+ PeeringDB IXPs/Facilities)
-  const infraLayers = buildInfraLayers(
+  const { outages: outageLayers, assets: infraAssetLayers } = buildInfraLayers(
     cablesData,
     stationsData,
     outagesData,
@@ -263,8 +263,10 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     getTerminatorLayer(!!filters?.showTerminator),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
-    ...infraLayers,
-    // Keep NWS above infra so polygon picking is not masked by infra fills in 2D.
+    // Regional Shading Tier: Internet Outages
+    ...outageLayers,
+    // Regional Shading Tier: NWS Alerts
+    // Keep NWS above outages so polygon picking is not masked in 2D.
     ...buildNWSAlertsLayer(
       nwsAlertsData ?? null,
       !!filters?.showNWSAlerts,
@@ -272,6 +274,17 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredInfra,
       setSelectedInfra,
     ),
+    // Tactical Zones Tier: OpenAIP global airspace zones
+    ...buildAirspaceLayer({
+      data: airspaceZonesData ?? null,
+      enabled: !!filters?.showAirspaceZones,
+      globeMode,
+      onHover: setHoveredInfra,
+      onSelect: setSelectedInfra,
+      enabledTypes: filters?.airspaceZoneTypes as string[] | undefined,
+    }),
+    // Fixed Infrastructure Assets Tier
+    ...infraAssetLayers,
     // NDBC Ocean Buoys — Maritime Layer Group (Z-order 8–11)
     ...buildNDBCLayer(
       buoyData ?? null,
@@ -298,7 +311,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       onEntitySelect,
     ),
     // Cluster octagons sit above jamming so they are visible through the circular halos
-    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, setHoveredEntity, setHoverPosition, onEntitySelect),
+    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, globeMode, setHoveredEntity, setHoverPosition, onEntitySelect),
     // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
     // Auto-enabled when a mission area is active (shows all events in AOT)
     ...buildGdeltLayer(
@@ -457,14 +470,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       historyTails,
     ),
-    // OpenAIP global airspace zones — restricted/danger/prohibited polygon overlays
-    ...buildAirspaceLayer({
-      data: airspaceZonesData ?? null,
-      enabled: !!filters?.showAirspaceZones,
-      globeMode,
-      onHover: setHoveredInfra,
-      onSelect: setSelectedInfra,
-    }),
     // Aviation Holding Patterns - Pulsed Amber tactical zones
     ...buildHoldingPatternLayer(
       holdingPatternData || null,

@@ -15,6 +15,8 @@ export interface WorkerProtocolOptions {
     code?: number;
     attempt?: number;
   }) => void;
+  /** Optional callback for non-binary (JSON) websocket messages. */
+  onWsMessage?: (data: any) => void;
 }
 
 /**
@@ -26,6 +28,7 @@ export function startWorkerProtocol({
   watchedIcaosRef,
   onEntityUpdate,
   onSocketStateChange,
+  onWsMessage,
 }: WorkerProtocolOptions): () => void {
   const worker = new Worker(
     new URL("../workers/tak.worker.ts", import.meta.url),
@@ -120,6 +123,20 @@ export function startWorkerProtocol({
 
     ws.onmessage = (event) => {
       lastMessageTs = Date.now();
+      
+      // Handle text messages (JSON alerts/signals)
+      if (typeof event.data === "string") {
+        if (event.data === "pong") return; // ignore heartbeat responses
+        try {
+          const parsed = JSON.parse(event.data);
+          onWsMessage?.(parsed);
+        } catch {
+          // Silent catch for non-JSON strings
+        }
+        return;
+      }
+
+      // Handle binary messages (TAK Protobuf)
       if (workerRef.current) {
         workerRef.current.postMessage(
           { type: "decode_batch", payload: event.data },

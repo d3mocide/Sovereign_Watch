@@ -23,7 +23,7 @@ import { getFilterPref, saveFilterPref } from "../../utils/filterPreferences";
 
 interface LayerVisibilityControlsProps {
   filters?: MapFilters;
-  onFilterChange?: (key: string, value: boolean | number) => void;
+  onFilterChange?: (key: string, value: boolean | number | string[]) => void;
   radiorefEnabled?: boolean;
 }
 
@@ -70,10 +70,10 @@ export const LayerVisibilityControls: React.FC<
     localStorage.setItem("ui_hazards_expanded", String(hazardsExpanded));
   }, [hazardsExpanded]);
 
-  const handleSubFilterChange = (key: string, value: boolean) => {
+  const handleSubFilterChange = (key: string, value: boolean | string[]) => {
     if (onFilterChange) {
-      onFilterChange(key, value);
-      saveFilterPref(key, value);
+      onFilterChange(key, value as boolean);
+      if (typeof value === "boolean") saveFilterPref(key, value);
     }
   };
 
@@ -1437,6 +1437,59 @@ export const LayerVisibilityControls: React.FC<
                     />
                   </div>
                 </label>
+
+                {/* ── Airspace zone-type sub-filters ───────────────────────── */}
+                {filters.showAirspaceZones && (() => {
+                  type ZoneTypeDef = { type: string; tailwindActive: string; tailwindIcon: string; tailwindToggle: string; label: string; icon: React.ReactNode; };
+                  const ALL_ZONE_TYPES: ZoneTypeDef[] = [
+                    { type: "PROHIBITED", tailwindActive: "border-rose-500/50 bg-rose-500/10 shadow-[0_0_8px_rgba(244,63,94,0.2)]",  tailwindIcon: "text-rose-500",  tailwindToggle: "bg-rose-500/80",  label: "PROHIB",    icon: <AlertTriangle size={10} /> },
+                    { type: "RESTRICTED", tailwindActive: "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]", tailwindIcon: "text-orange-500", tailwindToggle: "bg-orange-500/80", label: "RESTRI",  icon: <AlertTriangle size={10} /> },
+                    { type: "DANGER",     tailwindActive: "border-yellow-500/50 bg-yellow-500/10 shadow-[0_0_8px_rgba(234,179,8,0.2)]",  tailwindIcon: "text-yellow-500", tailwindToggle: "bg-yellow-500/80", label: "DANGER",  icon: <AlertTriangle size={10} /> },
+                    { type: "WARNING",    tailwindActive: "border-amber-400/50 bg-amber-400/10 shadow-[0_0_8px_rgba(251,191,36,0.2)]",   tailwindIcon: "text-amber-400",  tailwindToggle: "bg-amber-400/80",  label: "WARN",    icon: <AlertTriangle size={10} /> },
+                    { type: "TRA",        tailwindActive: "border-indigo-400/50 bg-indigo-400/10 shadow-[0_0_8px_rgba(129,140,248,0.2)]", tailwindIcon: "text-indigo-400", tailwindToggle: "bg-indigo-400/80", label: "TRA",     icon: <AlertTriangle size={10} /> },
+                    { type: "TSA",        tailwindActive: "border-fuchsia-500/50 bg-fuchsia-500/10 shadow-[0_0_8px_rgba(217,70,239,0.2)]",tailwindIcon: "text-fuchsia-500",tailwindToggle: "bg-fuchsia-500/80",label: "TSA",     icon: <AlertTriangle size={10} /> },
+                    { type: "ADIZ",       tailwindActive: "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(6,182,212,0.2)]",       tailwindIcon: "text-cyan-500",   tailwindToggle: "bg-cyan-500/80",   label: "ADIZ",    icon: <AlertTriangle size={10} /> },
+                    { type: "MILITARY",   tailwindActive: "border-slate-400/50 bg-slate-400/10 shadow-[0_0_8px_rgba(148,163,184,0.2)]",   tailwindIcon: "text-slate-400",  tailwindToggle: "bg-slate-400/80",  label: "MIL",     icon: <AlertTriangle size={10} /> },
+                    { type: "CTR",        tailwindActive: "border-blue-500/50 bg-blue-500/10 shadow-[0_0_8px_rgba(59,130,246,0.2)]",      tailwindIcon: "text-blue-500",   tailwindToggle: "bg-blue-500/80",   label: "CTR",     icon: <AlertTriangle size={10} /> },
+                    { type: "FIR",        tailwindActive: "border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_8px_rgba(99,102,241,0.2)]",  tailwindIcon: "text-indigo-500", tailwindToggle: "bg-indigo-500/80", label: "FIR",     icon: <AlertTriangle size={10} /> },
+                    { type: "FIS",        tailwindActive: "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]",tailwindIcon: "text-emerald-500",tailwindToggle: "bg-emerald-500/80",label: "FIS",     icon: <AlertTriangle size={10} /> },
+                    { type: "VFR",        tailwindActive: "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_8px_rgba(52,211,153,0.2)]",tailwindIcon: "text-emerald-400",tailwindToggle: "bg-emerald-400/80",label: "VFR",     icon: <AlertTriangle size={10} /> },
+                  ];
+                  const enabledTypes = (filters.airspaceZoneTypes as string[] | undefined) ?? ALL_ZONE_TYPES.map(z => z.type);
+                  const toggleType = (type: string) => {
+                    const next = enabledTypes.includes(type)
+                      ? enabledTypes.filter(t => t !== type)
+                      : [...enabledTypes, type];
+                    handleSubFilterChange("airspaceZoneTypes", next);
+                  };
+                  return (
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                      {ALL_ZONE_TYPES.map(({ type, tailwindActive, tailwindIcon, tailwindToggle, label, icon }) => {
+                        const active = enabledTypes.includes(type);
+                        return (
+                          <label
+                            key={type}
+                            className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${active ? tailwindActive : "border-white/5 bg-white/5"}`}
+                          >
+                            <div className={`flex items-center gap-1.5 ${tailwindIcon}`}>
+                              <span className={active ? "opacity-100" : "opacity-20"}>{icon}</span>
+                              <span className={`text-[9px] font-bold tracking-wide ${active ? `${tailwindIcon}/80` : "text-white/30"}`}>{label}</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={active}
+                              onChange={() => toggleType(type)}
+                            />
+                            <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${active ? tailwindToggle : "bg-white/10"}`}>
+                              <div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${active ? "left-2.5" : "left-0.5"}`} />
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
               </div>
             )}
