@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-04-12
+
 ### Added
 
 - **OpenAIP Global Airspace Zones**: Replaced the deprecated FAA NOTAM pipeline with an OpenAIP-based ingestion loop (`OpenAIPSource`). Polls every 24 hours, computes a bbox from the active mission area, paginates with `limit=1000`, writes a GeoJSON FeatureCollection to Redis (`airspace:zones`, 25h TTL), and archives to TimescaleDB. Covers PROHIBITED, RESTRICTED, DANGER, WARNING, TRA, TSA, ADIZ, CTR, FIR, and more — globally.
