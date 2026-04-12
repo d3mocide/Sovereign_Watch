@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     ai_router,
+    airspace,
     analysis,
     auth,
     buoys,
@@ -202,6 +203,7 @@ app.include_router(news.router, dependencies=_viewer_auth)
 app.include_router(space_weather.router, dependencies=_viewer_auth)
 app.include_router(jamming.router, dependencies=_viewer_auth)
 app.include_router(holding_patterns.router, dependencies=_viewer_auth)
+app.include_router(airspace.router, dependencies=_viewer_auth)
 app.include_router(satnogs.router, dependencies=_viewer_auth)
 app.include_router(gdelt.router, dependencies=_viewer_auth)
 app.include_router(stats.router)

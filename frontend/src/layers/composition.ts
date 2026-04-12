@@ -35,6 +35,7 @@ import type { H3CellData } from "./buildH3CoverageLayer";
 import type { H3RiskCellData } from "../api/h3Risk";
 import type { ClusterInfo } from "../api/clusters";
 import { buildClusterLayer } from "./buildClusterLayer";
+import { buildAirspaceLayer } from "./buildAirspaceLayer";
 import { buildClausalChainLayer, ClausalChain } from "./buildClausalChainLayer";
 
 interface LayerCompositionOptions {
@@ -101,6 +102,8 @@ interface LayerCompositionOptions {
   clusterData?: ClusterInfo[];
   /** Clausal chain narrative traces (AI router medial clauses) */
   clausalChainsData?: ClausalChain[];
+  /** OpenAIP global restricted/danger/prohibited airspace zones GeoJSON */
+  airspaceZonesData?: FeatureCollection | null;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -152,6 +155,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     holdingPatternData,
     clusterData,
     clausalChainsData,
+    airspaceZonesData,
   } = options;
 
   // JS8 station layers
@@ -453,6 +457,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       historyTails,
     ),
+    // OpenAIP global airspace zones — restricted/danger/prohibited polygon overlays
+    ...buildAirspaceLayer({
+      data: airspaceZonesData ?? null,
+      enabled: !!filters?.showAirspaceZones,
+      globeMode,
+      onHover: setHoveredInfra,
+      onSelect: setSelectedInfra,
+    }),
     // Aviation Holding Patterns - Pulsed Amber tactical zones
     ...buildHoldingPatternLayer(
       holdingPatternData || null,

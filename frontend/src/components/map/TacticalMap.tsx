@@ -314,6 +314,8 @@ export function TacticalMap({
   const [jammingData, setJammingData] = useState<any>(null);
   const [holdingPatternData, setHoldingPatternData] =
     useState<FeatureCollection | null>(null);
+  const [airspaceZonesData, setAirspaceZonesData] =
+    useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -334,6 +336,28 @@ export function TacticalMap({
       clearInterval(id);
     };
   }, [filters?.showHoldingPatterns]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAirspaceZones = async () => {
+      try {
+        if (filters?.showAirspaceZones) {
+          const r = await fetch("/api/airspace/zones");
+          if (r.ok && !cancelled) setAirspaceZonesData(await r.json());
+        } else {
+          setAirspaceZonesData(null);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    fetchAirspaceZones();
+    const id = setInterval(fetchAirspaceZones, 6 * 60 * 60_000); // 6-hour cadence
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [filters?.showAirspaceZones]);
 
   useEffect(() => {
     let cancelled = false;
@@ -774,6 +798,7 @@ export function TacticalMap({
         : undefined,
     historySegmentsRef,
     holdingPatternData,
+    airspaceZonesData,
     h3RiskResolution,
   });
 

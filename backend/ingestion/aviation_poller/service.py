@@ -13,6 +13,7 @@ from h3_sharding import H3PriorityManager
 from holding_pattern import HoldingPatternDetector
 from jamming import JammingAnalyzer
 from multi_source_poller import MultiSourcePoller
+from openaip_source import OpenAIPSource
 from opensky_client import OpenSkyClient, nm_radius_to_bbox
 from opensky_watchlist import WatchlistManager
 from utils import parse_altitude, safe_float
@@ -126,6 +127,9 @@ class PollerService:
         self._last_holding_pattern_analysis = 0.0
         self._holding_pattern_analysis_interval = 30.0  # Analyze every 30 seconds
 
+        # OpenAIP global airspace zones (Ingest-06) — skipped if API key absent
+        self.openaip_source: Optional[OpenAIPSource] = None
+
     async def setup(self):
         await self.poller.start()
         self.producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
@@ -170,6 +174,15 @@ class PollerService:
         # Start holding pattern detector
         await self.holding_pattern_detector.start()
 
+        # Instantiate OpenAIP source now that redis_client is available
+        self.openaip_source = OpenAIPSource(
+            self.redis_client,
+            db_pool=None,
+            center_lat=self.center_lat,
+            center_lon=self.center_lon,
+            radius_nm=self.radius_nm,
+        )
+
         logger.info("Poller service ready")
 
     async def load_active_mission(self):
@@ -199,6 +212,8 @@ class PollerService:
         await self.h3_manager.close()
         await self.jamming_analyzer.close()
         await self.holding_pattern_detector.close()
+        if self.openaip_source:
+            await self.openaip_source.shutdown()
         await self.producer.stop()
         if self.pubsub:
             await self.pubsub.unsubscribe("navigation-updates")
@@ -465,6 +480,10 @@ class PollerService:
 
         # Add background cleanup task
         tasks.append(asyncio.create_task(self.cleanup_loop()))
+
+        # OpenAIP global airspace zone poll (24-hour cadence, skips if no API key)
+        if self.openaip_source:
+            tasks.append(asyncio.create_task(self.openaip_source.run()))
 
         # Add optional OpenSky bbox loop
         if self.opensky_client and OPENSKY_ENABLED:
