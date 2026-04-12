@@ -36,6 +36,7 @@ import type { H3RiskCellData } from "../api/h3Risk";
 import type { ClusterInfo } from "../api/clusters";
 import { buildClusterLayer } from "./buildClusterLayer";
 import { buildClausalChainLayer, ClausalChain } from "./buildClausalChainLayer";
+import { buildNOTAMLayer } from "./buildNOTAMLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -101,6 +102,8 @@ interface LayerCompositionOptions {
   clusterData?: ClusterInfo[];
   /** Clausal chain narrative traces (AI router medial clauses) */
   clausalChainsData?: ClausalChain[];
+  /** FAA NOTAM active zones GeoJSON (from /api/notam/active) */
+  notamData?: FeatureCollection | null;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -152,6 +155,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     holdingPatternData,
     clusterData,
     clausalChainsData,
+    notamData,
   } = options;
 
   // JS8 station layers
@@ -453,6 +457,19 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       globeMode,
       historyTails,
     ),
+    // FAA NOTAMs — airspace notices, TFRs, GPS outages, obstacles
+    ...buildNOTAMLayer({
+      data: notamData ?? null,
+      enabled: !!filters?.showNOTAMs,
+      globeMode,
+      now,
+      onHover: (info: unknown) => {
+        setHoveredInfra(info);
+      },
+      onSelect: (info: unknown) => {
+        setSelectedInfra(info);
+      },
+    }),
     // Aviation Holding Patterns - Pulsed Amber tactical zones
     ...buildHoldingPatternLayer(
       holdingPatternData || null,

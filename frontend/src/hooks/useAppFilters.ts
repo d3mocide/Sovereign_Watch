@@ -68,6 +68,7 @@ const DEFAULT_FILTERS: MapFilters = {
   showGdeltLabels: false,
   showTerminator: true,
   showHoldingPatterns: true,
+  showNOTAMs: false,
 };
 
 const DEFAULT_ORBITAL_SAT_FILTERS = {

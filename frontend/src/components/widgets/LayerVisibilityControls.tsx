@@ -97,7 +97,7 @@ export const LayerVisibilityControls: React.FC<
 
   const hazardsIsOn =
     !!filters &&
-    (!!filters.showJamming || filters.showHoldingPatterns !== false);
+    (!!filters.showJamming || filters.showHoldingPatterns !== false || !!filters.showNOTAMs);
 
   const toggleInfra = () => {
     if (!onFilterChange || !filters) return;
@@ -141,12 +141,14 @@ export const LayerVisibilityControls: React.FC<
     if (hazardsIsOn) {
       onFilterChange("showJamming", false);
       onFilterChange("showHoldingPatterns", false);
+      onFilterChange("showNOTAMs", false);
     } else {
       onFilterChange("showJamming", getFilterPref("showJamming", true));
       onFilterChange(
         "showHoldingPatterns",
         getFilterPref("showHoldingPatterns", true),
       );
+      onFilterChange("showNOTAMs", getFilterPref("showNOTAMs", false));
     }
   };
 
@@ -1395,6 +1397,41 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showHoldingPatterns !== false ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showNOTAMs ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle
+                      size={10}
+                      className={
+                        filters.showNOTAMs
+                          ? "text-red-400"
+                          : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showNOTAMs ? "text-red-400/80" : "text-white/30"}`}
+                    >
+                      FAA NOTAMs
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showNOTAMs}
+                    onChange={(e) =>
+                      handleSubFilterChange("showNOTAMs", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showNOTAMs ? "bg-red-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showNOTAMs ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>
