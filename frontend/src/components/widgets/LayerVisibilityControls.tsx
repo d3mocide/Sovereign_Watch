@@ -12,10 +12,12 @@ import {
   Network,
   Radio,
   RefreshCw,
+  Server,
   Sparkles,
   TowerControl,
   Waves,
   WifiOff,
+  Zap,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { MapFilters } from "../../types";
@@ -85,7 +87,9 @@ export const LayerVisibilityControls: React.FC<
       filters.showTowers === true ||
       filters.showIXPs === true ||
       filters.showFacilities === true ||
-      filters.showISS === true);
+      filters.showISS === true ||
+      filters.showDnsRoot === true ||
+      filters.showCdnEdge === true);
 
   const environmentalIsOn = !!(
     filters?.showAurora ||
@@ -111,6 +115,8 @@ export const LayerVisibilityControls: React.FC<
       onFilterChange("showIXPs", false);
       onFilterChange("showFacilities", false);
       onFilterChange("showISS", false);
+      onFilterChange("showDnsRoot", false);
+      onFilterChange("showCdnEdge", false);
     } else {
       onFilterChange("showCables", getFilterPref("showCables", true));
       onFilterChange("showOutages", getFilterPref("showOutages", true));
@@ -122,6 +128,8 @@ export const LayerVisibilityControls: React.FC<
       onFilterChange("showIXPs", getFilterPref("showIXPs", false));
       onFilterChange("showFacilities", getFilterPref("showFacilities", false));
       onFilterChange("showISS", getFilterPref("showISS", true));
+      onFilterChange("showDnsRoot", getFilterPref("showDnsRoot", false));
+      onFilterChange("showCdnEdge", getFilterPref("showCdnEdge", false));
     }
   };
 
@@ -871,6 +879,72 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showISS !== false ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* DNS Root Servers */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showDnsRoot ? "border-green-400/50 bg-green-400/10 shadow-[0_0_8px_rgba(74,222,128,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Server
+                      size={10}
+                      className={filters.showDnsRoot ? "text-green-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showDnsRoot ? "text-green-400/80" : "text-white/30"}`}
+                    >
+                      DNS ROOT SERVERS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showDnsRoot}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showDnsRoot", e.target.checked);
+                    }}
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showDnsRoot ? "bg-green-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showDnsRoot ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* Cloudflare CDN Edge PoPs */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showCdnEdge ? "border-indigo-400/50 bg-indigo-400/10 shadow-[0_0_8px_rgba(129,140,248,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Zap
+                      size={10}
+                      className={filters.showCdnEdge ? "text-indigo-400" : "text-white/20"}
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showCdnEdge ? "text-indigo-400/80" : "text-white/30"}`}
+                    >
+                      CDN EDGE POPS
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showCdnEdge}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleSubFilterChange("showCdnEdge", e.target.checked);
+                    }}
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showCdnEdge ? "bg-indigo-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showCdnEdge ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>

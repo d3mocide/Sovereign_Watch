@@ -280,6 +280,8 @@ export interface MapFilters {
   showIXPs?: boolean;
   showFacilities?: boolean;
   showISS?: boolean;
+  showDnsRoot?: boolean;
+  showCdnEdge?: boolean;
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
@@ -301,6 +303,27 @@ export interface SatNOGSStation {
   lat: number;
   lon: number;
   altitude: number;
+}
+
+/** DNS root server health record returned by /api/infra/dns-root */
+export interface DnsRootServer {
+  letter: string;
+  operator: string;
+  ip: string;
+  lat: number;
+  lon: number;
+  reachable: boolean;
+  latency_ms: number | null;
+}
+
+/** Cloudflare CDN edge PoP record returned by /api/infra/cdn-nodes */
+export interface CdnEdgeNode {
+  iata: string;
+  city: string;
+  country: string;
+  lat: number;
+  lon: number;
+  region?: string;
 }
 
 /** A parsed FCC tower record returned by /api/infra/towers */

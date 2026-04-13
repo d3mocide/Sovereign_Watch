@@ -1,3 +1,4 @@
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends
 from core.auth import require_role
@@ -502,6 +503,183 @@ async def get_throughput_stats():
 
     except Exception as e:
         logger.error(f"Failed to fetch throughput stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+async def _get_active_mission() -> dict | None:
+    """Read the active mission from Redis; return None if unavailable."""
+    if not db.redis_client:
+        return None
+    raw = await db.redis_client.get("mission:active")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+@router.get("/api/stats/mission/activity")
+async def get_mission_activity_stats(hours: int = 24):
+    """Activity statistics scoped to the active mission area.
+
+    Filters the ``tracks`` hypertable to rows whose position lies within the
+    active mission's radius (nm) of its centre point, then returns the same
+    1-minute tumbling-window breakdown as ``/api/stats/activity``.  Falls back
+    to a global query when no active mission is set.
+    """
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    hours = max(1, min(hours, 72))
+    mission = await _get_active_mission()
+
+    if mission:
+        lat = float(mission["lat"])
+        lon = float(mission["lon"])
+        radius_m = float(mission["radius_nm"]) * 1852.0
+        query = """
+            SELECT
+                time_bucket('1 minute', time) AS bucket,
+                type,
+                COUNT(*) AS count
+            FROM tracks
+            WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
+              AND ST_DWithin(
+                    geom::geography,
+                    ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography,
+                    $4
+                  )
+            GROUP BY bucket, type
+            ORDER BY bucket ASC, type
+        """
+        params = (hours, lat, lon, radius_m)
+    else:
+        query = """
+            SELECT
+                time_bucket('1 minute', time) AS bucket,
+                type,
+                COUNT(*) AS count
+            FROM tracks
+            WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
+            GROUP BY bucket, type
+            ORDER BY bucket ASC, type
+        """
+        params = (hours,)
+
+    try:
+        async with db.pool.acquire() as conn:
+            records = await conn.fetch(query, *params)
+
+        timeline: dict = {}
+        for r in records:
+            b_str = r["bucket"].isoformat()
+            t_type = r["type"] or "unknown"
+            timeline.setdefault(b_str, {})[t_type] = timeline.get(b_str, {}).get(t_type, 0) + r["count"]
+
+        result = sorted(
+            [{"time": b, "counts": c} for b, c in timeline.items()],
+            key=lambda x: x["time"],
+        )
+        return {
+            "status": "ok",
+            "mission_scoped": mission is not None,
+            "mission": mission,
+            "data": result,
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch mission activity stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/api/stats/mission/tak-breakdown")
+async def get_mission_tak_breakdown(hours: int = 24):
+    """TAK entity breakdown scoped to the active mission area.
+
+    Same COT-type breakdown as ``/api/stats/tak-breakdown`` but restricted to
+    tracks within the active mission's geographic radius.  Falls back to global
+    when no mission is active.
+    """
+    if not db.pool:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    hours = max(1, min(hours, 72))
+    mission = await _get_active_mission()
+
+    COT_MAP = {
+        "a-f-A-C-F": {"label": "Civilian Fixed Wing",  "category": "Aviation",     "color": "#7dd3fc"},
+        "a-f-A-M-F": {"label": "Military Fixed Wing",  "category": "Aviation",     "color": "#fb923c"},
+        "a-f-A-C-H": {"label": "Civilian Helicopter",  "category": "Aviation",     "color": "#4ade80"},
+        "a-f-A-M-H": {"label": "Military Helicopter",  "category": "Aviation",     "color": "#facc15"},
+        "a-f-A-C-Q": {"label": "Civilian Drone/UAV",   "category": "Aviation",     "color": "#f8fafc"},
+        "a-f-A-M-Q": {"label": "Military Drone/UAV",   "category": "Aviation",     "color": "#e2e8f0"},
+        "a-f-S-C-M": {"label": "Maritime Surface",     "category": "Maritime",     "color": "#3b82f6"},
+        "a-f-G-E-V-C": {"label": "Ground Vehicle",     "category": "Terrestrial",  "color": "#f472b6"},
+        "a-f-O-X-S": {"label": "Orbital Satellite",    "category": "Space",        "color": "#c084fc"},
+    }
+
+    if mission:
+        lat = float(mission["lat"])
+        lon = float(mission["lon"])
+        radius_m = float(mission["radius_nm"]) * 1852.0
+        query = """
+            SELECT type, COUNT(*) AS count
+            FROM tracks
+            WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
+              AND ST_DWithin(
+                    geom::geography,
+                    ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography,
+                    $4
+                  )
+            GROUP BY type
+            ORDER BY count DESC
+        """
+        params = (hours, lat, lon, radius_m)
+    else:
+        query = """
+            SELECT type, COUNT(*) AS count
+            FROM tracks
+            WHERE time >= NOW() - ($1::numeric * INTERVAL '1 hour')
+            GROUP BY type
+            ORDER BY count DESC
+        """
+        params = (hours,)
+
+    try:
+        async with db.pool.acquire() as conn:
+            records = await conn.fetch(query, *params)
+
+        total_pings = sum(r["count"] for r in records)
+        unknown_pings = sum(
+            r["count"] for r in records
+            if r["type"] is None or r["type"].lower() == "unknown"
+        )
+        noise_pct = round((unknown_pings / total_pings * 100), 2) if total_pings > 0 else 0.0
+
+        breakdown = []
+        for r in records:
+            t = r["type"]
+            info = COT_MAP.get(t, {"label": f"Unknown ({t})", "category": "Unclassified", "color": "#4b5563"})
+            breakdown.append({
+                "type": t,
+                "label": info["label"],
+                "category": info["category"],
+                "color": info["color"],
+                "count": r["count"],
+            })
+
+        return {
+            "status": "ok",
+            "mission_scoped": mission is not None,
+            "mission": mission,
+            "data": breakdown,
+            "metrics": {
+                "noise_pct": noise_pct,
+                "total_count": total_pings,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch mission TAK breakdown: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

@@ -1,16 +1,21 @@
 """Unit tests for InfraPoller pure helper functions."""
+import struct
 import sys
 import os
+import unittest.mock as mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from main import (
+    DNS_ROOT_SERVERS,
     build_cable_country_index,
     dms_to_decimal,
     extract_station_country,
     ioda_severity,
     normalize_country_label,
+    parse_cloudflare_locations,
     parse_float,
+    _probe_dns_sync,
 )
 
 
@@ -197,3 +202,129 @@ def test_build_cable_country_index_links_endpoint_countries():
     ]
     assert index["countries"]["country a"]["cable_ids"] == ["a-b-cable"]
     assert index["countries"]["country b"]["cable_ids"] == ["a-b-cable"]
+
+
+# ---------------------------------------------------------------------------
+# DNS_ROOT_SERVERS static data
+# ---------------------------------------------------------------------------
+
+def test_dns_root_servers_count():
+    assert len(DNS_ROOT_SERVERS) == 13
+
+
+def test_dns_root_servers_letters():
+    letters = [s["letter"] for s in DNS_ROOT_SERVERS]
+    assert letters == list("ABCDEFGHIJKLM")
+
+
+def test_dns_root_servers_have_coords():
+    for srv in DNS_ROOT_SERVERS:
+        assert -90.0 <= srv["lat"] <= 90.0, f"{srv['letter']} bad lat"
+        assert -180.0 <= srv["lon"] <= 180.0, f"{srv['letter']} bad lon"
+
+
+def test_dns_root_servers_have_valid_ips():
+    import ipaddress
+    for srv in DNS_ROOT_SERVERS:
+        ipaddress.IPv4Address(srv["ip"])  # raises if invalid
+
+
+# ---------------------------------------------------------------------------
+# _probe_dns_sync — mocked socket
+# ---------------------------------------------------------------------------
+
+def _make_valid_dns_response() -> bytes:
+    """Minimal DNS response: ID=1, QR+AA bits set, rest zeroed."""
+    # Flags: 0x8400 = QR(1) + AA(1) + OPCODE(0) + ...
+    return struct.pack(">HHHHHH", 1, 0x8400, 0, 1, 0, 0)
+
+
+def test_probe_dns_sync_reachable():
+    response = _make_valid_dns_response()
+    mock_sock = mock.MagicMock()
+    mock_sock.recv.return_value = response
+
+    with mock.patch("main.socket.socket", return_value=mock_sock):
+        reachable, latency_ms = _probe_dns_sync("198.41.0.4")
+
+    assert reachable is True
+    assert latency_ms >= 0.0
+
+
+def test_probe_dns_sync_timeout_returns_unreachable():
+    mock_sock = mock.MagicMock()
+    mock_sock.sendto.side_effect = OSError("timed out")
+
+    with mock.patch("main.socket.socket", return_value=mock_sock):
+        reachable, latency_ms = _probe_dns_sync("198.41.0.4")
+
+    assert reachable is False
+    assert latency_ms == -1.0
+
+
+def test_probe_dns_sync_bad_response_id_returns_false():
+    # Response with wrong QID (2 instead of 1) — should return False
+    bad_response = struct.pack(">HHHHHH", 2, 0x8400, 0, 1, 0, 0)
+    mock_sock = mock.MagicMock()
+    mock_sock.recv.return_value = bad_response
+
+    with mock.patch("main.socket.socket", return_value=mock_sock):
+        reachable, latency_ms = _probe_dns_sync("198.41.0.4")
+
+    assert reachable is False
+
+
+def test_probe_dns_sync_socket_closed_on_error():
+    mock_sock = mock.MagicMock()
+    mock_sock.sendto.side_effect = OSError("network unreachable")
+
+    with mock.patch("main.socket.socket", return_value=mock_sock):
+        _probe_dns_sync("198.41.0.4")
+
+    mock_sock.close.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# parse_cloudflare_locations
+# ---------------------------------------------------------------------------
+
+def test_parse_cloudflare_locations_basic():
+    raw = [
+        {"iata": "LAX", "lat": 33.9425, "lon": -118.408, "cca2": "US",
+         "region": "North America", "city": "Los Angeles"},
+        {"iata": "LHR", "lat": 51.477,  "lon": -0.461,   "cca2": "GB",
+         "region": "Europe",        "city": "London"},
+    ]
+    nodes = parse_cloudflare_locations(raw)
+    assert len(nodes) == 2
+    assert nodes[0]["iata"] == "LAX"
+    assert nodes[0]["provider"] == "cloudflare"
+    assert nodes[0]["lat"] == 33.9425
+    assert nodes[1]["country"] == "GB"
+
+
+def test_parse_cloudflare_locations_drops_missing_coords():
+    raw = [
+        {"iata": "XXX"},                        # missing lat/lon
+        {"iata": "LAX", "lat": 33.9, "lon": -118.4, "cca2": "US", "city": "LA"},
+    ]
+    nodes = parse_cloudflare_locations(raw)
+    assert len(nodes) == 1
+    assert nodes[0]["iata"] == "LAX"
+
+
+def test_parse_cloudflare_locations_drops_missing_iata():
+    raw = [{"lat": 33.9, "lon": -118.4}]
+    nodes = parse_cloudflare_locations(raw)
+    assert nodes == []
+
+
+def test_parse_cloudflare_locations_accepts_long_key():
+    raw = [{"iata": "SYD", "lat": -33.87, "long": 151.21, "cca2": "AU", "city": "Sydney"}]
+    nodes = parse_cloudflare_locations(raw)
+    assert len(nodes) == 1
+    assert nodes[0]["lon"] == 151.21
+
+
+def test_parse_cloudflare_locations_empty_input():
+    assert parse_cloudflare_locations([]) == []

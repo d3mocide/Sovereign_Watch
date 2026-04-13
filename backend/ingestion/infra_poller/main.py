@@ -19,6 +19,8 @@ import logging
 import math
 import os
 import signal
+import socket
+import struct
 import tempfile
 import time
 import traceback
@@ -60,9 +62,30 @@ POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
 POLL_INTERVAL_ISS_SECONDS = int(os.getenv("POLL_INTERVAL_ISS_SECONDS", "5"))
 POLL_INTERVAL_NWS_MINUTES = int(os.getenv("POLL_INTERVAL_NWS_MINUTES", "10"))
+POLL_INTERVAL_DNS_ROOT_MINUTES = int(os.getenv("POLL_INTERVAL_DNS_ROOT_MINUTES", "5"))
+POLL_INTERVAL_CDN_HOURS = int(os.getenv("POLL_INTERVAL_CDN_HOURS", "6"))
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
+CDN_CLOUDFLARE_LOCATIONS_URL = "https://speed.cloudflare.com/locations"
+
+# The 13 IANA root DNS server clusters (authoritative primary IPv4 + nominal location).
+# These are anycast clusters; the IP always routes to the nearest instance.
+DNS_ROOT_SERVERS = [
+    {"letter": "A", "operator": "Verisign",  "ip": "198.41.0.4",     "lat": 38.9695,  "lon": -77.3861},
+    {"letter": "B", "operator": "USC-ISI",   "ip": "199.9.14.201",   "lat": 33.9802,  "lon": -118.4517},
+    {"letter": "C", "operator": "Cogent",    "ip": "192.33.4.12",    "lat": 38.9695,  "lon": -77.3861},
+    {"letter": "D", "operator": "UMD",       "ip": "199.7.91.13",    "lat": 38.9807,  "lon": -76.9369},
+    {"letter": "E", "operator": "NASA",      "ip": "192.203.230.10", "lat": 37.4149,  "lon": -122.0650},
+    {"letter": "F", "operator": "ISC",       "ip": "192.5.5.241",    "lat": 37.3861,  "lon": -122.0839},
+    {"letter": "G", "operator": "DISA",      "ip": "192.112.36.4",   "lat": 39.9612,  "lon": -82.9988},
+    {"letter": "H", "operator": "ARL",       "ip": "198.97.190.53",  "lat": 39.5093,  "lon": -76.1644},
+    {"letter": "I", "operator": "Netnod",    "ip": "192.36.148.17",  "lat": 59.3293,  "lon": 18.0686},
+    {"letter": "J", "operator": "Verisign",  "ip": "192.58.128.30",  "lat": 38.9531,  "lon": -77.4565},
+    {"letter": "K", "operator": "RIPE NCC",  "ip": "193.0.14.129",   "lat": 52.3728,  "lon": 4.8936},
+    {"letter": "L", "operator": "ICANN",     "ip": "199.7.83.42",    "lat": 34.0522,  "lon": -118.2437},
+    {"letter": "M", "operator": "WIDE",      "ip": "202.12.27.33",   "lat": 35.6762,  "lon": 139.6503},
+]
 # Maximum haversine distance (km) for IODA outage ↔ cable landing correlation
 IODA_CABLE_CORRELATION_KM = 300.0
 
@@ -661,6 +684,58 @@ def _upsert_peeringdb_fac_sync(db_url: str, records: list[dict]) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _probe_dns_sync(ip: str, timeout: float = 2.0) -> tuple[bool, float]:
+    """Send a minimal DNS query for root NS records to *ip*:53; return (reachable, latency_ms).
+
+    Builds the smallest valid DNS query: QID=1, RD=1, QDCOUNT=1, QNAME=. (root),
+    QTYPE=NS(2), QCLASS=IN(1).  No third-party library required.
+    """
+    # Header: ID=1, flags=0x0100 (RD set), QDCOUNT=1, all other counts=0
+    query = struct.pack(">HHHHHH", 1, 0x0100, 1, 0, 0, 0) + b"\x00" + struct.pack(">HH", 2, 1)
+    sock = None
+    start = time.monotonic()
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
+        sock.sendto(query, (ip, 53))
+        data = sock.recv(512)
+        latency_ms = (time.monotonic() - start) * 1000
+        # Validate: response ID must match and QR bit (0x8000) must be set
+        if len(data) >= 4 and data[0:2] == b"\x00\x01" and (data[2] & 0x80):
+            return True, round(latency_ms, 1)
+        return False, round(latency_ms, 1)
+    except OSError:
+        return False, -1.0
+    finally:
+        if sock is not None:
+            sock.close()
+
+
+def parse_cloudflare_locations(raw: list) -> list[dict]:
+    """Normalize the Cloudflare speed.cloudflare.com/locations JSON array.
+
+    Each entry is expected to contain at minimum ``iata``, ``lat``, ``lon``
+    (or ``long``).  Entries missing coordinates are silently dropped.
+    """
+    nodes = []
+    for entry in raw:
+        lat = entry.get("lat")
+        lon = entry.get("lon") or entry.get("long")
+        iata = entry.get("iata") or entry.get("code")
+        if lat is None or lon is None or not iata:
+            continue
+        nodes.append({
+            "provider": "cloudflare",
+            "iata": str(iata),
+            "city": entry.get("city", ""),
+            "country": entry.get("cca2") or entry.get("country", ""),
+            "region": entry.get("region", ""),
+            "lat": float(lat),
+            "lon": float(lon),
+        })
+    return nodes
+
+
 class InfraPollerService:
     def __init__(self):
         self.running = True
@@ -680,6 +755,8 @@ class InfraPollerService:
             asyncio.create_task(self.ndbc_loop()),
             asyncio.create_task(self.peeringdb_loop()),
             asyncio.create_task(self.nws_loop()),
+            asyncio.create_task(self.dns_root_loop()),
+            asyncio.create_task(self.cdn_edge_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
@@ -1260,6 +1337,87 @@ class InfraPollerService:
             "NWS alerts stored in Redis: %d total, %d severe, %d extreme",
             len(features), severe_count, extreme_count,
         )
+
+
+    # -----------------------------------------------------------------------
+    # DNS Root Server Health loop — 5-minute interval
+    # -----------------------------------------------------------------------
+
+    async def dns_root_loop(self):
+        """Probe all 13 root DNS clusters every 5 min; write to ``dns:root:health``."""
+        interval_s = POLL_INTERVAL_DNS_ROOT_MINUTES * 60
+        while self.running:
+            try:
+                await self._fetch_dns_root_health()
+            except Exception:
+                logger.exception("DNS root health probe error")
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_dns_root_health(self):
+        """Probe each root DNS server via UDP and persist results to Redis.
+
+        Redis key written:
+          dns:root:health  — list of {letter, operator, ip, lat, lon,
+                              reachable, latency_ms, checked_at}
+        """
+        checked_at = datetime.now(UTC).isoformat()
+        results = []
+        for srv in DNS_ROOT_SERVERS:
+            reachable, latency_ms = await asyncio.to_thread(_probe_dns_sync, srv["ip"])
+            results.append({
+                "letter": srv["letter"],
+                "operator": srv["operator"],
+                "ip": srv["ip"],
+                "lat": srv["lat"],
+                "lon": srv["lon"],
+                "reachable": reachable,
+                "latency_ms": latency_ms,
+                "checked_at": checked_at,
+            })
+            logger.debug(
+                "DNS root %s (%s) → reachable=%s latency=%.1fms",
+                srv["letter"], srv["ip"], reachable, latency_ms,
+            )
+        ttl = POLL_INTERVAL_DNS_ROOT_MINUTES * 60 + 60
+        await self.redis.set("dns:root:health", json.dumps(results), ex=ttl)
+        reachable_count = sum(1 for r in results if r["reachable"])
+        logger.info("DNS root health: %d/%d clusters reachable", reachable_count, len(results))
+
+    # -----------------------------------------------------------------------
+    # CDN Edge Nodes loop — 6-hour interval
+    # -----------------------------------------------------------------------
+
+    async def cdn_edge_loop(self):
+        """Fetch Cloudflare PoP locations every 6 h; write to ``cdn:edge:nodes``."""
+        interval_s = POLL_INTERVAL_CDN_HOURS * 3600
+        while self.running:
+            try:
+                await self._fetch_cdn_edge_nodes()
+            except Exception:
+                logger.exception("CDN edge nodes fetch error")
+            await asyncio.sleep(interval_s)
+
+    async def _fetch_cdn_edge_nodes(self):
+        """Fetch Cloudflare speed.cloudflare.com/locations and persist to Redis.
+
+        Redis key written:
+          cdn:edge:nodes  — {nodes: [...], count, fetched_at}
+        """
+        timeout = aiohttp.ClientTimeout(total=30.0)
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.get(CDN_CLOUDFLARE_LOCATIONS_URL) as resp:
+                resp.raise_for_status()
+                raw = await resp.json(content_type=None)
+
+        nodes = parse_cloudflare_locations(raw)
+        payload = {
+            "nodes": nodes,
+            "count": len(nodes),
+            "fetched_at": datetime.now(UTC).isoformat(),
+        }
+        ttl = POLL_INTERVAL_CDN_HOURS * 3600 + 600
+        await self.redis.set("cdn:edge:nodes", json.dumps(payload), ex=ttl)
+        logger.info("CDN edge nodes: stored %d Cloudflare PoPs", len(nodes))
 
 
 # ---------------------------------------------------------------------------

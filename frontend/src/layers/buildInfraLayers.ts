@@ -1,4 +1,5 @@
 import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
+import type { CdnEdgeNode, DnsRootServer } from "../types";
 
 // Helper to convert hex colors (e.g. '#3b82f6') to [R, G, B, A] array required by Deck.GL
 function hexToRgb(hex: string, alpha: number = 255): [number, number, number, number] {
@@ -26,6 +27,8 @@ interface InfraFilters {
     showOutages?: boolean;
     showIXPs?: boolean;
     showFacilities?: boolean;
+    showDnsRoot?: boolean;
+    showCdnEdge?: boolean;
     cableOpacity?: number;
 }
 
@@ -48,6 +51,8 @@ export function buildInfraLayers(
     countryOutageMap: Record<string, OutageProperties> | null = null,
     ixpData: any = null,
     facilityData: any = null,
+    dnsRootData: DnsRootServer[] = [],
+    cdnEdgeData: CdnEdgeNode[] = [],
 ) {
     const outages: any[] = [];
     const assets: any[] = [];
@@ -281,6 +286,70 @@ export function buildInfraLayers(
                 lineWidthMinPixels: 1,
                 getPosition: (d: unknown) => (d as GeoJsonFeature).geometry.coordinates as [number, number],
                 getFillColor: [168, 85, 247, 200],  // purple-500
+                getLineColor: [255, 255, 255, 80],
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: !!globeMode,
+                    depthBias: globeMode ? -85.0 : 0,
+                },
+                onHover: setHoveredInfra,
+                onClick: setSelectedInfra,
+            })
+        );
+    }
+
+    // DNS Root Server Health Layer — green = reachable, red = unreachable
+    if (dnsRootData.length > 0 && filters?.showDnsRoot === true) {
+        assets.push(
+            new ScatterplotLayer({
+                id: `dns-root-layer-${globeMode ? "globe" : "merc"}`,
+                data: dnsRootData,
+                pickable: true,
+                opacity: 0.9,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 5,
+                radiusMaxPixels: 16,
+                lineWidthMinPixels: 1,
+                getPosition: (d: DnsRootServer) => [d.lon, d.lat],
+                getFillColor: (d: DnsRootServer) => {
+                    if (!d.reachable) return [239, 68, 68, 220];   // red-500
+                    // Scale green brightness by latency (0ms = bright, 200ms+ = dimmer)
+                    const alpha = d.latency_ms !== null
+                        ? Math.max(140, 220 - Math.min(80, d.latency_ms / 2.5))
+                        : 200;
+                    return [34, 197, 94, alpha];  // green-500
+                },
+                getLineColor: [255, 255, 255, 120],
+                updateTriggers: { getFillColor: [dnsRootData] },
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: !!globeMode,
+                    depthBias: globeMode ? -85.0 : 0,
+                },
+                onHover: setHoveredInfra,
+                onClick: setSelectedInfra,
+            })
+        );
+    }
+
+    // Cloudflare CDN Edge PoPs Layer — blue/indigo dots
+    if (cdnEdgeData.length > 0 && filters?.showCdnEdge === true) {
+        assets.push(
+            new ScatterplotLayer({
+                id: `cdn-edge-layer-${globeMode ? "globe" : "merc"}`,
+                data: cdnEdgeData,
+                pickable: true,
+                opacity: 0.8,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 3,
+                radiusMaxPixels: 10,
+                lineWidthMinPixels: 1,
+                getPosition: (d: CdnEdgeNode) => [d.lon, d.lat],
+                getFillColor: [99, 102, 241, 200],   // indigo-500
                 getLineColor: [255, 255, 255, 80],
                 parameters: {
                     depthTest: !!globeMode,

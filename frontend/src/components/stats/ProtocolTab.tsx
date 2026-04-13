@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Activity, Zap, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Activity, Zap, AlertTriangle, TrendingUp, Crosshair, Globe } from 'lucide-react';
 import type { ActivityData, TakBreakdown, TakMetrics, ProtocolIntelligence } from './types';
 
 interface Props {
@@ -9,9 +9,12 @@ interface Props {
   loading: boolean;
   takMetrics: TakMetrics | null;
   intelligence: ProtocolIntelligence | null;
+  missionScope?: boolean;
+  missionInfo?: { lat: number; lon: number; radius_nm: number } | null;
+  onToggleMissionScope?: () => void;
 }
 
-export default function ProtocolTab({ takBreakdown, activityData, loading, takMetrics, intelligence }: Props) {
+export default function ProtocolTab({ takBreakdown, activityData, loading, takMetrics, intelligence, missionScope, missionInfo, onToggleMissionScope }: Props) {
   const totalSignals = takMetrics?.total_count ?? 0;
 
   const activityChartOptions = useMemo(() => {
@@ -118,16 +121,38 @@ export default function ProtocolTab({ takBreakdown, activityData, loading, takMe
         <div>
           <h1 className="text-4xl font-black tracking-tighter text-primary uppercase">PROTOCOL ARCHITECTURE</h1>
           <p className="text-on-surface-variant text-[10px] mt-1 tracking-widest uppercase">TAK/COT SCHEMA & SIGNAL CLASSIFICATION HIERARCHY</p>
+          {missionScope && missionInfo && (
+            <div className="flex items-center gap-2 mt-2 px-2 py-1 bg-amber-400/10 border border-amber-400/30 w-fit">
+              <Crosshair size={10} className="text-amber-400" />
+              <span className="text-[9px] font-bold text-amber-400 tracking-widest uppercase">
+                MISSION AOR · {missionInfo.lat.toFixed(2)},{missionInfo.lon.toFixed(2)} · {missionInfo.radius_nm}nm
+              </span>
+            </div>
+          )}
         </div>
-        <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
-          <div className="text-right">
-            <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Active Signals</div>
-            <div className="text-2xl font-bold text-primary">{totalSignals.toLocaleString()}</div>
-          </div>
-          <div className="w-px h-8 bg-on-surface-variant/20"></div>
-          <div className="text-right">
-            <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
-            <div className="text-2xl font-bold text-tertiary">{takMetrics?.noise_pct ?? '0.00'}%</div>
+        <div className="flex flex-col gap-2 items-end">
+          <button
+            onClick={onToggleMissionScope}
+            title={missionScope ? "Switch to global view" : "Switch to mission-scoped view"}
+            className={`flex items-center gap-2 px-3 py-1.5 text-[9px] font-bold tracking-widest uppercase transition-all border ${
+              missionScope
+                ? 'bg-amber-400/15 border-amber-400/50 text-amber-400 hover:bg-amber-400/25'
+                : 'bg-surface-container border-primary/20 text-primary/50 hover:text-primary hover:border-primary/40'
+            }`}
+          >
+            {missionScope ? <Crosshair size={10} /> : <Globe size={10} />}
+            {missionScope ? 'MISSION AOR' : 'GLOBAL VIEW'}
+          </button>
+          <div className="flex gap-6 items-center bg-surface-container p-3 border border-primary/5">
+            <div className="text-right">
+              <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Active Signals</div>
+              <div className="text-2xl font-bold text-primary">{totalSignals.toLocaleString()}</div>
+            </div>
+            <div className="w-px h-8 bg-on-surface-variant/20"></div>
+            <div className="text-right">
+              <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">Signal Noise</div>
+              <div className="text-2xl font-bold text-tertiary">{takMetrics?.noise_pct ?? '0.00'}%</div>
+            </div>
           </div>
         </div>
       </div>
@@ -137,9 +162,9 @@ export default function ProtocolTab({ takBreakdown, activityData, loading, takMe
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-bold text-sm tracking-widest text-primary uppercase flex items-center gap-2">
-                <Activity size={16} /> Global Signal Activity
+                <Activity size={16} /> {missionScope ? 'Mission AOR Activity' : 'Global Signal Activity'}
               </h3>
-              <p className="text-[9px] text-on-surface-variant uppercase">24H ARCHIVE: TACTICAL PULSE FREQUENCY</p>
+              <p className="text-[9px] text-on-surface-variant uppercase">{missionScope ? 'MISSION-SCOPED: TACTICAL PULSE FREQUENCY' : '24H ARCHIVE: TACTICAL PULSE FREQUENCY'}</p>
             </div>
             <span className="px-2 py-0.5 bg-surface-container-highest text-[10px] text-primary border border-primary/20">LIVE</span>
           </div>

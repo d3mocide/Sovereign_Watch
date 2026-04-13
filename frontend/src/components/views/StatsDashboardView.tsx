@@ -33,6 +33,8 @@ export default function StatsDashboardView() {
   const [activeTab, setActiveTab] = useState<TabName>('protocol');
   const [alertCount, setAlertCount] = useState(0);
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
+  const [missionScope, setMissionScope] = useState(false);
+  const [missionInfo, setMissionInfo] = useState<{ lat: number; lon: number; radius_nm: number } | null>(null);
 
   // New tactical intelligence state
   const [sensorMetrics, setSensorMetrics] = useState<SensorMetrics | null>(null);
@@ -42,12 +44,15 @@ export default function StatsDashboardView() {
 
   // Heavy stats: poller health, activity, TAK breakdown, and Intelligence (30 s)
   useEffect(() => {
+    const activityUrl = missionScope ? '/api/stats/mission/activity' : '/api/stats/activity?hours=24';
+    const takUrl = missionScope ? '/api/stats/mission/tak-breakdown' : '/api/stats/tak-breakdown';
+
     const fetchData = async () => {
       try {
         const [healthRes, activityRes, takRes, throughputRes, sensorRes, fusionRes, intelRes, clausalizerRes] = await Promise.all([
           fetch('/api/config/poller-health'),
-          fetch('/api/stats/activity?hours=24'),
-          fetch('/api/stats/tak-breakdown'),
+          fetch(activityUrl),
+          fetch(takUrl),
           fetch('/api/stats/throughput'),
           fetch('/api/stats/sensors'),
           fetch('/api/stats/fusion'),
@@ -56,9 +61,14 @@ export default function StatsDashboardView() {
         ]);
 
         if (healthRes.ok) setHealthData(await healthRes.json());
-        if (activityRes.ok) { const j = await activityRes.json(); setActivityData(j.data ?? []); }
-        if (takRes.ok) { 
-          const j: TakBreakdownResponse = await takRes.json(); 
+        if (activityRes.ok) {
+          const j = await activityRes.json();
+          setActivityData(j.data ?? []);
+          if (j.mission_scoped && j.mission) setMissionInfo(j.mission);
+          else if (!j.mission_scoped) setMissionInfo(null);
+        }
+        if (takRes.ok) {
+          const j: TakBreakdownResponse = await takRes.json();
           setTakBreakdown(j.data ?? []);
           setTakMetrics(j.metrics);
         }
@@ -91,7 +101,7 @@ export default function StatsDashboardView() {
     }, 5_000);
 
     return () => { clearInterval(t); clearInterval(t2); };
-  }, []);
+  }, [missionScope]);
 
   // Operations data: real logs + system metrics + backup status (10 s)
   useEffect(() => {
@@ -136,7 +146,7 @@ export default function StatsDashboardView() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} activityData={activityData} loading={loading} takMetrics={takMetrics} intelligence={protocolIntel} />;
+      case 'protocol':    return <ProtocolTab takBreakdown={takBreakdown} activityData={activityData} loading={loading} takMetrics={takMetrics} intelligence={protocolIntel} missionScope={missionScope} missionInfo={missionInfo} onToggleMissionScope={() => setMissionScope(v => !v)} />;
       case 'operations':  return <OperationsTab systemMetrics={systemMetrics} logs={logs} backupStatus={backupStatus} healthData={healthData} throughputData={throughputData} />;
       case 'sensors':     return <SensorIntelligenceTab metrics={sensorMetrics} loading={loading} />;
       case 'audit':       return <FusionAuditTab metrics={fusionMetrics} loading={loading} />;
