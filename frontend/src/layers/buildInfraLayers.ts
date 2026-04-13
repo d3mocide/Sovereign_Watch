@@ -1,5 +1,5 @@
 import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
-import type { CdnEdgeNode, DnsRootServer } from "../types";
+import type { DnsRootServer } from "../types";
 
 // Helper to convert hex colors (e.g. '#3b82f6') to [R, G, B, A] array required by Deck.GL
 function hexToRgb(hex: string, alpha: number = 255): [number, number, number, number] {
@@ -28,7 +28,6 @@ interface InfraFilters {
     showIXPs?: boolean;
     showFacilities?: boolean;
     showDnsRoot?: boolean;
-    showCdnEdge?: boolean;
     cableOpacity?: number;
 }
 
@@ -52,7 +51,6 @@ export function buildInfraLayers(
     ixpData: any = null,
     facilityData: any = null,
     dnsRootData: DnsRootServer[] = [],
-    cdnEdgeData: CdnEdgeNode[] = [],
 ) {
     const outages: any[] = [];
     const assets: any[] = [];
@@ -334,33 +332,6 @@ export function buildInfraLayers(
         );
     }
 
-    // Cloudflare CDN Edge PoPs Layer — blue/indigo dots
-    if (cdnEdgeData.length > 0 && filters?.showCdnEdge === true) {
-        assets.push(
-            new ScatterplotLayer({
-                id: `cdn-edge-layer-${globeMode ? "globe" : "merc"}`,
-                data: cdnEdgeData,
-                pickable: true,
-                opacity: 0.8,
-                stroked: true,
-                filled: true,
-                radiusScale: 1,
-                radiusMinPixels: 3,
-                radiusMaxPixels: 10,
-                lineWidthMinPixels: 1,
-                getPosition: (d: CdnEdgeNode) => [d.lon, d.lat],
-                getFillColor: [99, 102, 241, 200],   // indigo-500
-                getLineColor: [255, 255, 255, 80],
-                parameters: {
-                    depthTest: !!globeMode,
-                    depthMask: !!globeMode,
-                    depthBias: globeMode ? -85.0 : 0,
-                },
-                onHover: setHoveredInfra,
-                onClick: setSelectedInfra,
-            })
-        );
-    }
 
     return { outages, assets };
 }

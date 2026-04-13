@@ -13,7 +13,7 @@ from main import (
     extract_station_country,
     ioda_severity,
     normalize_country_label,
-    parse_cloudflare_locations,
+    parse_ioda_outages,
     parse_float,
     _probe_dns_sync,
 )
@@ -284,47 +284,4 @@ def test_probe_dns_sync_socket_closed_on_error():
     mock_sock.close.assert_called()
 
 
-# ---------------------------------------------------------------------------
-# parse_cloudflare_locations
-# ---------------------------------------------------------------------------
 
-def test_parse_cloudflare_locations_basic():
-    raw = [
-        {"iata": "LAX", "lat": 33.9425, "lon": -118.408, "cca2": "US",
-         "region": "North America", "city": "Los Angeles"},
-        {"iata": "LHR", "lat": 51.477,  "lon": -0.461,   "cca2": "GB",
-         "region": "Europe",        "city": "London"},
-    ]
-    nodes = parse_cloudflare_locations(raw)
-    assert len(nodes) == 2
-    assert nodes[0]["iata"] == "LAX"
-    assert nodes[0]["provider"] == "cloudflare"
-    assert nodes[0]["lat"] == 33.9425
-    assert nodes[1]["country"] == "GB"
-
-
-def test_parse_cloudflare_locations_drops_missing_coords():
-    raw = [
-        {"iata": "XXX"},                        # missing lat/lon
-        {"iata": "LAX", "lat": 33.9, "lon": -118.4, "cca2": "US", "city": "LA"},
-    ]
-    nodes = parse_cloudflare_locations(raw)
-    assert len(nodes) == 1
-    assert nodes[0]["iata"] == "LAX"
-
-
-def test_parse_cloudflare_locations_drops_missing_iata():
-    raw = [{"lat": 33.9, "lon": -118.4}]
-    nodes = parse_cloudflare_locations(raw)
-    assert nodes == []
-
-
-def test_parse_cloudflare_locations_accepts_long_key():
-    raw = [{"iata": "SYD", "lat": -33.87, "long": 151.21, "cca2": "AU", "city": "Sydney"}]
-    nodes = parse_cloudflare_locations(raw)
-    assert len(nodes) == 1
-    assert nodes[0]["lon"] == 151.21
-
-
-def test_parse_cloudflare_locations_empty_input():
-    assert parse_cloudflare_locations([]) == []

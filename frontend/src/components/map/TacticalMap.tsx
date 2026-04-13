@@ -136,7 +136,7 @@ interface TacticalMapProps {
   /** DNS root server health records (Infra-06) */
   dnsRootData?: import("../../types").DnsRootServer[];
   /** Cloudflare CDN edge PoP records (Infra-07) */
-  cdnEdgeData?: import("../../types").CdnEdgeNode[];
+  
   /** Current ISS position (Initiative B real-time tracker) */
   issPosition?: import("../../types").ISSPosition | null;
   /** ISS ground track ring buffer (Initiative B real-time tracker) */
@@ -212,7 +212,7 @@ export function TacticalMap({
   ixpData,
   facilityData,
   dnsRootData,
-  cdnEdgeData,
+  
   issPosition,
   issTrack,
   historySegments,
@@ -264,7 +264,6 @@ export function TacticalMap({
       const isISS = props.entity_type === "iss";
       const isAirspace = props.zone_id !== undefined;
       const isDNS = (obj as any).letter !== undefined && (obj as any).ip !== undefined;
-      const isCDN = (obj as any).iata !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -276,18 +275,18 @@ export function TacticalMap({
           : isISS
             ? "iss"
           : isDNS
-            ? "dns"
-          : isCDN
-            ? "cdn"
+            ? "infra"
           : isAirspace
             ? "airspace"
             : "infra";
       const entity: CoTEntity = {
         uid: String(
+          isDNS ? `dns-${(obj as any).letter}` :
           props.zone_id || props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
         ),
         type: entityType,
         callsign: String(
+          isDNS ? `ROOT SERVER ${String((obj as any).letter).toUpperCase()}` :
           props.name ||
             props.buoy_id ||
             props.event ||
@@ -773,7 +772,6 @@ export function TacticalMap({
       const isISS = props.entity_type === "iss";
       const isAirspace = props.zone_id !== undefined;
       const isDNS = (info.object as any).letter !== undefined && (info.object as any).ip !== undefined;
-      const isCDN = (info.object as any).iata !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -785,15 +783,12 @@ export function TacticalMap({
           : isISS
             ? "iss"
           : isDNS
-            ? "dns"
-          : isCDN
-            ? "cdn"
+            ? "infra"
           : isAirspace
             ? "airspace"
             : "infra";
       const callsign = String(
         isDNS ? `ROOT SERVER ${String((info.object as any).letter).toUpperCase()}` :
-        isCDN ? `CDN EDGE ${String((info.object as any).iata).toUpperCase()}` :
         props.name ||
           props.buoy_id ||
           props.event ||
@@ -812,7 +807,6 @@ export function TacticalMap({
       const infraEntity: CoTEntity = {
         uid: String(
           isDNS ? `dns-${(info.object as any).letter}` :
-          isCDN ? `cdn-${(info.object as any).iata}` :
           props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
         ),
         lat: info.coordinate?.[1] || 0,
@@ -856,7 +850,7 @@ export function TacticalMap({
     ixpData,
     facilityData,
     dnsRootData,
-    cdnEdgeData,
+    
     issPosition,
     issTrack,
     gdeltToneThreshold:

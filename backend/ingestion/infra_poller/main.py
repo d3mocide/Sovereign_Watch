@@ -63,11 +63,9 @@ POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "
 POLL_INTERVAL_ISS_SECONDS = int(os.getenv("POLL_INTERVAL_ISS_SECONDS", "5"))
 POLL_INTERVAL_NWS_MINUTES = int(os.getenv("POLL_INTERVAL_NWS_MINUTES", "10"))
 POLL_INTERVAL_DNS_ROOT_MINUTES = int(os.getenv("POLL_INTERVAL_DNS_ROOT_MINUTES", "5"))
-POLL_INTERVAL_CDN_HOURS = int(os.getenv("POLL_INTERVAL_CDN_HOURS", "6"))
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
-CDN_CLOUDFLARE_LOCATIONS_URL = "https://raw.githubusercontent.com/LufsX/Cloudflare-Data-Center-IATA-Code-list/main/cloudflare-iata-full.json"
 
 # The 13 IANA root DNS server clusters (authoritative primary IPv4 + nominal location).
 # These are anycast clusters; the IP always routes to the nearest instance.
@@ -155,6 +153,33 @@ def normalize_country_label(value: str | None) -> str:
         return ""
     chars = [char.lower() if char.isalnum() else " " for char in str(value)]
     return " ".join("".join(chars).split())
+
+
+def parse_ioda_outages(data: list) -> list[dict]:
+    """Parse IODA v2 summary data into a list of Feature dicts.
+
+    Filters for overall scores >= 1000 and calculates severity.
+    """
+    outages = []
+    for entry in data:
+        entity = entry.get("entity", {})
+        if not entity:
+            continue
+        overall_score = entry.get("scores", {}).get("overall", 0)
+        if overall_score < 1000:
+            continue
+
+        country_code = entity.get("code", "")
+        country_name = entity.get("name", country_code)
+        severity = ioda_severity(overall_score)
+
+        outages.append({
+            "code": country_code,
+            "name": country_name,
+            "severity": round(severity, 1),
+            "score_raw": overall_score,
+        })
+    return outages
 
 
 def extract_station_country(name: str | None) -> str:
@@ -707,49 +732,8 @@ def _probe_dns_sync(ip: str, timeout: float = 2.0) -> tuple[bool, float]:
     except OSError:
         return False, -1.0
     finally:
-        if sock is not None:
+        if sock:
             sock.close()
-
-
-def parse_cloudflare_locations(raw) -> list[dict]:
-    """Normalize the Cloudflare speed.cloudflare.com/locations JSON array or a dict mirror.
-
-    Each entry is expected to contain at minimum ``iata``, ``lat``, ``lon``
-    (or ``long``/``lng``).  Entries missing coordinates are silently dropped.
-    """
-    nodes = []
-    if isinstance(raw, dict):
-        for iata, entry in raw.items():
-            lat = entry.get("lat")
-            lon = entry.get("lng") or entry.get("lon")
-            if lat is None or lon is None or not iata:
-                continue
-            nodes.append({
-                "provider": "cloudflare",
-                "iata": str(iata).upper(),
-                "city": entry.get("place", "").split(",")[0].strip(),
-                "country": entry.get("cca2", ""),
-                "region": entry.get("region", ""),
-                "lat": float(lat),
-                "lon": float(lon),
-            })
-    else:
-        for entry in raw:
-            lat = entry.get("lat")
-            lon = entry.get("lon") or entry.get("long")
-            iata = entry.get("iata") or entry.get("code")
-            if lat is None or lon is None or not iata:
-                continue
-            nodes.append({
-                "provider": "cloudflare",
-                "iata": str(iata),
-                "city": entry.get("city", ""),
-                "country": entry.get("cca2") or entry.get("country", ""),
-                "region": entry.get("region", ""),
-                "lat": float(lat),
-                "lon": float(lon),
-            })
-    return nodes
 
 
 class InfraPollerService:
@@ -962,23 +946,14 @@ class InfraPollerService:
                 params={"from": from_time, "until": now, "entityType": "country"},
             ) as resp:
                 resp.raise_for_status()
-                parsed = await resp.json()
-                data = parsed.get("data", [])
+            parsed = await resp.json()
+            data = parsed.get("data", [])
 
+        raw_outages = parse_ioda_outages(data)
         outages = []
-        for entry in data:
-            entity = entry.get("entity", {})
-            if not entity:
-                continue
-            overall_score = entry.get("scores", {}).get("overall", 0)
-            if overall_score < 1000:
-                continue
 
-            country_code = entity.get("code", "")
-            country_name = entity.get("name", country_code)
-            severity = ioda_severity(overall_score)
-
-            lat, lon = await self.geocode_region(country_name, country_code)
+        for o in raw_outages:
+            lat, lon = await self.geocode_region(o["name"], o["code"])
             if lat == 0.0 and lon == 0.0:
                 continue
 
@@ -986,14 +961,14 @@ class InfraPollerService:
                 {
                     "type": "Feature",
                     "properties": {
-                        "id": f"outage-{country_code}",
-                        "region": country_name,
-                        "country": country_name,
-                        "country_code": country_code,
-                        "severity": round(severity, 1),
+                        "id": f"outage-{o['code']}",
+                        "region": o["name"],
+                        "country": o["name"],
+                        "country_code": o["code"],
+                        "severity": o["severity"],
                         "datasource": "IODA_OVERALL",
                         "entity_type": "country",
-                        "score_raw": overall_score,
+                        "score_raw": o["score_raw"],
                     },
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 }
@@ -1400,45 +1375,7 @@ class InfraPollerService:
         logger.info("DNS root health: %d/%d clusters reachable", reachable_count, len(results))
 
     # -----------------------------------------------------------------------
-    # CDN Edge Nodes loop — 6-hour interval
-    # -----------------------------------------------------------------------
-
-    async def cdn_edge_loop(self):
-        """Fetch Cloudflare PoP locations every 6 h; write to ``cdn:edge:nodes``."""
-        interval_s = POLL_INTERVAL_CDN_HOURS * 3600
-        while self.running:
-            try:
-                await self._fetch_cdn_edge_nodes()
-            except Exception:
-                logger.exception("CDN edge nodes fetch error")
-            await asyncio.sleep(interval_s)
-
-    async def _fetch_cdn_edge_nodes(self):
-        """Fetch Cloudflare speed.cloudflare.com/locations and persist to Redis.
-
-        Redis key written:
-          cdn:edge:nodes  — {nodes: [...], count, fetched_at}
-        """
-        timeout = aiohttp.ClientTimeout(total=30.0)
-        headers = {"User-Agent": USER_AGENT}
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
-            async with client.get(CDN_CLOUDFLARE_LOCATIONS_URL) as resp:
-                resp.raise_for_status()
-                raw = await resp.json(content_type=None)
-
-        nodes = parse_cloudflare_locations(raw)
-        payload = {
-            "nodes": nodes,
-            "count": len(nodes),
-            "fetched_at": datetime.now(UTC).isoformat(),
-        }
-        ttl = POLL_INTERVAL_CDN_HOURS * 3600 + 600
-        await self.redis.set("cdn:edge:nodes", json.dumps(payload), ex=ttl)
-        logger.info("CDN edge nodes: stored %d Cloudflare PoPs", len(nodes))
-
-
-# ---------------------------------------------------------------------------
-# Entry point
+    # Entry point
 # ---------------------------------------------------------------------------
 
 

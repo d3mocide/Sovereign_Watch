@@ -14,7 +14,7 @@ import { latLngToCell } from "h3-js";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import {
-  CdnEdgeNode,
+
   CoTEntity,
   DnsRootServer,
   DRState,
@@ -81,7 +81,7 @@ interface UseAnimationLoopOptions {
   /** DNS root server health records (Infra-06) */
   dnsRootData?: DnsRootServer[];
   /** Cloudflare CDN edge PoP records (Infra-07) */
-  cdnEdgeData?: CdnEdgeNode[];
+
   /** Current ISS position (Initiative B real-time tracker) */
   issPosition?: ISSPosition | null;
   /** ISS ground track ring buffer (Initiative B real-time tracker) */
@@ -169,7 +169,7 @@ export function useAnimationLoop({
   ixpData,
   facilityData,
   dnsRootData,
-  cdnEdgeData,
+  
   issPosition,
   issTrack,
   setHoveredInfra,
@@ -270,8 +270,8 @@ export function useAnimationLoop({
   const dnsRootDataRef = useRef(dnsRootData);
   dnsRootDataRef.current = dnsRootData;
 
-  const cdnEdgeDataRef = useRef(cdnEdgeData);
-  cdnEdgeDataRef.current = cdnEdgeData;
+  
+  
 
   const issPositionRef = useRef(issPosition);
   issPositionRef.current = issPosition;
@@ -766,7 +766,7 @@ export function useAnimationLoop({
         ixpData: ixpDataRef.current ?? null,
         facilityData: facilityDataRef.current ?? null,
         dnsRootData: dnsRootDataRef.current ?? [],
-        cdnEdgeData: cdnEdgeDataRef.current ?? [],
+
         issPosition: issPositionRef.current ?? null,
         issTrack: issTrackRef.current ?? [],
         onEntitySelect: onEntitySelectRef.current,

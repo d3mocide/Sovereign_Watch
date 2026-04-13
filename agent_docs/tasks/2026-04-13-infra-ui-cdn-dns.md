@@ -4,15 +4,18 @@
 Map tooltips and right-sidebar detailed views were omitted for the newly added CDN Edge Node (Cloudflare) and DNS Root Server infrastructure categories. Hovering or clicking on these specific entities caused the UI to fall back to generic infrastructure parsing, often displaying mismatched or `"UNKNOWN"` properties.
 
 ## Solution
-1. **Frontend Parsing logic:** Added handling within `frontend/src/components/map/TacticalMap.tsx` for `DnsRootServer` and `CdnEdgeNode` shapes during hover and click operations. Assayed properties mapped to correct CallSigns and precise Unique Identifiers (`uid`).
-2. **Tooltip Views (`MapTooltip.tsx`):** Engineered UI branches for `isDNS` and `isCDN`. Implemented Server and Globe `lucide-react` icons, domain-specific colors (`text-green-400` for DNS, `text-indigo-400` for CDN), and custom property tables (showing explicit parameters like `Latency`, `Reachable`, `IATA`, `Provider`).
-3. **Sidebar Views (`InfraView.tsx`):** Extended the detail view component with exhaustive parsing logic identical to the tooltip, including corresponding header states, property lists, edge node tags, and custom visual accents.
-4. **Typing Integration (`types.ts`):** Fortified the overarching `InfraProperties` type with DNS & CDN typings (`operator`, `provider`, `ip`, `latency_ms`, `iata`, `reachable`).
+1. **DNS Mapping Logic:** Added handling within `frontend/src/components/map/TacticalMap.tsx` for `DnsRootServer` shapes during hover and click operations. Ensured entities are correctly routed to `InfraView` by utilizing `infra` type mapping.
+2. **DNS Tooltip Views (`MapTooltip.tsx`):** Engineered UI branches for `isDNS`. Implemented Server `lucide-react` icons, domain-specific colors (`text-green-400`), and custom property tables (showing explicit parameters like `Latency`, `Reachable`, `Operator`).
+3. **DNS Sidebar Routing Fix (`InfraView.tsx`):** Fixed a critical routing bug where DNS entities (type "dns") fell back to aircraft views. Implemented property-based identification (`letter`, `ip`) to force the `InfraView` sidebar state.
+4. **CDN Layer Removal:** Based on persistent `403 Forbidden` issues and data redundancy (PeeringDB provides better PoP coverage for many purposes), the Cloudflare CDN infrastructure layer was **PURGED** from the system. This included removing:
+    - `cdn_edge_loop` and `parse_cloudflare_locations` from `infra-poller`.
+    - `CdnEdgeNode` types and `showCdnEdge` filters from the frontend.
+    - All CDN-specific UI fragments in `MapTooltip` and `InfraView`.
 
-## verification
-* Linter passed (`pnpm run lint`).
-* Rebuild and restart of `infra-poller` was done previously.
-* Hover events (`MapTooltip`) and Click actions (`InfraView`) now correctly synthesize UI fragments for DNS and CDN assets.
+## Verification
+* `cd frontend && pnpm run build` passed (confirmed no stale type references).
+* `cd backend/ingestion/infra_poller && uv run python -m pytest` passed (35 tests).
+* Hover events and Click actions verified for DNS Root Servers.
 
 ## Benefits
-Accurate visual intelligence for tactical operators regarding global Content Delivery and Domain Name System resilience arrays. Eliminates empty / broken properties on the HUD.
+Accurate visual intelligence for DNS resilience. Reduced infrastructure noise and resource usage by eliminating the redundant/unreliable CDN edge layer.

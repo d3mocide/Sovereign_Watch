@@ -281,7 +281,6 @@ export interface MapFilters {
   showFacilities?: boolean;
   showISS?: boolean;
   showDnsRoot?: boolean;
-  showCdnEdge?: boolean;
   cableOpacity?: number;
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
@@ -316,15 +315,6 @@ export interface DnsRootServer {
   latency_ms: number | null;
 }
 
-/** Cloudflare CDN edge PoP record returned by /api/infra/cdn-nodes */
-export interface CdnEdgeNode {
-  iata: string;
-  city: string;
-  country: string;
-  lat: number;
-  lon: number;
-  region?: string;
-}
 
 /** A parsed FCC tower record returned by /api/infra/towers */
 export interface Tower {

@@ -276,7 +276,7 @@ function AuthenticatedApp() {
     ixpData,
     facilityData,
     dnsRootData,
-    cdnEdgeData,
+    
   } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] =
     useState<FeatureCollection | null>(null);
@@ -968,7 +968,7 @@ function AuthenticatedApp() {
               ixpData={ixpData}
               facilityData={facilityData}
               dnsRootData={dnsRootData}
-              cdnEdgeData={cdnEdgeData}
+              
               issPosition={issPosition}
               issTrack={issTrack}
               wsSignal={wsSignal}
@@ -1086,7 +1086,7 @@ function AuthenticatedApp() {
             ixpData={ixpData}
             facilityData={facilityData}
             dnsRootData={dnsRootData}
-            cdnEdgeData={cdnEdgeData}
+            
           />
         ) : (
           <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
