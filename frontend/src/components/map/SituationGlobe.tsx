@@ -29,6 +29,10 @@ interface SituationGlobeProps {
   ixpData?: FeatureCollection | null;
   /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
   facilityData?: FeatureCollection | null;
+  /** DNS root server health records (Infra-06) */
+  dnsRootData?: import("../../types").DnsRootServer[];
+  /** Cloudflare CDN edge PoP records (Infra-07) */
+  cdnEdgeData?: import("../../types").CdnEdgeNode[];
 }
 
 const DARK_MAP_STYLE =
@@ -47,6 +51,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   onHover,
   ixpData,
   facilityData,
+  dnsRootData,
+  cdnEdgeData,
 }) => {
   const GLOBE_ROTATION_DEG_PER_60FPS_FRAME = 0.01;
 
@@ -228,6 +234,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       countryOutageMap,
       ixpData ?? null,
       facilityData ?? null,
+      dnsRootData ?? [],
+      cdnEdgeData ?? [],
     );
 
     // 3. Build Orbital Layers

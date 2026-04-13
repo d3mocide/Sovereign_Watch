@@ -3,7 +3,9 @@ import { PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { FeatureCollection } from "geojson";
 import { getTerminatorLayer } from "../components/map/TerminatorLayer";
 import {
+  CdnEdgeNode,
   CoTEntity,
+  DnsRootServer,
   HistorySegment,
   JS8Station,
   MapFilters,
@@ -80,6 +82,10 @@ interface LayerCompositionOptions {
   ixpData?: FeatureCollection | null;
   /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
   facilityData?: FeatureCollection | null;
+  /** DNS root server health records (Infra-06) */
+  dnsRootData?: DnsRootServer[];
+  /** Cloudflare CDN edge PoP records (Infra-07) */
+  cdnEdgeData?: CdnEdgeNode[];
   /** Current ISS position (Initiative B real-time tracker) */
   issPosition?: ISSPosition | null;
   /** ISS ground track ring buffer (Initiative B real-time tracker) */
@@ -143,6 +149,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     buoyData,
     ixpData,
     facilityData,
+    dnsRootData,
+    cdnEdgeData,
     issPosition,
     issTrack,
     onEntitySelect,
@@ -203,6 +211,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     countryOutageMap,
     ixpData ?? null,
     facilityData ?? null,
+    dnsRootData ?? [],
+    cdnEdgeData ?? [],
   );
 
   // KiwiSDR node marker layer

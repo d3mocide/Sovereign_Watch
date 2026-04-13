@@ -133,6 +133,10 @@ interface TacticalMapProps {
   ixpData?: FeatureCollection | null;
   /** PeeringDB Data Center Facilities GeoJSON (Initiative B) */
   facilityData?: FeatureCollection | null;
+  /** DNS root server health records (Infra-06) */
+  dnsRootData?: import("../../types").DnsRootServer[];
+  /** Cloudflare CDN edge PoP records (Infra-07) */
+  cdnEdgeData?: import("../../types").CdnEdgeNode[];
   /** Current ISS position (Initiative B real-time tracker) */
   issPosition?: import("../../types").ISSPosition | null;
   /** ISS ground track ring buffer (Initiative B real-time tracker) */
@@ -207,6 +211,8 @@ export function TacticalMap({
   nwsAlertsData,
   ixpData,
   facilityData,
+  dnsRootData,
+  cdnEdgeData,
   issPosition,
   issTrack,
   historySegments,
@@ -833,6 +839,8 @@ export function TacticalMap({
     nwsAlertsData,
     ixpData,
     facilityData,
+    dnsRootData,
+    cdnEdgeData,
     issPosition,
     issTrack,
     gdeltToneThreshold:

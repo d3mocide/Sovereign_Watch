@@ -48,6 +48,8 @@ interface DashboardViewProps {
   ixpData?: FeatureCollection | null;
   facilityData?: FeatureCollection | null;
   nwsAlertsData?: FeatureCollection | null;
+  dnsRootData?: import("../../types").DnsRootServer[];
+  cdnEdgeData?: import("../../types").CdnEdgeNode[];
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -65,6 +67,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   gdeltData,
   ixpData,
   facilityData,
+  dnsRootData,
+  cdnEdgeData,
   nwsAlertsData,
 }) => {
   const mission = missionProps?.currentMission ?? null;
@@ -444,6 +448,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             }}
             ixpData={ixpData}
             facilityData={facilityData}
+            dnsRootData={dnsRootData}
+            cdnEdgeData={cdnEdgeData}
           />
 
           {/* Situation Globe Tooltip (Heads-up Display) */}

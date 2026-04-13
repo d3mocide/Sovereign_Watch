@@ -1,5 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import { useEffect, useRef, useState } from "react";
+import type { CdnEdgeNode, DnsRootServer } from "../types";
 
 const isFeatureCollection = (value: unknown): value is FeatureCollection => {
   return (
@@ -130,6 +131,8 @@ export const useInfraData = () => {
   );
   const [ixpData, setIxpData] = useState<FeatureCollection | null>(null);
   const [facilityData, setFacilityData] = useState<FeatureCollection | null>(null);
+  const [dnsRootData, setDnsRootData] = useState<DnsRootServer[]>([]);
+  const [cdnEdgeData, setCdnEdgeData] = useState<CdnEdgeNode[]>([]);
 
   // Track whether PeeringDB data has been fetched once (it's global, no bbox needed)
   const peeringdbFetchedRef = useRef(false);
@@ -227,6 +230,30 @@ export const useInfraData = () => {
       }
     };
 
+    const fetchDnsRoot = async () => {
+      try {
+        const res = await fetch("/api/infra/dns-root");
+        if (res.ok) {
+          const j = await res.json() as { servers?: DnsRootServer[] };
+          setDnsRootData(j.servers ?? []);
+        }
+      } catch (err) {
+        console.warn("DNS root fetch failed:", err);
+      }
+    };
+
+    const fetchCdnEdge = async () => {
+      try {
+        const res = await fetch("/api/infra/cdn-nodes");
+        if (res.ok) {
+          const j = await res.json() as { nodes?: CdnEdgeNode[] };
+          setCdnEdgeData(j.nodes ?? []);
+        }
+      } catch (err) {
+        console.warn("CDN edge fetch failed:", err);
+      }
+    };
+
     const fetchAll = () => {
       fetchCables();
       fetchStations();
@@ -234,6 +261,8 @@ export const useInfraData = () => {
       fetchGdelt();
       fetchNwsAlerts();
       fetchPeeringDB();
+      fetchDnsRoot();
+      fetchCdnEdge();
     };
 
     fetchAll();
@@ -252,11 +281,17 @@ export const useInfraData = () => {
       },
       24 * 60 * 60 * 1000,
     );
+    // Refresh DNS root health every 5 minutes (matches poller cadence)
+    const dnsInterval = setInterval(fetchDnsRoot, 5 * 60 * 1000);
+    // Refresh CDN edge PoPs every 6 hours (matches poller cadence)
+    const cdnInterval = setInterval(fetchCdnEdge, 6 * 60 * 60 * 1000);
     return () => {
       clearInterval(outageInterval);
       clearInterval(gdeltInterval);
       clearInterval(nwsInterval);
       clearInterval(peeringdbInterval);
+      clearInterval(dnsInterval);
+      clearInterval(cdnInterval);
     };
   }, []);
 
@@ -268,5 +303,7 @@ export const useInfraData = () => {
     nwsAlertsData,
     ixpData,
     facilityData,
+    dnsRootData,
+    cdnEdgeData,
   };
 };
