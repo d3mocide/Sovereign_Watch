@@ -756,7 +756,6 @@ class InfraPollerService:
             asyncio.create_task(self.peeringdb_loop()),
             asyncio.create_task(self.nws_loop()),
             asyncio.create_task(self.dns_root_loop()),
-            asyncio.create_task(self.cdn_edge_loop()),
         ]
         try:
             await asyncio.gather(*tasks)
