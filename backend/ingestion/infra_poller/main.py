@@ -945,8 +945,8 @@ class InfraPollerService:
                 params={"from": from_time, "until": now, "entityType": "country"},
             ) as resp:
                 resp.raise_for_status()
-            parsed = await resp.json()
-            data = parsed.get("data", [])
+                parsed = await resp.json()
+                data = parsed.get("data", [])
 
         raw_outages = parse_ioda_outages(data)
         outages = []
