@@ -37,6 +37,8 @@ import type { ClusterInfo } from "../api/clusters";
 import { buildClusterLayer } from "./buildClusterLayer";
 import { buildAirspaceLayer } from "./buildAirspaceLayer";
 import { buildClausalChainLayer, ClausalChain } from "./buildClausalChainLayer";
+import { buildFIRMSLayer } from "./buildFIRMSLayer";
+import { buildDarkVesselLayer } from "./buildDarkVesselLayer";
 
 interface LayerCompositionOptions {
   interpolatedEntities: CoTEntity[];
@@ -104,6 +106,10 @@ interface LayerCompositionOptions {
   clausalChainsData?: ClausalChain[];
   /** OpenAIP global restricted/danger/prohibited airspace zones GeoJSON */
   airspaceZonesData?: FeatureCollection | null;
+  /** NASA FIRMS VIIRS/MODIS thermal hotspot detections GeoJSON */
+  firmsData?: FeatureCollection | null;
+  /** Dark vessel candidates (AIS-gap cross-reference) GeoJSON */
+  darkVesselData?: FeatureCollection | null;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -156,6 +162,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     clusterData,
     clausalChainsData,
     airspaceZonesData,
+    firmsData,
+    darkVesselData,
   } = options;
 
   // JS8 station layers
@@ -293,6 +301,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredInfra,
       setSelectedInfra,
     ),
+    // NASA FIRMS thermal hotspots — Tier 4 Infra Assets (depthBias -92)
+    ...buildFIRMSLayer(
+      firmsData ?? null,
+      !!filters?.showFIRMS,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
+    ),
     getSatNOGSLayer(
       satnogsStations || [],
       !!filters?.showSatNOGS,
@@ -309,6 +325,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredEntity,
       setHoverPosition,
       onEntitySelect,
+    ),
+    // Dark vessel candidates — Tier 5 Dynamic (depthBias -108, above jamming)
+    ...buildDarkVesselLayer(
+      darkVesselData ?? null,
+      !!filters?.showDarkVessels,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
     ),
     // Cluster octagons sit above jamming so they are visible through the circular halos
     ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, globeMode, setHoveredEntity, setHoverPosition, onEntitySelect),

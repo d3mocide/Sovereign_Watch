@@ -284,6 +284,9 @@ export interface MapFilters {
   // Maritime / Geospatial (Phase 1)
   showBuoys?: boolean;
   showNWSAlerts?: boolean;
+  // NASA FIRMS thermal hotspot + dark vessel detection
+  showFIRMS?: boolean;
+  showDarkVessels?: boolean;
   // Phase 2 — ST-DBSCAN cluster overlay
   showClusters?: boolean;
   clusterLookbackHours?: number;
@@ -325,6 +328,35 @@ export interface NDBCBuoyProperties {
   atmp_c: number | null; // Air temperature (°C)
   pres_hpa: number | null; // Atmospheric pressure (hPa)
   time: string; // ISO-8601 observation timestamp
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/firms/hotspots */
+export interface FIRMSHotspotProperties {
+  brightness: number | null;   // bright_ti4 (VIIRS, Kelvin) or brightness (MODIS, Kelvin)
+  frp: number | null;          // Fire Radiative Power (MW)
+  confidence: string | null;   // 'low' | 'nominal' | 'high'
+  satellite: string | null;    // 'SNPP' | 'NOAA-20' | 'Terra' | 'Aqua'
+  instrument: string | null;   // 'VIIRS' | 'MODIS'
+  source: string | null;       // feed name, e.g. 'VIIRS_SNPP_NRT'
+  daynight: string | null;     // 'D' | 'N'
+  acq_date: string | null;     // ISO date string, e.g. '2026-04-12'
+  acq_time: string | null;     // HHMM string, e.g. '0342'
+  time: string | null;         // ISO-8601 acquisition timestamp
+}
+
+/** Properties on a GeoJSON Feature returned by GET /api/firms/dark-vessels */
+export interface DarkVesselProperties {
+  hotspot_time: string | null;        // ISO-8601 FIRMS acquisition time
+  brightness: number | null;
+  frp: number | null;
+  confidence: string | null;
+  satellite: string | null;
+  instrument: string | null;
+  daynight: string | null;
+  nearest_ais_mmsi: string | null;    // closest AIS vessel (if any at edge of match radius)
+  nearest_ais_dist_nm: number | null; // distance to nearest AIS in nautical miles
+  risk_score: number | null;          // normalised [0, 1] composite dark vessel score
+  risk_severity: string | null;       // 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 }
 
 /** Properties on a GeoJSON Feature returned by GET /api/infrastructure/ixps */
