@@ -1,4 +1,4 @@
-"""Unit tests for Phase 1 GDELT mission-linkage helpers."""
+"""Unit tests for GDELT mission-linkage helpers (admission tiers and scoring)."""
 
 from __future__ import annotations
 
@@ -222,3 +222,87 @@ def test_classify_gdelt_linkage_boosts_theater_aligned_chokepoint_score():
     assert admitted_aligned[0]["linkage_evidence"]["matched_theater"] == "CENTCOM"
     assert admitted_aligned[0]["linkage_evidence"]["chokepoint_theaters"] == ["CENTCOM", "INDOPACOM"]
     assert "matched_theater" not in admitted_non_aligned[0]["linkage_evidence"]
+
+
+def test_classify_gdelt_linkage_cable_event_ranks_above_weak_neighbor_noise():
+    """Cable-linked event outranks a low-signal neighbor state_actor event."""
+    events = [
+        {
+            # Cable-linked: GBR in cable_country_codes; strong quad + Goldstein
+            "event_id_cnty": "cable",
+            "event_latitude": 51.5,
+            "event_longitude": -0.12,
+            "in_aot": False,
+            "quad_class": 4,
+            "actor1_country": "GBR",
+            "goldstein": -6.0,
+        },
+        {
+            # Neighbor state-actor: weaker quad, no Goldstein boost
+            "event_id_cnty": "neighbor-noise",
+            "event_latitude": 52.2,
+            "event_longitude": 21.0,
+            "in_aot": False,
+            "quad_class": 3,
+            "actor1_country": "POL",
+            "goldstein": -1.0,
+        },
+    ]
+
+    admitted, counts = gdelt_linkage.classify_gdelt_linkage(
+        events,
+        mission_country_codes={"UKR", "RUS", "BLR", "POL"},
+        cable_country_codes={"GBR"},
+        primary_mission_country_code="UKR",
+    )
+
+    tiers = {e["event_id_cnty"]: e["linkage_tier"] for e in admitted}
+    scores = {e["event_id_cnty"]: e["linkage_score"] for e in admitted}
+
+    assert tiers["cable"] == "cable_infra"
+    assert tiers["neighbor-noise"] == "state_actor"
+    # cable: 0.70 + 0.10 (quad=4) + 0.05 (goldstein<=-5) = 0.85
+    assert scores["cable"] == 0.85
+    # neighbor: 0.65 (depth=1, POL not primary) + 0 (quad=3) = 0.65
+    assert scores["neighbor-noise"] == 0.65
+    assert scores["cable"] > scores["neighbor-noise"]
+    assert [e["event_id_cnty"] for e in admitted] == ["cable", "neighbor-noise"]
+
+    assert counts["cable_infra"] == 1
+    assert counts["state_actor"] == 1
+
+
+def test_classify_gdelt_linkage_excludes_events_with_no_hard_gate_match():
+    """Events that pass no admission gate are never returned."""
+    events = [
+        {
+            # quad_class=2 — cooperation; excluded regardless of country match
+            "event_id_cnty": "low-quad",
+            "event_latitude": 50.45,
+            "event_longitude": 30.52,
+            "in_aot": False,
+            "quad_class": 2,
+            "actor1_country": "UKR",
+            "goldstein": 1.0,
+        },
+        {
+            # quad_class=4 but actor unrelated to mission, cable, or any chokepoint
+            "event_id_cnty": "unrelated-far",
+            "event_latitude": -33.87,
+            "event_longitude": 151.21,  # Sydney — far from all chokepoints
+            "in_aot": False,
+            "quad_class": 4,
+            "actor1_country": "AUS",
+            "goldstein": -7.0,
+        },
+    ]
+
+    admitted, counts = gdelt_linkage.classify_gdelt_linkage(
+        events,
+        mission_country_codes={"UKR", "RUS", "BLR"},
+        cable_country_codes={"GBR"},
+        primary_mission_country_code="UKR",
+    )
+
+    assert len(admitted) == 0
+    assert sum(counts.values()) == 0
