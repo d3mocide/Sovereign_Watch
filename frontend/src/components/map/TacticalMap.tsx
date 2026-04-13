@@ -263,6 +263,8 @@ export function TacticalMap({
       const isBuoy = props.buoy_id !== undefined;
       const isISS = props.entity_type === "iss";
       const isAirspace = props.zone_id !== undefined;
+      const isDNS = (obj as any).letter !== undefined && (obj as any).ip !== undefined;
+      const isCDN = (obj as any).iata !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -273,6 +275,10 @@ export function TacticalMap({
             ? "outage"
           : isISS
             ? "iss"
+          : isDNS
+            ? "dns"
+          : isCDN
+            ? "cdn"
           : isAirspace
             ? "airspace"
             : "infra";
@@ -766,6 +772,8 @@ export function TacticalMap({
       const isBuoy = props.buoy_id !== undefined;
       const isISS = props.entity_type === "iss";
       const isAirspace = props.zone_id !== undefined;
+      const isDNS = (info.object as any).letter !== undefined && (info.object as any).ip !== undefined;
+      const isCDN = (info.object as any).iata !== undefined;
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -776,10 +784,16 @@ export function TacticalMap({
             ? "outage"
           : isISS
             ? "iss"
+          : isDNS
+            ? "dns"
+          : isCDN
+            ? "cdn"
           : isAirspace
             ? "airspace"
             : "infra";
       const callsign = String(
+        isDNS ? `ROOT SERVER ${String((info.object as any).letter).toUpperCase()}` :
+        isCDN ? `CDN EDGE ${String((info.object as any).iata).toUpperCase()}` :
         props.name ||
           props.buoy_id ||
           props.event ||
@@ -797,6 +811,8 @@ export function TacticalMap({
 
       const infraEntity: CoTEntity = {
         uid: String(
+          isDNS ? `dns-${(info.object as any).letter}` :
+          isCDN ? `cdn-${(info.object as any).iata}` :
           props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
         ),
         lat: info.coordinate?.[1] || 0,

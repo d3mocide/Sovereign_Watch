@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **CDN and DNS Infrastructure UI**: Added map tooltips and right-sidebar states for Cloudflare CDN Edge Nodes and DNS Root Servers, including fields for IP, Latency, Reachability, IATA, and Provider.
+- **DNS Root Server & Cloudflare CDN Layers**: Rendered DNS root reachability (green/red latency indicators) and Cloudflare CDN Edge densities (indigo) on the tactical map under the Infra filter.
+- **Mission-Scope Stats Dashboard Toggle**: Added global vs. mission-scoped data toggle to the Stats Dashboard Protocol Tab, seamlessly switching backend feeds between global activity and AOR-specific events.
+- **Frontend Test Coverage Expansion**: Added 74 new unit tests covering mission location hooks, hash routing, and major Deck.gl layer builders (H3 risk, Cluster octagons, FCC towers), backed by new test environment infrastructure (`jsdom`/`testing-library`).
+
+### Fixed
+
+- **Cloudflare CDN 403 Forbidden**: Fixed an issue where the `infra-poller` was blocked by Cloudflare when fetching CDN edge node locations by adding a standard browser `User-Agent`.
+
+
 ## [1.0.4] - 2026-04-12
 
 ### Added

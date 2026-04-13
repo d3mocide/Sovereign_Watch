@@ -1,9 +1,11 @@
 import {
   CloudRain,
   Crosshair,
+  Globe,
   Layers,
   Network,
   Satellite,
+  Server,
   Signal,
   Waves,
   X,
@@ -36,6 +38,9 @@ export const InfraView: React.FC<BaseViewProps> = ({
       props.id?.includes("outage") ||
       props.severity !== undefined
     );
+  const isDNS = entity.type === "dns";
+  const isCDN = entity.type === "cdn";
+
   const severity = Number(props.severity || 0);
 
   const accentColor = isBuoy
@@ -44,6 +49,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
       ? "text-yellow-400"
       : isNwsAlert
         ? "text-amber-300"
+      : isDNS
+        ? "text-green-400"
+      : isCDN
+        ? "text-indigo-400"
       : isOutage
         ? severity > 50
           ? "text-red-400"
@@ -55,6 +64,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
       ? "border-yellow-400/30"
       : isNwsAlert
         ? "border-amber-400/30"
+      : isDNS
+        ? "border-green-400/30"
+      : isCDN
+        ? "border-indigo-400/30"
       : isFacility
         ? "border-purple-400/30"
         : isOutage
@@ -68,6 +81,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
       ? "from-yellow-400/20 to-yellow-400/5"
       : isNwsAlert
         ? "from-amber-400/20 to-amber-400/5"
+      : isDNS
+        ? "from-green-400/20 to-green-400/5"
+      : isCDN
+        ? "from-indigo-400/20 to-indigo-400/5"
       : isOutage
         ? severity > 50
           ? "from-red-400/20 to-red-400/5"
@@ -79,6 +96,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
       ? "text-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]"
       : isNwsAlert
         ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+      : isDNS
+        ? "text-green-300 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]"
+      : isCDN
+        ? "text-indigo-300 drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]"
       : isFacility
         ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
         : isOutage
@@ -106,6 +127,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 <Network size={14} className={accentColor} />
               ) : isFacility ? (
                 <Layers size={14} className={accentColor} />
+              ) : isDNS ? (
+                <Server size={14} className={accentColor} />
+              ) : isCDN ? (
+                <Globe size={14} className={accentColor} />
               ) : isOutage ? (
                 <Signal size={14} className={accentColor} />
               ) : (
@@ -118,6 +143,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                     ? "ORBITAL_PLATFORM"
                     : isNwsAlert
                       ? "NWS_ALERT"
+                    : isDNS
+                      ? "ROOT_DNS"
+                    : isCDN
+                      ? "CDN_EDGE"
                     : isIXP
                       ? "INTERNET_EXCHANGE"
                       : isFacility
@@ -141,6 +170,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                     ? "INTL_SPACE_STATION"
                     : isNwsAlert
                       ? "WEATHER_HAZARD"
+                    : isDNS
+                      ? "AUTHORITATIVE_SERVER"
+                    : isCDN
+                      ? "CONTENT_DELIVERY_POP"
                     : isIXP
                       ? "PEERINGDB_NODE"
                       : isFacility
@@ -162,6 +195,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                           ? "Orbit:"
                         : isNwsAlert
                           ? "Severity:"
+                        : isDNS
+                          ? "Operator:"
+                        : isCDN
+                          ? "Provider:"
                         : isOutage
                           ? "Impact:"
                           : isStation
@@ -173,6 +210,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                         ? "LEO_ORBIT"
                         : isNwsAlert
                           ? String(props.severity || "UNKNOWN")
+                        : isDNS
+                          ? String(props.operator || "UNKNOWN")
+                        : isCDN
+                          ? String(props.provider || "UNKNOWN")
                         : String(
                           props.region ||
                             props.country ||
@@ -234,6 +275,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
             className={`flex-1 flex items-center justify-center gap-2 bg-gradient-to-b ${
               isISS
                 ? "from-yellow-400/30 to-yellow-400/10 border-yellow-400/50 text-yellow-400"
+                : isDNS
+                  ? "from-green-400/30 to-green-400/10 border-green-400/50 text-green-400"
+                : isCDN
+                  ? "from-indigo-400/30 to-indigo-400/10 border-indigo-400/50 text-indigo-400"
                 : isOutage
                   ? "from-amber-400/30 to-amber-400/10 border-amber-400/50 text-amber-400"
                   : "from-cyan-400/30 to-cyan-400/10 border-cyan-400/50 text-cyan-400"
@@ -256,6 +301,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 ? "NWS_Alert_Details"
                 : isOutage
                   ? "Outage_Report"
+                  : isDNS
+                    ? "Server_Status"
+                  : isCDN
+                    ? "Edge_Node_Status"
                   : "Infrastructure_Specs"}
             </h3>
             <div className="space-y-1 text-mono-xs font-medium">
@@ -315,9 +364,51 @@ export const InfraView: React.FC<BaseViewProps> = ({
                     </span>
                   </div>
                 </>
+              ) : isDNS ? (
+                <>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">REACHABLE:</span>
+                    <span className={`${props.reachable ? "text-green-400" : "text-red-400"} font-bold`}>
+                      {props.reachable ? "YES" : "NO"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">LATENCY:</span>
+                    <span className="text-white tabular-nums">
+                      {props.latency_ms != null ? `${Number(props.latency_ms).toFixed(1)} ms` : "—"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">IP ADDRESS:</span>
+                    <span className="text-white font-bold">
+                      {String(props.ip || "UNKNOWN")}
+                    </span>
+                  </div>
+                </>
+              ) : isCDN ? (
+                <>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">PROVIDER:</span>
+                    <span className="text-indigo-400 font-bold uppercase">
+                      {String(props.provider || "UNKNOWN")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">CITY:</span>
+                    <span className="text-white">
+                      {String(props.city || "—")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
+                    <span className="text-white/30">COUNTRY:</span>
+                    <span className="text-white">
+                      {String(props.country || "—")}
+                    </span>
+                  </div>
+                </>
               ) : (
                 <>
-                  {!isStation && (
+                  {!isStation && !isIXP && !isFacility && (
                     <>
                       <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-white/5 pb-1">
                         <span className="text-white/30">LENGTH:</span>
@@ -339,9 +430,9 @@ export const InfraView: React.FC<BaseViewProps> = ({
                     <span className="text-white/30">OWNERS:</span>
                     <span
                       className="text-amber-400 truncate"
-                      title={props.owners || props.org_name || "CONSORTIUM"}
+                      title={String(props.owners || props.org_name || "CONSORTIUM")}
                     >
-                      {props.owners || props.org_name || "CONSORTIUM"}
+                      {String(props.owners || props.org_name || "CONSORTIUM")}
                     </span>
                   </div>
                   {props.website && (

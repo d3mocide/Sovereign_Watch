@@ -2,12 +2,14 @@ import {
   Activity,
   CloudRain,
   Crosshair,
+  Globe,
   HexagonIcon,
   Layers,
   Network,
   Plane,
   Radio,
   Satellite,
+  Server,
   Shield,
   Ship,
   Signal,
@@ -72,6 +74,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isISS = entity.type === "iss";
   const isNwsAlert = entity.type === "nws_alert";
   const isOutage = entity.type === "outage";
+  const isDNS = entity.type === "dns";
+  const isCDN = entity.type === "cdn";
   const isHold = entity.type === "hold";
   const isGdelt = entity.type === "gdelt";
   const isJamming = entity.type === "jamming";
@@ -140,6 +144,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "text-yellow-400"
                     : isNwsAlert
                       ? "text-amber-300"
+                    : isDNS
+                      ? "text-green-400"
+                    : isCDN
+                      ? "text-indigo-400"
                     : isInfra
                       ? "text-cyan-400"
                       : isHold
@@ -190,6 +198,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "border-yellow-400/50"
                     : isNwsAlert
                       ? "border-amber-400/60"
+                    : isDNS
+                      ? "border-green-400/50"
+                    : isCDN
+                      ? "border-indigo-400/50"
                     : isInfra
                       ? "border-cyan-400/50"
                       : isHold
@@ -235,6 +247,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? Satellite
                     : isNwsAlert
                       ? CloudRain
+                    : isDNS
+                      ? Server
+                    : isCDN
+                      ? Globe
                     : isInfra
                       ? Network
                       : isOutage
@@ -291,6 +307,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "BUOY"
                     : isNwsAlert
                       ? "NWS"
+                    : isDNS
+                      ? "DNS"
+                    : isCDN
+                      ? "CDN"
                     : isInfra
                       ? "UNDERSEA"
                       : isOutage
@@ -743,6 +763,92 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               {detailProps.expires
                 ? new Date(String(detailProps.expires)).toLocaleString()
                 : "N/A"}
+            </span>
+          </div>
+        </div>
+      ) : isDNS ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-green-400 font-mono font-bold leading-tight uppercase">
+              DNS ROOT SERVER
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              IP ADDRESS
+            </span>
+            <span className="text-[10px] text-white/90 font-mono font-bold leading-tight block">
+              {String(detailProps.ip || "UNKNOWN")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              REACHABLE
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight ${detailProps.reachable ? "text-green-400" : "text-red-400"}`}>
+              {detailProps.reachable ? "YES" : "NO"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              OPERATOR
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.operator || "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              LATENCY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.latency_ms != null ? `${Number(detailProps.latency_ms).toFixed(1)} ms` : "—"}
+            </span>
+          </div>
+        </div>
+      ) : isCDN ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-indigo-400 font-mono font-bold leading-tight uppercase">
+              CDN EDGE NODE
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              PROVIDER
+            </span>
+            <span className="text-[10px] text-white/90 font-mono font-bold leading-tight block uppercase">
+              {String(detailProps.provider || "UNKNOWN")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              IATA
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight uppercase">
+              {String(detailProps.iata || "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CITY
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.city || "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              COUNTRY
+            </span>
+            <span className="text-[10px] text-indigo-400 font-mono font-bold leading-tight">
+              {String(detailProps.country || "—")}
             </span>
           </div>
         </div>

@@ -66,6 +66,13 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   lower_limit?: string;
   icao_class?: string;
   type?: string;
+  // DNS / CDN additions
+  operator?: string;
+  provider?: string;
+  ip?: string;
+  reachable?: boolean;
+  latency_ms?: number;
+  iata?: string;
 }
 
 export interface AirspaceProperties {

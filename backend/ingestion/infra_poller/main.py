@@ -1404,7 +1404,8 @@ class InfraPollerService:
           cdn:edge:nodes  — {nodes: [...], count, fetched_at}
         """
         timeout = aiohttp.ClientTimeout(total=30.0)
-        async with aiohttp.ClientSession(timeout=timeout) as client:
+        headers = {"User-Agent": USER_AGENT}
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
             async with client.get(CDN_CLOUDFLARE_LOCATIONS_URL) as resp:
                 resp.raise_for_status()
                 raw = await resp.json(content_type=None)
