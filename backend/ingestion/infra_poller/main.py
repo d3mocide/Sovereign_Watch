@@ -67,7 +67,7 @@ POLL_INTERVAL_CDN_HOURS = int(os.getenv("POLL_INTERVAL_CDN_HOURS", "6"))
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
-CDN_CLOUDFLARE_LOCATIONS_URL = "https://speed.cloudflare.com/locations"
+CDN_CLOUDFLARE_LOCATIONS_URL = "https://raw.githubusercontent.com/LufsX/Cloudflare-Data-Center-IATA-Code-list/main/cloudflare-iata-full.json"
 
 # The 13 IANA root DNS server clusters (authoritative primary IPv4 + nominal location).
 # These are anycast clusters; the IP always routes to the nearest instance.
@@ -711,28 +711,44 @@ def _probe_dns_sync(ip: str, timeout: float = 2.0) -> tuple[bool, float]:
             sock.close()
 
 
-def parse_cloudflare_locations(raw: list) -> list[dict]:
-    """Normalize the Cloudflare speed.cloudflare.com/locations JSON array.
+def parse_cloudflare_locations(raw) -> list[dict]:
+    """Normalize the Cloudflare speed.cloudflare.com/locations JSON array or a dict mirror.
 
     Each entry is expected to contain at minimum ``iata``, ``lat``, ``lon``
-    (or ``long``).  Entries missing coordinates are silently dropped.
+    (or ``long``/``lng``).  Entries missing coordinates are silently dropped.
     """
     nodes = []
-    for entry in raw:
-        lat = entry.get("lat")
-        lon = entry.get("lon") or entry.get("long")
-        iata = entry.get("iata") or entry.get("code")
-        if lat is None or lon is None or not iata:
-            continue
-        nodes.append({
-            "provider": "cloudflare",
-            "iata": str(iata),
-            "city": entry.get("city", ""),
-            "country": entry.get("cca2") or entry.get("country", ""),
-            "region": entry.get("region", ""),
-            "lat": float(lat),
-            "lon": float(lon),
-        })
+    if isinstance(raw, dict):
+        for iata, entry in raw.items():
+            lat = entry.get("lat")
+            lon = entry.get("lng") or entry.get("lon")
+            if lat is None or lon is None or not iata:
+                continue
+            nodes.append({
+                "provider": "cloudflare",
+                "iata": str(iata).upper(),
+                "city": entry.get("place", "").split(",")[0].strip(),
+                "country": entry.get("cca2", ""),
+                "region": entry.get("region", ""),
+                "lat": float(lat),
+                "lon": float(lon),
+            })
+    else:
+        for entry in raw:
+            lat = entry.get("lat")
+            lon = entry.get("lon") or entry.get("long")
+            iata = entry.get("iata") or entry.get("code")
+            if lat is None or lon is None or not iata:
+                continue
+            nodes.append({
+                "provider": "cloudflare",
+                "iata": str(iata),
+                "city": entry.get("city", ""),
+                "country": entry.get("cca2") or entry.get("country", ""),
+                "region": entry.get("region", ""),
+                "lat": float(lat),
+                "lon": float(lon),
+            })
     return nodes
 
 
