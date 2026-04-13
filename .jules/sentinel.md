@@ -46,3 +46,7 @@
 **Vulnerability:** Raw exception strings (e.g., `exc`) were interpolated directly into the `HTTPException` detail response sent to clients upon failure.
 **Learning:** Returning unhandled or low-level internal error details to users can leak stack traces, implementation details, or sensitive system state, violating the principle of failing securely.
 **Prevention:** Catch exceptions, log the detailed error securely on the server (using `logger.warning` or `logger.error`), and return only a sanitized, generic error message (like 'Malformed TLE' or 'Internal server error') in the HTTP response.
+## 2026-05-24 - Fix null reference vulnerability in auth rate limiting
+**Vulnerability:** Denial of Service (DoS) via Unhandled Exception
+**Learning:** Blind usage of `request.client.host` in `backend/api/routers/auth.py` rate limiting logic caused an `AttributeError` when `request.client` was `None` (e.g. behind certain proxies). This crash acts as an unhandled exception, creating a Denial of Service vector where a malicious actor or misconfigured proxy could crash the request handling, bypassing rate limits or bringing down the service.
+**Prevention:** Safely extract client IP addresses using fallback logic (e.g. `request.client.host if request.client and request.client.host else "unknown"`) to guarantee that rate-limiting logic does not encounter null reference errors.
