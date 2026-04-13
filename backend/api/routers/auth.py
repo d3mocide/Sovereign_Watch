@@ -57,13 +57,16 @@ logger = logging.getLogger("SovereignWatch.Auth")
 )
 async def login(request: Request, body: LoginRequest):
     """Authenticate with username + password; returns a Bearer token."""
-    await check_rate_limit(f"login:{request.client.host}", limit=10, window=60)
+    client_ip = (
+        request.client.host if request.client and request.client.host else "unknown"
+    )
+    await check_rate_limit(f"login:{client_ip}", limit=10, window=60)
     user = await get_user_by_username(body.username)
     if user is None or not verify_password(body.password, user["hashed_password"]):
         logger.warning(
             "Failed login attempt for username '%s' from %s",
             body.username,
-            request.client.host,
+            client_ip,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,7 +77,7 @@ async def login(request: Request, body: LoginRequest):
         logger.warning(
             "Login attempt on disabled account '%s' from %s",
             body.username,
-            request.client.host,
+            client_ip,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -93,7 +96,7 @@ async def login(request: Request, body: LoginRequest):
     logger.info(
         "User '%s' authenticated successfully from %s",
         body.username,
-        request.client.host,
+        client_ip,
     )
     return TokenResponse(
         access_token=token,
@@ -114,7 +117,10 @@ async def first_setup(request: Request, body: FirstSetupRequest):
     the TOCTOU race between checking and inserting.  Returns 404 when already
     set up (avoids leaking whether users exist).
     """
-    await check_rate_limit(f"first-setup:{request.client.host}", limit=5, window=60)
+    client_ip = (
+        request.client.host if request.client and request.client.host else "unknown"
+    )
+    await check_rate_limit(f"first-setup:{client_ip}", limit=5, window=60)
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not available")
 
