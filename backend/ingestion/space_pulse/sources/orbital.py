@@ -71,7 +71,7 @@ class OrbitalSource(BaseSource):
             ("gp.php", "noaa"),
             ("gp.php", "goes"),
             ("gp.php", "sarsat"),
-            ("sup-gp.php", "starlink"),
+            ("gp.php", "starlink"),
             ("gp.php", "oneweb"),
             ("gp.php", "iridium-NEXT"),
             ("gp.php", "military"),
