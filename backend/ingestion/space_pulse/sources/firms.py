@@ -260,7 +260,11 @@ class FIRMSSource:
         rows, hotspot_dicts = self._parse_csv(body)
         if not rows:
             logger.info("FIRMS: no new hotspots in area (or no detections this cycle)")
-            await self._update_redis_cache([])
+            # Do NOT overwrite Redis with an empty collection — the previous
+            # cycle's data is still valid until its TTL expires.  Writing an
+            # empty GeoJSON here poisons the API fast-path so it returns []
+            # even when the DB still holds hotspots (e.g. manually injected
+            # test data or rows from a prior poll that haven't aged out yet).
             return
 
         try:

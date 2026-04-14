@@ -112,12 +112,19 @@ async def get_firms_hotspots(
         and min_lon <= -179.9 and max_lon >= 179.9
     )
 
-    # Fast-path: global view with no extra filters → serve Redis cache
+    # Fast-path: global view with no extra filters → serve Redis cache.
+    # Only serve cache when it actually contains features; an empty cached
+    # collection can occur when the poller ran but found nothing, which would
+    # mask DB rows inserted by other means (e.g. test injection, manual inserts).
     if global_bbox and hours_back == 24 and min_frp == 0.0 and not confidence and db.redis_client:
         try:
             cached = await db.redis_client.get(_REDIS_HOTSPOT_KEY)
             if cached:
-                return json.loads(cached)
+                parsed = json.loads(cached)
+                if parsed.get("features"):
+                    return parsed
+                # Cache is empty — fall through to DB so live data is returned
+                logger.debug("FIRMS Redis cache is empty, falling back to DB query")
         except Exception as exc:
             logger.warning("FIRMS Redis fast-path failed, falling back to DB: %s", exc)
 
