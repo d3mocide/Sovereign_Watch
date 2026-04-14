@@ -52,6 +52,12 @@ SEVERITY_THRESHOLDS: dict[str, list[float]] = {
     "orbital":        [0.30, 0.60, 0.85],
     "rf":             [0.25, 0.55, 0.80],
     "infrastructure": [0.25, 0.55, 0.80],
+    # VIIRS/MODIS thermal hotspot detections.  Thresholds are maritime-adjacent
+    # because FIRMS data has inherent noise from coastal industry and oil platforms.
+    "firms":          [0.20, 0.45, 0.75],
+    # Dark vessel candidates (AIS-off cross-reference).  Aggressive lower bounds:
+    # any AIS gap co-located with a thermal detection is immediately suspicious.
+    "dark_vessel":    [0.15, 0.40, 0.70],
 }
 
 
@@ -80,11 +86,17 @@ def score_to_severity(score: float, domain: str = "default") -> RiskSeverity:
 #   TAK_AIS   — AIS updates every 2–6 min but positional relevance lasts longer than ADS-B.
 #   orbital   — satellite signal-loss events are extremely time-sensitive (orbital period ~90 min).
 DECAY_HALF_LIFE_HOURS: dict[str, float] = {
-    "GDELT":    12.0,
-    "TAK_ADSB": 2.0,
-    "TAK_AIS":  6.0,
-    "orbital":  1.0,
-    "default":  6.0,
+    "GDELT":       12.0,
+    "TAK_ADSB":    2.0,
+    "TAK_AIS":     6.0,
+    "orbital":     1.0,
+    "default":     6.0,
+    # FIRMS NRT data is actionable for ~2 hours after acquisition; thermal plumes
+    # from vessel engines dissipate quickly in the IR channel.
+    "firms":       2.0,
+    # Dark vessel candidates retain investigative relevance longer than raw hotspots —
+    # a vessel that went dark 6 hours ago is still a current intelligence concern.
+    "dark_vessel": 6.0,
 }
 
 
@@ -110,15 +122,20 @@ def temporal_weight(capture_time: datetime, domain: str = "default") -> float:
 # Used to weight each signal source's contribution to density/sentiment scores.
 # Keys match the source tag stored in tracks.meta->>'source' and gdelt quad_class tiers.
 SOURCE_CONFIDENCE: dict[str, float] = {
-    "dump1090":        0.95,  # local ADS-B receiver — highest fidelity
-    "opensky_sat":     0.75,  # satellite-received ADS-B
-    "opensky_crowd":   0.65,  # crowd-sourced ADS-B
-    "ais_terrestrial": 0.90,  # terrestrial AIS receiver
-    "ais_satellite":   0.70,  # satellite AIS (position accuracy lower)
-    "gdelt_conflict":  0.80,  # quad_class 3 or 4 — material/verbal conflict
-    "gdelt_verbal":    0.50,  # quad_class 1 or 2 — cooperation signals
-    "satnogs":         0.80,  # SatNOGS network signal observations
-    "default":         0.70,
+    "dump1090":          0.95,  # local ADS-B receiver — highest fidelity
+    "opensky_sat":       0.75,  # satellite-received ADS-B
+    "opensky_crowd":     0.65,  # crowd-sourced ADS-B
+    "ais_terrestrial":   0.90,  # terrestrial AIS receiver
+    "ais_satellite":     0.70,  # satellite AIS (position accuracy lower)
+    "gdelt_conflict":    0.80,  # quad_class 3 or 4 — material/verbal conflict
+    "gdelt_verbal":      0.50,  # quad_class 1 or 2 — cooperation signals
+    "satnogs":           0.80,  # SatNOGS network signal observations
+    # NASA FIRMS satellite sensors — VIIRS 375 m resolution is significantly
+    # more reliable than MODIS 1 km for detecting vessel-scale heat sources.
+    "VIIRS_SNPP_NRT":    0.92,
+    "VIIRS_NOAA20_NRT":  0.90,
+    "MODIS_NRT":         0.78,
+    "default":           0.70,
 }
 
 

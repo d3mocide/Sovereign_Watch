@@ -11,6 +11,7 @@ Sources and their output paths:
   SatNOGSDBSource     → Kafka topic: satnogs_transmitters
   SatNOGSNetworkSource→ Kafka topic: satnogs_observations
   SpaceWeatherSource  → Redis + TimescaleDB (direct writes, no Kafka)
+  FIRMSSource         → TimescaleDB firms_hotspots + Redis cache (no Kafka; 10-min polling)
 """
 
 import asyncio
@@ -21,11 +22,12 @@ import os
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 
+from sources.firms import FIRMSSource
+from sources.iss import ISSSource
 from sources.orbital import OrbitalSource
 from sources.satnogs_db import SatNOGSDBSource
 from sources.satnogs_network import SatNOGSNetworkSource
 from sources.space_weather import SpaceWeatherSource
-from sources.iss import ISSSource
 
 logger = logging.getLogger("space_pulse")
 
@@ -45,6 +47,7 @@ SATNOGS_NETWORK_INTERVAL_H = int(os.getenv("SATNOGS_NETWORK_INTERVAL_H", "1"))
 AURORA_INTERVAL_S          = int(os.getenv("AURORA_INTERVAL_S", "300"))   # 5 min
 KP_INTERVAL_S              = int(os.getenv("KP_INTERVAL_S", "900"))       # 15 min
 SCALES_INTERVAL_S          = int(os.getenv("SCALES_INTERVAL_S", "900"))   # 15 min
+FIRMS_FETCH_INTERVAL_M     = int(os.getenv("FIRMS_FETCH_INTERVAL_M", "10"))  # 10 min
 
 
 class SpacePulseService:
@@ -96,6 +99,11 @@ class SpacePulseService:
             ISSSource(
                 redis_client=self.redis_client,
                 db_url=DATABASE_URL,
+            ),
+            FIRMSSource(
+                redis_client=self.redis_client,
+                db_url=DATABASE_URL,
+                fetch_interval_m=FIRMS_FETCH_INTERVAL_M,
             ),
         ]
 

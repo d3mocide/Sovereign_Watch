@@ -14,6 +14,7 @@ from routers import (
     analysis,
     auth,
     buoys,
+    firms,
     gdelt,
     h3_risk,
     holding_patterns,
@@ -208,6 +209,7 @@ app.include_router(satnogs.router, dependencies=_viewer_auth)
 app.include_router(gdelt.router, dependencies=_viewer_auth)
 app.include_router(stats.router)
 app.include_router(buoys.router, dependencies=_viewer_auth)
+app.include_router(firms.router, dependencies=_viewer_auth)
 app.include_router(maritime.router, dependencies=_viewer_auth)
 app.include_router(iss.router)
 app.include_router(ai_router.router, dependencies=_viewer_auth)
