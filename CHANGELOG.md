@@ -1,13 +1,17 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.5] - 2026-04-14
 
 ### Added
 
+- **Condensed "Sovereign Glass" Health HUD**: Redesigned the System Health widget into a high-density, 2-column grid layout with categorized groupings (Tracking, Orbital, Intel, RF, Infrastructure).
+- **ISS Real-time Tracking Loop**: Implemented a 5-second polling loop in `InfraPoller` with direct TimescaleDB archival and Redis caching.
+- **Tactical News Expansion**: Expanded RSS aggregator with defense-critical sources: UN News, The Aviationist, Defense News, and Reuters World.
+- **Aggregator Health Monitoring**: Integrated News Aggregator availability into the System Health HUD.
 - **DNS Infrastructure UI**: Added map tooltips and right-sidebar states for DNS Root Servers, including fields for IP, Latency, and Reachability.
 - **DNS Root Server Layer**: Rendered DNS root reachability (green/red latency indicators) on the tactical map under the Infra filter.
-- **Mission-Scope Stats Dashboard Toggle**: Added global vs. mission-scoped data toggle to the Stats Dashboard Protocol Tab, seamlessly switching backend feeds between global activity and AOR-specific events.
-- **Frontend Test Coverage Expansion**: Added 74 new unit tests covering mission location hooks, hash routing, and major Deck.gl layer builders (H3 risk, Cluster octagons, FCC towers), backed by new test environment infrastructure (`jsdom`/`testing-library`).
+- **Mission-Scope Stats Dashboard Toggle**: Added global vs. mission-scoped data toggle to the Stats Dashboard Protocol Tab.
+- **Frontend Test Coverage Expansion**: Added 74 new unit tests covering mission location hooks, hash routing, and Deck.gl layer builders.
 
 ### Removed
 
@@ -15,7 +19,11 @@
 
 ### Fixed
 
-- **DNS Root Sidebar Routing**: Fixed an issue where DNS Root Server entities were incorrectly routed to the default AircraftView sidebar; they now correctly trigger the InfraView sidebar regardless of their entity type.
+- **Infrastructure Telemetry Restoration**: Fixed `PENDING` states for ISS, Ocean Buoys (NDBC), and Weather Alerts (NWS) by aligning polling heartbeats with the HUD registry.
+- **SatNOGS Health Tracking**: Restored missing backend registration for SatNOGS station and network heartbeats.
+- **ISS Ingestion Crash**: Resolved a database integrity failure where missing unique constraints on the ISS hypertable caused the poller loop to crash.
+- **News Aggregator Resilience**: Fixed a `NameError` (missing `time` import) and resolved a state gap where serving from cache would hide the aggregator's health pulse.
+- **DNS Root Sidebar Routing**: Fixed routing issue where DNS Root entities were sent to AircraftView; they now correctly trigger InfraView.
 
 
 ## [1.0.4] - 2026-04-12

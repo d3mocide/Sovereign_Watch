@@ -66,6 +66,7 @@ POLL_INTERVAL_DNS_ROOT_MINUTES = int(os.getenv("POLL_INTERVAL_DNS_ROOT_MINUTES",
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
+ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 
 # The 13 IANA root DNS server clusters (authoritative primary IPv4 + nominal location).
 # These are anycast clusters; the IP always routes to the nearest instance.
@@ -618,6 +619,32 @@ def parse_iss_position(data: dict) -> dict | None:
     }
 
 
+def _upsert_iss_position_sync(db_url: str, pos: dict) -> None:
+    """Upsert the latest ISS position into the iss_positions hypertable."""
+    insert_sql = """
+        INSERT INTO iss_positions (time, lat, lon, altitude_km, velocity_kms, geom)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            insert_sql,
+            (
+                pos["time"],
+                pos["lat"],
+                pos["lon"],
+                pos["altitude_km"],
+                pos["velocity_kms"],
+                f"SRID=4326;POINT({pos['lon']} {pos['lat']})",
+            ),
+        )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+
 def _upsert_peeringdb_ixps_sync(db_url: str, records: list[dict]) -> int:
     """Upsert PeeringDB IXP records into peeringdb_ixps (blocking)."""
     insert_sql = """
@@ -755,6 +782,7 @@ class InfraPollerService:
             asyncio.create_task(self.ndbc_loop()),
             asyncio.create_task(self.peeringdb_loop()),
             asyncio.create_task(self.nws_loop()),
+            asyncio.create_task(self.iss_loop()),
             asyncio.create_task(self.dns_root_loop()),
         ]
         try:
@@ -1122,6 +1150,7 @@ class InfraPollerService:
         while self.running:
             try:
                 await self._fetch_and_ingest_ndbc()
+                await self.redis.set("infra:last_ndbc_fetch", str(time.time()))
             except Exception as e:
                 logger.exception("NDBC fetch error")
                 try:
@@ -1277,6 +1306,7 @@ class InfraPollerService:
         while self.running:
             try:
                 await self._fetch_nws_alerts()
+                await self.redis.set("infra:last_nws_fetch", str(time.time()))
             except Exception:
                 logger.exception("NWS alerts fetch error")
             await asyncio.sleep(interval_s)
@@ -1372,6 +1402,53 @@ class InfraPollerService:
         await self.redis.set("dns:root:health", json.dumps(results), ex=ttl)
         reachable_count = sum(1 for r in results if r["reachable"])
         logger.info("DNS root health: %d/%d clusters reachable", reachable_count, len(results))
+
+    # -----------------------------------------------------------------------
+    # ISS tracking loop — 5-second interval
+    # -----------------------------------------------------------------------
+
+    async def iss_loop(self):
+        """Poll Open Notify for ISS position every 5 seconds; write to PostgreSQL."""
+        while self.running:
+            try:
+                await self._fetch_iss_position()
+                await self.redis.set("infra:last_iss_fetch", str(time.time()))
+            except Exception as e:
+                logger.exception("ISS fetch error")
+                try:
+                    await self.redis.set(
+                        "poller:infra_iss:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(e)}),
+                        ex=3600,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(POLL_INTERVAL_ISS_SECONDS)
+
+    async def _fetch_iss_position(self):
+        """Fetch current ISS coordinates, parse, and upsert into DB."""
+        timeout = aiohttp.ClientTimeout(total=5.0)
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.get(ISS_POSITION_URL) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+        pos = parse_iss_position(data)
+        if not pos:
+            logger.warning("ISS: Failed to parse position from API")
+            return
+
+        # Blocking DB write — offload to thread pool
+        await asyncio.to_thread(_upsert_iss_position_sync, DB_URL, pos)
+        
+        # Cache latest position to Redis for real-time map feed
+        redis_pos = pos.copy()
+        if redis_pos.get("time") and isinstance(redis_pos["time"], datetime):
+            redis_pos["time"] = redis_pos["time"].isoformat()
+            
+        await self.redis.set("infra:iss_latest", json.dumps(redis_pos), ex=60)
+        
+        logger.debug("ISS: Position updated (%.4f, %.4f)", pos["lat"], pos["lon"])
 
     # -----------------------------------------------------------------------
     # Entry point

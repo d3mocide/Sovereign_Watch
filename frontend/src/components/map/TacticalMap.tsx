@@ -427,6 +427,11 @@ export function TacticalMap({
     return () => clearInterval(id);
   }, [fetchAirspaceZones]);
 
+  // Ensure layer-on immediately hydrates data instead of waiting for WS/poll fallback.
+  useEffect(() => {
+    fetchAirspaceZones();
+  }, [filters?.showAirspaceZones, fetchAirspaceZones]);
+
   useEffect(() => {
     const id = setInterval(fetchSpaceWeather, 60_000);
     return () => clearInterval(id);

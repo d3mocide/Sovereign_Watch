@@ -24,7 +24,8 @@ dependencies = [
     "httpx==0.28.1",
     "pyyaml==6.0.3",
     "python-jose[cryptography]==3.5.0",
-    "bcrypt==4.2.1",
+    # passlib 1.7.4 expects bcrypt module metadata removed in bcrypt>=4.1
+    "bcrypt==4.0.1",
     "passlib[bcrypt]==1.7.4",
     "python-multipart==0.0.22",
     "psutil==6.1.1",

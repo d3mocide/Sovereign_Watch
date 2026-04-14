@@ -5,6 +5,7 @@ import os
 import time as _time
 from datetime import datetime, timezone
 
+import httpx
 import yaml
 from core.auth import require_role
 from core.database import db
@@ -436,6 +437,15 @@ async def get_poller_health():
             True,
         ),
         (
+            "satnogs",
+            "SatNOGS",
+            "Orbital",
+            None,
+            None,
+            None,
+            True,
+        ),
+        (
             "space_weather",
             "Space Weather",
             "Environment",
@@ -450,6 +460,15 @@ async def get_poller_health():
             "Intel",
             "gdelt_pulse:last_fetch",
             "poller:gdelt:last_error",
+            1800,
+            True,
+        ),
+        (
+            "news",
+            "News Aggregator",
+            "Intel",
+            "news:last_fetch",
+            "poller:news:last_error",
             1800,
             True,
         ),
@@ -496,6 +515,42 @@ async def get_poller_health():
             "infra:last_fcc_fetch",
             "poller:infra_towers:last_error",
             8 * 86400,
+            True,
+        ),
+        (
+            "infra_iss",
+            "ISS Tracking",
+            "Infrastructure",
+            "infra:last_iss_fetch",
+            "poller:infra_iss:last_error",
+            30,
+            True,
+        ),
+        (
+            "infra_ndbc",
+            "Ocean Buoys",
+            "Infrastructure",
+            "infra:last_ndbc_fetch",
+            "poller:infra_ndbc:last_error",
+            1800,
+            True,
+        ),
+        (
+            "infra_peeringdb",
+            "Network Assets",
+            "Infrastructure",
+            "infra:last_peeringdb_fetch",
+            "poller:infra_peeringdb:last_error",
+            48 * 3600,
+            True,
+        ),
+        (
+            "infra_nws",
+            "Weather Alerts",
+            "Environment",
+            "infra:last_nws_fetch",
+            "poller:infra_nws:last_error",
+            1200,
             True,
         ),
         ("ai", "AI Analysis", "Analysis", None, None, None, ai_has_creds),
@@ -633,6 +688,34 @@ async def get_poller_health():
                 "history": history,
             }
         )
+
+    # Add JS8Call Bridge status
+    try:
+        js8_url = os.getenv("JS8_BASE_URL", "http://sovereign-js8call:8080/health")
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            resp = await client.get(js8_url)
+            js8_healthy = resp.status_code == 200
+        results.append({
+            "id": "js8_bridge",
+            "name": "Radio Bridge",
+            "group": "RF",
+            "status": "active" if js8_healthy else "error",
+            "last_success": now if js8_healthy else None,
+            "last_error_ts": None if js8_healthy else now,
+            "last_error_msg": None if js8_healthy else "JS8 Bridge unreachable",
+            "stale_after_s": None,
+        })
+    except Exception:
+        results.append({
+            "id": "js8_bridge",
+            "name": "Radio Bridge",
+            "group": "RF",
+            "status": "error",
+            "last_success": None,
+            "last_error_ts": now,
+            "last_error_msg": "JS8 Bridge unreachable",
+            "stale_after_s": None,
+        })
 
     return results
 

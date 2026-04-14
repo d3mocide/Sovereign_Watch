@@ -1,13 +1,25 @@
 import {
   Activity,
   AlertTriangle,
+  Brain,
   CheckCircle2,
   Clock,
+  Cloud,
+  Globe,
+  Network,
+  Orbit,
+  Plane,
+  Radio,
+  Satellite,
+  Server,
+  Ship,
+  Sun,
+  Waves,
   X,
   XCircle,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 
 type PollerStatus =
@@ -39,6 +51,18 @@ interface ClausalizerWidgetMetrics {
   };
 }
 
+interface SatnogsStationsMeta {
+  source: string;
+  stale: boolean;
+  count: number;
+  served_at: number;
+}
+
+interface SatnogsStationsEnvelope {
+  stations: unknown[];
+  meta?: SatnogsStationsMeta;
+}
+
 interface SystemHealthWidgetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -52,13 +76,42 @@ function formatAge(epochSec: number): string {
   return `${Math.floor(age / 86400)}d ago`;
 }
 
-function StatusIcon({ status }: { status: PollerStatus }) {
+function getIconForPoller(poller: PollerHealth | { id: string; group: string }) {
+  const id = poller.id.toLowerCase();
+  const group = poller.group.toUpperCase();
+
+  if (id.includes("satnogs")) return Activity;
+  if (id.includes("aviation") || id.includes("adsb") || id.includes("flight")) return Plane;
+  if (id.includes("maritime") || id.includes("ais") || id.includes("vessel")) return Ship;
+  if (id.includes("iss") || id.includes("station")) return Orbit;
+  if (id.includes("orbital") || id.includes("tle") || id.includes("satellite")) return Satellite;
+  if (id.includes("weather") || id.includes("space_pulse") || id.includes("nws")) return id.includes("nws") ? Cloud : Sun;
+  if (id.includes("gdelt") || id.includes("osint")) return Globe;
+  if (id.includes("rf") || id.includes("radio") || id.includes("noaa") || id.includes("radioref")) return Radio;
+  if (id.includes("ndbc") || id.includes("ocean") || id.includes("buoy")) return Waves;
+  if (id.includes("peeringdb") || id.includes("ixp") || id.includes("network")) return Network;
+  if (id.includes("cable") || id.includes("tower") || id.includes("infra")) return Server;
+  if (group === "ANALYSIS" || id.includes("analysis") || id.includes("clausalizer")) return Brain;
+
+  return CheckCircle2;
+}
+
+function StatusIcon({
+  status,
+  icon: IconComponent,
+}: {
+  status: PollerStatus;
+  icon?: any;
+}) {
+  const Icon = IconComponent || CheckCircle2;
+  const size = 12;
+
   switch (status) {
     case "healthy":
     case "active":
       return (
-        <CheckCircle2
-          size={12}
+        <Icon
+          size={size}
           className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.8)]"
         />
       );
@@ -66,28 +119,28 @@ function StatusIcon({ status }: { status: PollerStatus }) {
     case "no_data":
       return (
         <Clock
-          size={12}
+          size={size}
           className="text-amber-500 drop-shadow-[0_0_5px_rgba(245,158,11,0.8)]"
         />
       );
     case "error":
       return (
         <XCircle
-          size={12}
+          size={size}
           className="text-red-500 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]"
         />
       );
     case "no_credentials":
       return (
         <AlertTriangle
-          size={12}
+          size={size}
           className="text-amber-500 drop-shadow-[0_0_5px_rgba(245,158,11,0.8)]"
         />
       );
     case "pending":
     case "unknown":
     default:
-      return <XCircle size={12} className="text-white/30" />;
+      return <Icon size={size} className="text-white/30" />;
   }
 }
 
@@ -138,6 +191,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
   const [loading, setLoading] = useState(true);
   const [clausalizerMetrics, setClausalizerMetrics] =
     useState<ClausalizerWidgetMetrics | null>(null);
+  const [satnogsMeta, setSatnogsMeta] = useState<SatnogsStationsMeta | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [prevOpen, setPrevOpen] = useState(isOpen);
 
@@ -154,19 +208,31 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
 
     let mounted = true;
 
-    Promise.all([
+    Promise.allSettled([
       fetch("/api/config/poller-health"),
       fetch("/api/stats/clausalizer?hours=1"),
+      fetch("/api/satnogs/stations?include_offline=false&include_meta=true"),
     ])
-      .then(async ([pollerRes, clausalizerRes]) => {
-        const pollerData: PollerHealth[] = pollerRes.ok ? await pollerRes.json() : [];
-        const clausalizerData: ClausalizerWidgetMetrics | null = clausalizerRes.ok
-          ? await clausalizerRes.json()
+      .then(async ([pollerRes, clausalizerRes, satnogsRes]) => {
+        const pollerResponse = pollerRes.status === "fulfilled" ? pollerRes.value : null;
+        const clausalizerResponse =
+          clausalizerRes.status === "fulfilled" ? clausalizerRes.value : null;
+        const satnogsResponse = satnogsRes.status === "fulfilled" ? satnogsRes.value : null;
+
+        const pollerData: PollerHealth[] = pollerResponse?.ok
+          ? await pollerResponse.json()
+          : [];
+        const clausalizerData: ClausalizerWidgetMetrics | null = clausalizerResponse?.ok
+          ? await clausalizerResponse.json()
+          : null;
+        const satnogsData: SatnogsStationsEnvelope | null = satnogsResponse?.ok
+          ? await satnogsResponse.json()
           : null;
 
         if (mounted) {
           setPollers(pollerData);
           setClausalizerMetrics(clausalizerData);
+          setSatnogsMeta(satnogsData?.meta ?? null);
           setLoading(false);
         }
       })
@@ -187,14 +253,43 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
     return () => clearInterval(timer);
   }, [isOpen]);
 
+  const groupedPollers = useMemo(() => {
+    const groups: Record<string, PollerHealth[]> = {};
+    const order = [
+      "TRACKING",
+      "ORBITAL",
+      "INTEL",
+      "RF",
+      "INFRASTRUCTURE",
+      "ENVIRONMENT",
+      "ANALYSIS",
+    ];
+
+    pollers.forEach((p) => {
+      // SatNOGS internals (net/db) are handled via dots in the SatNOGS row
+      if (p.id === "satnogs_net" || p.id === "satnogs_db") return;
+      
+      const g = p.group.toUpperCase();
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(p);
+    });
+
+    return Object.keys(groups)
+      .sort((a, b) => {
+        const idxA = order.indexOf(a);
+        const idxB = order.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b);
+      })
+      .map((g) => ({ name: g, items: groups[g] }));
+  }, [pollers]);
+
   if (!isOpen) return null;
 
-  // Group pollers by their group field
-  const groups = pollers.reduce<Record<string, PollerHealth[]>>((acc, p) => {
-    if (!acc[p.group]) acc[p.group] = [];
-    acc[p.group].push(p);
-    return acc;
-  }, {});
+  const satnogsNetPoller = pollers.find((p) => p.id === "satnogs_net");
+  const satnogsDbPoller = pollers.find((p) => p.id === "satnogs_db");
 
   const lastWriteMs = clausalizerMetrics?.health?.last_write_at
     ? Date.parse(clausalizerMetrics.health.last_write_at)
@@ -203,7 +298,8 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
     ? null
     : Math.max(0, Math.floor((nowTs - lastWriteMs) / 60000));
   const rows5mTotal = clausalizerMetrics?.health?.rows_5m_total ?? 0;
-  const activityPercent = Math.min(100, rows5mTotal);
+  // Use a logarithmic scale for activity, saturated at 5,000 rows
+  const activityPercent = Math.min(100, (Math.log10(rows5mTotal + 1) / Math.log10(5000 + 1)) * 100);
   const clausalizerStatus: PollerStatus =
     minutesSinceWrite === null
       ? "unknown"
@@ -213,9 +309,21 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
           ? "stale"
           : "error";
 
+  const satnogsStatus: PollerStatus = satnogsMeta
+    ? satnogsMeta.stale
+      ? "stale"
+      : satnogsMeta.source === "live" || satnogsMeta.source === "cache"
+        ? "healthy"
+        : "unknown"
+    : "error";
+
+  const satnogsSourceLabel = satnogsMeta
+    ? satnogsMeta.source.replaceAll("_", " ").toUpperCase()
+    : "UNAVAILABLE";
+
   return (
     <div
-      className="absolute top-[calc(100%+23px)] left-1/2 z-[100] w-[300px] max-h-[calc(100vh-88px)] -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200"
+      className="absolute top-[calc(100%+23px)] left-1/2 z-[100] w-[640px] max-h-[calc(100vh-88px)] -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200"
       onClick={(e) => e.stopPropagation()}
       role="dialog"
       aria-label="System Health Checker"
@@ -270,106 +378,129 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
           </div>
         </div>
 
-        {/* Content */}
-        <div
-          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2"
-          aria-live="polite"
-          aria-busy={loading}
-        >
+        {/* Body Container */}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-hud-green/20">
           {loading ? (
-            <div className="flex items-center justify-center p-4">
-              <div className="h-4 w-4 rounded-full border-2 border-hud-green/20 border-t-hud-green animate-spin" />
-              <span className="ml-2 text-[10px] text-white/40 tracking-widest font-mono">
-                DIAGNOSING...
+            <div className="flex h-32 items-center justify-center space-x-2 text-hud-green/50">
+              <Activity className="size-4 animate-pulse" />
+              <span className="text-xs font-mono uppercase tracking-widest">
+                Aggregating Fusion State...
               </span>
             </div>
-          ) : pollers.length === 0 ? (
-            <div className="flex items-center justify-center p-4 text-[10px] text-white/40 font-mono tracking-wider">
-              NO DATA AVAILABLE
-            </div>
           ) : (
-            Object.entries(groups).map(([groupName, items]) => (
-              <div key={groupName}>
-                {/* Group label */}
-                <div className="px-2 pb-1">
-                  <span className="text-[8px] font-bold tracking-[0.2em] text-white/30 uppercase font-mono">
-                    {groupName}
+            <div className="bg-hud-green/[0.02] border-t border-hud-green/10 backdrop-blur-sm shadow-inner">
+              <div className="p-3 space-y-3">
+                {groupedPollers.map((group, idx) => (
+                  <div key={group.name} className="space-y-1">
+                    {idx > 0 && <div className="h-px w-full bg-hud-green/10 my-1" />}
+                    
+                    <div className="flex items-center gap-2 mb-1 opacity-50">
+                      <span className="text-[9px] font-black tracking-[0.2em] text-hud-green uppercase">
+                        {group.name}
+                      </span>
+                      <div className="h-px flex-1 bg-hud-green/5" />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+                      {group.items.map((poller) => (
+                        <div
+                          key={poller.id}
+                          className="group/item flex items-center justify-between py-0.5 transition-colors hover:bg-white/5 px-1.5 rounded -mx-1.5"
+                          title={poller.last_error_msg || undefined}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <StatusIcon
+                              status={poller.status as PollerStatus}
+                              icon={getIconForPoller(poller)}
+                            />
+                            <span className="text-[10px] font-bold tracking-wider text-white/90 font-mono uppercase truncate">
+                              {poller.name.replace(/\s*\(.*\)/, "")}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            {poller.id === "satnogs" && (
+                              <div className="flex items-center gap-1.5">
+                                {satnogsSourceLabel && (
+                                  <span className="text-[7px] text-white/20 font-mono uppercase bg-white/5 px-1 rounded">
+                                    {satnogsSourceLabel}
+                                  </span>
+                                )}
+                                <div className="flex gap-0.5">
+                                  <div
+                                    className={`size-1.5 rounded-full ${
+                                      satnogsNetPoller?.status === "healthy"
+                                        ? "bg-hud-green shadow-[0_0_4px_#00FF41]"
+                                        : "bg-white/10"
+                                    }`}
+                                  />
+                                  <div
+                                    className={`size-1.5 rounded-full ${
+                                      satnogsDbPoller?.status === "healthy"
+                                        ? "bg-hud-green shadow-[0_0_4px_#00FF41]"
+                                        : "bg-white/10"
+                                    }`}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            
+                            <span className="text-[9px] font-mono text-white/30 uppercase tracking-tighter tabular-nums">
+                              {poller.last_success && poller.status !== "pending" && poller.status !== "active"
+                                ? formatAge(poller.last_success)
+                                : ""}
+                            </span>
+                            <span
+                              className={`text-[9px] font-black tabular-nums transition-all ${statusColor(
+                                poller.id === "satnogs" ? satnogsStatus : (poller.status as PollerStatus)
+                              )}`}
+                            >
+                              {statusLabel(poller.id === "satnogs" ? satnogsStatus : (poller.status as PollerStatus))}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Clausalizer Activity Anchor (Full Width at Bottom of Inner Container) */}
+              <div className="pt-1.5 border-t border-hud-green/20 bg-hud-green/[0.03] px-2.5 pb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={clausalizerStatus} icon={Brain} />
+                    <span className="text-[9px] font-black tracking-widest text-white/80 font-mono uppercase">
+                      CLAUSALIZER ENGINE
+                    </span>
+                  </div>
+                  <span className={`text-[9px] font-black ${statusColor(clausalizerStatus)}`}>
+                    {statusLabel(clausalizerStatus)}
                   </span>
                 </div>
-                {/* Items */}
-                <div className="flex flex-col gap-0.5">
-                  {items.map((poller) => (
-                    <div
-                      key={poller.id}
-                      className="flex items-center justify-between px-2 py-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 transition-colors"
-                      title={
-                        poller.last_error_msg
-                          ? `Last error: ${poller.last_error_msg}`
-                          : poller.last_success
-                            ? `Last success: ${formatAge(poller.last_success)}`
-                            : undefined
-                      }
-                    >
-                      <div className="flex items-center gap-2">
-                        <StatusIcon status={poller.status} />
-                        <span className="text-[10px] font-bold tracking-wider text-white/80 font-mono uppercase">
-                          {poller.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {poller.last_success && poller.status !== "active" && (
-                          <span className="text-[8px] text-white/30 font-mono">
-                            {formatAge(poller.last_success)}
-                          </span>
-                        )}
-                        <span
-                          className={`text-[9px] font-bold tracking-widest font-mono uppercase ${statusColor(poller.status)}`}
-                        >
-                          {statusLabel(poller.status)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {groupName.toUpperCase() === "ANALYSIS" && (
-                    <div className="rounded bg-white/5 border border-white/5 px-2 py-1.5">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-2">
-                          <StatusIcon status={clausalizerStatus} />
-                          <span className="text-[10px] font-bold tracking-wider text-white/80 font-mono uppercase">
-                            CLAUSALIZER FLOW
-                          </span>
-                        </div>
-                        <span
-                          className={`text-[9px] font-bold tracking-widest font-mono uppercase ${statusColor(clausalizerStatus)}`}
-                        >
-                          {statusLabel(clausalizerStatus)}
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full bg-white/10 rounded overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            clausalizerStatus === "healthy"
-                              ? "bg-hud-green"
-                              : clausalizerStatus === "stale"
-                                ? "bg-amber-500"
-                                : "bg-red-500"
-                          }`}
-                          style={{ width: `${activityPercent}%` }}
-                        />
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-[8px] text-white/40 font-mono tracking-wider uppercase">
-                        <span>Rows/5m: {rows5mTotal}</span>
-                        <span>
-                          {minutesSinceWrite === null
-                            ? "No writes"
-                            : `${minutesSinceWrite}m since write`}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                
+                <div className="h-1 w-full bg-hud-green/5 rounded-full overflow-hidden mb-1.5">
+                  <div
+                    className={`h-full bg-hud-green shadow-[0_0_8px_rgba(0,255,65,0.6)] transition-all duration-1000 ${
+                      clausalizerStatus === "healthy" ? "animate-pulse" : ""
+                    }`}
+                    style={{
+                      width: `${activityPercent}%`,
+                    }}
+                  />
+                </div>
+                
+                <div className="flex justify-between items-center text-[8px] font-mono font-bold text-white/20 tracking-tight">
+                  <div className="flex gap-2">
+                    <span className="uppercase">TP: <span className="text-white/40">{rows5mTotal.toLocaleString()}</span></span>
+                    <span className="uppercase">20K TGT</span>
+                  </div>
+                  <span className="uppercase">
+                    LAST: <span className="text-white/40">{minutesSinceWrite !== null ? `${minutesSinceWrite}m` : "--"}</span>
+                  </span>
                 </div>
               </div>
-            ))
+            </div>
           )}
         </div>
       </div>

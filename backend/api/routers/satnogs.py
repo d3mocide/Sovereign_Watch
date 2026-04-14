@@ -18,6 +18,8 @@ GET /api/satnogs/verify/{norad_id}
 
 import json
 import logging
+import re
+import time
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from core.database import db
@@ -28,6 +30,87 @@ logger = logging.getLogger("SovereignWatch.SatNOGS")
 CACHE_TTL_TRANSMITTERS = 3600  # 1 hour — transmitter catalog changes rarely
 CACHE_TTL_OBSERVATIONS = 300  # 5 minutes — observations arrive hourly
 CACHE_TTL_STATIONS = 300  # 5 minutes — station availability changes frequently
+CACHE_TTL_STATIONS_STALE = 3600  # 1 hour fallback when upstream is temporarily down
+CACHE_TTL_STATIONS_ERROR = 60  # 1 minute failure backoff to avoid hammering upstream
+MAX_STATIONS_BACKOFF = 6 * 3600  # Cap externally requested backoff at 6 hours
+
+_THROTTLE_DETAIL_RE = re.compile(r"expected available in\s+(\d+)\s+seconds", re.IGNORECASE)
+
+
+def _stations_response(
+    stations: list[dict],
+    *,
+    include_meta: bool,
+    source: str,
+    stale: bool,
+) -> list[dict] | dict:
+    if not include_meta:
+        return stations
+
+    return {
+        "stations": stations,
+        "meta": {
+            "source": source,
+            "stale": stale,
+            "count": len(stations),
+            "served_at": int(time.time()),
+        },
+    }
+
+
+def _sanitize_backoff_seconds(raw_seconds: int | None) -> int:
+    if raw_seconds is None:
+        return CACHE_TTL_STATIONS_ERROR
+    return max(CACHE_TTL_STATIONS_ERROR, min(int(raw_seconds), MAX_STATIONS_BACKOFF))
+
+
+def _extract_retry_after_seconds(response: httpx.Response) -> int:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return _sanitize_backoff_seconds(int(retry_after))
+        except ValueError:
+            pass
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        detail = payload.get("detail")
+        if isinstance(detail, str):
+            match = _THROTTLE_DETAIL_RE.search(detail)
+            if match:
+                return _sanitize_backoff_seconds(int(match.group(1)))
+
+    return CACHE_TTL_STATIONS_ERROR
+
+
+def _build_backoff_payload(*, retry_after_s: int, reason: str) -> str:
+    effective_retry_after = _sanitize_backoff_seconds(retry_after_s)
+    return json.dumps(
+        {
+            "reason": reason,
+            "retry_after_s": effective_retry_after,
+            "backoff_until": int(time.time()) + effective_retry_after,
+        }
+    )
+
+
+def _parse_backoff_payload(raw_payload: str | bytes | None) -> dict | None:
+    if not raw_payload:
+        return None
+
+    try:
+        payload = json.loads(raw_payload)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    return payload
 
 
 def _normalize_station_status(raw_status: object, online_flag: object) -> str:
@@ -257,13 +340,54 @@ async def get_stations(
         default=False,
         description="Include offline stations in response",
     ),
+    include_meta: bool = Query(
+        default=False,
+        description="Return response metadata for health diagnostics",
+    ),
 ):
     """Proxy the SatNOGS network stations API to bypass CORS and add caching."""
     cache_key = f"satnogs:stations:all:{include_offline}"
+    stale_cache_key = f"{cache_key}:stale"
+    error_backoff_key = f"{cache_key}:error"
+
+    # During upstream outages, avoid repeated external calls for a short window.
+    if db.redis_client and (backoff_raw := await db.redis_client.get(error_backoff_key)):
+        backoff = _parse_backoff_payload(backoff_raw) or {}
+        retry_after_s = max(
+            1,
+            int(backoff.get("backoff_until", time.time()) - time.time()),
+        )
+        stale = await db.redis_client.get(stale_cache_key)
+        if stale:
+            logger.warning(
+                "Serving stale SatNOGS stations during upstream backoff "
+                "(include_offline=%s, retry_after_s=%s)",
+                include_offline,
+                retry_after_s,
+            )
+            return _stations_response(
+                json.loads(stale),
+                include_meta=include_meta,
+                source="stale_backoff",
+                stale=True,
+            )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "SatNOGS stations temporarily unavailable "
+                f"(upstream backoff active, retry in {retry_after_s}s)"
+            ),
+        )
+
     if db.redis_client:
         cached = await db.redis_client.get(cache_key)
         if cached:
-            return json.loads(cached)
+            return _stations_response(
+                json.loads(cached),
+                include_meta=include_meta,
+                source="cache",
+                stale=False,
+            )
 
     try:
         headers = {
@@ -304,15 +428,108 @@ async def get_stations(
                         }
                     )
 
-            if db.redis_client and stations:
+            if db.redis_client:
+                payload = json.dumps(stations, default=str)
+                await db.redis_client.set(cache_key, payload, ex=CACHE_TTL_STATIONS)
                 await db.redis_client.set(
-                    cache_key, json.dumps(stations, default=str), ex=CACHE_TTL_STATIONS
+                    stale_cache_key,
+                    payload,
+                    ex=CACHE_TTL_STATIONS_STALE,
+                )
+                await db.redis_client.delete(error_backoff_key)
+
+            return _stations_response(
+                stations,
+                include_meta=include_meta,
+                source="live",
+                stale=False,
+            )
+
+    except httpx.HTTPStatusError as exc:
+        retry_after_s = (
+            _extract_retry_after_seconds(exc.response)
+            if exc.response.status_code == 429
+            else CACHE_TTL_STATIONS_ERROR
+        )
+        if db.redis_client:
+            await db.redis_client.set(
+                error_backoff_key,
+                _build_backoff_payload(
+                    retry_after_s=retry_after_s,
+                    reason="http_429" if exc.response.status_code == 429 else "http_error",
+                ),
+                ex=retry_after_s,
+            )
+            stale = await db.redis_client.get(stale_cache_key)
+            if stale:
+                logger.warning(
+                    "SatNOGS upstream HTTP %s, serving stale stations "
+                    "(include_offline=%s, retry_after_s=%s)",
+                    exc.response.status_code,
+                    include_offline,
+                    retry_after_s,
+                )
+                return _stations_response(
+                    json.loads(stale),
+                    include_meta=include_meta,
+                    source=(
+                        "stale_rate_limited"
+                        if exc.response.status_code == 429
+                        else "stale_http_error"
+                    ),
+                    stale=True,
                 )
 
-            return stations
-
-    except Exception as e:
-        logger.error(f"Failed to fetch SatNOGS stations: {e}")
-        raise HTTPException(
-            status_code=502, detail="Failed to fetch upstream SatNOGS network stations"
+        logger.error(
+            "Failed to fetch SatNOGS stations due to upstream HTTP status "
+            "(status=%s, include_offline=%s, retry_after_s=%s)",
+            exc.response.status_code,
+            include_offline,
+            retry_after_s,
+            exc_info=True,
         )
+        raise HTTPException(
+            status_code=503 if exc.response.status_code == 429 else 502,
+            detail=(
+                f"SatNOGS upstream rate limited requests; retry in {retry_after_s}s"
+                if exc.response.status_code == 429
+                else "Failed to fetch upstream SatNOGS network stations"
+            ),
+        ) from exc
+
+    except httpx.HTTPError as exc:
+        if db.redis_client:
+            await db.redis_client.set(
+                error_backoff_key,
+                _build_backoff_payload(
+                    retry_after_s=CACHE_TTL_STATIONS_ERROR,
+                    reason="network_error",
+                ),
+                ex=CACHE_TTL_STATIONS_ERROR,
+            )
+            stale = await db.redis_client.get(stale_cache_key)
+            if stale:
+                logger.warning(
+                    "SatNOGS upstream network error (%s), serving stale stations "
+                    "(include_offline=%s)",
+                    type(exc).__name__,
+                    include_offline,
+                )
+                return _stations_response(
+                    json.loads(stale),
+                    include_meta=include_meta,
+                    source="stale_network_error",
+                    stale=True,
+                )
+
+        logger.error(
+            "Failed to fetch SatNOGS stations due to upstream network error "
+            "(error_type=%s, include_offline=%s)",
+            type(exc).__name__,
+            include_offline,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to fetch upstream SatNOGS network stations",
+        ) from exc

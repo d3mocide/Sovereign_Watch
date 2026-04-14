@@ -13,7 +13,6 @@ from main import (
     extract_station_country,
     ioda_severity,
     normalize_country_label,
-    parse_ioda_outages,
     parse_float,
     _probe_dns_sync,
 )
