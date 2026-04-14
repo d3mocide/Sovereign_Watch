@@ -73,6 +73,7 @@ const DEFAULT_FILTERS: MapFilters = {
   showClusters: true,
   clusterLookbackHours: 24,
   showFIRMS: true,
+  firmsGlobal: false,
   showDarkVessels: true,
 };
 

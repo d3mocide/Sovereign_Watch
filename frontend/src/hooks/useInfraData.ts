@@ -1,5 +1,10 @@
 import type { FeatureCollection } from "geojson";
 import { useEffect, useRef, useState } from "react";
+
+export interface UseInfraDataOptions {
+  /** When true the FIRMS fetch uses global world-wide bbox instead of mission-area defaults. */
+  firmsGlobal?: boolean;
+}
 import type { DnsRootServer } from "../types";
 
 const isFeatureCollection = (value: unknown): value is FeatureCollection => {
@@ -117,7 +122,7 @@ const fallbackEmpty: FeatureCollection = {
   features: [],
 };
 
-export const useInfraData = () => {
+export const useInfraData = (options?: UseInfraDataOptions) => {
   const [cablesData, setCablesData] = useState<FeatureCollection | null>(null);
   const [stationsData, setStationsData] = useState<FeatureCollection | null>(
     null,
@@ -139,6 +144,10 @@ export const useInfraData = () => {
 
   // Track whether PeeringDB data has been fetched once (it's global, no bbox needed)
   const peeringdbFetchedRef = useRef(false);
+
+  // Stable ref so the FIRMS interval callback always sees the latest global flag
+  // without needing to recreate the interval on every render.
+  const firmsGlobalRef = useRef<boolean>(!!options?.firmsGlobal);
 
   useEffect(() => {
     const fetchCables = async () => {
@@ -245,21 +254,6 @@ export const useInfraData = () => {
       }
     };
 
-    const fetchFirms = async () => {
-      try {
-        const res = await fetch("/api/firms/hotspots?hours_back=24");
-        const data: unknown = await res.json();
-        if (isFeatureCollection(data)) {
-          setFirmsData(data);
-        } else {
-          setFirmsData(fallbackEmpty);
-        }
-      } catch (err) {
-        console.warn("FIRMS fetch failed:", err);
-        setFirmsData(fallbackEmpty);
-      }
-    };
-
     const fetchDarkVessels = async () => {
       try {
         const res = await fetch("/api/firms/dark-vessels?hours_back=24");
@@ -284,7 +278,6 @@ export const useInfraData = () => {
       fetchNwsAlerts();
       fetchPeeringDB();
       fetchDnsRoot();
-      fetchFirms();
       fetchDarkVessels();
     };
 
@@ -306,8 +299,7 @@ export const useInfraData = () => {
     );
     // Refresh DNS root health every 5 minutes (matches poller cadence)
     const dnsInterval = setInterval(fetchDnsRoot, 5 * 60 * 1000);
-    // Refresh FIRMS and Dark Vessels every 5 minutes
-    const firmsInterval = setInterval(fetchFirms, 5 * 60 * 1000);
+    // Refresh Dark Vessels every 5 minutes
     const dvInterval = setInterval(fetchDarkVessels, 5 * 60 * 1000);
     return () => {
       clearInterval(outageInterval);
@@ -315,10 +307,39 @@ export const useInfraData = () => {
       clearInterval(nwsInterval);
       clearInterval(peeringdbInterval);
       clearInterval(dnsInterval);
-      clearInterval(firmsInterval);
       clearInterval(dvInterval);
     };
   }, []);
+
+  // ── FIRMS fetch — owns its own interval and re-fires when firmsGlobal toggles ──
+  useEffect(() => {
+    firmsGlobalRef.current = !!options?.firmsGlobal;
+
+    const fetchFirms = async () => {
+      // Explicit full-world bbox params when in global mode so the API skips
+      // the mission-area Redis cache and queries the DB with a world envelope.
+      const url = firmsGlobalRef.current
+        ? "/api/firms/hotspots?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180"
+        : "/api/firms/hotspots?hours_back=24";
+      try {
+        const res = await fetch(url);
+        const data: unknown = await res.json();
+        if (isFeatureCollection(data)) {
+          setFirmsData(data);
+        } else {
+          setFirmsData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("FIRMS fetch failed:", err);
+        setFirmsData(fallbackEmpty);
+      }
+    };
+
+    fetchFirms();
+    const firmsInterval = setInterval(fetchFirms, 5 * 60 * 1000);
+    return () => clearInterval(firmsInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options?.firmsGlobal]);
 
   return {
     cablesData,
