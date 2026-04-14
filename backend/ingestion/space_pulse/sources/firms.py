@@ -222,6 +222,7 @@ class FIRMSSource(BaseSource):
         self.db_url          = db_url
         self.fetch_interval  = fetch_interval_m * 60  # convert to seconds
         self._seen_keys: set[str] = set()  # (acq_date, acq_time, lat, lon, sat) dedup
+        self._use_fallback   = False  # firms2.modaps.eosdis.nasa.gov fallback
 
     async def run(self):
         """Main polling loop — runs indefinitely inside SpacePulseService.run()."""
@@ -267,11 +268,22 @@ class FIRMSSource(BaseSource):
             )
 
         try:
-            resp = await self.fetch_with_retry(url)
+            base_url = "https://firms2.modaps.eosdis.nasa.gov" if self._use_fallback else "https://firms.modaps.eosdis.nasa.gov"
+            url = f"{base_url}/api/area/csv/{FIRMS_MAP_KEY}/{source}/{bbox_str}/{self.days_back}"
+            
+            resp = await self.fetch_with_retry(url, max_retries=2)
+            if not resp and not self._use_fallback:
+                logger.warning("FIRMS Primary unreachable, attempting FIRMS2 secondary...")
+                self._use_fallback = True
+                url = f"https://firms2.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_MAP_KEY}/{source}/{bbox_str}/{self.days_back}"
+                resp = await self.fetch_with_retry(url, max_retries=1)
+
             if not resp:
-                return  # BaseSource already logged the failure
+                return
+                
             resp.raise_for_status()
             body = resp.text
+            self._use_fallback = False  # Success, reset state
         except httpx.HTTPStatusError as exc:
             logger.error(
                 "FIRMS HTTP error %d: %s",

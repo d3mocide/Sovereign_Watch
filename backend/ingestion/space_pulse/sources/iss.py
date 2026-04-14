@@ -30,10 +30,6 @@ _RATE_LIMIT_BACKOFF_S = 30
 ISS_PRIMARY_URL  = "https://api.wheretheiss.at/v1/satellites/25544"
 ISS_FALLBACK_URL = "http://api.open-notify.org/iss-now.json"
 
-# Primary and fallback ISS position APIs
-ISS_PRIMARY_URL  = "https://api.wheretheiss.at/v1/satellites/25544"
-ISS_FALLBACK_URL = "http://api.open-notify.org/iss-now.json"
-
 
 class ISSSource(BaseSource):
     def __init__(self, client, redis_client, db_url):
