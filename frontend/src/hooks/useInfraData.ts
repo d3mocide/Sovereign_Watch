@@ -299,8 +299,9 @@ export const useInfraData = (options?: UseInfraDataOptions) => {
     );
     // Refresh DNS root health every 5 minutes (matches poller cadence)
     const dnsInterval = setInterval(fetchDnsRoot, 5 * 60 * 1000);
-    // Refresh Dark Vessels every 5 minutes
-    const dvInterval = setInterval(fetchDarkVessels, 5 * 60 * 1000);
+    // Refresh Dark Vessels every 30 minutes — matches the server-side Redis cache TTL.
+    // Polling more frequently just hits the cache and returns stale data anyway.
+    const dvInterval = setInterval(fetchDarkVessels, 30 * 60 * 1000);
     return () => {
       clearInterval(outageInterval);
       clearInterval(gdeltInterval);

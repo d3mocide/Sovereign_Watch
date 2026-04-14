@@ -131,11 +131,12 @@ async def get_firms_hotspots(
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
 
+    # Whitelist only — never interpolate user input into SQL
+    _VALID_CONFIDENCE = {"nominal", "high", "low"}
     confidence_filter = ""
-    if confidence in ("nominal", "high"):
-        confidence_filter = f"AND confidence = '{confidence}'"
-    elif confidence == "low":
-        confidence_filter = "AND confidence = 'low'"
+    if confidence in _VALID_CONFIDENCE:
+        confidence_filter = "AND confidence = $8"
+    # We'll pass confidence as an extra bind param only when filtering
 
     query = f"""
     SELECT json_build_object(
@@ -175,14 +176,19 @@ async def get_firms_hotspots(
 
     try:
         async with db.pool.acquire() as conn:
-            result = await conn.fetchval(
-                query, min_lon, min_lat, max_lon, max_lat, str(hours_back), min_frp, limit
-            )
+            if confidence in {"nominal", "high", "low"}:
+                result = await conn.fetchval(
+                    query, min_lon, min_lat, max_lon, max_lat, str(hours_back), min_frp, limit, confidence
+                )
+            else:
+                result = await conn.fetchval(
+                    query, min_lon, min_lat, max_lon, max_lat, str(hours_back), min_frp, limit
+                )
         if not result:
             return {"type": "FeatureCollection", "features": [], "metadata": {"count": 0}}
         return json.loads(result)
     except Exception as exc:
-        logger.error("Error fetching FIRMS hotspots: %s", exc)
+        logger.error("Error fetching FIRMS hotspots: %s", repr(exc))
         raise HTTPException(status_code=500, detail="Database error")
 
 
@@ -312,7 +318,7 @@ async def get_dark_vessels(
                 match_radius_nm * 0.8,   # inner threshold: vessels within 80% of radius aren't dark
             )
     except Exception as exc:
-        logger.error("Dark vessel query failed: %s", exc)
+        logger.error("Dark vessel query failed: %s", repr(exc))
         raise HTTPException(status_code=500, detail="Database error")
 
     features = []

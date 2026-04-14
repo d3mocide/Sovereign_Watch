@@ -2,7 +2,7 @@ import {
   Activity,
   CloudRain,
   Crosshair,
-  
+  Flame,
   HexagonIcon,
   Layers,
   Network,
@@ -271,7 +271,7 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                                   : isClausal
                                     ? Activity
                                     : isFirms
-                                      ? Activity
+                                      ? Flame
                                     : isDarkVessel
                                       ? Crosshair
                                     : Plane;
@@ -1204,6 +1204,161 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
               </span>
             </div>
           )}
+        </div>
+      ) : isFirms ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SYSTEM
+            </span>
+            <span className="text-[10px] text-orange-400 font-mono font-bold leading-tight uppercase">
+              NASA FIRMS THERMAL DETECTION
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SATELLITE
+            </span>
+            <span className="text-[10px] text-white/90 font-mono font-bold leading-tight">
+              {String(detailProps.satellite ?? "—")} / {String(detailProps.instrument ?? "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              FRP
+            </span>
+            <span className="text-[10px] text-orange-400 font-mono font-bold leading-tight">
+              {detailProps.frp != null ? `${Number(detailProps.frp).toFixed(1)} MW` : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              BRIGHTNESS
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.brightness != null ? `${Number(detailProps.brightness).toFixed(1)} K` : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              CONFIDENCE
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight uppercase ${
+              (detailProps.confidence as string)?.toLowerCase() === "high"
+                ? "text-orange-300"
+                : (detailProps.confidence as string)?.toLowerCase() === "nominal"
+                  ? "text-amber-400"
+                  : "text-white/50"
+            }`}>
+              {String(detailProps.confidence ?? "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              DAY / NIGHT
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {(detailProps.daynight as string) === "N" ? "🌙 Night" : (detailProps.daynight as string) === "D" ? "☀️ Day" : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ACQ DATE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.acq_date ?? "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ACQ TIME (UTC)
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {detailProps.acq_time
+                ? `${String(detailProps.acq_time).slice(0, 2)}:${String(detailProps.acq_time).slice(2)} Z`
+                : "—"}
+            </span>
+          </div>
+          <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SOURCE
+            </span>
+            <span className="text-[10px] text-white/60 font-mono leading-tight">
+              {String(detailProps.source ?? "VIIRS_SNPP_NRT")}
+            </span>
+          </div>
+        </div>
+      ) : isDarkVessel ? (
+        <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">
+          <div className="col-span-2 border-b border-white/5 pb-2 mb-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              ANOMALY CLASS
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight uppercase ${
+              (detailProps.risk_severity as string) === "CRITICAL" ? "text-red-400" :
+              (detailProps.risk_severity as string) === "HIGH" ? "text-orange-400" :
+              (detailProps.risk_severity as string) === "MEDIUM" ? "text-amber-400" :
+              "text-white/50"
+            }`}>
+              {String(detailProps.risk_severity ?? "LOW")} — DARK VESSEL CANDIDATE
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              RISK SCORE
+            </span>
+            <span className={`text-[10px] font-mono font-bold leading-tight ${
+              Number(detailProps.risk_score ?? 0) >= 0.70 ? "text-red-400" :
+              Number(detailProps.risk_score ?? 0) >= 0.45 ? "text-orange-400" :
+              "text-amber-400"
+            }`}>
+              {detailProps.risk_score != null ? (Number(detailProps.risk_score) * 100).toFixed(0) + "%" : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              FRP
+            </span>
+            <span className="text-[10px] text-orange-400 font-mono font-bold leading-tight">
+              {detailProps.frp != null ? `${Number(detailProps.frp).toFixed(1)} MW` : "—"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              SATELLITE
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {String(detailProps.satellite ?? "—")} / {String(detailProps.instrument ?? "—")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[8px] text-white/40 block leading-tight">
+              DAY / NIGHT
+            </span>
+            <span className="text-[10px] text-white/80 font-mono font-bold leading-tight">
+              {(detailProps.daynight as string) === "N" ? "🌙 Night" : (detailProps.daynight as string) === "D" ? "☀️ Day" : "—"}
+            </span>
+          </div>
+          <div className="col-span-2 border-t border-white/5 pt-2 mt-1">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              NEAREST AIS VESSEL
+            </span>
+            <span className="text-[10px] font-mono font-bold leading-tight text-white/80">
+              {detailProps.nearest_ais_mmsi
+                ? `MMSI ${detailProps.nearest_ais_mmsi} — ${Number(detailProps.nearest_ais_dist_nm ?? 0).toFixed(1)} NM`
+                : "No AIS contact in match radius"}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[8px] text-white/40 block leading-tight">
+              HOTSPOT TIME
+            </span>
+            <span className="text-[10px] text-white/60 font-mono leading-tight">
+              {detailProps.hotspot_time
+                ? new Date(String(detailProps.hotspot_time)).toUTCString().replace(" GMT", "Z")
+                : "—"}
+            </span>
+          </div>
         </div>
       ) : (
         <div className="p-3 grid grid-cols-2 gap-y-2 gap-x-4">

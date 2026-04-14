@@ -96,13 +96,25 @@ def _bbox_from_mission(lat: float, lon: float, radius_nm: float) -> tuple[float,
 
 
 def _parse_viirs_confidence(raw: str) -> str | None:
-    """Normalise VIIRS confidence string; return None to skip low-confidence rows."""
+    """Normalise VIIRS confidence string; return None to skip unrecognised rows.
+
+    The FIRMS NRT API returns either the full word (nominal, high, low) or
+    single-character abbreviations (n, h, l).  Both forms are accepted.
+    """
     val = raw.strip().lower()
-    if val in VIIRS_ACCEPTED_CONFIDENCE:
+    # Full-word forms
+    if val in VIIRS_ACCEPTED_CONFIDENCE:   # "nominal", "high"
         return val
     if val == "low":
-        return "low"  # stored but callers can filter
-    return None  # unexpected — skip
+        return "low"
+    # Single-character abbreviations used by FIRMS NRT feed
+    if val == "n":
+        return "nominal"
+    if val == "h":
+        return "high"
+    if val == "l":
+        return "low"
+    return None  # truly unexpected — skip
 
 
 def _parse_modis_confidence(raw: str) -> str:
@@ -265,10 +277,14 @@ class FIRMSSource:
                 logger.warning("FIRMS rate limit hit — backing off 60s")
                 await asyncio.sleep(60)
             else:
-                logger.error("FIRMS HTTP error %d: %s", exc.response.status_code, exc)
+                logger.error(
+                    "FIRMS HTTP error %d: %s",
+                    exc.response.status_code,
+                    repr(exc),
+                )
             return
         except Exception as exc:
-            logger.error("FIRMS fetch failed: %s", exc)
+            logger.error("FIRMS fetch failed: %s", repr(exc))
             return
 
         rows, hotspot_dicts = self._parse_csv(body)

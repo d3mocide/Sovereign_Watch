@@ -18,11 +18,11 @@ async def generate_mock_data():
     # Approx 50nm west of Portland/Astoria
     test_hotslots = [
         # (lat, lon, frp, confidence, satellite, daynight)
-        (45.6, -125.1, 45.5, 'high',    'SNPP', 'N'), # Large, Night, High Conf
-        (45.7, -125.2, 12.2, 'nominal', 'SNPP', 'N'), # Small, Night, Nominal
-        (45.5, -125.0, 5.8,  'low',     'Aqua', 'D'), # Low Conf, Day
-        (45.8, -125.3, 33.1, 'high',    'NOAA-20', 'N'), # Large, Night
-        (46.0, -125.5, 8.5,  'nominal', 'Terra', 'D'), # Medium, Day
+        (45.6, -125.1, 45.5, 'high',    'SNPP',    'N'), # Large, Night, High Conf
+        (45.7, -125.2, 12.2, 'nominal', 'SNPP',    'N'), # Small, Night, Nominal
+        (45.5, -125.0, 5.8,  'low',     'Aqua',    'D'), # Low Conf, Day (MODIS)
+        (45.8, -125.3, 33.1, 'high',    'NOAA-20', 'N'), # Large, Night (VIIRS, not MODIS)
+        (46.0, -125.5, 8.5,  'nominal', 'Terra',   'D'), # Medium, Day (MODIS)
     ]
     
     print(f"Injecting {len(test_hotslots)} mock FIRMS hotspots...")
@@ -31,15 +31,19 @@ async def generate_mock_data():
         # Slightly vary the timestamp for each
         obs_time = now - timedelta(minutes=i*15)
         
+        # NOAA-20 and SNPP both carry VIIRS; Terra and Aqua carry MODIS
+        instrument = 'VIIRS' if sat in ('SNPP', 'NOAA-20') else 'MODIS'
         await conn.execute("""
-            INSERT INTO firms_hotspots 
-            (time, latitude, longitude, geom, brightness, frp, confidence, satellite, instrument, source, daynight, acq_date, acq_time)
-            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, $9, $10, $11, $12, $13, $14)
-            ON CONFLICT DO NOTHING
-        """, 
-            obs_time, lat, lon, lon, lat, 
-            310.5 + i, frp, conf, sat, 'VIIRS' if 'SNPP' in sat else 'MODIS', 
-            'MOCK_TEST_FEED', dn, obs_time.date(), obs_time.strftime("%H%M")
+            INSERT INTO firms_hotspots
+            (time, latitude, longitude, geom, brightness, frp, confidence,
+             satellite, instrument, source, daynight, scan, track, acq_date, acq_time)
+            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8,
+                    $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT ON CONSTRAINT ix_firms_hotspots_dedup DO NOTHING
+        """,
+            obs_time, lat, lon, lon, lat,
+            310.5 + i, frp, conf,
+            sat, instrument, 'MOCK_TEST_FEED', dn, 0.38, 0.36, obs_time.date(), obs_time.strftime("%H%M")
         )
 
     await conn.close()
