@@ -278,7 +278,7 @@ function AuthenticatedApp() {
     dnsRootData,
     firmsData,
     darkVesselData,
-  } = useInfraData();
+  } = useInfraData({ firmsGlobal: !!filters.firmsGlobal });
   const [worldCountriesData, setWorldCountriesData] =
     useState<FeatureCollection | null>(null);
 

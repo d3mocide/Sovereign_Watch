@@ -25,6 +25,7 @@ Configuration (via environment):
   FIRMS_FETCH_INTERVAL_M — poll interval in minutes (default: 10)
   FIRMS_DAYS_BACK        — days of history per request (default: 1)
   FIRMS_MIN_FRP          — minimum Fire Radiative Power filter in MW (default: 0.5)
+  FIRMS_BBOX_MODE        — "mission" (default, area bbox) | "global" (World endpoint)
   CENTER_LAT / CENTER_LON / COVERAGE_RADIUS_NM — mission area (shared with other pollers)
 """
 
@@ -53,6 +54,9 @@ FIRMS_SOURCE           = os.getenv("FIRMS_SOURCE", "VIIRS_SNPP_NRT")
 FIRMS_FETCH_INTERVAL_M = int(os.getenv("FIRMS_FETCH_INTERVAL_M", "10"))
 FIRMS_DAYS_BACK        = int(os.getenv("FIRMS_DAYS_BACK", "1"))
 FIRMS_MIN_FRP          = float(os.getenv("FIRMS_MIN_FRP", "0.5"))
+# "mission" (default) — area query scoped to the mission bbox
+# "global"           — NASA FIRMS World endpoint, ingests all planetary detections
+FIRMS_BBOX_MODE        = os.getenv("FIRMS_BBOX_MODE", "mission").lower()
 
 CENTER_LAT         = float(os.getenv("CENTER_LAT", "45.5152"))
 CENTER_LON         = float(os.getenv("CENTER_LON", "-122.6784"))
@@ -61,7 +65,8 @@ COVERAGE_RADIUS_NM = float(os.getenv("COVERAGE_RADIUS_NM", "150"))
 # Add 25% padding to the bounding box so edge-of-area detections aren't clipped
 BBOX_PADDING_FACTOR = 1.25
 
-FIRMS_BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+FIRMS_BASE_URL        = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+FIRMS_WORLD_BASE_URL  = "https://firms.modaps.eosdis.nasa.gov/api/country/csv"
 USER_AGENT     = "SovereignWatch/1.0 (SpacePulse FIRMS dark-vessel)"
 HTTP_TIMEOUT   = 30.0
 
@@ -231,11 +236,20 @@ class FIRMSSource:
 
     async def _poll(self):
         """Fetch and persist one round of FIRMS data."""
-        west, south, east, north = _bbox_from_mission(CENTER_LAT, CENTER_LON, COVERAGE_RADIUS_NM)
-        bbox_str = f"{west:.4f},{south:.4f},{east:.4f},{north:.4f}"
-        url = f"{FIRMS_BASE_URL}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/{bbox_str}/{FIRMS_DAYS_BACK}"
-
-        logger.info("Polling FIRMS %s (bbox=%s, days=%d)…", FIRMS_SOURCE, bbox_str, FIRMS_DAYS_BACK)
+        if FIRMS_BBOX_MODE == "global":
+            url = f"{FIRMS_WORLD_BASE_URL}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/World/{FIRMS_DAYS_BACK}"
+            logger.info(
+                "Polling FIRMS %s (mode=GLOBAL, days=%d)…",
+                FIRMS_SOURCE, FIRMS_DAYS_BACK,
+            )
+        else:
+            west, south, east, north = _bbox_from_mission(CENTER_LAT, CENTER_LON, COVERAGE_RADIUS_NM)
+            bbox_str = f"{west:.4f},{south:.4f},{east:.4f},{north:.4f}"
+            url = f"{FIRMS_BASE_URL}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/{bbox_str}/{FIRMS_DAYS_BACK}"
+            logger.info(
+                "Polling FIRMS %s (mode=MISSION, bbox=%s, days=%d)…",
+                FIRMS_SOURCE, bbox_str, FIRMS_DAYS_BACK,
+            )
 
         try:
             async with httpx.AsyncClient(
@@ -260,7 +274,11 @@ class FIRMSSource:
         rows, hotspot_dicts = self._parse_csv(body)
         if not rows:
             logger.info("FIRMS: no new hotspots in area (or no detections this cycle)")
-            await self._update_redis_cache([])
+            # Do NOT overwrite Redis with an empty collection — the previous
+            # cycle's data is still valid until its TTL expires.  Writing an
+            # empty GeoJSON here poisons the API fast-path so it returns []
+            # even when the DB still holds hotspots (e.g. manually injected
+            # test data or rows from a prior poll that haven't aged out yet).
             return
 
         try:

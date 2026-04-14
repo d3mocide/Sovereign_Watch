@@ -1100,38 +1100,66 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* NASA FIRMS (Thermal) */}
-                <label
-                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showFIRMS ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
+                <div
+                  className={`group flex items-center rounded border p-1 transition-all ${filters.showFIRMS ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <Flame
-                      size={10}
-                      className={
-                        filters.showFIRMS ? "text-orange-500" : "text-white/20"
+                  <label className="flex flex-1 cursor-pointer items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Flame
+                        size={10}
+                        className={
+                          filters.showFIRMS ? "text-orange-500" : "text-white/20"
+                        }
+                      />
+                      <span
+                        className={`text-[9px] font-bold tracking-wide ${filters.showFIRMS ? "text-orange-500/80" : "text-orange-500/30"}`}
+                      >
+                        NASA FIRMS (THERMAL)
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={!!filters.showFIRMS}
+                      onChange={(e) =>
+                        handleSubFilterChange("showFIRMS", e.target.checked)
                       }
                     />
-                    <span
-                      className={`text-[9px] font-bold tracking-wide ${filters.showFIRMS ? "text-orange-500/80" : "text-orange-500/30"}`}
-                    >
-                      NASA FIRMS (THERMAL)
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={!!filters.showFIRMS}
-                    onChange={(e) =>
-                      handleSubFilterChange("showFIRMS", e.target.checked)
-                    }
-                  />
-                  <div
-                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFIRMS ? "bg-orange-500/80" : "bg-white/10"}`}
-                  >
                     <div
-                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFIRMS ? "left-2.5" : "left-0.5"}`}
-                    />
-                  </div>
-                </label>
+                      className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFIRMS ? "bg-orange-500/80" : "bg-white/10"}`}
+                    >
+                      <div
+                        className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFIRMS ? "left-2.5" : "left-0.5"}`}
+                      />
+                    </div>
+                  </label>
+
+                  {/* GLOBAL coverage chip */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (filters.showFIRMS) {
+                        handleSubFilterChange("firmsGlobal", !filters.firmsGlobal);
+                      }
+                    }}
+                    title={
+                      filters.showFIRMS
+                        ? filters.firmsGlobal
+                          ? "Switch to mission-area FIRMS"
+                          : "Switch to global FIRMS coverage"
+                        : "Enable FIRMS layer first"
+                    }
+                    className={`ml-1.5 shrink-0 rounded px-1 py-0.5 text-[8px] font-bold tracking-widest transition-all border ${
+                      filters.firmsGlobal && filters.showFIRMS
+                        ? "border-orange-400/50 bg-orange-500/30 text-orange-300"
+                        : "border-white/10 bg-white/5 text-white/20"
+                    } ${!filters.showFIRMS ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:bg-orange-500/20 hover:text-orange-400/60"}`}
+                  >
+                    GLOBAL
+                  </button>
+                </div>
 
                 {/* Dark Vessel Detection */}
                 <label
