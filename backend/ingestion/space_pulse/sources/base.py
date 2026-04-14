@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import socket
 from typing import Dict, Optional
 
 import httpx
@@ -52,8 +53,19 @@ class BaseSource:
                     return resp
                 
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
-                logger.warning("Network error (%s) for %s. Attempt %d/%d", 
-                               repr(exc), url, attempts + 1, max_retries + 1)
+                # DNS Diagnostic: Try to resolve the host manually to see if it's a resolution failure
+                dns_status = "unknown"
+                try:
+                    from urllib.parse import urlparse
+                    hostname = urlparse(url).hostname
+                    if hostname:
+                        ip = socket.gethostbyname(hostname)
+                        dns_status = f"resolves to {ip}"
+                except Exception as dns_exc:
+                    dns_status = f"resolution failed: {repr(dns_exc)}"
+
+                logger.warning("Network error (%s) for %s [DNS: %s]. Attempt %d/%d", 
+                               repr(exc), url, dns_status, attempts + 1, max_retries + 1)
             
             except Exception as exc:
                 logger.error("Unexpected error fetching %s: %s", url, repr(exc))

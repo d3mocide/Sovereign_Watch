@@ -76,7 +76,7 @@ class SpacePulseService:
 
         self.http_client = httpx.AsyncClient(
             timeout=30.0,
-            headers={"User-Agent": "SovereignWatch/1.0 (Poller-Service; +https://github.com/d3mocide/Sovereign_Watch)"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"},
             follow_redirects=True,
         )
 

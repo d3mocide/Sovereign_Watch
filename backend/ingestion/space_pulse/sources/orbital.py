@@ -197,7 +197,11 @@ class OrbitalSource(BaseSource):
                 except Exception as exc:
                     logger.error("Fetch error %s: %s", url, repr(exc))
                     continue
-                await asyncio.sleep(1.0)
+                # Specific staggering for heavy groups to avoid burst flagging
+                if param_val in ("starlink", "oneweb", "planet"):
+                    await asyncio.sleep(3.0)
+                else:
+                    await asyncio.sleep(1.0)
 
             if data_text:
                 parsed = await asyncio.to_thread(
