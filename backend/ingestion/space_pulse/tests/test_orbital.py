@@ -13,7 +13,7 @@ _TLE_L2   = "2 25544  51.6412 123.4567 0001234  56.7890 303.2109 15.495300000000
 
 
 def make_source():
-    return OrbitalSource(producer=None, redis_client=None, topic="orbital_raw")
+    return OrbitalSource(client=None, producer=None, redis_client=None, topic="orbital_raw")
 
 
 def test_parse_tle_data_valid():

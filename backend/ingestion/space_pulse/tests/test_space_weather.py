@@ -19,6 +19,7 @@ def test_kp_storm_levels():
 
 def test_source_instantiation():
     src = SpaceWeatherSource(
+        client=None,
         redis_client=None,
         db_url="postgresql://localhost/test",
         aurora_interval_s=300,
@@ -30,6 +31,7 @@ def test_source_instantiation():
 
 def test_seen_kp_times_dedup():
     src = SpaceWeatherSource(
+        client=None,
         redis_client=None,
         db_url="postgresql://localhost/test",
         aurora_interval_s=300,

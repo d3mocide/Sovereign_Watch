@@ -19,6 +19,7 @@ import json
 import logging
 import os
 
+import httpx
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 
@@ -56,6 +57,7 @@ class SpacePulseService:
         self.running      = True
         self.producer     = None
         self.redis_client = None
+        self.http_client  = None
         self.sources      = []
 
     async def setup(self):
@@ -72,13 +74,21 @@ class SpacePulseService:
         )
         logger.info("Redis connected")
 
+        self.http_client = httpx.AsyncClient(
+            timeout=30.0,
+            headers={"User-Agent": "SovereignWatch/1.0 (Poller-Service; +https://github.com/d3mocide/Sovereign_Watch)"},
+            follow_redirects=True,
+        )
+
         self.sources = [
             OrbitalSource(
+                client=self.http_client,
                 producer=self.producer,
                 redis_client=self.redis_client,
                 topic=TOPIC_ORBITAL,
             ),
             SatNOGSDBSource(
+                client=self.http_client,
                 producer=self.producer,
                 redis_client=self.redis_client,
                 topic=TOPIC_SAT_TX,
@@ -86,6 +96,7 @@ class SpacePulseService:
                 api_token=SATNOGS_API_TOKEN,
             ),
             SatNOGSNetworkSource(
+                client=self.http_client,
                 producer=self.producer,
                 redis_client=self.redis_client,
                 topic=TOPIC_SAT_OBS,
@@ -93,6 +104,7 @@ class SpacePulseService:
                 api_token=SATNOGS_API_TOKEN,
             ),
             SpaceWeatherSource(
+                client=self.http_client,
                 redis_client=self.redis_client,
                 db_url=DATABASE_URL,
                 aurora_interval_s=AURORA_INTERVAL_S,
@@ -100,19 +112,30 @@ class SpacePulseService:
                 scales_interval_s=SCALES_INTERVAL_S,
             ),
             ISSSource(
+                client=self.http_client,
                 redis_client=self.redis_client,
                 db_url=DATABASE_URL,
             ),
             FIRMSSource(
+                client=self.http_client,
                 redis_client=self.redis_client,
                 db_url=DATABASE_URL,
                 fetch_interval_m=FIRMS_FETCH_INTERVAL_M,
             ),
         ]
 
+    async def _run_source_staggered(self, src, delay):
+        if delay > 0:
+            await asyncio.sleep(delay)
+        await src.run()
+
     async def run(self):
-        """Run all source loops concurrently."""
-        tasks = [asyncio.create_task(src.run()) for src in self.sources]
+        """Run all source loops with a staggered startup to prevent network bursts."""
+        tasks = []
+        for i, src in enumerate(self.sources):
+            # Stagger startup by 1.5s per source to avoid DNS/TLS "thundering herd"
+            tasks.append(asyncio.create_task(self._run_source_staggered(src, i * 1.5)))
+        
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
@@ -123,5 +146,7 @@ class SpacePulseService:
         self.running = False
         if self.producer:
             await self.producer.stop()
+        if self.http_client:
+            await self.http_client.aclose()
         if self.redis_client:
             await self.redis_client.close()

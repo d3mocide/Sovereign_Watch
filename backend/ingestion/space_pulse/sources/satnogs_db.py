@@ -15,7 +15,7 @@ import logging
 import time
 from datetime import datetime, UTC
 
-import httpx
+from sources.base import BaseSource
 
 logger = logging.getLogger("space_pulse.db")
 
@@ -26,8 +26,9 @@ PAGE_SIZE        = 100   # items per page
 USER_AGENT       = "SovereignWatch/1.0 (SatNOGS spectrum verification; admin@sovereignwatch.local)"
 
 
-class SatNOGSDBSource:
-    def __init__(self, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
+class SatNOGSDBSource(BaseSource):
+    def __init__(self, client, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
+        super().__init__(client)
         self.producer      = producer
         self.redis_client  = redis_client
         self.topic         = topic
@@ -85,25 +86,20 @@ class SatNOGSDBSource:
             "page_size": PAGE_SIZE,
         }
 
-        async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
-            url = TRANSMITTERS_URL
-            page = 1
-            while url:
-                try:
-                    resp = await client.get(url, params=params if page == 1 else None)
-                    resp.raise_for_status()
-                    data = resp.json()
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code == 429:
-                        retry_after = exc.response.headers.get("Retry-After")
-                        wait_msg = f" (Retry-After: {retry_after}s)" if retry_after else ""
-                        logger.warning("SatNOGS DB: Rate limited (429)%s. Aborting this cycle.", wait_msg)
-                    else:
-                        logger.error("SatNOGS DB HTTP %d for %s — aborting page fetch", exc.response.status_code, url)
+        url = TRANSMITTERS_URL
+        page = 1
+        while url:
+            try:
+                resp = await self.fetch_with_retry(
+                    url, params=params if page == 1 else None, headers=headers
+                )
+                if not resp:
                     break
-                except Exception as exc:
-                    logger.error("SatNOGS DB request error on page %d: %s", page, exc)
-                    break
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as exc:
+                logger.error("SatNOGS DB request error on page %d: %s", page, repr(exc))
+                break
 
                 # API returns either a paginated envelope or a plain list
                 if isinstance(data, dict):

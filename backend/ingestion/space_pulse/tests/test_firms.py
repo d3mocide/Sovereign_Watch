@@ -12,8 +12,6 @@ Run all including live feed check (requires FIRMS_MAP_KEY):
     uv run python -m pytest tests/test_firms.py -v
 """
 
-import io
-import math
 import os
 import sys
 import textwrap
@@ -44,7 +42,7 @@ from sources.firms import (  # noqa: E402
 
 def make_source() -> FIRMSSource:
     """Instantiate FIRMSSource without real Redis/DB (won't be called in unit tests)."""
-    return FIRMSSource(redis_client=None, db_url="postgresql://localhost/test")
+    return FIRMSSource(client=None, redis_client=None, db_url="postgresql://localhost/test")
 
 
 # ---------------------------------------------------------------------------

@@ -18,9 +18,9 @@ import os
 import time
 from datetime import UTC, datetime, timedelta
 
-import aiohttp
 import numpy as np
 from sgp4.api import Satrec, SatrecArray, jday
+from sources.base import BaseSource
 from utils import compute_course, ecef_to_lla_vectorized, teme_to_ecef_vectorized
 
 logger = logging.getLogger("space_pulse.orbital")
@@ -45,12 +45,12 @@ def _write_file_sync(path, content):
         f.write(content)
 
 
-class OrbitalSource:
-    def __init__(self, producer, redis_client, topic):
+class OrbitalSource(BaseSource):
+    def __init__(self, client, producer, redis_client, topic):
+        super().__init__(client)
         self.producer = producer
         self.redis_client = redis_client
         self.topic = topic
-        self.running = True
 
         self.satrecs = []
         self.sat_meta = []
@@ -161,44 +161,45 @@ class OrbitalSource:
         return parsed
 
     async def fetch_tle_data(self):
-        async with aiohttp.ClientSession() as session:
-            sat_dict = {}
-            for endpoint, param_val in self.groups:
-                if not self.running:
-                    break
-                param_name = "FILE" if "sup-gp" in endpoint else "GROUP"
-                cache_path = self._get_cache_path(endpoint, param_name, param_val)
-                use_cache = False
-                if os.path.exists(cache_path):
-                    if time.time() - os.path.getmtime(cache_path) < 2 * 3600:
-                        use_cache = True
-                data_text = ""
-                if use_cache:
-                    data_text = await asyncio.to_thread(_read_file_sync, cache_path)
-                    logger.info("Cache hit: %s", param_val)
-                else:
-                    url = f"https://celestrak.org/NORAD/elements/{endpoint}?{param_name}={param_val}&FORMAT=TLE"
-                    try:
-                        async with session.get(url) as resp:
-                            if resp.status == 200:
-                                data_text = await resp.text()
-                                await asyncio.to_thread(
-                                    _write_file_sync, cache_path, data_text
-                                )
-                                logger.info("Fetched TLE: %s", param_val)
-                            elif resp.status in (403, 404):
-                                logger.warning(
-                                    "HTTP %d for %s. Skipping.", resp.status, url
-                                )
-                                continue
-                            else:
-                                logger.warning("Failed %s: HTTP %d", url, resp.status)
-                                continue
-                    except Exception as exc:
-                        logger.error("Fetch error %s: %s", url, exc)
+        sat_dict = {}
+        for endpoint, param_val in self.groups:
+            if not self.running:
+                break
+            param_name = "FILE" if "sup-gp" in endpoint else "GROUP"
+            cache_path = self._get_cache_path(endpoint, param_name, param_val)
+            use_cache = False
+            if os.path.exists(cache_path):
+                if time.time() - os.path.getmtime(cache_path) < 2 * 3600:
+                    use_cache = True
+            data_text = ""
+            if use_cache:
+                data_text = await asyncio.to_thread(_read_file_sync, cache_path)
+                logger.info("Cache hit: %s", param_val)
+            else:
+                url = f"https://celestrak.org/NORAD/elements/{endpoint}?{param_name}={param_val}&FORMAT=TLE"
+                try:
+                    resp = await self.fetch_with_retry(url)
+                    if resp and resp.status_code == 200:
+                        data_text = resp.text
+                        await asyncio.to_thread(
+                            _write_file_sync, cache_path, data_text
+                        )
+                        logger.info("Fetched TLE: %s", param_val)
+                    elif resp and resp.status_code in (403, 404):
+                        logger.warning(
+                            "HTTP %d for %s. Skipping (Target potentially blocked or moved).", resp.status_code, url
+                        )
                         continue
-                    await asyncio.sleep(1.0)
+                    else:
+                        code = resp.status_code if resp else 0
+                        logger.warning("Failed %s: HTTP %d", url, code)
+                        continue
+                except Exception as exc:
+                    logger.error("Fetch error %s: %s", url, repr(exc))
+                    continue
+                await asyncio.sleep(1.0)
 
+            if data_text:
                 parsed = await asyncio.to_thread(
                     self._parse_tle_data, data_text, param_val
                 )
@@ -229,7 +230,7 @@ class OrbitalSource:
                     ex=self.fetch_interval_hours * 3600 * 4,
                 )
             except Exception as exc:
-                logger.error("TLE update error: %s", exc)
+                logger.error("TLE update error: %s", repr(exc))
                 try:
                     await self.redis_client.set(
                         "poller:orbital:last_error",

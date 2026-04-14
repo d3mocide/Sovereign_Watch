@@ -21,7 +21,7 @@ import logging
 import time
 from datetime import datetime, timedelta, UTC
 
-import httpx
+from sources.base import BaseSource
 
 logger = logging.getLogger("space_pulse.network")
 
@@ -37,8 +37,9 @@ USER_AGENT           = "SovereignWatch/1.0 (SatNOGS spectrum verification; admin
 OBSERVATION_WINDOW_H = 3
 
 
-class SatNOGSNetworkSource:
-    def __init__(self, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
+class SatNOGSNetworkSource(BaseSource):
+    def __init__(self, client, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
+        super().__init__(client)
         self.producer     = producer
         self.redis_client = redis_client
         self.topic        = topic
@@ -106,30 +107,22 @@ class SatNOGSNetworkSource:
             "start":     start_after,
         }
 
-        async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
-            url = OBSERVATIONS_URL
-            page = 1
-            while url:
-                try:
-                    # Pass params ONLY on the initial URL. Subsequent cursors from Link headers
-                    # will already include them.
-                    resp = await client.get(url, params=params if page == 1 else None)
-                    resp.raise_for_status()
-                    data = resp.json()
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code == 429:
-                        retry_after = exc.response.headers.get("Retry-After")
-                        wait_msg = f" (Retry-After: {retry_after}s)" if retry_after else ""
-                        logger.warning("SatNOGS Network: Rate limited (429)%s. Aborting this cycle.", wait_msg)
-                    else:
-                        logger.error(
-                            "SatNOGS Network HTTP %d for %s — aborting",
-                            exc.response.status_code, url,
-                        )
+        url = OBSERVATIONS_URL
+        page = 1
+        while url:
+            try:
+                # Pass params ONLY on the initial URL. Subsequent cursors from Link headers
+                # will already include them.
+                resp = await self.fetch_with_retry(
+                    url, params=params if page == 1 else None, headers=headers
+                )
+                if not resp:
                     break
-                except Exception as exc:
-                    logger.error("SatNOGS Network request error on page %d: %s", page, exc)
-                    break
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as exc:
+                logger.error("SatNOGS Network request error on page %d: %s", page, repr(exc))
+                break
 
                 # SatNOGS API observations endpoint returns a raw list (no dict wrapper),
                 # with pagination URLs provided in the RFC 5988 "Link" header.

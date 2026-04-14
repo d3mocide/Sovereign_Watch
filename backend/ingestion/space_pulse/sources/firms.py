@@ -43,6 +43,8 @@ import httpx
 import psycopg2
 from psycopg2.extras import execute_values
 
+from sources.base import BaseSource
+
 logger = logging.getLogger("space_pulse.firms")
 
 # ---------------------------------------------------------------------------
@@ -205,7 +207,7 @@ def _store_hotspots_sync(db_url: str, rows: list[tuple]) -> int:
 # FIRMSSource
 # ---------------------------------------------------------------------------
 
-class FIRMSSource:
+class FIRMSSource(BaseSource):
     """
     Polls NASA FIRMS NRT API on a fixed interval and persists thermal hotspot
     detections to TimescaleDB.  Caches the latest GeoJSON in Redis for fast
@@ -214,7 +216,8 @@ class FIRMSSource:
     Integrated into SpacePulseService alongside OrbitalSource, SpaceWeatherSource, etc.
     """
 
-    def __init__(self, redis_client, db_url: str, fetch_interval_m: int = FIRMS_FETCH_INTERVAL_M):
+    def __init__(self, client, redis_client, db_url: str, fetch_interval_m: int = FIRMS_FETCH_INTERVAL_M):
+        super().__init__(client)
         self.redis_client    = redis_client
         self.db_url          = db_url
         self.fetch_interval  = fetch_interval_m * 60  # convert to seconds
@@ -264,27 +267,20 @@ class FIRMSSource:
             )
 
         try:
-            async with httpx.AsyncClient(
-                timeout=HTTP_TIMEOUT,
-                headers={"User-Agent": USER_AGENT},
-                follow_redirects=True,
-            ) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                body = resp.text
+            resp = await self.fetch_with_retry(url)
+            if not resp:
+                return  # BaseSource already logged the failure
+            resp.raise_for_status()
+            body = resp.text
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 429:
-                logger.warning("FIRMS rate limit hit — backing off 60s")
-                await asyncio.sleep(60)
-            else:
-                logger.error(
-                    "FIRMS HTTP error %d: %s",
-                    exc.response.status_code,
-                    repr(exc),
-                )
+            logger.error(
+                "FIRMS HTTP error %d: %s",
+                exc.response.status_code,
+                repr(exc),
+            )
             return
         except Exception as exc:
-            logger.error("FIRMS fetch failed: %s", repr(exc))
+            logger.error("FIRMS fetch final failure: %s", repr(exc))
             return
 
         rows, hotspot_dicts = self._parse_csv(body)

@@ -17,27 +17,29 @@ import json
 import logging
 from datetime import UTC, datetime
 
-import aiohttp
 import asyncpg
 
+from sources.base import BaseSource
+
 logger = logging.getLogger("space_pulse.iss")
+
+# Rate limit threshold
+_RATE_LIMIT_BACKOFF_S = 30
 
 # Primary and fallback ISS position APIs
 ISS_PRIMARY_URL  = "https://api.wheretheiss.at/v1/satellites/25544"
 ISS_FALLBACK_URL = "http://api.open-notify.org/iss-now.json"
 
-# aiohttp wants a ClientTimeout object, not a plain int
-_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
-
-# On a 429 from wheretheiss.at, pause before retrying
-_RATE_LIMIT_BACKOFF_S = 30
+# Primary and fallback ISS position APIs
+ISS_PRIMARY_URL  = "https://api.wheretheiss.at/v1/satellites/25544"
+ISS_FALLBACK_URL = "http://api.open-notify.org/iss-now.json"
 
 
-class ISSSource:
-    def __init__(self, redis_client, db_url):
+class ISSSource(BaseSource):
+    def __init__(self, client, redis_client, db_url):
+        super().__init__(client)
         self.redis_client   = redis_client
         self.db_url         = db_url
-        self.running        = True
         self.poll_interval_s = 5
         self._last_lat      = None
         self._last_lon      = None
@@ -49,39 +51,43 @@ class ISSSource:
             "ISS source started (primary=%s, fallback=%s, interval=%ds)",
             ISS_PRIMARY_URL, ISS_FALLBACK_URL, self.poll_interval_s,
         )
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
-            while self.running:
-                try:
-                    await self._poll(session)
-                except Exception as exc:
-                    logger.error("ISS fetch error: %s", repr(exc))
+        while self.running:
+            try:
+                await self._poll()
+            except Exception as exc:
+                logger.error("ISS fetch error: %s", repr(exc))
 
-                await asyncio.sleep(self.poll_interval_s)
+            await asyncio.sleep(self.poll_interval_s)
 
-    async def _poll(self, session: aiohttp.ClientSession):
+    async def _poll(self):
         """Attempt primary; fall back gracefully on rate-limit or error."""
         url = ISS_FALLBACK_URL if self._use_fallback else ISS_PRIMARY_URL
 
-        async with session.get(url) as resp:
-            if resp.status == 429:
-                logger.warning(
-                    "ISS rate-limited by %s — switching to fallback for %ds",
-                    url, _RATE_LIMIT_BACKOFF_S,
-                )
+        resp = await self.fetch_with_retry(url, max_retries=1)
+        if not resp:
+            # If primary is struggling, let the next cycle try fallback
+            if not self._use_fallback:
                 self._use_fallback = True
-                await asyncio.sleep(_RATE_LIMIT_BACKOFF_S)
-                return
+            return
 
-            if resp.status != 200:
-                logger.warning("ISS fetch failed: HTTP %d from %s", resp.status, url)
-                # If primary is struggling, let the next cycle try fallback
-                if not self._use_fallback:
-                    self._use_fallback = True
-                return
+        if resp.status_code == 429:
+            logger.warning(
+                "ISS rate-limited by %s — switching to fallback for %ds",
+                url, _RATE_LIMIT_BACKOFF_S,
+            )
+            self._use_fallback = True
+            await asyncio.sleep(_RATE_LIMIT_BACKOFF_S)
+            return
 
-            # Success — reset fallback flag so primary is retried next cycle
-            self._use_fallback = False
-            data = await resp.json(content_type=None)
+        if resp.status_code != 200:
+            logger.warning("ISS fetch failed: HTTP %d from %s", resp.status_code, url)
+            if not self._use_fallback:
+                self._use_fallback = True
+            return
+
+        # Success — reset fallback flag so primary is retried next cycle
+        self._use_fallback = False
+        data = resp.json()
 
         record = self._parse_response(data, url)
         if record:

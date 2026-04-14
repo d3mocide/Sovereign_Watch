@@ -10,6 +10,7 @@ from sources.satnogs_db import SatNOGSDBSource
 def make_source():
     """Return a SatNOGSDBSource with stub producer/redis (not used in unit tests)."""
     return SatNOGSDBSource(
+        client=None,
         producer=None,
         redis_client=None,
         topic="satnogs_transmitters",

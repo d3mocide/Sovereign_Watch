@@ -9,6 +9,7 @@ from sources.satnogs_network import SatNOGSNetworkSource
 
 def make_source():
     return SatNOGSNetworkSource(
+        client=None,
         producer=None,
         redis_client=None,
         topic="satnogs_observations",

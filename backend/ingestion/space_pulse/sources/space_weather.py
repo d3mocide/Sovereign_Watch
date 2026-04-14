@@ -26,6 +26,8 @@ import httpx
 import psycopg2
 from psycopg2.extras import execute_values
 
+from sources.base import BaseSource
+
 logger = logging.getLogger("space_pulse.space_weather")
 
 KP_1M_URL     = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
@@ -91,9 +93,10 @@ def _store_kp_db_sync(db_url: str, rows: list[tuple]) -> None:
         conn.close()
 
 
-class SpaceWeatherSource:
-    def __init__(self, redis_client, db_url: str, aurora_interval_s: int,
+class SpaceWeatherSource(BaseSource):
+    def __init__(self, client, redis_client, db_url: str, aurora_interval_s: int,
                  kp_interval_s: int, scales_interval_s: int = 900):
+        super().__init__(client)
         self.redis_client     = redis_client
         self.db_url           = db_url
         self.aurora_interval  = aurora_interval_s
@@ -128,12 +131,11 @@ class SpaceWeatherSource:
             await asyncio.sleep(30)
 
     async def _fetch_json(self, url: str):
-        async with httpx.AsyncClient(
-            timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.json()
+        resp = await self.fetch_with_retry(url)
+        if not resp:
+            raise httpx.RequestError(f"Failed to fetch {url} after retries")
+        resp.raise_for_status()
+        return resp.json()
 
     async def _poll_kp(self):
         logger.info("Polling Kp-index...")
