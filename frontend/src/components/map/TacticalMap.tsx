@@ -307,7 +307,7 @@ export function TacticalMap({
         course: 0,
         speed: 0,
         lastSeen: Date.now(),
-        detail: obj as any,
+        detail: isDNS ? { properties: obj } : (obj as any),
         trail: [],
         uidHash: 0,
       };
@@ -819,7 +819,7 @@ export function TacticalMap({
         lastSeen: Date.now(),
         trail: [],
         uidHash: 0,
-        detail: info.object,
+        detail: isDNS ? { properties: info.object } : info.object,
       };
       onEntitySelect(infraEntity);
     },
