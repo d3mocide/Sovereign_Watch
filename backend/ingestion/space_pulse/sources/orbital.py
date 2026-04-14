@@ -341,6 +341,21 @@ class OrbitalSource(BaseSource):
                             # TLE lines removed from periodic updates to save bandwidth
                         },
                     }
+
+                    # --- ISS Specialized Shadowing ---
+                    # Update legacy Redis keys and channels if this is the ISS (NORAD 25544)
+                    # so the specialized frontend layers stay in sync with our local propagation.
+                    if meta.get("norad_id") == 25544:
+                        iss_payload = json.dumps({
+                            "lat": tak_event["point"]["lat"],
+                            "lon": tak_event["point"]["lon"],
+                            "timestamp": int(now.timestamp()),
+                            "altitude_km": round(float(alt[i_valid]), 2),
+                            "velocity_kms": round(float(speed[i_valid]) / 1000.0, 2),
+                        })
+                        batch_tasks.append(self.redis_client.set("infra:iss_latest", iss_payload, ex=60))
+                        batch_tasks.append(self.redis_client.publish("infrastructure:iss-position", iss_payload))
+
                     batch_tasks.append(
                         self.producer.send(
                             self.topic,

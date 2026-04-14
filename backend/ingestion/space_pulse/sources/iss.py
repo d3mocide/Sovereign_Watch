@@ -36,7 +36,7 @@ class ISSSource(BaseSource):
         super().__init__(client)
         self.redis_client   = redis_client
         self.db_url         = db_url
-        self.poll_interval_s = 5
+        self.poll_interval_s = 900  # 15 minutes
         self._last_lat      = None
         self._last_lon      = None
         self._use_fallback  = False   # toggled when primary is rate-limited
