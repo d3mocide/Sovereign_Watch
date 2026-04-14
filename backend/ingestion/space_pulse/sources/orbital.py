@@ -180,7 +180,13 @@ class OrbitalSource(BaseSource):
                 try:
                     resp = await self.fetch_with_retry(url)
                     if resp and resp.status_code == 200:
-                        data_text = resp.text
+                        body = resp.text
+                        # Celestrak returns a 200 OK with a text message if you poll too fast
+                        if "GP data has not updated" in body:
+                            logger.info("Celestrak Cooldown: Data has not updated for %s. Using existing cache.", param_val)
+                            continue
+
+                        data_text = body
                         await asyncio.to_thread(
                             _write_file_sync, cache_path, data_text
                         )
