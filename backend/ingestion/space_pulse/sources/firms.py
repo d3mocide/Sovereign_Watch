@@ -252,30 +252,30 @@ class FIRMSSource(BaseSource):
 
     async def _poll(self):
         """Fetch and persist one round of FIRMS data."""
+        domain = "firms2.modaps.eosdis.nasa.gov" if self._use_fallback else "firms.modaps.eosdis.nasa.gov"
+        
         if FIRMS_BBOX_MODE == "global":
-            url = f"{FIRMS_WORLD_BASE_URL}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/World/{FIRMS_DAYS_BACK}"
-            logger.info(
-                "Polling FIRMS %s (mode=GLOBAL, days=%d)…",
-                FIRMS_SOURCE, FIRMS_DAYS_BACK,
-            )
+            endpoint = "country/csv"
+            query_target = "World"
+            logger.info("Polling FIRMS %s (mode=GLOBAL, days=%d)…", FIRMS_SOURCE, FIRMS_DAYS_BACK)
         else:
             west, south, east, north = _bbox_from_mission(CENTER_LAT, CENTER_LON, COVERAGE_RADIUS_NM)
             bbox_str = f"{west:.4f},{south:.4f},{east:.4f},{north:.4f}"
-            url = f"{FIRMS_BASE_URL}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/{bbox_str}/{FIRMS_DAYS_BACK}"
-            logger.info(
-                "Polling FIRMS %s (mode=MISSION, bbox=%s, days=%d)…",
-                FIRMS_SOURCE, bbox_str, FIRMS_DAYS_BACK,
-            )
+            endpoint = "area/csv"
+            query_target = bbox_str
+            logger.info("Polling FIRMS %s (mode=MISSION, bbox=%s, days=%d)…", FIRMS_SOURCE, bbox_str, FIRMS_DAYS_BACK)
+
+        url = f"https://{domain}/api/{endpoint}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/{query_target}/{FIRMS_DAYS_BACK}"
 
         try:
-            base_url = "https://firms2.modaps.eosdis.nasa.gov" if self._use_fallback else "https://firms.modaps.eosdis.nasa.gov"
-            url = f"{base_url}/api/area/csv/{FIRMS_MAP_KEY}/{source}/{bbox_str}/{self.days_back}"
-            
             resp = await self.fetch_with_retry(url, max_retries=2)
+            
+            # If primary fails, immediately try fallback on a different domain
             if not resp and not self._use_fallback:
-                logger.warning("FIRMS Primary unreachable, attempting FIRMS2 secondary...")
+                logger.warning("FIRMS Primary (%s) unreachable, attempting secondary...", domain)
                 self._use_fallback = True
-                url = f"https://firms2.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_MAP_KEY}/{source}/{bbox_str}/{self.days_back}"
+                domain = "firms2.modaps.eosdis.nasa.gov"
+                url = f"https://{domain}/api/{endpoint}/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/{query_target}/{FIRMS_DAYS_BACK}"
                 resp = await self.fetch_with_retry(url, max_retries=1)
 
             if not resp:
@@ -283,7 +283,7 @@ class FIRMSSource(BaseSource):
                 
             resp.raise_for_status()
             body = resp.text
-            self._use_fallback = False  # Success, reset state
+            self._use_fallback = False  # Success, reset state for next poll
         except httpx.HTTPStatusError as exc:
             logger.error(
                 "FIRMS HTTP error %d: %s",
