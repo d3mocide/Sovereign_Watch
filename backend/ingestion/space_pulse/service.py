@@ -48,6 +48,7 @@ AURORA_INTERVAL_S          = int(os.getenv("AURORA_INTERVAL_S", "300"))   # 5 mi
 KP_INTERVAL_S              = int(os.getenv("KP_INTERVAL_S", "900"))       # 15 min
 SCALES_INTERVAL_S          = int(os.getenv("SCALES_INTERVAL_S", "900"))   # 15 min
 FIRMS_FETCH_INTERVAL_M     = int(os.getenv("FIRMS_FETCH_INTERVAL_M", "10"))  # 10 min
+SATNOGS_API_TOKEN          = os.getenv("SATNOGS_API_TOKEN")
 
 
 class SpacePulseService:
@@ -82,12 +83,14 @@ class SpacePulseService:
                 redis_client=self.redis_client,
                 topic=TOPIC_SAT_TX,
                 fetch_interval_h=SATNOGS_DB_INTERVAL_H,
+                api_token=SATNOGS_API_TOKEN,
             ),
             SatNOGSNetworkSource(
                 producer=self.producer,
                 redis_client=self.redis_client,
                 topic=TOPIC_SAT_OBS,
                 fetch_interval_h=SATNOGS_NETWORK_INTERVAL_H,
+                api_token=SATNOGS_API_TOKEN,
             ),
             SpaceWeatherSource(
                 redis_client=self.redis_client,

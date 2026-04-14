@@ -276,7 +276,8 @@ function AuthenticatedApp() {
     ixpData,
     facilityData,
     dnsRootData,
-    
+    firmsData,
+    darkVesselData,
   } = useInfraData();
   const [worldCountriesData, setWorldCountriesData] =
     useState<FeatureCollection | null>(null);
@@ -972,6 +973,8 @@ function AuthenticatedApp() {
               issPosition={issPosition}
               issTrack={issTrack}
               wsSignal={wsSignal}
+              firmsData={firmsData}
+              darkVesselData={darkVesselData}
             />
 
             {articleViewerOverlay}

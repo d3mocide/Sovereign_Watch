@@ -81,6 +81,8 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
   const isCluster = entity.type === "cluster";
   const isAirspace = entity.type === "airspace";
   const isClausal = entity.type === "clausal-state-change";
+  const isFirms = entity.type === "firms_hotspot" || detailProps.layer === "firms";
+  const isDarkVessel = entity.type === "dark_vessel" || detailProps.layer === "dark_vessel";
   const clausalReason = String(detailProps.state_change_reason ?? "");
   const clausalAccentText =
     clausalReason === "EMERGENCY" || clausalReason === "SQUAWK_EMERGENCY" ? "text-red-500" :
@@ -171,6 +173,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                                      "text-slate-400")
                                   : isClausal
                                     ? clausalAccentText
+                                    : isFirms
+                                      ? "text-orange-400"
+                                    : isDarkVessel
+                                      ? "text-rose-500"
                                     : "text-air-accent";
 
   const borderColor = isRepeater
@@ -218,6 +224,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                                      "border-slate-400/50")
                                   : isClausal
                                     ? clausalBorderClass
+                                    : isFirms
+                                      ? "border-orange-400/50"
+                                    : isDarkVessel
+                                      ? "border-rose-500/50"
                                     : "border-air-accent/50";
 
   const HeaderIcon = isRepeater
@@ -260,6 +270,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                                   ? Shield
                                   : isClausal
                                     ? Activity
+                                    : isFirms
+                                      ? Activity
+                                    : isDarkVessel
+                                      ? Crosshair
                                     : Plane;
 
   return (
@@ -318,6 +332,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                                   ? "AIRSPACE"
                                   : isClausal
                                     ? "CLAUSAL"
+                                    : isFirms
+                                      ? "THERMAL"
+                                    : isDarkVessel
+                                      ? "ANOMALY"
                                     : "LIVE"}
           </span>
         </div>
@@ -1204,6 +1222,10 @@ export const MapTooltip: React.FC<MapTooltipProps> = ({ entity, position }) => {
                     ? "BUOY"
                     : isShip
                       ? "MARITIME"
+                      : isFirms
+                        ? "THERMAL"
+                      : isDarkVessel
+                        ? "ANOMALY"
                       : "AVIONICS"}
             </span>
           </div>

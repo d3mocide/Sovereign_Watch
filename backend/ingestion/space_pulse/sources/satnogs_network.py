@@ -32,16 +32,18 @@ TIMEOUT              = 30.0
 PAGE_SIZE            = 100
 USER_AGENT           = "SovereignWatch/1.0 (SatNOGS spectrum verification; admin@sovereignwatch.local)"
 
-# Fetch observations from the last N hours to bound volume
-OBSERVATION_WINDOW_H = 24
+# Fetch observations from a smaller window to reduce redundant paginated requests.
+# Since we poll every 1 hour, a 3-hour window provides ample overlap.
+OBSERVATION_WINDOW_H = 3
 
 
 class SatNOGSNetworkSource:
-    def __init__(self, producer, redis_client, topic, fetch_interval_h):
+    def __init__(self, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
         self.producer     = producer
         self.redis_client = redis_client
         self.topic        = topic
         self.interval_sec = fetch_interval_h * 3600
+        self.api_token    = api_token
         # In-memory cache of observation IDs seen this session to avoid re-publishing
         self._seen_ids: set[int] = set()
 
@@ -95,6 +97,9 @@ class SatNOGSNetworkSource:
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
         }
+        if self.api_token:
+            headers["Authorization"] = f"Token {self.api_token}"
+
         params = {
             "format":    "json",
             "status":    "good",
@@ -112,10 +117,15 @@ class SatNOGSNetworkSource:
                     resp.raise_for_status()
                     data = resp.json()
                 except httpx.HTTPStatusError as exc:
-                    logger.error(
-                        "SatNOGS Network HTTP %d for %s — aborting",
-                        exc.response.status_code, url,
-                    )
+                    if exc.response.status_code == 429:
+                        retry_after = exc.response.headers.get("Retry-After")
+                        wait_msg = f" (Retry-After: {retry_after}s)" if retry_after else ""
+                        logger.warning("SatNOGS Network: Rate limited (429)%s. Aborting this cycle.", wait_msg)
+                    else:
+                        logger.error(
+                            "SatNOGS Network HTTP %d for %s — aborting",
+                            exc.response.status_code, url,
+                        )
                     break
                 except Exception as exc:
                     logger.error("SatNOGS Network request error on page %d: %s", page, exc)
@@ -141,7 +151,10 @@ class SatNOGSNetworkSource:
                 url = resp.links.get("next", {}).get("url")
                 page += 1
                 if url:
-                    await asyncio.sleep(0.5)  # polite pacing
+                    # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
+                    # We use a conservative 5s for anonymous and 1s for authenticated.
+                    delay = 1.0 if self.api_token else 5.0
+                    await asyncio.sleep(delay)
 
         # Bound in-memory dedup set to avoid unbounded growth across many intervals
         if len(self._seen_ids) > 50_000:

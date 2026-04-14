@@ -71,6 +71,18 @@ export interface InfraProperties extends Partial<NDBCBuoyProperties> {
   ip?: string;
   reachable?: boolean;
   latency_ms?: number;
+  // FIRMS / Dark Vessel additions
+  brightness?: number;
+  frp?: number;
+  confidence?: string;
+  satellite?: string;
+  instrument?: string;
+  acq_time?: string;
+  daynight?: string;
+  risk_score?: number;
+  risk_severity?: string;
+  nearest_ais_mmsi?: string;
+  nearest_ais_nm?: number;
 }
 
 export interface AirspaceProperties {

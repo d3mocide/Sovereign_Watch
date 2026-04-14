@@ -132,6 +132,10 @@ export const useInfraData = () => {
   const [ixpData, setIxpData] = useState<FeatureCollection | null>(null);
   const [facilityData, setFacilityData] = useState<FeatureCollection | null>(null);
   const [dnsRootData, setDnsRootData] = useState<DnsRootServer[]>([]);
+  const [firmsData, setFirmsData] = useState<FeatureCollection | null>(null);
+  const [darkVesselData, setDarkVesselData] = useState<FeatureCollection | null>(
+    null,
+  );
 
   // Track whether PeeringDB data has been fetched once (it's global, no bbox needed)
   const peeringdbFetchedRef = useRef(false);
@@ -241,6 +245,36 @@ export const useInfraData = () => {
       }
     };
 
+    const fetchFirms = async () => {
+      try {
+        const res = await fetch("/api/firms/hotspots?hours_back=24");
+        const data: unknown = await res.json();
+        if (isFeatureCollection(data)) {
+          setFirmsData(data);
+        } else {
+          setFirmsData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("FIRMS fetch failed:", err);
+        setFirmsData(fallbackEmpty);
+      }
+    };
+
+    const fetchDarkVessels = async () => {
+      try {
+        const res = await fetch("/api/firms/dark-vessels?hours_back=24");
+        const data: unknown = await res.json();
+        if (isFeatureCollection(data)) {
+          setDarkVesselData(data);
+        } else {
+          setDarkVesselData(fallbackEmpty);
+        }
+      } catch (err) {
+        console.warn("Dark Vessels fetch failed:", err);
+        setDarkVesselData(fallbackEmpty);
+      }
+    };
+
 
     const fetchAll = () => {
       fetchCables();
@@ -250,6 +284,8 @@ export const useInfraData = () => {
       fetchNwsAlerts();
       fetchPeeringDB();
       fetchDnsRoot();
+      fetchFirms();
+      fetchDarkVessels();
     };
 
     fetchAll();
@@ -270,12 +306,17 @@ export const useInfraData = () => {
     );
     // Refresh DNS root health every 5 minutes (matches poller cadence)
     const dnsInterval = setInterval(fetchDnsRoot, 5 * 60 * 1000);
+    // Refresh FIRMS and Dark Vessels every 5 minutes
+    const firmsInterval = setInterval(fetchFirms, 5 * 60 * 1000);
+    const dvInterval = setInterval(fetchDarkVessels, 5 * 60 * 1000);
     return () => {
       clearInterval(outageInterval);
       clearInterval(gdeltInterval);
       clearInterval(nwsInterval);
       clearInterval(peeringdbInterval);
       clearInterval(dnsInterval);
+      clearInterval(firmsInterval);
+      clearInterval(dvInterval);
     };
   }, []);
 
@@ -288,5 +329,7 @@ export const useInfraData = () => {
     ixpData,
     facilityData,
     dnsRootData,
+    firmsData,
+    darkVesselData,
   };
 };

@@ -30,7 +30,6 @@ import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
 import { getOrbitalLayers } from "./OrbitalLayer";
-import { getSatNOGSLayer } from "./SatNOGSLayer";
 
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
@@ -163,7 +162,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     setHoveredInfra,
     setSelectedInfra,
     historySegments,
-    satnogsStations,
     holdingPatternData,
     clusterData,
     clausalChainsData,
@@ -308,21 +306,6 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredInfra,
       setSelectedInfra,
     ),
-    // NASA FIRMS thermal hotspots — Tier 4 Infra Assets (depthBias -92)
-    ...buildFIRMSLayer(
-      firmsData ?? null,
-      !!filters?.showFIRMS,
-      globeMode,
-      setHoveredInfra,
-      setSelectedInfra,
-    ),
-    getSatNOGSLayer(
-      satnogsStations || [],
-      !!filters?.showSatNOGS,
-      setHoveredEntity,
-      setHoverPosition,
-      onEntitySelect,
-    ),
     // Jamming zones sit above infra but below entity chevrons
     ...buildJammingLayer(
       jammingData,
@@ -337,6 +320,14 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     ...buildDarkVesselLayer(
       darkVesselData ?? null,
       !!filters?.showDarkVessels,
+      globeMode,
+      setHoveredInfra,
+      setSelectedInfra,
+    ),
+    // NASA FIRMS thermal hotspots — Tier 4 Infra Assets (depthBias -92)
+    ...buildFIRMSLayer(
+      firmsData ?? null,
+      !!filters?.showFIRMS,
       globeMode,
       setHoveredInfra,
       setSelectedInfra,

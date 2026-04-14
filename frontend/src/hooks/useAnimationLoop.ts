@@ -131,6 +131,10 @@ interface UseAnimationLoopOptions {
   airspaceZonesData?: FeatureCollection | null;
   /** H3 resolution tier (4/6/9) derived from map zoom; drives risk layer refetch */
   h3RiskResolution?: number;
+  /** NASA FIRMS VIIRS/MODIS thermal hotspot detections GeoJSON */
+  firmsData?: FeatureCollection | null;
+  /** Dark vessel candidates (AIS-gap cross-reference) GeoJSON */
+  darkVesselData?: FeatureCollection | null;
 }
 
 export function useAnimationLoop({
@@ -196,6 +200,8 @@ export function useAnimationLoop({
   holdingPatternData,
   airspaceZonesData,
   h3RiskResolution,
+  firmsData,
+  darkVesselData,
 }: UseAnimationLoopOptions): void {
   const lastFrameTimeRef = useRef<number>(0);
   useEffect(() => {
@@ -287,6 +293,12 @@ export function useAnimationLoop({
 
   const airspaceZonesDataRef = useRef(airspaceZonesData);
   airspaceZonesDataRef.current = airspaceZonesData;
+
+  const firmsDataRef = useRef(firmsData);
+  firmsDataRef.current = firmsData;
+
+  const darkVesselDataRef = useRef(darkVesselData);
+  darkVesselDataRef.current = darkVesselData;
 
   // ── Clausal chain data ───────────────────────────────────────────────────
   // Managed internally (same pattern as cluster fetch) so the region is always
@@ -780,6 +792,8 @@ export function useAnimationLoop({
         airspaceZonesData: airspaceZonesDataRef.current,
         clusterData: clusterDataRef.current,
         clausalChainsData: clausalChainsDataRef.current,
+        firmsData: firmsDataRef.current,
+        darkVesselData: darkVesselDataRef.current,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {

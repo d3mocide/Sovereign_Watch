@@ -34,19 +34,19 @@ function hotspotColor(
 
   if (night) {
     return conf === "high"
-      ? [210, 30, 20, 240]    // deep crimson — high-confidence night detection
-      : [230, 100, 10, 210];  // orange-red — nominal night
+      ? [255, 230, 20, 250]    // vibrant yellow-green flash — high-confidence night
+      : [255, 120, 10, 230];   // intense orange — nominal night
   }
   return conf === "high"
-    ? [255, 165, 0, 190]      // amber — high-confidence daytime
-    : [255, 210, 10, 160];    // yellow-orange — nominal daytime
+    ? [255, 255, 100, 220]     // bright yellow-white — high-confidence daytime
+    : [255, 180, 20, 200];     // amber — nominal daytime
 }
 
 /** Radius in metres: 6 km base + FRP-scaled component, capped at 60 km. */
 function hotspotRadius(frp: number | null): number {
   const frpVal = frp ?? 0;
-  const base   = 6_000;
-  const scaled = Math.min(frpVal * 1_200, 54_000); // 45 MW → 60 km max
+  const base   = 12_000;                // Increased base to 12km to ensure they stick out more
+  const scaled = Math.min(frpVal * 2_000, 80_000); // Scaled for higher visibility
   return base + scaled;
 }
 
@@ -59,10 +59,20 @@ export function buildFIRMSLayer(
 ): Layer[] {
   if (!visible || !firmsData?.features?.length) return [];
 
+  // Add layer tag to features for the picker
+  const data = firmsData.features.map(f => ({
+    ...f,
+    properties: {
+      ...f.properties,
+      layer: "firms",
+      type: "firms_hotspot"
+    }
+  })) as any[];
+
   return [
     new ScatterplotLayer<Feature<Point, FIRMSHotspotProperties>>({
       id: `firms-hotspots-${globeMode ? "globe" : "merc"}`,
-      data: firmsData.features as Feature<Point, FIRMSHotspotProperties>[],
+      data,
       pickable: true,
       opacity: 1.0,
 
@@ -70,7 +80,7 @@ export function buildFIRMSLayer(
 
       getRadius: (d) => hotspotRadius(d.properties.frp),
       radiusUnits: "meters",
-      radiusMinPixels: 3,
+      radiusMinPixels: 6,
       radiusMaxPixels: 60,
 
       getFillColor: (d) => hotspotColor(d.properties.confidence, d.properties.daynight),
@@ -81,31 +91,10 @@ export function buildFIRMSLayer(
       parameters: {
         depthTest: globeMode,
         depthBias: globeMode ? -92.0 : 0,
-      },
+      } as any,
 
-      onHover: (info) => {
-        setHoveredInfra(
-          info.object
-            ? {
-                type: "firms_hotspot",
-                layer: "firms",
-                ...info.object.properties,
-                coordinates: info.object.geometry.coordinates,
-              }
-            : null,
-        );
-      },
-
-      onClick: (info) => {
-        if (info.object) {
-          setSelectedInfra({
-            type: "firms_hotspot",
-            layer: "firms",
-            ...info.object.properties,
-            coordinates: info.object.geometry.coordinates,
-          });
-        }
-      },
+      onHover: (info) => setHoveredInfra(info),
+      onClick: (info) => setSelectedInfra(info),
     }),
   ];
 }

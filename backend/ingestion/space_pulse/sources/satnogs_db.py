@@ -27,11 +27,12 @@ USER_AGENT       = "SovereignWatch/1.0 (SatNOGS spectrum verification; admin@sov
 
 
 class SatNOGSDBSource:
-    def __init__(self, producer, redis_client, topic, fetch_interval_h):
+    def __init__(self, producer, redis_client, topic, fetch_interval_h, api_token: str | None = None):
         self.producer      = producer
         self.redis_client  = redis_client
         self.topic         = topic
         self.interval_sec  = fetch_interval_h * 3600
+        self.api_token     = api_token
 
     async def run(self):
         while True:
@@ -75,6 +76,9 @@ class SatNOGSDBSource:
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
         }
+        if self.api_token:
+            headers["Authorization"] = f"Token {self.api_token}"
+
         params = {
             "format": "json",
             "status": "active",
@@ -90,7 +94,12 @@ class SatNOGSDBSource:
                     resp.raise_for_status()
                     data = resp.json()
                 except httpx.HTTPStatusError as exc:
-                    logger.error("SatNOGS DB HTTP %d for %s — aborting page fetch", exc.response.status_code, url)
+                    if exc.response.status_code == 429:
+                        retry_after = exc.response.headers.get("Retry-After")
+                        wait_msg = f" (Retry-After: {retry_after}s)" if retry_after else ""
+                        logger.warning("SatNOGS DB: Rate limited (429)%s. Aborting this cycle.", wait_msg)
+                    else:
+                        logger.error("SatNOGS DB HTTP %d for %s — aborting page fetch", exc.response.status_code, url)
                     break
                 except Exception as exc:
                     logger.error("SatNOGS DB request error on page %d: %s", page, exc)
@@ -114,7 +123,10 @@ class SatNOGSDBSource:
                 url = next_url
                 page += 1
                 if url:
-                    await asyncio.sleep(0.5)  # polite pacing between pages
+                    # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
+                    # We use a conservative 5s for anonymous and 1s for authenticated.
+                    delay = 1.0 if self.api_token else 5.0
+                    await asyncio.sleep(delay)
 
         logger.info("SatNOGS DB: published %d transmitter records to %s", published, self.topic)
 

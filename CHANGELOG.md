@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **NRT NASA FIRMS Thermal Layer**: Integrated NASA VIIRS/MODIS thermal infrared data into the tactical map. Features FRP-scaled radii (12km–80km), confidence-coded fill colors, and 10-minute polling via the `space_pulse` ingestion container.
+- **Dark Vessel Anomaly Detection Engine**: Implemented a backend cross-reference service that identifies vessel-scale heat signatures (FIRMS) with no matching AIS broadcast within a 5nm/2h window. Results are scored by risk severity and cached in Redis.
+- **TimescaleDB Migration V004**: Added `firms_hotspots` hypertable and `dark_vessel_candidates` tables for forensic anomaly archival.
+
+### Changed
+
+- **Alert UI De-cluttering**: Removed the intrusive pulsing red indicator and `animate-ping` effect from the TopBar alerts widget, replacing it with a static high-contrast alert state for a cleaner HUD experience.
+- **Thermal Visibility Tuning**: Significant increase to `radiusMinPixels` (fixed at 6px) and base meter radius for FIRMS hotspots to ensure reliable identification on both the 3D globe and 2D mercator views.
+- **Filter Initialization**: Updated `DEFAULT_FILTERS` to include `showFIRMS` and `showDarkVessels`, ensuring consistent layer state and persistence.
+
+### Fixed
+
+- **Synthetic Entity UI Stabilization**: Fixed right-sidebar header icons and subtitles in `InfraView.tsx` to explicitly label FIRMS and Dark Vessels (THERMAL / ANOMALY) instead of defaulting to "LANDING_STATION".
+- **Tactical Tooltip Misclassification**: Corrected `MapTooltip.tsx` layout and icons to support synthetic entities, eliminating the "AVIONICS" fallback label for maritime and thermal anomalies.
+- **Tactical Map Scope Errors**: Resolved `ReferenceError` issues where infrastructure detection variables were utilized outside their valid scope.
+
 ## [1.0.5] - 2026-04-14
 
 ### Added

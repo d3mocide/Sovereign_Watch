@@ -72,6 +72,8 @@ const DEFAULT_FILTERS: MapFilters = {
   airspaceZoneTypes: ["PROHIBITED", "RESTRICTED", "DANGER", "WARNING", "TRA", "TSA", "ADIZ", "MILITARY"],
   showClusters: true,
   clusterLookbackHours: 24,
+  showFIRMS: true,
+  showDarkVessels: true,
 };
 
 const DEFAULT_ORBITAL_SAT_FILTERS = {

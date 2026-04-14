@@ -53,7 +53,16 @@ export function buildDarkVesselLayer(
 ): Layer[] {
   if (!visible || !darkVesselData?.features?.length) return [];
 
-  const features = darkVesselData.features as Feature<Point, DarkVesselProperties>[];
+  // Add layer tag to features for the picker
+  const data = darkVesselData.features.map(f => ({
+    ...f,
+    properties: {
+      ...f.properties,
+      layer: "dark_vessel",
+      type: "dark_vessel"
+    }
+  })) as any[];
+
   const layerParams = {
     parameters: {
       depthTest: globeMode,
@@ -65,7 +74,7 @@ export function buildDarkVesselLayer(
     // Outer alert ring — stroked, no fill
     new ScatterplotLayer<Feature<Point, DarkVesselProperties>>({
       id: `dark-vessel-ring-${globeMode ? "globe" : "merc"}`,
-      data: features,
+      data,
       pickable: false,        // inner dot handles picking
       opacity: 1.0,
 
@@ -87,12 +96,12 @@ export function buildDarkVesselLayer(
     // Inner filled dot — pick target
     new ScatterplotLayer<Feature<Point, DarkVesselProperties>>({
       id: `dark-vessel-dot-${globeMode ? "globe" : "merc"}`,
-      data: features,
+      data,
       pickable: true,
       opacity: 1.0,
 
       getPosition: (d) => d.geometry.coordinates as [number, number],
-      getRadius: (_d) => 5_000,
+      getRadius: () => 5_000,
       radiusUnits: "meters",
       radiusMinPixels: 4,
       radiusMaxPixels: 16,
@@ -105,29 +114,8 @@ export function buildDarkVesselLayer(
 
       ...layerParams,
 
-      onHover: (info) => {
-        setHoveredInfra(
-          info.object
-            ? {
-                type: "dark_vessel",
-                layer: "dark_vessel",
-                ...info.object.properties,
-                coordinates: info.object.geometry.coordinates,
-              }
-            : null,
-        );
-      },
-
-      onClick: (info) => {
-        if (info.object) {
-          setSelectedInfra({
-            type: "dark_vessel",
-            layer: "dark_vessel",
-            ...info.object.properties,
-            coordinates: info.object.geometry.coordinates,
-          });
-        }
-      },
+      onHover: (info) => setHoveredInfra(info),
+      onClick: (info) => setSelectedInfra(info),
     }),
   ];
 }

@@ -1,10 +1,10 @@
 import {
   CloudRain,
   Crosshair,
-
   Layers,
   Network,
   Satellite,
+  Activity,
   Server,
   Signal,
   Waves,
@@ -39,6 +39,8 @@ export const InfraView: React.FC<BaseViewProps> = ({
       props.severity !== undefined
     );
   const isDNS = (props as any).letter !== undefined && props.ip !== undefined;
+  const isFirms = entity.type === "firms_hotspot" || props.layer === "firms";
+  const isDarkVessel = entity.type === "dark_vessel" || props.layer === "dark_vessel";
 
   const severity = Number(props.severity || 0);
 
@@ -46,58 +48,77 @@ export const InfraView: React.FC<BaseViewProps> = ({
     ? "text-blue-400"
     : isISS
       ? "text-yellow-400"
-      : isNwsAlert
-        ? "text-amber-300"
-      : isDNS
-        ? "text-green-400"
-      : isOutage
-        ? severity > 50
-          ? "text-red-400"
-          : "text-amber-400"
-        : "text-cyan-400";
+    : isNwsAlert
+      ? "text-amber-300"
+    : isDNS
+      ? "text-green-400"
+    : isFirms
+      ? "text-orange-400"
+    : isDarkVessel
+      ? "text-rose-500"
+    : isOutage
+      ? severity > 50
+        ? "text-red-400"
+        : "text-amber-400"
+      : "text-cyan-400";
+
   const accentBorder = isBuoy
     ? "border-blue-400/30"
     : isISS
       ? "border-yellow-400/30"
-      : isNwsAlert
-        ? "border-amber-400/30"
-      : isDNS
-        ? "border-green-400/30"
-      : isFacility
-        ? "border-purple-400/30"
-        : isOutage
-          ? severity > 50
-            ? "border-red-400/30"
-            : "border-amber-400/30"
-          : "border-cyan-400/30";
+    : isNwsAlert
+      ? "border-amber-400/30"
+    : isDNS
+      ? "border-green-400/30"
+    : isFirms
+      ? "border-orange-400/30"
+    : isDarkVessel
+      ? "border-rose-500/30"
+    : isFacility
+      ? "border-purple-400/30"
+    : isOutage
+      ? severity > 50
+        ? "border-red-400/30"
+        : "border-amber-400/30"
+      : "border-cyan-400/30";
+
   const accentBg = isBuoy
     ? "from-blue-400/20 to-blue-400/5"
     : isISS
       ? "from-yellow-400/20 to-yellow-400/5"
-      : isNwsAlert
-        ? "from-amber-400/20 to-amber-400/5"
-      : isDNS
-        ? "from-green-400/20 to-green-400/5"
-      : isOutage
-        ? severity > 50
-          ? "from-red-400/20 to-red-400/5"
-          : "from-amber-400/20 to-amber-400/5"
-        : "from-cyan-400/20 to-cyan-400/5";
+    : isNwsAlert
+      ? "from-amber-400/20 to-amber-400/5"
+    : isDNS
+      ? "from-green-400/20 to-green-400/5"
+    : isFirms
+      ? "from-orange-400/20 to-orange-400/5"
+    : isDarkVessel
+      ? "from-rose-500/20 to-rose-500/5"
+    : isOutage
+      ? severity > 50
+        ? "from-red-400/20 to-red-400/5"
+        : "from-amber-400/20 to-amber-400/5"
+      : "from-cyan-400/20 to-cyan-400/5";
+
   const accentGlow = isBuoy
     ? "text-blue-300 drop-shadow-[0_0_8px_rgba(96,165,250,0.8)]"
     : isISS
       ? "text-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]"
-      : isNwsAlert
-        ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
-      : isDNS
-        ? "text-green-300 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]"
-      : isFacility
-        ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
-        : isOutage
-          ? severity > 50
-            ? "text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"
-            : "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
-          : "text-cyan-300 drop-shadow-[0_0_8px_currentColor]";
+    : isNwsAlert
+      ? "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+    : isDNS
+      ? "text-green-300 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]"
+    : isFirms
+      ? "text-orange-300 drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]"
+    : isDarkVessel
+      ? "text-rose-300 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]"
+    : isFacility
+      ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
+    : isOutage
+      ? severity > 50
+        ? "text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+        : "text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+      : "text-cyan-300 drop-shadow-[0_0_8px_currentColor]";
 
   return (
     <div className="pointer-events-auto flex flex-col h-auto max-h-full overflow-hidden animate-in slide-in-from-right duration-500 font-mono">
@@ -120,6 +141,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 <Layers size={14} className={accentColor} />
               ) : isDNS ? (
                 <Server size={14} className={accentColor} />
+              ) : isFirms ? (
+                <Activity size={14} className={accentColor} />
+              ) : isDarkVessel ? (
+                <Crosshair size={14} className={accentColor} />
               ) : isOutage ? (
                 <Signal size={14} className={accentColor} />
               ) : (
@@ -140,7 +165,11 @@ export const InfraView: React.FC<BaseViewProps> = ({
                         ? "DATA_CENTER"
                         : isOutage
                           ? "CRITICAL_EVENT"
-                          : "UNDERSEA_INFRASTRUCTURE"}
+                          : isFirms
+                            ? "THERMAL_ANOMALY"
+                            : isDarkVessel
+                              ? "MARITIME_ANOMALY"
+                              : "UNDERSEA_INFRASTRUCTURE"}
               </span>
             </div>
             <h2
@@ -159,6 +188,10 @@ export const InfraView: React.FC<BaseViewProps> = ({
                       ? "WEATHER_HAZARD"
                     : isDNS
                       ? "AUTHORITATIVE_SERVER"
+                    : isFirms
+                      ? "NASA_FIRMS_THERMAL"
+                    : isDarkVessel
+                      ? "MARITIME_ANOMALY"
                     : isIXP
                       ? "PEERINGDB_NODE"
                       : isFacility
@@ -182,11 +215,15 @@ export const InfraView: React.FC<BaseViewProps> = ({
                           ? "Severity:"
                         : isDNS
                           ? "Operator:"
+                        : isFirms
+                          ? "Source:"
+                        : isDarkVessel
+                          ? "Category:"
                         : isOutage
                           ? "Impact:"
                           : isStation
-                            ? "Country:"
-                            : "Location:"}
+                              ? "Country:"
+                              : "Location:"}
                     </span>
                     <span className="text-white/80">
                       {isISS
@@ -194,13 +231,17 @@ export const InfraView: React.FC<BaseViewProps> = ({
                         : isNwsAlert
                           ? String(props.severity || "UNKNOWN")
                         : isDNS
-                          ? String(props.operator || "UNKNOWN")
-                        : String(
-                          props.region ||
-                            props.country ||
-                            props.status ||
-                            "ACTIVE",
-                        )}
+                           ? String(props.severity || "UNKNOWN")
+                         : isFirms
+                           ? String(props.satellite || "NASA FIRMS")
+                           : isDarkVessel
+                             ? "AIS-GAP ANOMALY"
+                             : String(
+                               props.region ||
+                                 props.country ||
+                                 props.status ||
+                                 "ACTIVE",
+                             )}
                     </span>
                   </div>
                   {isOutage && (
@@ -537,6 +578,61 @@ export const InfraView: React.FC<BaseViewProps> = ({
                 <span className="text-white/30">EPOCH_UTC:</span>
                 <span className="text-hud-green tabular-nums">
                   {props.timestamp ? new Date(props.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+        {(isFirms || isDarkVessel) && (
+          <section className="space-y-2">
+            <h3 className={`text-[10px] ${isFirms ? "text-orange-400" : "text-rose-400"} font-bold tracking-wider uppercase`}>
+              {isFirms ? "Thermal_hotspot_telemetry" : "Dark_vessel_anomaly_specs"}
+            </h3>
+            <div className="space-y-1 text-mono-xs font-medium">
+              {props.frp !== undefined && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">RADIATIVE POWER:</span>
+                  <span className="text-orange-400 tabular-nums font-bold">
+                    {Number(props.frp).toFixed(1)} MW
+                  </span>
+                </div>
+              )}
+              {props.brightness !== undefined && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">BRIGHTNESS:</span>
+                  <span className="text-white tabular-nums">
+                    {Number(props.brightness).toFixed(1)} K
+                  </span>
+                </div>
+              )}
+              {props.confidence !== undefined && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">CONFIDENCE:</span>
+                  <span className="text-hud-green font-bold uppercase">
+                    {String(props.confidence)}
+                  </span>
+                </div>
+              )}
+              {props.risk_score !== undefined && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">RISK SCORE:</span>
+                  <span className="text-rose-400 tabular-nums font-bold">
+                    {(Number(props.risk_score) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {props.nearest_ais_nm !== undefined && (
+                <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                  <span className="text-white/30">NEAREST AIS:</span>
+                  <span className="text-white tabular-nums">
+                    {Number(props.nearest_ais_nm).toFixed(1)} NM
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-[140px_1fr] gap-2 border-b border-white/5 pb-1">
+                <span className="text-white/30">ACQ_TIME:</span>
+                <span className="text-cyan-400 tabular-nums">
+                  {props.acq_time ? String(props.acq_time) : "N/A"}
                 </span>
               </div>
             </div>

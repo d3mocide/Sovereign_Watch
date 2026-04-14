@@ -17,7 +17,8 @@ import {
   TowerControl,
   Waves,
   WifiOff,
-  
+  Flame,
+  Ghost,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { MapFilters } from "../../types";
@@ -93,7 +94,9 @@ export const LayerVisibilityControls: React.FC<
   const environmentalIsOn = !!(
     filters?.showAurora ||
     filters?.showBuoys ||
-    filters?.showNWSAlerts
+    filters?.showNWSAlerts ||
+    filters?.showFIRMS ||
+    filters?.showDarkVessels
   );
 
   const analysisIsOn = !!(filters?.showH3Risk || filters?.showClusters || filters?.showClausalChains);
@@ -136,10 +139,14 @@ export const LayerVisibilityControls: React.FC<
       onFilterChange("showAurora", false);
       onFilterChange("showBuoys", false);
       onFilterChange("showNWSAlerts", false);
+      onFilterChange("showFIRMS", false);
+      onFilterChange("showDarkVessels", false);
     } else {
       onFilterChange("showAurora", getFilterPref("showAurora", true));
       onFilterChange("showBuoys", getFilterPref("showBuoys", true));
       onFilterChange("showNWSAlerts", getFilterPref("showNWSAlerts", true));
+      onFilterChange("showFIRMS", getFilterPref("showFIRMS", true));
+      onFilterChange("showDarkVessels", getFilterPref("showDarkVessels", true));
     }
   };
 
@@ -1088,6 +1095,76 @@ export const LayerVisibilityControls: React.FC<
                   >
                     <div
                       className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showNWSAlerts ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* NASA FIRMS (Thermal) */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showFIRMS ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Flame
+                      size={10}
+                      className={
+                        filters.showFIRMS ? "text-orange-500" : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showFIRMS ? "text-orange-500/80" : "text-orange-500/30"}`}
+                    >
+                      NASA FIRMS (THERMAL)
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showFIRMS}
+                    onChange={(e) =>
+                      handleSubFilterChange("showFIRMS", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFIRMS ? "bg-orange-500/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFIRMS ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
+                </label>
+
+                {/* Dark Vessel Detection */}
+                <label
+                  className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showDarkVessels ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Ghost
+                      size={10}
+                      className={
+                        filters.showDarkVessels
+                          ? "text-red-400"
+                          : "text-white/20"
+                      }
+                    />
+                    <span
+                      className={`text-[9px] font-bold tracking-wide ${filters.showDarkVessels ? "text-red-400/80" : "text-red-400/30"}`}
+                    >
+                      DARK VESSELS (AIS-GAP)
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showDarkVessels}
+                    onChange={(e) =>
+                      handleSubFilterChange("showDarkVessels", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showDarkVessels ? "bg-red-400/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showDarkVessels ? "left-2.5" : "left-0.5"}`}
                     />
                   </div>
                 </label>

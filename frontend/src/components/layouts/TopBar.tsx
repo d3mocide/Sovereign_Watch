@@ -403,7 +403,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         title={alertsCount > 0 ? `${alertsCount} Active Alerts - Click to view` : "No Active Alerts - Click to view"}
                     >
                         {alertsCount > 0 ? (
-                            <ShieldAlert size={15} aria-hidden="true" className="text-alert-red animate-pulse drop-shadow-[0_0_8px_rgba(255,0,0,0.8)]" />
+                            <ShieldAlert size={15} aria-hidden="true" className="text-alert-red drop-shadow-[0_0_8px_rgba(255,0,0,0.8)]" />
                         ) : (
                             <ShieldCheck size={15} aria-hidden="true" className="text-white/40" />
                         )}
@@ -411,14 +411,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                             }`}>
                             ALERTS [{alertsCount.toString().padStart(2, '0')}]
                         </span>
-
-                        {/* Ping indicator for active alerts */}
-                        {alertsCount > 0 && (
-                            <div className="absolute -top-1 -right-1 flex h-3 w-3">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-alert-red opacity-80"></span>
-                                <span className="relative inline-flex h-3 w-3 rounded-full bg-alert-red shadow-[0_0_8px_rgba(255,0,0,1)]"></span>
-                            </div>
-                        )}
                     </button>
                     {isAlertsOpen && alerts && onAlertsClose && (
                         <AlertsWidget isOpen={isAlertsOpen} alerts={alerts} onClose={onAlertsClose} />

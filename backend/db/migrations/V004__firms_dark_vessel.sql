@@ -52,10 +52,11 @@ $$;
 CREATE INDEX IF NOT EXISTS ix_firms_hotspots_geom
     ON firms_hotspots USING GIST (geom);
 
--- Deduplication index: prevent re-inserting the same FIRMS detection on re-poll
-CREATE UNIQUE INDEX IF NOT EXISTS ix_firms_hotspots_dedup
-    ON firms_hotspots (acq_date, acq_time, latitude, longitude, satellite)
-    WHERE acq_date IS NOT NULL AND acq_time IS NOT NULL;
+-- Deduplication: prevent re-inserting the same FIRMS detection on re-poll.
+-- TimescaleDB unique constraints on hypertables MUST include the partitioning column ('time').
+ALTER TABLE firms_hotspots
+    ADD CONSTRAINT ix_firms_hotspots_dedup
+    UNIQUE (time, latitude, longitude, satellite, instrument);
 
 -- Confidence + FRP filter index used by dark vessel detection query
 CREATE INDEX IF NOT EXISTS ix_firms_hotspots_frp

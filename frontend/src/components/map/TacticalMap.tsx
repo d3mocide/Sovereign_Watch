@@ -145,6 +145,8 @@ interface TacticalMapProps {
   /** Historical track segments from TrackHistoryPanel — rendered as a path layer */
   historySegments?: import("../../types").HistorySegment[];
   wsSignal?: any;
+  firmsData?: FeatureCollection | null;
+  darkVesselData?: FeatureCollection | null;
 }
 
 type InfraPickObject = {
@@ -218,6 +220,8 @@ export function TacticalMap({
   historySegments,
   currentMission,
   wsSignal,
+  firmsData,
+  darkVesselData,
 }: TacticalMapProps) {
   // State for UI interactions
   const [hoveredEntity, setHoveredEntity] = useState<CoTEntity | null>(null);
@@ -255,15 +259,16 @@ export function TacticalMap({
       }
 
       const props = obj.properties || {};
-      const isOutage =
-        props.entity_type === "outage" || obj.type === "outage";
-      const isNwsAlert =
-        props.event !== undefined || props.headline !== undefined;
-      const isTower = obj.type === "tower" || props.entity_type === "tower";
+      const isDarkVessel = props.type === "dark_vessel" || obj.type === "dark_vessel" || (obj as any).layer === "dark_vessel";
+      const isFirms = props.type === "firms_hotspot" || obj.type === "firms_hotspot" || (obj as any).layer === "firms";
       const isBuoy = props.buoy_id !== undefined;
-      const isISS = props.entity_type === "iss";
+      const isTower = props.fcc_id !== undefined;
+      const isNwsAlert = props.event !== undefined || props.headline !== undefined;
+      const isOutage = props.type === "internet_outage" || props.outage_id !== undefined;
+      const isISS = props.type === "iss_marker" || String(obj.id).startsWith("iss-");
+      const isDNS = (obj as any).letter !== undefined;
       const isAirspace = props.zone_id !== undefined;
-      const isDNS = (obj as any).letter !== undefined && (obj as any).ip !== undefined;
+
       const entityType = isBuoy
         ? "buoy"
         : isTower
@@ -278,15 +283,28 @@ export function TacticalMap({
             ? "infra"
           : isAirspace
             ? "airspace"
+          : isDarkVessel
+            ? "dark_vessel"
+          : isFirms
+            ? "firms_hotspot"
             : "infra";
       const entity: CoTEntity = {
         uid: String(
           isDNS ? `dns-${(obj as any).letter}` :
+          isDarkVessel ? `dv-${props.id || obj.id || Date.now()}` :
+          isFirms ? `firms-${props.brightness || obj.id || Date.now()}` :
           props.zone_id || props.id || props.buoy_id || obj.id || `infra-${Date.now()}`,
         ),
         type: entityType,
+        classification: isFirms 
+          ? { category: "THERMAL", description: "NASA FIRMS Thermal Hotspot" } 
+          : isDarkVessel 
+            ? { category: "ANOMALY", description: "Maritime AIS Anomaly" } 
+            : { category: "SYNTHETIC", description: "Synthetic Infrastructure" },
         callsign: String(
           isDNS ? `ROOT SERVER ${String((obj as any).letter).toUpperCase()}` :
+          isDarkVessel ? "DARK VESSEL CANDIDATE" :
+          isFirms ? `THERMAL HOTSPOT (${props.satellite || "FIRMS"})` :
           props.name ||
             props.buoy_id ||
             props.event ||
@@ -371,6 +389,11 @@ export function TacticalMap({
       if (fetchList.length > 0) await Promise.all(fetchList);
     } catch { /* ignore */ }
   }, [filters, currentMission]);
+
+  useEffect(() => {
+    if (firmsData) console.debug("TacticalMap: FIRMS Data received", firmsData.features.length, "features");
+    if (darkVesselData) console.debug("TacticalMap: Dark Vessel Data received", darkVesselData.features.length, "features");
+  }, [firmsData, darkVesselData]);
 
   // 1. Initial load / page refresh — only fires once per mission value
   //    Uses a 500ms delay to avoid fetching before any in-flight poller cycle
@@ -767,6 +790,8 @@ export function TacticalMap({
       if (!isInfraPickInfo(info) || !info.object) return;
 
       const props = info.object.properties || {};
+      const isDarkVessel = props.type === "dark_vessel" || info.object.type === "dark_vessel" || (info.object as any).layer === "dark_vessel";
+      const isFirms = props.type === "firms_hotspot" || info.object.type === "firms_hotspot" || (info.object as any).layer === "firms";
       const isOutage =
         props.entity_type === "outage" || info.object.type === "outage";
       const isNwsAlert =
@@ -791,9 +816,15 @@ export function TacticalMap({
             ? "infra"
           : isAirspace
             ? "airspace"
+          : isDarkVessel
+            ? "dark_vessel"
+          : isFirms
+            ? "firms_hotspot"
             : "infra";
       const callsign = String(
         isDNS ? `ROOT SERVER ${String((info.object as any).letter).toUpperCase()}` :
+        isDarkVessel ? "DARK VESSEL CANDIDATE" :
+        isFirms ? `THERMAL HOTSPOT (${props.satellite || "FIRMS"})` :
         props.name ||
           props.buoy_id ||
           props.event ||
@@ -812,12 +843,19 @@ export function TacticalMap({
       const infraEntity: CoTEntity = {
         uid: String(
           isDNS ? `dns-${(info.object as any).letter}` :
+          isDarkVessel ? `dv-${props.id || info.object.id || Date.now()}` :
+          isFirms ? `firms-${props.brightness || info.object.id || Date.now()}` :
           props.id || props.buoy_id || info.object.id || `infra-${Date.now()}`,
         ),
         lat: info.coordinate?.[1] || 0,
         lon: info.coordinate?.[0] || 0,
         altitude: 0,
         type: entityType,
+        classification: isFirms 
+          ? { category: "THERMAL", description: "NASA FIRMS Thermal Hotspot" } 
+          : isDarkVessel 
+            ? { category: "ANOMALY", description: "Maritime AIS Anomaly" } 
+            : { category: "SYNTHETIC", description: "Synthetic Infrastructure" },
         course: 0,
         speed: 0,
         callsign,
@@ -866,6 +904,8 @@ export function TacticalMap({
     holdingPatternData,
     airspaceZonesData,
     h3RiskResolution,
+    firmsData,
+    darkVesselData,
   });
 
   // Map Camera: projection, graticule, 3D terrain/fog
