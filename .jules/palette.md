@@ -72,3 +72,6 @@
 ## 2024-04-14 - User Menu Close Button Accessibility
 **Learning:** Icon-only close buttons in dynamic popovers like the `UserMenuWidget` must include descriptive `aria-label` attributes to ensure screen reader users understand their function, along with distinct keyboard focus indicators (`focus-visible:ring-*`) to maintain visibility for keyboard navigation.
 **Action:** Always check interactive elements (especially `<button>` with only SVG/Icon children) within custom UI panels to ensure they have an `aria-label` and `focus-visible` classes matching the application's design system.
+## 2026-04-15 - Explicit Label Associations
+**Learning:** In LinkageAuditView, inputs were nested inside `<label>` tags without `htmlFor` or `id` attributes. While technically valid HTML (implicit labeling), it can be fragile with some assistive technologies and fails strict accessibility audits. Explicitly linking labels using `htmlFor` matching the input's `id` provides a more robust and predictable experience for screen readers without altering the visual design.
+**Action:** Always prefer explicit labeling (`htmlFor` + `id`) over implicit labeling (nesting) for forms, even when building rapid internal tools.

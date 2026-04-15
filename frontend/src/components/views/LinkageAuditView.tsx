@@ -204,29 +204,29 @@ export default function LinkageAuditView() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {missionMode === 'h3' ? (
-              <label className="md:col-span-3 text-[11px] uppercase tracking-[0.2em] text-white/45">
+              <label htmlFor="h3-region-input" className="md:col-span-3 text-[11px] uppercase tracking-[0.2em] text-white/45">
                 H3 Region
-                <input value={h3Region} onChange={(event) => setH3Region(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" placeholder="8728f2ba8ffffff" />
+                <input id="h3-region-input" value={h3Region} onChange={(event) => setH3Region(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" placeholder="8728f2ba8ffffff" />
               </label>
             ) : (
               <>
-                <label className="text-[11px] uppercase tracking-[0.2em] text-white/45">
+                <label htmlFor="latitude-input" className="text-[11px] uppercase tracking-[0.2em] text-white/45">
                   Latitude
-                  <input value={lat} onChange={(event) => setLat(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
+                  <input id="latitude-input" value={lat} onChange={(event) => setLat(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
                 </label>
-                <label className="text-[11px] uppercase tracking-[0.2em] text-white/45">
+                <label htmlFor="longitude-input" className="text-[11px] uppercase tracking-[0.2em] text-white/45">
                   Longitude
-                  <input value={lon} onChange={(event) => setLon(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
+                  <input id="longitude-input" value={lon} onChange={(event) => setLon(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
                 </label>
-                <label className="text-[11px] uppercase tracking-[0.2em] text-white/45">
+                <label htmlFor="radius-nm-input" className="text-[11px] uppercase tracking-[0.2em] text-white/45">
                   Radius Nm
-                  <input value={radiusNm} onChange={(event) => setRadiusNm(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
+                  <input id="radius-nm-input" value={radiusNm} onChange={(event) => setRadiusNm(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
                 </label>
               </>
             )}
-            <label className="text-[11px] uppercase tracking-[0.2em] text-white/45">
+            <label htmlFor="hours-input" className="text-[11px] uppercase tracking-[0.2em] text-white/45">
               Hours
-              <input value={hours} onChange={(event) => setHours(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
+              <input id="hours-input" value={hours} onChange={(event) => setHours(event.target.value)} className="mt-2 w-full bg-[#07090d] border border-white/10 px-3 py-2 text-white rounded-sm font-mono normal-case tracking-normal" />
             </label>
           </div>
 
