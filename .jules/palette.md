@@ -68,3 +68,7 @@
 ## 2026-04-07 - [ARIA State Anti-pattern on Toggle Buttons]
 **Learning:** For accessibility on icon-only toggle buttons, use `aria-pressed` or `aria-expanded` to indicate state alongside a static `aria-label` (e.g., 'Toggle Terminal'). Dynamically changing the `aria-label` when these state attributes are present is an anti-pattern as screen readers already announce the state. Only use dynamic `aria-label`s when state attributes like `aria-pressed` are not applicable (e.g., a 'Copy' button changing to 'Copied'). Dynamic `title` attributes remain useful for visual hover feedback.
 **Action:** Avoid combining dynamic `aria-label`s with `aria-pressed` / `aria-expanded`. Verify state handling logic before altering labels.
+
+## 2024-04-14 - User Menu Close Button Accessibility
+**Learning:** Icon-only close buttons in dynamic popovers like the `UserMenuWidget` must include descriptive `aria-label` attributes to ensure screen reader users understand their function, along with distinct keyboard focus indicators (`focus-visible:ring-*`) to maintain visibility for keyboard navigation.
+**Action:** Always check interactive elements (especially `<button>` with only SVG/Icon children) within custom UI panels to ensure they have an `aria-label` and `focus-visible` classes matching the application's design system.

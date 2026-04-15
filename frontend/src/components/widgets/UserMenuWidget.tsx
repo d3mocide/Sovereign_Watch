@@ -50,7 +50,8 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
             </span>
             <button
               onClick={onClose}
-              className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+              aria-label="Close User Menu"
             >
               <X size={14} />
             </button>
