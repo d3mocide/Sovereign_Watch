@@ -1,11 +1,15 @@
-"""Unit tests for PeeringDB and ISS pure helper functions in InfraPoller."""
+"""Unit tests for PeeringDB pure helper functions in InfraPoller."""
 import sys
 import os
-from datetime import datetime, UTC
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from main import parse_peeringdb_ixps, parse_peeringdb_facilities, parse_iss_position
+from main import (
+    build_peeringdb_facility_location_index,
+    enrich_peeringdb_ixps_with_facility_locations,
+    parse_peeringdb_ixps,
+    parse_peeringdb_facilities,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +212,40 @@ def test_parse_ixps_zero_coordinates_kept():
     assert null_island["lon"] == 0.0
 
 
+def test_build_peeringdb_facility_location_index_averages_city_country_centroid():
+    index = build_peeringdb_facility_location_index(
+        [
+            {"city": "Ashburn", "country": "US", "lat": 39.0, "lon": -77.0},
+            {"city": "Ashburn", "country": "US", "lat": 39.2, "lon": -77.2},
+        ]
+    )
+
+    assert index[("ashburn", "us")] == (39.1, -77.1)
+
+
+def test_enrich_peeringdb_ixps_with_facility_locations_fills_missing_coords():
+    ixp_response = {
+        "data": [
+            {
+                "id": 10,
+                "name": "Equinix Ashburn",
+                "name_long": "Equinix Internet Exchange Ashburn",
+                "city": "Ashburn",
+                "country": "US",
+                "website": "https://ix.equinix.com",
+            }
+        ]
+    }
+    location_index = {("ashburn", "us"): (39.0438, -77.4874)}
+
+    records = enrich_peeringdb_ixps_with_facility_locations(ixp_response, location_index)
+
+    assert len(records) == 1
+    assert records[0]["ixp_id"] == 10
+    assert records[0]["lat"] == 39.0438
+    assert records[0]["lon"] == -77.4874
+
+
 # ---------------------------------------------------------------------------
 # parse_peeringdb_facilities
 # ---------------------------------------------------------------------------
@@ -274,114 +312,3 @@ def test_parse_fac_zero_coordinates_kept():
 def test_parse_fac_empty_data():
     result = parse_peeringdb_facilities({"data": []})
     assert result == []
-
-
-# ---------------------------------------------------------------------------
-# parse_iss_position
-# ---------------------------------------------------------------------------
-
-SAMPLE_ISS_RESPONSE = {
-    "message": "success",
-    "timestamp": 1711636200,
-    "iss_position": {"latitude": "12.3456", "longitude": "-67.8901"},
-}
-
-
-def test_parse_iss_returns_dict():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert isinstance(result, dict)
-
-
-def test_parse_iss_lat():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert abs(result["lat"] - 12.3456) < 0.0001
-
-
-def test_parse_iss_lon():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert abs(result["lon"] - (-67.8901)) < 0.0001
-
-
-def test_parse_iss_time_is_datetime():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert isinstance(result["time"], datetime)
-
-
-def test_parse_iss_time_utc():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert result["time"].tzinfo == UTC
-
-
-def test_parse_iss_time_value():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert result["time"] == datetime.fromtimestamp(1711636200, tz=UTC)
-
-
-def test_parse_iss_altitude_none():
-    # open-notify doesn't provide altitude; should be None
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert result["altitude_km"] is None
-
-
-def test_parse_iss_velocity_none():
-    result = parse_iss_position(SAMPLE_ISS_RESPONSE)
-    assert result is not None
-    assert result["velocity_kms"] is None
-
-
-def test_parse_iss_non_success_message():
-    bad = {"message": "error", "timestamp": 123, "iss_position": {"latitude": "1", "longitude": "2"}}
-    assert parse_iss_position(bad) is None
-
-
-def test_parse_iss_missing_position_key():
-    bad = {"message": "success", "timestamp": 123}
-    assert parse_iss_position(bad) is None
-
-
-def test_parse_iss_invalid_lat():
-    bad = {
-        "message": "success",
-        "timestamp": 123,
-        "iss_position": {"latitude": "not_a_float", "longitude": "0"},
-    }
-    assert parse_iss_position(bad) is None
-
-
-def test_parse_iss_out_of_range_lat():
-    bad = {
-        "message": "success",
-        "timestamp": 123,
-        "iss_position": {"latitude": "999.0", "longitude": "0"},
-    }
-    assert parse_iss_position(bad) is None
-
-
-def test_parse_iss_polar_orbit_lat():
-    # ISS max inclination is ~51.6°, but test boundary values
-    high_lat = {
-        "message": "success",
-        "timestamp": 123,
-        "iss_position": {"latitude": "51.6", "longitude": "180.0"},
-    }
-    result = parse_iss_position(high_lat)
-    assert result is not None
-    assert result["lat"] == 51.6
-
-
-def test_parse_iss_negative_coordinates():
-    south = {
-        "message": "success",
-        "timestamp": 123,
-        "iss_position": {"latitude": "-45.0", "longitude": "-120.0"},
-    }
-    result = parse_iss_position(south)
-    assert result is not None
-    assert result["lat"] == -45.0
-    assert result["lon"] == -120.0

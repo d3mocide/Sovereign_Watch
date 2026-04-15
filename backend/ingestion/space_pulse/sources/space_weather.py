@@ -47,6 +47,10 @@ STORM_LEVELS = {
     5: "G1", 6: "G2", 7: "G3", 8: "G4", 9: "G5",
 }
 
+REDIS_KEY_KP_LAST_FETCH = "space_weather:kp:last_fetch"
+REDIS_KEY_AURORA_LAST_FETCH = "space_weather:aurora:last_fetch"
+REDIS_KEY_SCALES_LAST_FETCH = "space_weather:scales:last_fetch"
+
 
 def _kp_to_storm_level(kp: float) -> str:
     return STORM_LEVELS.get(int(kp), "G5" if kp >= 9 else "quiet")
@@ -104,31 +108,75 @@ class SpaceWeatherSource(BaseSource):
         self.scales_interval  = scales_interval_s
         self._seen_kp_times: set[str] = set()
 
-    async def run(self):
-        last_kp     = 0.0
-        last_aurora = 0.0
-        last_scales = 0.0
+    async def _get_last_fetch(self, key: str) -> float | None:
+        if not self.redis_client:
+            return None
 
+        raw_value = await self.redis_client.get(key)
+        if not raw_value:
+            return None
+
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            logger.warning("Space weather: invalid last-fetch timestamp in Redis key %s", key)
+            return None
+
+    async def _set_last_fetch(self, key: str, interval_s: int):
+        if not self.redis_client:
+            return
+
+        await self.redis_client.set(key, str(datetime.now(UTC).timestamp()), ex=interval_s * 2)
+
+    async def _wait_for_cooldown(self, key: str, interval_s: int, label: str) -> bool:
+        last_fetch = await self._get_last_fetch(key)
+        if last_fetch is None:
+            logger.info("Space weather %s: no prior fetch timestamp — fetching immediately on startup.", label)
+            return False
+
+        now_ts = datetime.now(UTC).timestamp()
+        elapsed = now_ts - last_fetch
+        if elapsed >= interval_s:
+            return False
+
+        wait_sec = interval_s - elapsed
+        logger.info(
+            "Space weather %s: cooldown active (%.1fm / %.1fm). Next in %.1fm.",
+            label,
+            elapsed / 60,
+            interval_s / 60,
+            wait_sec / 60,
+        )
+        await asyncio.sleep(wait_sec)
+        return True
+
+    async def run(self):
         while True:
             try:
-                now = asyncio.get_event_loop().time()
-
-                if now - last_kp >= self.kp_interval:
+                if not await self._wait_for_cooldown(REDIS_KEY_KP_LAST_FETCH, self.kp_interval, "Kp"):
                     await self._poll_kp()
-                    last_kp = now
+                    await self._set_last_fetch(REDIS_KEY_KP_LAST_FETCH, self.kp_interval)
 
-                if now - last_aurora >= self.aurora_interval:
+                if not await self._wait_for_cooldown(REDIS_KEY_AURORA_LAST_FETCH, self.aurora_interval, "Aurora"):
                     await self._poll_aurora()
-                    last_aurora = now
+                    await self._set_last_fetch(REDIS_KEY_AURORA_LAST_FETCH, self.aurora_interval)
 
-                if now - last_scales >= self.scales_interval:
+                if not await self._wait_for_cooldown(REDIS_KEY_SCALES_LAST_FETCH, self.scales_interval, "NOAA Scales"):
                     await self._poll_noaa_scales()
-                    last_scales = now
+                    await self._set_last_fetch(REDIS_KEY_SCALES_LAST_FETCH, self.scales_interval)
 
-            except Exception:
+            except Exception as exc:
                 logger.exception("Space weather poll error")
-
-            await asyncio.sleep(30)
+                if self.redis_client:
+                    try:
+                        await self.redis_client.set(
+                            "poller:space_weather:last_error",
+                            json.dumps({"ts": datetime.now(UTC).timestamp(), "msg": str(exc)}),
+                            ex=86400,
+                        )
+                    except Exception:
+                        pass
+                await asyncio.sleep(60)
 
     async def _fetch_json(self, url: str):
         resp = await self.fetch_with_retry(url)

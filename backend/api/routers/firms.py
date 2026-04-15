@@ -18,19 +18,32 @@ Both endpoints return an empty FeatureCollection when no data is available
 (poller has not yet run, or no detections in the mission area).
 """
 
+import csv
+import io
 import json
 import logging
 import math
+import os
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from core.database import db
 from fastapi import APIRouter, HTTPException, Query
+import httpx
 
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.FIRMS")
 
 # Redis keys (must match space_pulse/sources/firms.py)
 _REDIS_HOTSPOT_KEY    = "firms:latest_geojson"
+_REDIS_HOTSPOT_GLOBAL_KEY = "firms:global_live_geojson"
 _REDIS_DV_CACHE_KEY   = "firms:dark_vessel_candidates"
+
+FIRMS_MAP_KEY = os.getenv("FIRMS_MAP_KEY", "").strip()
+FIRMS_SOURCE = os.getenv("FIRMS_SOURCE", "VIIRS_SNPP_NRT").strip() or "VIIRS_SNPP_NRT"
+FIRMS_BBOX_MODE = os.getenv("FIRMS_BBOX_MODE", "mission").strip().lower() or "mission"
+FIRMS_GLOBAL_CACHE_TTL_S = 600
+_DEFAULT_LANDMASK_CONTAINER_PATH = Path("/app/support/world-countries.json")
 
 # Dark vessel detection parameters (may be overridden via query params)
 _DEFAULT_MATCH_RADIUS_NM  = 5.0    # AIS search radius around each hotspot
@@ -45,6 +58,10 @@ _DV_THRESHOLDS = [0.20, 0.45, 0.70]  # LOW / MEDIUM / HIGH / CRITICAL boundaries
 
 def _nm_to_meters(nm: float) -> float:
     return nm * 1852.0
+
+
+def _query_default(value):
+    return getattr(value, "default", value)
 
 
 def _risk_score(
@@ -91,6 +108,283 @@ def _severity_label(score: float) -> str:
     return "CRITICAL"
 
 
+def _extract_land_geometry_geojson(feature_collection: dict) -> list[str]:
+    geometries: list[str] = []
+    for feature in feature_collection.get("features", []):
+        geometry = feature.get("geometry")
+        if not isinstance(geometry, dict):
+            continue
+        if geometry.get("type") not in {"Polygon", "MultiPolygon"}:
+            continue
+        geometries.append(json.dumps(geometry, separators=(",", ":")))
+    return geometries
+
+
+def _candidate_landmask_paths() -> list[Path]:
+    candidates: list[Path] = []
+
+    env_path = os.getenv("FIRMS_LANDMASK_PATH", "").strip()
+    if env_path:
+        candidates.append(Path(env_path))
+
+    candidates.append(_DEFAULT_LANDMASK_CONTAINER_PATH)
+
+    module_path = Path(__file__).resolve()
+    for parent in module_path.parents:
+        candidates.append(parent / "frontend" / "public" / "world-countries.json")
+
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate_key = str(candidate)
+        if candidate_key in seen:
+            continue
+        seen.add(candidate_key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def _load_world_land_geometry_geojson() -> list[str]:
+    for path in _candidate_landmask_paths():
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                feature_collection = json.load(handle)
+        except Exception as exc:
+            logger.warning(
+                "Failed to load world land polygons for FIRMS dark-vessel mask from %s: %s",
+                path,
+                exc,
+            )
+            continue
+
+        if not isinstance(feature_collection, dict):
+            continue
+
+        geometries = _extract_land_geometry_geojson(feature_collection)
+        if geometries:
+            logger.info(
+                "Loaded %d land geometries for FIRMS dark-vessel masking from %s",
+                len(geometries),
+                path,
+            )
+            return geometries
+
+    logger.warning("No world land polygon asset found for FIRMS dark-vessel masking; land filter disabled")
+    return []
+
+
+_WORLD_LAND_GEOMETRIES = _load_world_land_geometry_geojson()
+
+
+def _parse_viirs_confidence(raw: str) -> str | None:
+    value = raw.strip().lower()
+    if value in {"l", "low"}:
+        return "low"
+    if value in {"n", "nominal"}:
+        return "nominal"
+    if value in {"h", "high"}:
+        return "high"
+
+    try:
+        numeric = int(value)
+    except ValueError:
+        return None
+
+    if numeric >= 80:
+        return "high"
+    if numeric >= 30:
+        return "nominal"
+    if numeric >= 0:
+        return "low"
+    return None
+
+
+def _parse_modis_confidence(raw: str) -> str:
+    try:
+        numeric = int(raw.strip())
+    except ValueError:
+        return "low"
+    if numeric >= 80:
+        return "high"
+    if numeric >= 50:
+        return "nominal"
+    return "low"
+
+
+def _rows_to_geojson(rows: list[dict], source: str, scope: str) -> dict:
+    features = []
+    for row in rows:
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [row["longitude"], row["latitude"]],
+                },
+                "properties": {
+                    "brightness": row.get("brightness"),
+                    "frp": row.get("frp"),
+                    "confidence": row.get("confidence"),
+                    "satellite": row.get("satellite"),
+                    "instrument": row.get("instrument"),
+                    "source": row.get("source"),
+                    "daynight": row.get("daynight"),
+                    "acq_date": row.get("acq_date"),
+                    "acq_time": row.get("acq_time"),
+                    "time": row.get("time"),
+                },
+            }
+        )
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "fetched_at": datetime.now(UTC).isoformat(),
+            "source": source,
+            "count": len(features),
+            "scope": scope,
+        },
+    }
+
+
+def _parse_firms_csv_to_rows(
+    body: str,
+    *,
+    source: str,
+    hours_back: int,
+    min_frp: float,
+    confidence: str,
+    limit: int,
+) -> list[dict]:
+    rows: list[dict] = []
+    seen_keys: set[str] = set()
+    is_viirs = "VIIRS" in source.upper()
+    now_utc = datetime.now(UTC)
+    cutoff = now_utc - timedelta(hours=hours_back)
+
+    try:
+        reader = csv.DictReader(io.StringIO(body))
+    except Exception as exc:
+        logger.warning("FIRMS live CSV parse failed: %s", exc)
+        return []
+
+    for row in reader:
+        try:
+            lat = float(row.get("latitude", 0))
+            lon = float(row.get("longitude", 0))
+        except ValueError:
+            continue
+
+        if lat == 0.0 and lon == 0.0:
+            continue
+
+        acq_date = (row.get("acq_date") or "").strip()
+        acq_time = (row.get("acq_time") or "").strip().zfill(4)
+        satellite = (row.get("satellite") or "").strip()
+        dedup_key = f"{acq_date}|{acq_time}|{lat:.5f}|{lon:.5f}|{satellite}"
+        if dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+
+        raw_confidence = (row.get("confidence") or "").strip()
+        normalized_confidence = (
+            _parse_viirs_confidence(raw_confidence)
+            if is_viirs
+            else _parse_modis_confidence(raw_confidence)
+        )
+        if normalized_confidence is None:
+            continue
+        if confidence and normalized_confidence != confidence:
+            continue
+
+        brightness_raw = row.get("bright_ti4") or row.get("brightness") or "0"
+        try:
+            brightness = float(brightness_raw)
+        except ValueError:
+            brightness = None
+
+        try:
+            frp = float(row.get("frp", "0") or 0)
+        except ValueError:
+            frp = 0.0
+        if frp < min_frp:
+            continue
+
+        instrument = (row.get("instrument") or "").strip() or ("VIIRS" if is_viirs else "MODIS")
+        daynight = ((row.get("daynight") or "U").strip().upper() or "U")[:1]
+
+        acq_dt: datetime | None = None
+        if acq_date and acq_time:
+            try:
+                acq_dt = datetime.strptime(acq_date, "%Y-%m-%d").replace(
+                    hour=int(acq_time[:2]),
+                    minute=int(acq_time[2:]),
+                    tzinfo=UTC,
+                )
+            except (ValueError, IndexError):
+                acq_dt = None
+
+        time_val = acq_dt or now_utc
+        if time_val < cutoff:
+            continue
+
+        rows.append(
+            {
+                "latitude": lat,
+                "longitude": lon,
+                "brightness": brightness,
+                "frp": frp,
+                "confidence": normalized_confidence,
+                "satellite": satellite or None,
+                "instrument": instrument,
+                "source": source,
+                "daynight": daynight,
+                "acq_date": acq_date or None,
+                "acq_time": acq_time or None,
+                "time": time_val.isoformat(),
+            }
+        )
+        if len(rows) >= limit:
+            break
+
+    return rows
+
+
+async def _fetch_live_global_hotspots(
+    *,
+    hours_back: int,
+    min_frp: float,
+    confidence: str,
+    limit: int,
+) -> dict | None:
+    if not FIRMS_MAP_KEY:
+        return None
+
+    days_back = max(1, math.ceil(hours_back / 24))
+    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/world/{days_back}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("FIRMS live global fetch failed: %s", exc)
+        return None
+
+    rows = _parse_firms_csv_to_rows(
+        resp.text,
+        source=FIRMS_SOURCE,
+        hours_back=hours_back,
+        min_frp=min_frp,
+        confidence=confidence,
+        limit=limit,
+    )
+    return _rows_to_geojson(rows, FIRMS_SOURCE, "global_live")
+
+
 # ---------------------------------------------------------------------------
 # GET /api/firms/hotspots
 # ---------------------------------------------------------------------------
@@ -111,22 +405,43 @@ async def get_firms_hotspots(
         min_lat <= -89.9 and max_lat >= 89.9
         and min_lon <= -179.9 and max_lon >= 179.9
     )
+    using_default_global_request = (
+        global_bbox
+        and hours_back == 24
+        and min_frp == 0.0
+        and not confidence
+    )
 
-    # Fast-path: global view with no extra filters → serve Redis cache.
-    # Only serve cache when it actually contains features; an empty cached
-    # collection can occur when the poller ran but found nothing, which would
-    # mask DB rows inserted by other means (e.g. test injection, manual inserts).
-    if global_bbox and hours_back == 24 and min_frp == 0.0 and not confidence and db.redis_client:
+    # Global requests need true world data. Do not reuse mission-scoped FIRMS cache
+    # as if it were global; prefer a dedicated global cache and live fallback.
+    if using_default_global_request and db.redis_client:
         try:
-            cached = await db.redis_client.get(_REDIS_HOTSPOT_KEY)
+            cache_key = _REDIS_HOTSPOT_KEY if FIRMS_BBOX_MODE == "global" else _REDIS_HOTSPOT_GLOBAL_KEY
+            cached = await db.redis_client.get(cache_key)
             if cached:
                 parsed = json.loads(cached)
                 if parsed.get("features"):
                     return parsed
-                # Cache is empty — fall through to DB so live data is returned
-                logger.debug("FIRMS Redis cache is empty, falling back to DB query")
+                logger.debug("FIRMS global cache is empty, falling back to live fetch / DB query")
         except Exception as exc:
-            logger.warning("FIRMS Redis fast-path failed, falling back to DB: %s", exc)
+            logger.warning("FIRMS Redis fast-path failed, falling back to live fetch / DB: %s", exc)
+
+        live_result = await _fetch_live_global_hotspots(
+            hours_back=hours_back,
+            min_frp=min_frp,
+            confidence=confidence,
+            limit=limit,
+        )
+        if live_result and live_result.get("features"):
+            try:
+                await db.redis_client.setex(
+                    _REDIS_HOTSPOT_GLOBAL_KEY,
+                    FIRMS_GLOBAL_CACHE_TTL_S,
+                    json.dumps(live_result),
+                )
+            except Exception as exc:
+                logger.warning("FIRMS global cache write failed: %s", exc)
+            return live_result
 
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
@@ -215,6 +530,16 @@ async def get_dark_vessels(
     Results are cached in Redis for 30 minutes.  Pass ?min_risk_score=0.4 to
     surface only MEDIUM or higher confidence candidates.
     """
+    min_lat = _query_default(min_lat)
+    max_lat = _query_default(max_lat)
+    min_lon = _query_default(min_lon)
+    max_lon = _query_default(max_lon)
+    hours_back = _query_default(hours_back)
+    match_radius_nm = _query_default(match_radius_nm)
+    min_frp = _query_default(min_frp)
+    ais_window_h = _query_default(ais_window_h)
+    min_risk_score = _query_default(min_risk_score)
+
     global_bbox = (
         min_lat <= -89.9 and max_lat >= 89.9
         and min_lon <= -179.9 and max_lon >= 179.9
@@ -267,6 +592,19 @@ async def get_dark_vessels(
           AND f.frp >= $6
           AND f.confidence IN ('nominal', 'high')
     ),
+    land_polygons AS (
+        SELECT ST_SetSRID(ST_GeomFromGeoJSON(geom_text), 4326) AS geom
+        FROM unnest($10::text[]) AS geom_text
+    ),
+    maritime_hotspots AS (
+        SELECT h.*
+        FROM hotspots h
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM land_polygons lp
+            WHERE ST_Intersects(lp.geom, h.geom)
+        )
+    ),
     nearest_ais AS (
         SELECT DISTINCT ON (h.latitude, h.longitude, h.hotspot_time)
             h.latitude,
@@ -274,7 +612,7 @@ async def get_dark_vessels(
             h.hotspot_time,
             t.entity_id  AS ais_mmsi,
             ST_Distance(h.geom::geography, t.geom::geography) / 1852.0 AS dist_nm
-        FROM hotspots h
+        FROM maritime_hotspots h
         LEFT JOIN tracks t ON (
             t.type LIKE 'a-f-S%%'
             AND t.time BETWEEN h.hotspot_time - ($7 || ' hours')::interval
@@ -295,7 +633,7 @@ async def get_dark_vessels(
         h.daynight,
         na.ais_mmsi,
         na.dist_nm AS nearest_ais_dist_nm
-    FROM hotspots h
+    FROM maritime_hotspots h
     LEFT JOIN nearest_ais na
         ON na.latitude = h.latitude
        AND na.longitude = h.longitude
@@ -316,6 +654,7 @@ async def get_dark_vessels(
                 str(ais_window_h),
                 match_radius_m,
                 match_radius_nm * 0.8,   # inner threshold: vessels within 80% of radius aren't dark
+                _WORLD_LAND_GEOMETRIES,
             )
     except Exception as exc:
         logger.error("Dark vessel query failed: %s", repr(exc))

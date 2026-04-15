@@ -101,28 +101,28 @@ class SatNOGSDBSource(BaseSource):
                 logger.error("SatNOGS DB request error on page %d: %s", page, repr(exc))
                 break
 
-                # API returns either a paginated envelope or a plain list
-                if isinstance(data, dict):
-                    results = data.get("results", [])
-                    next_url = data.get("next")
-                else:
-                    results = data
-                    next_url = None
+            # API returns either a paginated envelope or a plain list
+            if isinstance(data, dict):
+                results = data.get("results", [])
+                next_url = data.get("next")
+            else:
+                results = data
+                next_url = None
 
-                for tx in results:
-                    record = self._normalise(tx, fetched_at)
-                    if record is None:
-                        continue
-                    await self.producer.send(self.topic, value=record)
-                    published += 1
+            for tx in results:
+                record = self._normalise(tx, fetched_at)
+                if record is None:
+                    continue
+                await self.producer.send(self.topic, value=record)
+                published += 1
 
-                url = next_url
-                page += 1
-                if url:
-                    # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
-                    # We use a conservative 5s for anonymous and 1s for authenticated.
-                    delay = 1.0 if self.api_token else 5.0
-                    await asyncio.sleep(delay)
+            url = next_url
+            page += 1
+            if url:
+                # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
+                # We use a conservative 5s for anonymous and 1s for authenticated.
+                delay = 1.0 if self.api_token else 5.0
+                await asyncio.sleep(delay)
 
         logger.info("SatNOGS DB: published %d transmitter records to %s", published, self.topic)
 

@@ -7,18 +7,35 @@
 - **NRT NASA FIRMS Thermal Layer**: Integrated NASA VIIRS/MODIS thermal infrared data into the tactical map. Features FRP-scaled radii (12km–80km), confidence-coded fill colors, and 10-minute polling via the `space_pulse` ingestion container.
 - **Dark Vessel Anomaly Detection Engine**: Implemented a backend cross-reference service that identifies vessel-scale heat signatures (FIRMS) with no matching AIS broadcast within a 5nm/2h window. Results are scored by risk severity and cached in Redis.
 - **TimescaleDB Migration V004**: Added `firms_hotspots` hypertable and `dark_vessel_candidates` tables for forensic anomaly archival.
+- **Backend FIRMS Router Regression Coverage**: Added targeted backend API tests for live global FIRMS fallback, CSV normalization, polygonal land-mask extraction, and dark-vessel land-mask query parameters.
 
 ### Changed
 
 - **Alert UI De-cluttering**: Removed the intrusive pulsing red indicator and `animate-ping` effect from the TopBar alerts widget, replacing it with a static high-contrast alert state for a cleaner HUD experience.
 - **Thermal Visibility Tuning**: Significant increase to `radiusMinPixels` (fixed at 6px) and base meter radius for FIRMS hotspots to ensure reliable identification on both the 3D globe and 2D mercator views.
 - **Filter Initialization**: Updated `DEFAULT_FILTERS` to include `showFIRMS` and `showDarkVessels`, ensuring consistent layer state and persistence.
+- **FIRMS Scope Contract**: FIRMS and dark-vessel frontend fetches now resolve the active mission area explicitly in mission mode and only request full-world data when the FIRMS global toggle is enabled.
+- **Global FIRMS Fallback Path**: The backend API now serves true global FIRMS requests from a dedicated live world-feed cache/fallback path rather than reusing the mission-scoped Redis cache.
+- **Space-Pulse Cadence Policy**: Orbital TLE refreshes now follow a daily UTC-hour gate with cached startup priming, while FIRMS and space-weather poll cadence is persisted in Redis across restarts.
+- **ReliefWeb Integration Contract**: `gdelt_pulse` now targets the ReliefWeb v2 endpoint and requires an approved `RELIEFWEB_APPNAME` query parameter.
+- **ISS Ownership Cleanup**: ISS runtime polling has been removed from `infra_poller` so `space_pulse` remains the single owner of ISS ingestion state.
 
 ### Fixed
 
 - **Synthetic Entity UI Stabilization**: Fixed right-sidebar header icons and subtitles in `InfraView.tsx` to explicitly label FIRMS and Dark Vessels (THERMAL / ANOMALY) instead of defaulting to "LANDING_STATION".
 - **Tactical Tooltip Misclassification**: Corrected `MapTooltip.tsx` layout and icons to support synthetic entities, eliminating the "AVIONICS" fallback label for maritime and thermal anomalies.
 - **Tactical Map Scope Errors**: Resolved `ReferenceError` issues where infrastructure detection variables were utilized outside their valid scope.
+- **ISS Rendering Pathology**: Reworked the ISS layer to segment tracks at the antimeridian and render the marker as layered scatterplot beacons instead of an icon-atlas sprite.
+- **Dark-Vessel Scope Drift**: Dark-vessel requests no longer default to a full-world query in mission mode, reducing unrelated inland candidates from outside the active mission area.
+- **Backend Dark-Vessel Land Filter**: The FIRMS router now excludes hotspots intersecting world land polygons before dark-vessel matching and loads the land-mask asset safely in-container.
+- **SatNOGS Pagination Loop**: Fixed indentation bugs that prevented successful page traversal and inter-page backoff in both SatNOGS ingestion adapters.
+- **PeeringDB IXP Recovery**: Infra ingestion now backfills missing IXP coordinates from facility centroids and bypasses cooldown when the previous ingest produced zero IXPs.
+- **IODA Geocoding Regression**: Restored the Nominatim-backed geocoder used by outage ingestion and hardened outage feature selection in tactical/orbital map interactions.
+
+### Known Issues
+
+- **ISS Rendering Runtime Validation Pending**: The ISS track/marker render path has code-level fixes and passing frontend verification, but live runtime behavior is still reported as broken and requires follow-up validation before a patch release can be called GO.
+- **FIRMS Dark-Vessel Runtime Validation Pending**: Mission scoping and backend land masking are patched and verified in tests, but live map behavior is still reported as broken and requires additional runtime investigation before release.
 
 ## [1.0.5] - 2026-04-14
 

@@ -1,10 +1,16 @@
 """Unit tests for SatNOGS DB source normalisation logic."""
 import sys
 import os
+from unittest.mock import AsyncMock, MagicMock
+import asyncio
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sources.satnogs_db import SatNOGSDBSource
+
+
+def run(coro):
+    return asyncio.run(coro)
 
 
 def make_source():
@@ -82,3 +88,55 @@ def test_normalise_uplink_only_is_valid():
     assert record is not None
     assert record["uplink_low"] == 435000000
     assert record["downlink_low"] is None
+
+
+def test_fetch_and_publish_advances_pages_and_sleeps(monkeypatch):
+    src = SatNOGSDBSource(
+        client=None,
+        producer=AsyncMock(),
+        redis_client=MagicMock(),
+        topic="satnogs_transmitters",
+        fetch_interval_h=24,
+    )
+    src.producer.send = AsyncMock()
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    responses = [
+        FakeResponse(
+            {
+                "results": [{"uuid": "a", "norad_cat_id": 1, "downlink_low": 100}],
+                "next": "https://db.satnogs.org/api/transmitters/?page=2",
+            }
+        ),
+        FakeResponse(
+            {
+                "results": [{"uuid": "b", "norad_cat_id": 2, "downlink_low": 200}],
+                "next": None,
+            }
+        ),
+    ]
+    fetch_mock = AsyncMock(side_effect=responses)
+    src.fetch_with_retry = fetch_mock
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr("sources.satnogs_db.asyncio.sleep", sleep_mock)
+
+    run(src._fetch_and_publish())
+
+    assert fetch_mock.await_count == 2
+    assert src.producer.send.await_count == 2
+    first_call = fetch_mock.await_args_list[0]
+    second_call = fetch_mock.await_args_list[1]
+    assert first_call.args[0].endswith("/transmitters/")
+    assert first_call.kwargs["params"]["status"] == "active"
+    assert second_call.args[0].endswith("page=2")
+    assert second_call.kwargs["params"] is None
+    sleep_mock.assert_awaited_once_with(5.0)

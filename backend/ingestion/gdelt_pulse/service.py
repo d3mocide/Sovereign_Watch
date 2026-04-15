@@ -17,7 +17,9 @@ logger = logging.getLogger("SovereignWatch.GDELTPulse")
 logging.basicConfig(level=logging.INFO)
 
 GDELT_LAST_UPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
-RELIEFWEB_API_URL = "https://api.reliefweb.int/v1/disasters"
+RELIEFWEB_API_URL = os.getenv("RELIEFWEB_API_URL", "https://api.reliefweb.int/v2/disasters")
+RELIEFWEB_APPNAME = os.getenv("RELIEFWEB_APPNAME", "").strip()
+RELIEFWEB_APPNAME_DOCS_URL = "https://apidoc.reliefweb.int/parameters#appname"
 
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "localhost:9092")
 GDELT_POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 900))  # 15 min
@@ -59,6 +61,7 @@ class GDELTPulseService:
         self.session = None
         self.redis = None
         self.last_fetched_url = None
+        self._reliefweb_disabled_reason = None
         self._running = False
 
     async def setup(self):
@@ -316,8 +319,18 @@ class GDELTPulseService:
         ON CONFLICT (event_id, time) DO NOTHING clause stable deduplication
         across repeated polls of the same ongoing crisis.
         """
+        if self._reliefweb_disabled_reason:
+            return
+
+        if not RELIEFWEB_APPNAME:
+            self._disable_reliefweb(
+                "ReliefWeb polling disabled: RELIEFWEB_APPNAME is not configured. "
+                "ReliefWeb v2 requires an approved appname query parameter. "
+                f"Request one at {RELIEFWEB_APPNAME_DOCS_URL}."
+            )
+            return
+
         payload = {
-            "appname": "sovereign-watch",
             "profile": "list",
             "fields": {
                 "include": ["name", "date", "country", "type", "status", "url"]
@@ -335,11 +348,24 @@ class GDELTPulseService:
 
         async with self.session.post(
             RELIEFWEB_API_URL,
+            params={"appname": RELIEFWEB_APPNAME},
             json=payload,
             headers={"Content-Type": "application/json"},
         ) as resp:
             if resp.status != 200:
-                logger.error(f"ReliefWeb API returned {resp.status}")
+                error_body = await self._safe_reliefweb_error_body(resp)
+                if resp.status == 403 and "approved appname" in error_body.lower():
+                    self._disable_reliefweb(
+                        "ReliefWeb polling disabled: RELIEFWEB_APPNAME was rejected by the "
+                        f"API. Configure an approved appname and restart the service. See {RELIEFWEB_APPNAME_DOCS_URL}."
+                    )
+                    return
+
+                logger.error(
+                    "ReliefWeb API returned %s%s",
+                    resp.status,
+                    f": {error_body}" if error_body else "",
+                )
                 return
             body = await resp.json()
 
@@ -430,3 +456,16 @@ class GDELTPulseService:
                 )
             except Exception:
                 pass
+
+    def _disable_reliefweb(self, reason: str):
+        if self._reliefweb_disabled_reason == reason:
+            return
+
+        self._reliefweb_disabled_reason = reason
+        logger.error(reason)
+
+    async def _safe_reliefweb_error_body(self, resp: aiohttp.ClientResponse) -> str:
+        try:
+            return (await resp.text()).strip()
+        except Exception:
+            return ""

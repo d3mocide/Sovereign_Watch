@@ -1,47 +1,15 @@
 /**
- * buildISSLayer — ISS real-time position (IconLayer) + ground track (PathLayer).
+ * buildISSLayer — ISS real-time position beacon + ground track.
  *
  * Z-order: 15–17 (Navigation/Orbital group, per composition.ts z-ordering rules).
  *
- * The icon is a simple white dot; the ground track is a faded white PathLayer
- * that fades toward the tail to convey direction of travel.
+ * The marker is rendered as layered scatterplot beacons so it remains visible
+ * across map modes, while the ground track is split at the antimeridian to
+ * avoid world-spanning wrap artifacts.
  */
 
-import { IconLayer, PathLayer } from "@deck.gl/layers";
+import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { ISSPosition } from "../types";
-
-// Minimal inline atlas: white circle on transparent canvas
-function createISSAtlas() {
-    const size = 64;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
-
-    // Outer glow ring
-    ctx.beginPath();
-    ctx.arc(32, 32, 28, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // Inner filled circle
-    ctx.beginPath();
-    ctx.arc(32, 32, 14, 0, Math.PI * 2);
-    ctx.fillStyle = "white";
-    ctx.fill();
-
-    return {
-        url: canvas.toDataURL(),
-        width: size,
-        height: size,
-        mapping: {
-            iss: { x: 0, y: 0, width: size, height: size, anchorY: size / 2, mask: false },
-        },
-    };
-}
-
-const ISS_ATLAS = createISSAtlas();
 
 interface ISSLayerOptions {
     position: ISSPosition | null;
@@ -49,6 +17,68 @@ interface ISSLayerOptions {
     globeMode?: boolean;
     onHover?: (info: unknown) => void;
     onSelect?: (info: unknown) => void;
+}
+
+interface ISSPathSegment {
+    path: [number, number][];
+}
+
+function toOrderedTrack(track: ISSPosition[]): ISSPosition[] {
+    return [...track]
+        .filter(
+            (point) =>
+                Number.isFinite(point.lat) &&
+                Number.isFinite(point.lon) &&
+                typeof point.timestamp === "string"
+        )
+        .reverse();
+}
+
+function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
+    const ordered = toOrderedTrack(track);
+    if (ordered.length < 2) {
+        return [];
+    }
+
+    const segments: ISSPathSegment[] = [];
+    let currentSegment: [number, number][] = [[ordered[0].lon, ordered[0].lat]];
+
+    for (let index = 1; index < ordered.length; index += 1) {
+        const previous = ordered[index - 1];
+        const current = ordered[index];
+        const crossedAntimeridian = Math.abs(current.lon - previous.lon) > 180;
+
+        if (crossedAntimeridian) {
+            if (currentSegment.length >= 2) {
+                segments.push({ path: currentSegment });
+            }
+            currentSegment = [[current.lon, current.lat]];
+            continue;
+        }
+
+        currentSegment.push([current.lon, current.lat]);
+    }
+
+    if (currentSegment.length >= 2) {
+        segments.push({ path: currentSegment });
+    }
+
+    return segments;
+}
+
+function toIssFeature(position: ISSPosition) {
+    return {
+        type: "iss",
+        properties: {
+            name: "ISS (International Space Station)",
+            entity_type: "iss",
+            lat: position.lat,
+            lon: position.lon,
+            altitude_km: position.altitude_km,
+            velocity_kms: position.velocity_kms,
+            timestamp: position.timestamp,
+        },
+    };
 }
 
 export function buildISSLayer({
@@ -59,49 +89,66 @@ export function buildISSLayer({
     onSelect,
 }: ISSLayerOptions) {
     const layers = [];
+    const trackSegments = splitTrackAtAntimeridian(track);
 
-    // Ground track PathLayer — white fading line
-    if (Array.isArray(track) && track.length >= 2) {
-        // Reverse so index 0 is oldest; PathLayer renders head→tail
-        const ordered = [...track].reverse();
-
+    if (trackSegments.length > 0) {
         layers.push(
-            new PathLayer({
+            new PathLayer<ISSPathSegment>({
                 id: `iss-track-layer-${globeMode ? "globe" : "merc"}`,
-                data: [{ path: ordered.map((p) => [p.lon, p.lat]) }],
-                getPath: (d: { path: [number, number][] }) => d.path,
-                getColor: [255, 255, 255, 120],
+                data: trackSegments,
+                getPath: (segment) => segment.path,
+                getColor: [255, 244, 189, 136],
                 getWidth: 2,
                 widthMinPixels: 1,
                 widthMaxPixels: 3,
-                wrapLongitude: !globeMode,
+                wrapLongitude: false,
                 parameters: {
                     depthTest: !!globeMode,
                     depthMask: !!globeMode,
                     depthBias: globeMode ? -28.0 : 0,
-                },
+                } as any,
             })
         );
     }
 
-    // ISS current position IconLayer
     if (position) {
+        const markerData = [position];
+        const markerAltitudeMeters = (position.altitude_km ?? 0) * 1000;
+
         layers.push(
-            new IconLayer<ISSPosition>({
-                id: `iss-position-layer-${globeMode ? "globe" : "merc"}`,
-                data: [position],
-                iconAtlas: ISS_ATLAS.url,
-                iconMapping: ISS_ATLAS.mapping,
-                getIcon: () => "iss",
-                getPosition: (d: ISSPosition) => [d.lon, d.lat],
-                getSize: 32,
-                sizeScale: 1,
-                pickable: true,
-                getColor: [250, 204, 21, 255],  // yellow-400
+            new ScatterplotLayer<ISSPosition>({
+                id: `iss-position-glow-${globeMode ? "globe" : "merc"}`,
+                data: markerData,
+                getPosition: (point) => [point.lon, point.lat, markerAltitudeMeters],
+                getRadius: 18,
+                radiusUnits: "pixels",
+                filled: true,
+                stroked: false,
+                pickable: false,
+                getFillColor: [250, 204, 21, 72],
                 parameters: {
                     depthTest: !!globeMode,
-                    depthMask: !!globeMode,
-                    depthBias: globeMode ? -30.0 : 0,
+                    depthMask: false,
+                    depthBias: globeMode ? -34.0 : 0,
+                } as any,
+            }),
+            new ScatterplotLayer<ISSPosition>({
+                id: `iss-position-core-${globeMode ? "globe" : "merc"}`,
+                data: markerData,
+                getPosition: (point) => [point.lon, point.lat, markerAltitudeMeters],
+                getRadius: 6,
+                radiusUnits: "pixels",
+                filled: true,
+                stroked: true,
+                lineWidthUnits: "pixels",
+                getLineWidth: 2,
+                pickable: true,
+                getFillColor: [255, 250, 230, 255],
+                getLineColor: [250, 204, 21, 255],
+                parameters: {
+                    depthTest: !!globeMode,
+                    depthMask: false,
+                    depthBias: globeMode ? -36.0 : 0,
                 } as any,
                 onHover: onHover
                     ? (info: unknown) => {
@@ -109,18 +156,7 @@ export function buildISSLayer({
                           if (pickInfo.object) {
                               onHover({
                                   ...pickInfo,
-                                  object: {
-                                      type: "iss",
-                                      properties: {
-                                          name: "ISS (International Space Station)",
-                                          entity_type: "iss",
-                                          lat: pickInfo.object.lat,
-                                          lon: pickInfo.object.lon,
-                                          altitude_km: pickInfo.object.altitude_km,
-                                          velocity_kms: pickInfo.object.velocity_kms,
-                                          timestamp: pickInfo.object.timestamp,
-                                      },
-                                  },
+                                  object: toIssFeature(pickInfo.object),
                               });
                           } else {
                               onHover({ ...pickInfo, object: null });
@@ -133,18 +169,7 @@ export function buildISSLayer({
                           if (pickInfo.object) {
                               onSelect({
                                   ...pickInfo,
-                                  object: {
-                                      type: "iss",
-                                      properties: {
-                                          name: "ISS (International Space Station)",
-                                          entity_type: "iss",
-                                          lat: pickInfo.object.lat,
-                                          lon: pickInfo.object.lon,
-                                          altitude_km: pickInfo.object.altitude_km,
-                                          velocity_kms: pickInfo.object.velocity_kms,
-                                          timestamp: pickInfo.object.timestamp,
-                                      },
-                                  },
+                                  object: toIssFeature(pickInfo.object),
                               });
                           }
                       }

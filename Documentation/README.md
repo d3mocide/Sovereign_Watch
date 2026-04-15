@@ -62,7 +62,7 @@ Each poller is a standalone microservice that ingests data from external sources
 | ADS-B   | airplanes.live                | Every **30 seconds** (backup)     |
 | ADS-B   | Holding Patterns              | Real-time analysis (**Ingest-05**) |
 | AIS     | AISStream.io                  | **Event-driven** WebSocket stream |
-| Space   | Celestrak TLE fetch           | Every **6 hours**                 |
+| Space   | Celestrak TLE fetch           | Daily at configured UTC hour      |
 | Space   | SGP4 propagation              | Every **5 seconds**               |
 | Space   | SatNOGS Network (Obs)         | Every **1 hour**                  |
 | Space   | NOAA Aurora Forecast          | Every **5 minutes**               |

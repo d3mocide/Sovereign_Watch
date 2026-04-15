@@ -1,4 +1,5 @@
 """Unit tests for InfraPoller pure helper functions."""
+import asyncio
 import struct
 import sys
 import os
@@ -8,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from main import (
     DNS_ROOT_SERVERS,
+    InfraPollerService,
     build_cable_country_index,
     dms_to_decimal,
     extract_station_country,
@@ -281,6 +283,47 @@ def test_probe_dns_sync_socket_closed_on_error():
         _probe_dns_sync("198.41.0.4")
 
     mock_sock.close.assert_called()
+
+
+def test_geocode_region_uses_nominatim_and_caches_result():
+    calls = []
+
+    class FakeResponse:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def raise_for_status(self):
+            return None
+
+        async def json(self):
+            return [{"lat": "15.4542", "lon": "18.7322"}]
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url, params=None):
+            calls.append((url, params))
+            return FakeResponse()
+
+    service = InfraPollerService()
+
+    with mock.patch("main.aiohttp.ClientSession", return_value=FakeSession()):
+        first = asyncio.run(service.geocode_region("Chad", "TD"))
+        second = asyncio.run(service.geocode_region("Chad", "TD"))
+
+    assert first == (15.4542, 18.7322)
+    assert second == first
+    assert len(calls) == 1
+    assert calls[0][0].endswith("/search")
+    assert calls[0][1]["q"] == "Chad"
+    assert calls[0][1]["countrycodes"] == "td"
 
 
 

@@ -329,6 +329,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       firmsData ?? null,
       !!filters?.showFIRMS,
       globeMode,
+      now,
       setHoveredInfra,
       setSelectedInfra,
     ),

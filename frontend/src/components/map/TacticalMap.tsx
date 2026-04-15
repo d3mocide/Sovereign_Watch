@@ -149,6 +149,18 @@ interface TacticalMapProps {
   darkVesselData?: FeatureCollection | null;
 }
 
+function isOutageFeature(props: Record<string, unknown>, obj: { id?: string; type?: string }): boolean {
+  const featureId = typeof props.id === "string" ? props.id : typeof obj.id === "string" ? obj.id : "";
+  return (
+    props.entity_type === "outage" ||
+    props.type === "internet_outage" ||
+    props.outage_id !== undefined ||
+    props.severity !== undefined ||
+    featureId.startsWith("outage-") ||
+    obj.type === "outage"
+  );
+}
+
 type InfraPickObject = {
   id?: string;
   type?: string;
@@ -264,7 +276,7 @@ export function TacticalMap({
       const isBuoy = props.buoy_id !== undefined;
       const isTower = props.fcc_id !== undefined;
       const isNwsAlert = props.event !== undefined || props.headline !== undefined;
-      const isOutage = props.type === "internet_outage" || props.outage_id !== undefined;
+      const isOutage = isOutageFeature(props, obj);
       const isISS = props.type === "iss_marker" || String(obj.id).startsWith("iss-");
       const isDNS = (obj as any).letter !== undefined;
       const isAirspace = props.zone_id !== undefined;
@@ -793,7 +805,7 @@ export function TacticalMap({
       const isDarkVessel = props.type === "dark_vessel" || info.object.type === "dark_vessel" || (info.object as any).layer === "dark_vessel";
       const isFirms = props.type === "firms_hotspot" || info.object.type === "firms_hotspot" || (info.object as any).layer === "firms";
       const isOutage =
-        props.entity_type === "outage" || info.object.type === "outage";
+        isOutageFeature(props, info.object);
       const isNwsAlert =
         props.event !== undefined || props.headline !== undefined;
       const isTower =

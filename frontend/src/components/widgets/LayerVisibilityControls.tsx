@@ -1103,8 +1103,8 @@ export const LayerVisibilityControls: React.FC<
                 <div
                   className={`group flex items-center rounded border p-1 transition-all ${filters.showFIRMS ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
-                  <label className="flex flex-1 cursor-pointer items-center justify-between">
-                    <div className="flex items-center gap-1.5">
+                  <label className="flex flex-1 cursor-pointer items-center">
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                       <Flame
                         size={10}
                         className={
@@ -1116,21 +1116,6 @@ export const LayerVisibilityControls: React.FC<
                       >
                         NASA FIRMS (THERMAL)
                       </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={!!filters.showFIRMS}
-                      onChange={(e) =>
-                        handleSubFilterChange("showFIRMS", e.target.checked)
-                      }
-                    />
-                    <div
-                      className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFIRMS ? "bg-orange-500/80" : "bg-white/10"}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFIRMS ? "left-2.5" : "left-0.5"}`}
-                      />
                     </div>
                   </label>
 
@@ -1159,6 +1144,22 @@ export const LayerVisibilityControls: React.FC<
                   >
                     GLOBAL
                   </button>
+
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={!!filters.showFIRMS}
+                    onChange={(e) =>
+                      handleSubFilterChange("showFIRMS", e.target.checked)
+                    }
+                  />
+                  <div
+                    className={`ml-1.5 h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showFIRMS ? "bg-orange-500/80" : "bg-white/10"}`}
+                  >
+                    <div
+                      className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showFIRMS ? "left-2.5" : "left-0.5"}`}
+                    />
+                  </div>
                 </div>
 
                 {/* Dark Vessel Detection */}

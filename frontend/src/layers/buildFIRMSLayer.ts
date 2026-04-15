@@ -1,20 +1,12 @@
 /**
- * buildFIRMSLayer — NASA FIRMS VIIRS/MODIS thermal hotspot ScatterplotLayer.
+ * buildFIRMSLayer — NASA FIRMS VIIRS/MODIS thermal hotspot beacon layers.
  *
  * Visual encoding:
- *   radius  — proportional to Fire Radiative Power (FRP in MW), min 6 km
- *   fill    — confidence × day/night:
- *               night + high      → deep crimson  [210, 30,  20, 240]
- *               night + nominal   → orange-red     [230, 100, 10, 210]
- *               day   + high      → amber          [255, 165,  0, 190]
- *               day   + nominal   → yellow-orange  [255, 210, 10, 160]
- *               low / unknown     → grey           [160, 160, 160, 100]
- *   stroke  — white at 40% opacity to delineate overlapping detections
+ *   heat bloom   — restrained meter-scale aura for thermal footprint
+ *   alert ring   — pulsing pixel-scale ring that reads as a live sensor hit
+ *   core         — compact bright center for precise pick targeting
  *
  * Z-order: Tier 4 (Infra Assets) — depthBias -92.0, below NDBC buoys.
- *
- * Hover tooltip: satellite, FRP, brightness, confidence, acquisition time.
- * Click: emits hotspot as a synthetic entity for the sidebar.
  */
 
 import type { Layer } from "@deck.gl/core";
@@ -22,11 +14,13 @@ import { ScatterplotLayer } from "@deck.gl/layers";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import type { FIRMSHotspotProperties } from "../types";
 
+type RGBA = [number, number, number, number];
+
 /** Map confidence + day/night to RGBA fill colour. */
 function hotspotColor(
   confidence: string | null,
   daynight: string | null,
-): [number, number, number, number] {
+): RGBA {
   const conf = (confidence ?? "").toLowerCase();
   const night = (daynight ?? "").toUpperCase() === "N";
 
@@ -42,22 +36,39 @@ function hotspotColor(
     : [255, 180, 20, 200];     // amber — nominal daytime
 }
 
-/** Radius in metres: 6 km base + FRP-scaled component, capped at 60 km. */
-function hotspotRadius(frp: number | null): number {
-  const frpVal = frp ?? 0;
-  const base   = 12_000;                // Increased base to 12km to ensure they stick out more
-  const scaled = Math.min(frpVal * 2_000, 80_000); // Scaled for higher visibility
-  return base + scaled;
+function withAlpha(color: RGBA, alpha: number): RGBA {
+  return [color[0], color[1], color[2], alpha];
+}
+
+/** Radius in metres: restrained bloom that scales sublinearly with FRP. */
+function hotspotBloomRadius(frp: number | null): number {
+  const frpVal = Math.max(0, frp ?? 0);
+  const scaled = Math.sqrt(frpVal) * 950;
+  return Math.min(2_000 + scaled, 18_000);
+}
+
+function hotspotRingRadiusPixels(frp: number | null, pulse: number): number {
+  const frpVal = Math.max(0, frp ?? 0);
+  const scaled = Math.min(Math.sqrt(frpVal) * 0.6, 7);
+  return 10 + scaled + pulse * 4;
+}
+
+function hotspotCoreRadiusPixels(frp: number | null): number {
+  const frpVal = Math.max(0, frp ?? 0);
+  return Math.min(4 + Math.sqrt(frpVal) * 0.22, 9);
 }
 
 export function buildFIRMSLayer(
   firmsData: FeatureCollection | null,
   visible: boolean,
   globeMode: boolean,
+  now: number,
   setHoveredInfra: (info: unknown) => void,
   setSelectedInfra: (info: unknown) => void,
 ): Layer[] {
   if (!visible || !firmsData?.features?.length) return [];
+
+  const pulse = (Math.sin(now / 420) + 1) / 2;
 
   // Add layer tag to features for the picker
   const data = firmsData.features.map(f => ({
@@ -69,29 +80,84 @@ export function buildFIRMSLayer(
     }
   })) as any[];
 
+  const layerParams = {
+    parameters: {
+      depthTest: globeMode,
+      depthBias: globeMode ? -92.0 : 0,
+    } as Record<string, unknown>,
+  };
+
   return [
     new ScatterplotLayer<Feature<Point, FIRMSHotspotProperties>>({
-      id: `firms-hotspots-${globeMode ? "globe" : "merc"}`,
+      id: `firms-heat-bloom-${globeMode ? "globe" : "merc"}`,
+      data,
+      pickable: false,
+      opacity: 1.0,
+
+      getPosition: (d) => d.geometry.coordinates as [number, number],
+      getRadius: (d) => hotspotBloomRadius(d.properties.frp),
+      radiusUnits: "meters",
+      radiusMinPixels: 10,
+      radiusMaxPixels: 34,
+
+      filled: true,
+      stroked: false,
+      getFillColor: (d) => withAlpha(
+        hotspotColor(d.properties.confidence, d.properties.daynight),
+        42 + Math.round(pulse * 18),
+      ),
+
+      ...layerParams,
+    }),
+
+    new ScatterplotLayer<Feature<Point, FIRMSHotspotProperties>>({
+      id: `firms-alert-ring-${globeMode ? "globe" : "merc"}`,
+      data,
+      pickable: false,
+      opacity: 1.0,
+
+      getPosition: (d) => d.geometry.coordinates as [number, number],
+
+      getRadius: (d) => hotspotRingRadiusPixels(d.properties.frp, pulse),
+      radiusUnits: "pixels",
+      radiusMinPixels: 9,
+      radiusMaxPixels: 22,
+
+      filled: false,
+      stroked: true,
+      getLineColor: (d) => withAlpha(
+        hotspotColor(d.properties.confidence, d.properties.daynight),
+        150 + Math.round(pulse * 70),
+      ),
+      lineWidthMinPixels: 2,
+      lineWidthMaxPixels: 4,
+
+      ...layerParams,
+    }),
+
+    new ScatterplotLayer<Feature<Point, FIRMSHotspotProperties>>({
+      id: `firms-core-${globeMode ? "globe" : "merc"}`,
       data,
       pickable: true,
       opacity: 1.0,
 
       getPosition: (d) => d.geometry.coordinates as [number, number],
+      getRadius: (d) => hotspotCoreRadiusPixels(d.properties.frp),
+      radiusUnits: "pixels",
+      radiusMinPixels: 4,
+      radiusMaxPixels: 10,
 
-      getRadius: (d) => hotspotRadius(d.properties.frp),
-      radiusUnits: "meters",
-      radiusMinPixels: 6,
-      radiusMaxPixels: 60,
-
-      getFillColor: (d) => hotspotColor(d.properties.confidence, d.properties.daynight),
-      getLineColor: [255, 255, 255, 100],
+      filled: true,
+      getFillColor: (d) => withAlpha(
+        hotspotColor(d.properties.confidence, d.properties.daynight),
+        232,
+      ),
       stroked: true,
+      getLineColor: [255, 250, 220, 220],
       lineWidthMinPixels: 1,
+      lineWidthMaxPixels: 2,
 
-      parameters: {
-        depthTest: globeMode,
-        depthBias: globeMode ? -92.0 : 0,
-      } as any,
+      ...layerParams,
 
       onHover: (info) => setHoveredInfra(info),
       onClick: (info) => setSelectedInfra(info),

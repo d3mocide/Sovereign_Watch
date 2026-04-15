@@ -60,13 +60,11 @@ PEERINGDB_FAC_URL = "https://www.peeringdb.com/api/fac"
 
 POLL_INTERVAL_NDBC_MINUTES = int(os.getenv("POLL_INTERVAL_NDBC_MINUTES", "15"))
 POLL_INTERVAL_PEERINGDB_HOURS = int(os.getenv("POLL_INTERVAL_PEERINGDB_HOURS", "24"))
-POLL_INTERVAL_ISS_SECONDS = int(os.getenv("POLL_INTERVAL_ISS_SECONDS", "5"))
 POLL_INTERVAL_NWS_MINUTES = int(os.getenv("POLL_INTERVAL_NWS_MINUTES", "10"))
 POLL_INTERVAL_DNS_ROOT_MINUTES = int(os.getenv("POLL_INTERVAL_DNS_ROOT_MINUTES", "5"))
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 NWS_USER_AGENT = "SovereignWatch/1.0 (infra-poller; contact@sovereign.watch)"
-ISS_POSITION_URL = "http://api.open-notify.org/iss-now.json"
 
 # The 13 IANA root DNS server clusters (authoritative primary IPv4 + nominal location).
 # These are anycast clusters; the IP always routes to the nearest instance.
@@ -547,6 +545,76 @@ def parse_peeringdb_ixps(data: dict) -> list[dict]:
     return records
 
 
+def build_peeringdb_facility_location_index(records: list[dict]) -> dict[tuple[str, str], tuple[float, float]]:
+    """Build a city/country centroid lookup from parsed facility records."""
+    buckets: dict[tuple[str, str], list[tuple[float, float]]] = {}
+    for record in records:
+        city_key = normalize_country_label(record.get("city"))
+        country_key = normalize_country_label(record.get("country"))
+        lat = record.get("lat")
+        lon = record.get("lon")
+        if not city_key or not country_key or lat is None or lon is None:
+            continue
+        buckets.setdefault((city_key, country_key), []).append((float(lat), float(lon)))
+
+    return {
+        key: (
+            sum(lat for lat, _ in coords) / len(coords),
+            sum(lon for _, lon in coords) / len(coords),
+        )
+        for key, coords in buckets.items()
+    }
+
+
+def enrich_peeringdb_ixps_with_facility_locations(
+    data: dict,
+    location_index: dict[tuple[str, str], tuple[float, float]],
+) -> list[dict]:
+    """Backfill IXP coordinates from facility centroids when the API omits lat/lon."""
+    records = []
+    for item in data.get("data", []):
+        try:
+            ixp_id = int(item["id"])
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+
+            _lat = item.get("lat")
+            lat_raw = _lat if _lat is not None else item.get("latitude")
+            _lon = item.get("lon")
+            lon_raw = _lon if _lon is not None else item.get("longitude")
+
+            if lat_raw is None or lon_raw is None:
+                city_key = normalize_country_label(item.get("city"))
+                country_key = normalize_country_label(item.get("country"))
+                inferred = location_index.get((city_key, country_key))
+                if inferred is None:
+                    continue
+                lat, lon = inferred
+            else:
+                lat = float(lat_raw)
+                lon = float(lon_raw)
+
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                continue
+
+            records.append(
+                {
+                    "ixp_id": ixp_id,
+                    "name": name,
+                    "name_long": str(item.get("name_long", "") or "").strip() or None,
+                    "city": str(item.get("city", "") or "").strip() or None,
+                    "country": str(item.get("country", "") or "").strip() or None,
+                    "website": str(item.get("website", "") or "").strip() or None,
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return records
+
+
 def parse_peeringdb_facilities(data: dict) -> list[dict]:
     """Parse PeeringDB /api/fac response into a list of facility dicts.
 
@@ -782,7 +850,6 @@ class InfraPollerService:
             asyncio.create_task(self.ndbc_loop()),
             asyncio.create_task(self.peeringdb_loop()),
             asyncio.create_task(self.nws_loop()),
-            asyncio.create_task(self.iss_loop()),
             asyncio.create_task(self.dns_root_loop()),
         ]
         try:
@@ -833,73 +900,84 @@ class InfraPollerService:
         
         raise Exception(f"[{log_tag}] Failed to fetch {url} after {max_retries} attempts.")
 
+    async def geocode_region(self, region_name: str | None, country_code: str | None) -> tuple[float, float]:
+        """Resolve a country/region name to representative coordinates via Nominatim."""
+        normalized_name = (region_name or "").strip()
+        normalized_code = (country_code or "").strip().lower()
+        cache_key = f"{normalized_code}:{normalized_name.casefold()}"
+        cached = self._geocode_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if not normalized_name:
+            return (0.0, 0.0)
+
+        params = {
+            "q": normalized_name,
+            "format": "jsonv2",
+            "limit": 1,
+        }
+        if len(normalized_code) == 2:
+            params["countrycodes"] = normalized_code
+
+        timeout = aiohttp.ClientTimeout(total=15.0)
+        try:
+            async with aiohttp.ClientSession(
+                timeout=timeout,
+                headers={"User-Agent": USER_AGENT},
+            ) as client:
+                async with client.get(NOMINATIM_URL, params=params) as resp:
+                    resp.raise_for_status()
+                    results = await resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Geocoding failed for %s (%s): %s",
+                normalized_name,
+                country_code,
+                exc,
+            )
+            return (0.0, 0.0)
+
+        if not isinstance(results, list) or not results:
+            return (0.0, 0.0)
+
+        first = results[0]
+        try:
+            lat = float(first["lat"])
+            lon = float(first["lon"])
+        except (KeyError, TypeError, ValueError):
+            return (0.0, 0.0)
+
+        coords = (lat, lon)
+        self._geocode_cache[cache_key] = coords
+        return coords
+
     async def shutdown(self):
         logger.info("InfraPoller: shutting down...")
         self.running = False
-        if self.redis:
-            await self.redis.aclose()
 
     # -----------------------------------------------------------------------
-    # Geocoding (Nominatim) — 1 req/s rate limit
-    # -----------------------------------------------------------------------
-
-    async def geocode_region(
-        self, region_name: str, country_code: str
-    ) -> tuple[float, float]:
-        cache_key = f"{region_name},{country_code}"
-        if cache_key in self._geocode_cache:
-            return self._geocode_cache[cache_key]
-
-        try:
-            timeout = aiohttp.ClientTimeout(total=10.0)
-            async with aiohttp.ClientSession(
-                timeout=timeout, headers={"User-Agent": USER_AGENT}
-            ) as client:
-                async with client.get(
-                    NOMINATIM_URL,
-                    params={
-                        "q": f"{region_name}, {country_code}",
-                        "format": "json",
-                        "limit": 1,
-                    },
-                ) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
-            if data:
-                lat = float(data[0]["lat"])
-                lon = float(data[0]["lon"])
-                self._geocode_cache[cache_key] = (lat, lon)
-                await asyncio.sleep(1)  # Nominatim: 1 req/s policy
-                return (lat, lon)
-        except Exception as exc:
-            logger.error(
-                "Geocoding failed for %s, %s: %s", region_name, country_code, exc
-            )
-
-        self._geocode_cache[cache_key] = (0.0, 0.0)
-        return (0.0, 0.0)
-
-    # -----------------------------------------------------------------------
-    # Cables loop — 7-day interval
+    # Cables + landing stations loop — 7-day interval
     # -----------------------------------------------------------------------
 
     async def cables_loop(self):
-        last_fetch_str = await self.redis.get("infra:last_cables_fetch")
-        last_fetch = float(last_fetch_str) if last_fetch_str else 0.0
         interval_s = POLL_INTERVAL_CABLES_DAYS * 86400
-
-        if last_fetch > 0:
-            remaining = interval_s - (time.time() - last_fetch)
-            if remaining > 0:
-                logger.info(
-                    "Cables: cached, next sync in %dd %dh",
-                    int(remaining // 86400),
-                    int((remaining % 86400) // 3600),
-                )
-                await asyncio.sleep(remaining)
 
         while self.running:
             try:
+                last_fetch = await self.redis.get("infra:last_cables_fetch")
+                if last_fetch:
+                    elapsed = time.time() - float(last_fetch)
+                    if elapsed < interval_s:
+                        remaining = interval_s - elapsed
+                        logger.info(
+                            "Cables loop: cooldown active. Next fetch in %dd %dh.",
+                            int(remaining // 86400),
+                            int((remaining % 86400) // 3600),
+                        )
+                        await asyncio.sleep(remaining)
+                        continue
+
                 await self._fetch_cables_and_stations()
                 await self.redis.set("infra:last_cables_fetch", str(time.time()))
             except Exception as e:
@@ -1218,8 +1296,16 @@ class InfraPollerService:
         last_fetch_str = await self.redis.get("infra:last_peeringdb_fetch")
         last_fetch = float(last_fetch_str) if last_fetch_str else 0.0
         interval_s = POLL_INTERVAL_PEERINGDB_HOURS * 3600
+        stats_raw = await self.redis.get("infra:peeringdb_stats")
+        should_refetch_immediately = False
+        if stats_raw:
+            try:
+                stats = json.loads(stats_raw)
+                should_refetch_immediately = int(stats.get("ixp_count", 0)) == 0
+            except (TypeError, ValueError, json.JSONDecodeError):
+                should_refetch_immediately = False
 
-        if last_fetch > 0:
+        if last_fetch > 0 and not should_refetch_immediately:
             remaining = interval_s - (time.time() - last_fetch)
             if remaining > 0:
                 logger.info(
@@ -1228,6 +1314,8 @@ class InfraPollerService:
                     int((remaining % 3600) // 60),
                 )
                 await asyncio.sleep(remaining)
+        elif should_refetch_immediately:
+            logger.info("PeeringDB: previous IXP ingest was empty, bypassing cooldown for recovery.")
 
         while self.running:
             try:
@@ -1262,13 +1350,18 @@ class InfraPollerService:
 
 
         fac_records = parse_peeringdb_facilities(fac_data)
-        ixp_records = parse_peeringdb_ixps(ix_data)
+        facility_location_index = build_peeringdb_facility_location_index(fac_records)
+        ixp_records = enrich_peeringdb_ixps_with_facility_locations(ix_data, facility_location_index)
 
         if ixp_records:
             ixp_count = await asyncio.to_thread(
                 _upsert_peeringdb_ixps_sync, DB_URL, ixp_records
             )
-            logger.info("PeeringDB: upserted %d IXPs (parsed %d)", ixp_count, len(ixp_records))
+            logger.info(
+                "PeeringDB: upserted %d IXPs (parsed %d, inferred via facilities where needed)",
+                ixp_count,
+                len(ixp_records),
+            )
         else:
             logger.warning("PeeringDB: no valid IXP records parsed")
 
@@ -1402,53 +1495,6 @@ class InfraPollerService:
         await self.redis.set("dns:root:health", json.dumps(results), ex=ttl)
         reachable_count = sum(1 for r in results if r["reachable"])
         logger.info("DNS root health: %d/%d clusters reachable", reachable_count, len(results))
-
-    # -----------------------------------------------------------------------
-    # ISS tracking loop — 5-second interval
-    # -----------------------------------------------------------------------
-
-    async def iss_loop(self):
-        """Poll Open Notify for ISS position every 5 seconds; write to PostgreSQL."""
-        while self.running:
-            try:
-                await self._fetch_iss_position()
-                await self.redis.set("infra:last_iss_fetch", str(time.time()))
-            except Exception as e:
-                logger.exception("ISS fetch error")
-                try:
-                    await self.redis.set(
-                        "poller:infra_iss:last_error",
-                        json.dumps({"ts": time.time(), "msg": str(e)}),
-                        ex=3600,
-                    )
-                except Exception:
-                    pass
-            await asyncio.sleep(POLL_INTERVAL_ISS_SECONDS)
-
-    async def _fetch_iss_position(self):
-        """Fetch current ISS coordinates, parse, and upsert into DB."""
-        timeout = aiohttp.ClientTimeout(total=5.0)
-        async with aiohttp.ClientSession(timeout=timeout) as client:
-            async with client.get(ISS_POSITION_URL) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-
-        pos = parse_iss_position(data)
-        if not pos:
-            logger.warning("ISS: Failed to parse position from API")
-            return
-
-        # Blocking DB write — offload to thread pool
-        await asyncio.to_thread(_upsert_iss_position_sync, DB_URL, pos)
-        
-        # Cache latest position to Redis for real-time map feed
-        redis_pos = pos.copy()
-        if redis_pos.get("time") and isinstance(redis_pos["time"], datetime):
-            redis_pos["time"] = redis_pos["time"].isoformat()
-            
-        await self.redis.set("infra:iss_latest", json.dumps(redis_pos), ex=60)
-        
-        logger.debug("ISS: Position updated (%.4f, %.4f)", pos["lat"], pos["lon"])
 
     # -----------------------------------------------------------------------
     # Entry point

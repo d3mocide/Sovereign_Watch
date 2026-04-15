@@ -142,6 +142,7 @@ services:
       - SCALES_INTERVAL_S=${SCALES_INTERVAL_S:-900}
       - SATNOGS_API_TOKEN=${SATNOGS_API_TOKEN:-}
       - FIRMS_MAP_KEY=${FIRMS_MAP_KEY:-}
+      - FIRMS_BBOX_MODE=${FIRMS_BBOX_MODE:-mission}
       - FIRMS_SOURCE=${FIRMS_SOURCE:-VIIRS_SNPP_NRT}
       - FIRMS_FETCH_INTERVAL_M=${FIRMS_FETCH_INTERVAL_M:-10}
       - FIRMS_DAYS_BACK=${FIRMS_DAYS_BACK:-1}
@@ -172,7 +173,6 @@ services:
       - POLL_FCC_START_HOUR=${POLL_FCC_START_HOUR:-3}
       - POLL_INTERVAL_NDBC_MINUTES=${POLL_INTERVAL_NDBC_MINUTES:-15}
       - POLL_INTERVAL_PEERINGDB_HOURS=${POLL_INTERVAL_PEERINGDB_HOURS:-24}
-      - POLL_INTERVAL_ISS_SECONDS=${POLL_INTERVAL_ISS_SECONDS:-5}
       - POLL_INTERVAL_NWS_MINUTES=${POLL_INTERVAL_NWS_MINUTES:-10}
     networks:
       - sovereign-net-backend
@@ -195,6 +195,7 @@ services:
       - REDIS_URL=redis://sovereign-redis:6379
       - GDELT_CONFLICT_ONLY=${GDELT_CONFLICT_ONLY:-true}
       - RELIEFWEB_POLL_INTERVAL=${RELIEFWEB_POLL_INTERVAL:-1800}
+      - RELIEFWEB_APPNAME=${RELIEFWEB_APPNAME:-}
     networks:
       - sovereign-net-backend
     depends_on:
@@ -298,6 +299,9 @@ services:
       - CENTER_LAT=${CENTER_LAT:-45.5152}
       - CENTER_LON=${CENTER_LON:--122.6784}
       - COVERAGE_RADIUS_NM=${COVERAGE_RADIUS_NM:-150}
+      - FIRMS_MAP_KEY=${FIRMS_MAP_KEY:-}
+      - FIRMS_SOURCE=${FIRMS_SOURCE:-VIIRS_SNPP_NRT}
+      - FIRMS_BBOX_MODE=${FIRMS_BBOX_MODE:-mission}
       - TRACK_HISTORY_MAX_LIMIT=${TRACK_HISTORY_MAX_LIMIT:-1000}
       - TRACK_HISTORY_MAX_HOURS=${TRACK_HISTORY_MAX_HOURS:-168}
       - TRACK_REPLAY_MAX_LIMIT=${TRACK_REPLAY_MAX_LIMIT:-10000}
@@ -330,6 +334,7 @@ services:
       - ./backend/ai/models.yaml:/app/models.yaml:ro
       - ./backend/ai/litellm_config.yaml:/app/litellm_config.yaml:ro
       - ./backend/db/migrations:/app/migrations:ro
+      - ./frontend/public/world-countries.json:/app/support/world-countries.json:ro
     networks:
       - sovereign-net-backend
     depends_on:

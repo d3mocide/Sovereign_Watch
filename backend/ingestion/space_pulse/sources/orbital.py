@@ -56,7 +56,7 @@ class OrbitalSource(BaseSource):
         self.sat_meta = []
         self.sat_array = None
 
-        self.fetch_interval_hours = 6
+        self.fetch_interval_hours = 24
         self.fetch_hour = int(
             os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "2"))
         )
@@ -123,6 +123,78 @@ class OrbitalSource(BaseSource):
             "spire": "Spire",
             "planet": "Planet",
         }
+
+    def _hydrate_sat_arrays(self, sat_dict: dict[int, dict]) -> int:
+        self.satrecs = [value["satrec"] for value in sat_dict.values()]
+        self.sat_meta = [value["meta"] for value in sat_dict.values()]
+        self.sat_array = SatrecArray(self.satrecs) if self.satrecs else None
+        return len(self.satrecs)
+
+    async def _load_cached_tle_data(self) -> int:
+        sat_dict: dict[int, dict] = {}
+
+        for endpoint, param_val in self.groups:
+            param_name = "FILE" if "sup-gp" in endpoint else "GROUP"
+            cache_path = self._get_cache_path(endpoint, param_name, param_val)
+            if not os.path.exists(cache_path):
+                continue
+
+            try:
+                data_text = await asyncio.to_thread(_read_file_sync, cache_path)
+            except Exception as exc:
+                logger.warning("Orbital TLE cache read failed for %s: %s", param_val, exc)
+                continue
+
+            if not data_text.strip():
+                continue
+
+            parsed = await asyncio.to_thread(self._parse_tle_data, data_text, param_val)
+            sat_dict.update(parsed)
+
+        loaded_count = self._hydrate_sat_arrays(sat_dict)
+        if loaded_count > 0:
+            logger.info("Orbital TLE: primed %d satellites from local cache.", loaded_count)
+        return loaded_count
+
+    async def _get_last_fetch_timestamp(self) -> float | None:
+        if not self.redis_client:
+            return None
+
+        raw_value = await self.redis_client.get("orbital_pulse:last_fetch")
+        if not raw_value:
+            return None
+
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            logger.warning("Orbital TLE: invalid last-fetch timestamp in Redis")
+            return None
+
+    def _seconds_until_next_fetch_window(self, now_dt: datetime, last_fetch_ts: float | None) -> tuple[float, str] | None:
+        if self.fetch_hour >= 0:
+            if now_dt.hour != self.fetch_hour:
+                next_run = now_dt.replace(hour=self.fetch_hour, minute=0, second=0, microsecond=0)
+                if next_run <= now_dt:
+                    next_run += timedelta(days=1)
+                return (next_run - now_dt).total_seconds(), "scheduled hour not reached"
+
+            if last_fetch_ts is not None:
+                last_dt = datetime.fromtimestamp(last_fetch_ts, UTC)
+                if last_dt.date() == now_dt.date():
+                    next_run = now_dt.replace(hour=self.fetch_hour, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    return (next_run - now_dt).total_seconds(), "already fetched in this UTC window"
+
+            return None
+
+        if last_fetch_ts is None:
+            return None
+
+        elapsed = now_dt.timestamp() - last_fetch_ts
+        interval_s = self.fetch_interval_hours * 3600
+        if elapsed >= interval_s:
+            return None
+
+        return interval_s - elapsed, "interval cooldown active"
 
     async def run(self):
         """Run TLE update and propagation loops concurrently."""
@@ -215,24 +287,34 @@ class OrbitalSource(BaseSource):
                 )
                 sat_dict.update(parsed)
 
-            self.satrecs = [v["satrec"] for v in sat_dict.values()]
-            self.sat_meta = [v["meta"] for v in sat_dict.values()]
-            if self.satrecs:
-                self.sat_array = SatrecArray(self.satrecs)
-            logger.info("Loaded %d unique satellites", len(self.satrecs))
+        loaded_count = self._hydrate_sat_arrays(sat_dict)
+        logger.info("Loaded %d unique satellites", loaded_count)
 
     async def tle_update_loop(self):
         while self.running:
-            if self.fetch_hour >= 0:
-                current_hour = datetime.now(UTC).hour
-                if current_hour != self.fetch_hour:
+            if not self.satrecs or not self.sat_array:
+                cached_count = await self._load_cached_tle_data()
+                if cached_count == 0:
                     logger.info(
-                        "Orbital TLE: deferring to %02d:00 UTC (now %02d:00 UTC).",
-                        self.fetch_hour,
-                        current_hour,
-                    )
-                    await asyncio.sleep(3600)
-                    continue
+                        "Orbital TLE: no cached state available; fetching immediately to seed live propagation.")
+                    try:
+                        await self.fetch_tle_data()
+                    except Exception as exc:
+                        logger.error("Initial TLE seed fetch error: %s", repr(exc))
+
+            now_dt = datetime.now(UTC)
+            last_fetch_ts = await self._get_last_fetch_timestamp()
+            wait_result = self._seconds_until_next_fetch_window(now_dt, last_fetch_ts)
+            if wait_result is not None:
+                wait_sec, reason = wait_result
+                logger.info(
+                    "Orbital TLE: %s. Next fetch in %.1fh.",
+                    reason,
+                    wait_sec / 3600,
+                )
+                await asyncio.sleep(max(wait_sec, 60))
+                continue
+
             try:
                 await self.fetch_tle_data()
                 await self.redis_client.set(
@@ -249,6 +331,8 @@ class OrbitalSource(BaseSource):
                     )
                 except Exception:
                     pass
+            if not self.running:
+                break
             await asyncio.sleep(self.fetch_interval_hours * 3600)
 
     async def propagation_loop(self):

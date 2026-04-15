@@ -18,7 +18,7 @@ By orchestrating multiple asynchronous sources within a single container, SpaceP
 
 Tracks approximately **14,000 satellites** in real time using Two-Line Element (TLE) data from **Celestrak** and the **SGP4** orbital mechanics propagator.
 
-- **TLE Refresh:** Every 6 hours.
+- **TLE Refresh:** Daily at the configured UTC hour (`SPACE_TLE_FETCH_HOUR`, default `02:00 UTC`). If hour gating is disabled, refresh every 24 hours.
 - **Propagation Rate:** Every 5 seconds.
 - **Output:** `orbital_raw` Kafka topic.
 

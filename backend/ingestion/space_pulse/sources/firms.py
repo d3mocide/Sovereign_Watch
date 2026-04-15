@@ -25,7 +25,7 @@ Configuration (via environment):
   FIRMS_FETCH_INTERVAL_M — poll interval in minutes (default: 10)
   FIRMS_DAYS_BACK        — days of history per request (default: 1)
   FIRMS_MIN_FRP          — minimum Fire Radiative Power filter in MW (default: 0.5)
-  FIRMS_BBOX_MODE        — "mission" (default, area bbox) | "global" (World endpoint)
+    FIRMS_BBOX_MODE        — "mission" (default, area bbox) | "global" (world area endpoint)
   CENTER_LAT / CENTER_LON / COVERAGE_RADIUS_NM — mission area (shared with other pollers)
 """
 
@@ -57,7 +57,7 @@ FIRMS_FETCH_INTERVAL_M = int(os.getenv("FIRMS_FETCH_INTERVAL_M", "10"))
 FIRMS_DAYS_BACK        = int(os.getenv("FIRMS_DAYS_BACK", "1"))
 FIRMS_MIN_FRP          = float(os.getenv("FIRMS_MIN_FRP", "0.5"))
 # "mission" (default) — area query scoped to the mission bbox
-# "global"           — NASA FIRMS World endpoint, ingests all planetary detections
+# "global"           — NASA FIRMS world area endpoint, ingests all planetary detections
 FIRMS_BBOX_MODE        = os.getenv("FIRMS_BBOX_MODE", "mission").lower()
 
 CENTER_LAT         = float(os.getenv("CENTER_LAT", "45.5152"))
@@ -68,7 +68,6 @@ COVERAGE_RADIUS_NM = float(os.getenv("COVERAGE_RADIUS_NM", "150"))
 BBOX_PADDING_FACTOR = 1.25
 
 FIRMS_BASE_URL        = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
-FIRMS_WORLD_BASE_URL  = "https://firms.modaps.eosdis.nasa.gov/api/country/csv"
 USER_AGENT     = "SovereignWatch/1.0 (SpacePulse FIRMS dark-vessel)"
 HTTP_TIMEOUT   = 30.0
 
@@ -78,6 +77,7 @@ VIIRS_ACCEPTED_CONFIDENCE = {"nominal", "high"}
 # Redis keys
 REDIS_KEY_GEOJSON     = "firms:latest_geojson"
 REDIS_KEY_DARK_VESSEL = "firms:dark_vessel_candidates"
+REDIS_KEY_LAST_FETCH  = "firms_pulse:last_fetch"
 REDIS_TTL_SECONDS     = 3600  # 1 hour
 
 
@@ -216,13 +216,37 @@ class FIRMSSource(BaseSource):
     Integrated into SpacePulseService alongside OrbitalSource, SpaceWeatherSource, etc.
     """
 
-    def __init__(self, client, redis_client, db_url: str, fetch_interval_m: int = FIRMS_FETCH_INTERVAL_M):
+    def __init__(self, client=None, redis_client=None, db_url: str = "", fetch_interval_m: int = FIRMS_FETCH_INTERVAL_M):
         super().__init__(client)
         self.redis_client    = redis_client
         self.db_url          = db_url
         self.fetch_interval  = fetch_interval_m * 60  # convert to seconds
         self._seen_keys: set[str] = set()  # (acq_date, acq_time, lat, lon, sat) dedup
         self._use_fallback   = False  # firms2.modaps.eosdis.nasa.gov fallback
+
+    async def _get_last_fetch(self) -> float | None:
+        if not self.redis_client:
+            return None
+
+        raw_value = await self.redis_client.get(REDIS_KEY_LAST_FETCH)
+        if not raw_value:
+            return None
+
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            logger.warning("FIRMS: invalid last-fetch timestamp in Redis key %s", REDIS_KEY_LAST_FETCH)
+            return None
+
+    async def _set_last_fetch(self):
+        if not self.redis_client:
+            return
+
+        await self.redis_client.set(
+            REDIS_KEY_LAST_FETCH,
+            str(time.time()),
+            ex=int(self.fetch_interval * 2),
+        )
 
     async def run(self):
         """Main polling loop — runs indefinitely inside SpacePulseService.run()."""
@@ -238,25 +262,47 @@ class FIRMSSource(BaseSource):
             FIRMS_SOURCE, FIRMS_FETCH_INTERVAL_M, FIRMS_DAYS_BACK, FIRMS_MIN_FRP,
         )
 
-        last_fetch = 0.0
         while True:
             try:
-                now = time.monotonic()
-                if now - last_fetch >= self.fetch_interval:
-                    await self._poll()
-                    last_fetch = now
-            except Exception:
-                logger.exception("FIRMS poll error")
+                now = time.time()
+                last_fetch = await self._get_last_fetch()
+                if last_fetch is not None:
+                    elapsed = now - last_fetch
+                    if elapsed < self.fetch_interval:
+                        wait_sec = self.fetch_interval - elapsed
+                        logger.info(
+                            "FIRMS: cooldown active (%.1fm / %.1fm). Next in %.1fm.",
+                            elapsed / 60,
+                            self.fetch_interval / 60,
+                            wait_sec / 60,
+                        )
+                        await asyncio.sleep(wait_sec)
+                        continue
+                else:
+                    logger.info("FIRMS: no prior fetch timestamp — fetching immediately on startup.")
 
-            await asyncio.sleep(30)
+                await self._poll()
+                await self._set_last_fetch()
+            except Exception as exc:
+                logger.exception("FIRMS poll error")
+                if self.redis_client:
+                    try:
+                        await self.redis_client.set(
+                            "poller:firms:last_error",
+                            json.dumps({"ts": time.time(), "msg": str(exc)}),
+                            ex=86400,
+                        )
+                    except Exception:
+                        pass
+                await asyncio.sleep(min(self.fetch_interval, 60))
 
     async def _poll(self):
         """Fetch and persist one round of FIRMS data."""
         domain = "firms2.modaps.eosdis.nasa.gov" if self._use_fallback else "firms.modaps.eosdis.nasa.gov"
         
         if FIRMS_BBOX_MODE == "global":
-            endpoint = "country/csv"
-            query_target = "World"
+            endpoint = "area/csv"
+            query_target = "world"
             logger.info("Polling FIRMS %s (mode=GLOBAL, days=%d)…", FIRMS_SOURCE, FIRMS_DAYS_BACK)
         else:
             west, south, east, north = _bbox_from_mission(CENTER_LAT, CENTER_LON, COVERAGE_RADIUS_NM)

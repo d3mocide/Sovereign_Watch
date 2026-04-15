@@ -124,30 +124,30 @@ class SatNOGSNetworkSource(BaseSource):
                 logger.error("SatNOGS Network request error on page %d: %s", page, repr(exc))
                 break
 
-                # SatNOGS API observations endpoint returns a raw list (no dict wrapper),
-                # with pagination URLs provided in the RFC 5988 "Link" header.
-                results = data if isinstance(data, list) else data.get("results", [])
-                
-                for obs in results:
-                    obs_id = obs.get("id")
-                    if obs_id in self._seen_ids:
-                        continue
-                    record = self._normalise(obs, fetched_at)
-                    if record is None:
-                        continue
-                    await self.producer.send(self.topic, value=record)
-                    if obs_id is not None:
-                        self._seen_ids.add(obs_id)
-                    published += 1
+            # SatNOGS API observations endpoint returns a raw list (no dict wrapper),
+            # with pagination URLs provided in the RFC 5988 "Link" header.
+            results = data if isinstance(data, list) else data.get("results", [])
 
-                # Traverse pagination via "Link" header (rel="next")
-                url = resp.links.get("next", {}).get("url")
-                page += 1
-                if url:
-                    # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
-                    # We use a conservative 5s for anonymous and 1s for authenticated.
-                    delay = 1.0 if self.api_token else 5.0
-                    await asyncio.sleep(delay)
+            for obs in results:
+                obs_id = obs.get("id")
+                if obs_id in self._seen_ids:
+                    continue
+                record = self._normalise(obs, fetched_at)
+                if record is None:
+                    continue
+                await self.producer.send(self.topic, value=record)
+                if obs_id is not None:
+                    self._seen_ids.add(obs_id)
+                published += 1
+
+            # Traverse pagination via "Link" header (rel="next")
+            url = resp.links.get("next", {}).get("url")
+            page += 1
+            if url:
+                # Anonymous limit is 60/hr (1/min); Authenticated is 240/hr (4/min).
+                # We use a conservative 5s for anonymous and 1s for authenticated.
+                delay = 1.0 if self.api_token else 5.0
+                await asyncio.sleep(delay)
 
         # Bound in-memory dedup set to avoid unbounded growth across many intervals
         if len(self._seen_ids) > 50_000:

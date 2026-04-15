@@ -15,6 +15,7 @@ Run all including live feed check (requires FIRMS_MAP_KEY):
 import os
 import sys
 import textwrap
+from unittest.mock import AsyncMock
 from datetime import UTC, datetime
 
 import pytest
@@ -29,6 +30,7 @@ os.environ.setdefault("FIRMS_MAP_KEY", "test-placeholder")
 
 from sources.firms import (  # noqa: E402
     FIRMSSource,
+    REDIS_KEY_LAST_FETCH,
     _bbox_from_mission,
     _parse_modis_confidence,
     _parse_viirs_confidence,
@@ -271,6 +273,59 @@ class TestFIRMSSourceInstantiation:
     def test_seen_keys_starts_empty(self):
         src = make_source()
         assert len(src._seen_keys) == 0
+
+
+def test_global_mode_uses_world_area_endpoint(monkeypatch):
+    import sources.firms as firms_mod
+
+    src = FIRMSSource(client=None, redis_client=AsyncMock(), db_url="postgresql://x/y")
+    src._set_last_fetch = AsyncMock()
+    src._update_redis_cache = AsyncMock()
+
+    response = AsyncMock()
+    response.raise_for_status.return_value = None
+    response.text = "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
+    fetch_mock = AsyncMock(return_value=response)
+    monkeypatch.setattr(firms_mod, "FIRMS_BBOX_MODE", "global")
+    src.fetch_with_retry = fetch_mock
+
+    asyncio.run(src._poll())
+
+    called_url = fetch_mock.await_args.args[0]
+    assert "/api/area/csv/" in called_url
+    assert called_url.endswith("/VIIRS_SNPP_NRT/world/1")
+
+
+class TestFIRMSRedisCadence:
+    @pytest.mark.anyio
+    async def test_get_last_fetch_reads_redis_timestamp(self):
+        redis_client = AsyncMock()
+        redis_client.get = AsyncMock(return_value="123.5")
+        src = FIRMSSource(client=None, redis_client=redis_client, db_url="postgresql://x/y")
+
+        last_fetch = await src._get_last_fetch()
+
+        assert last_fetch == 123.5
+        redis_client.get.assert_awaited_once_with(REDIS_KEY_LAST_FETCH)
+
+    @pytest.mark.anyio
+    async def test_set_last_fetch_persists_redis_timestamp(self):
+        redis_client = AsyncMock()
+        redis_client.set = AsyncMock()
+        src = FIRMSSource(
+            client=None,
+            redis_client=redis_client,
+            db_url="postgresql://x/y",
+            fetch_interval_m=10,
+        )
+
+        await src._set_last_fetch()
+
+        redis_client.set.assert_awaited_once()
+        call_args = redis_client.set.await_args
+        assert call_args.args[0] == REDIS_KEY_LAST_FETCH
+        assert float(call_args.args[1]) > 0
+        assert call_args.kwargs["ex"] == 1200
 
 
 # ---------------------------------------------------------------------------

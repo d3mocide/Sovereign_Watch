@@ -106,6 +106,18 @@ type InfraPickInfo = {
   layer?: { id?: string };
 };
 
+function isOutageFeature(props: Record<string, unknown>, obj: InfraPickObject): boolean {
+  const featureId = typeof props.id === "string" ? props.id : typeof obj.id === "string" ? obj.id : "";
+  return (
+    props.entity_type === "outage" ||
+    props.type === "internet_outage" ||
+    props.outage_id !== undefined ||
+    props.severity !== undefined ||
+    featureId.startsWith("outage-") ||
+    obj.type === "outage"
+  );
+}
+
 export function OrbitalMap({
   onCountsUpdate,
   filters,
@@ -186,7 +198,7 @@ export function OrbitalMap({
 
       if (isNwsAlert) {
         entityType = 'nws_alert';
-      } else if ((obj as any).type === 'outage') {
+      } else if (isOutageFeature(props, obj)) {
         entityType = 'outage';
       } else if (layerId.includes('ixp')) {
         // Inject a layer discriminator so MapTooltip can render the IXP section
@@ -201,6 +213,7 @@ export function OrbitalMap({
         callsign:
           (props as any).event ||
           (props as any).headline ||
+          (props as any).region ||
           (props as any).name ||
           (props as any).name_long ||
           'Unknown Infra',
@@ -511,7 +524,7 @@ export function OrbitalMap({
 
       const props = info.object.properties || {};
       const isNwsAlert = props.event != null || props.headline != null;
-      const isOutage = props.entity_type === 'outage' || info.object.type === 'outage';
+      const isOutage = isOutageFeature(props, info.object);
 
       let lat = info.coordinate?.[1] || 0;
       let lon = info.coordinate?.[0] || 0;
@@ -539,6 +552,7 @@ export function OrbitalMap({
         callsign: String(
           info.object.properties?.event ||
             info.object.properties?.headline ||
+            info.object.properties?.region ||
             info.object.properties?.name ||
             'INFRA',
         ),

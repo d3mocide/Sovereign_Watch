@@ -118,6 +118,7 @@ def _make_post_mock(status: int = 200, body: dict | None = None) -> MagicMock:
     mock_response = AsyncMock()
     mock_response.status = status
     mock_response.json = AsyncMock(return_value=body or {})
+    mock_response.text = AsyncMock(return_value=json.dumps(body or {}))
     mock_response.__aenter__ = AsyncMock(return_value=mock_response)
     mock_response.__aexit__ = AsyncMock(return_value=False)
     return mock_response
@@ -375,14 +376,35 @@ def _make_rw_body(disasters: list[dict] | None = None) -> dict:
     return {"data": disasters}
 
 
-def test_fetch_reliefweb_publishes_event():
+def test_fetch_reliefweb_publishes_event(monkeypatch):
     """A well-formed ReliefWeb disaster should produce one Kafka message per country."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     svc.session.post = MagicMock(return_value=_make_post_mock(200, _make_rw_body()))
 
     run(svc.fetch_reliefweb())
 
     svc.producer.send_and_wait.assert_called_once()
+    svc.session.post.assert_called_once_with(
+        svc_mod.RELIEFWEB_API_URL,
+        params={"appname": "approved-appname"},
+        json={
+            "profile": "list",
+            "fields": {
+                "include": ["name", "date", "country", "type", "status", "url"]
+            },
+            "filter": {
+                "operator": "OR",
+                "conditions": [
+                    {"field": "status", "value": "current"},
+                    {"field": "status", "value": "alert"},
+                ],
+            },
+            "limit": 200,
+            "sort": ["date.created:desc"],
+        },
+        headers={"Content-Type": "application/json"},
+    )
     call_args = svc.producer.send_and_wait.call_args
     assert call_args[0][0] == "gdelt_raw"
     msg = json.loads(call_args[0][1].decode("utf-8"))
@@ -400,8 +422,9 @@ def test_fetch_reliefweb_publishes_event():
     assert msg["tone"] is None
 
 
-def test_fetch_reliefweb_multi_country_emits_one_event_each():
+def test_fetch_reliefweb_multi_country_emits_one_event_each(monkeypatch):
     """A disaster affecting two countries should emit two separate Kafka messages."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     body = _make_rw_body([
         {
@@ -431,8 +454,9 @@ def test_fetch_reliefweb_multi_country_emits_one_event_each():
     assert ids == {"rw-99-MLI", "rw-99-NER"}
 
 
-def test_fetch_reliefweb_skips_country_without_location():
+def test_fetch_reliefweb_skips_country_without_location(monkeypatch):
     """Countries that lack a location block must be silently skipped."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     body = _make_rw_body([
         {
@@ -456,8 +480,9 @@ def test_fetch_reliefweb_skips_country_without_location():
     svc.producer.send_and_wait.assert_not_called()
 
 
-def test_fetch_reliefweb_skips_disaster_without_countries():
+def test_fetch_reliefweb_skips_disaster_without_countries(monkeypatch):
     """Disasters with an empty country list must not produce any Kafka messages."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     body = _make_rw_body([
         {
@@ -479,8 +504,9 @@ def test_fetch_reliefweb_skips_disaster_without_countries():
     svc.producer.send_and_wait.assert_not_called()
 
 
-def test_fetch_reliefweb_returns_early_on_http_error():
+def test_fetch_reliefweb_returns_early_on_http_error(monkeypatch):
     """A non-200 response from ReliefWeb must not produce any Kafka messages."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     svc.session.post = MagicMock(return_value=_make_post_mock(503))
 
@@ -489,8 +515,9 @@ def test_fetch_reliefweb_returns_early_on_http_error():
     svc.producer.send_and_wait.assert_not_called()
 
 
-def test_fetch_reliefweb_goldstein_unknown_type():
+def test_fetch_reliefweb_goldstein_unknown_type(monkeypatch):
     """Unknown disaster types should use the default Goldstein fallback."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     body = _make_rw_body([
         {
@@ -516,11 +543,48 @@ def test_fetch_reliefweb_goldstein_unknown_type():
     assert msg["goldstein"] == svc_mod._DEFAULT_RELIEFWEB_GOLDSTEIN
 
 
-def test_fetch_reliefweb_empty_data_list():
+def test_fetch_reliefweb_empty_data_list(monkeypatch):
     """An empty data array must not crash or publish any events."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "approved-appname")
     svc = make_service()
     svc.session.post = MagicMock(return_value=_make_post_mock(200, {"data": []}))
 
     run(svc.fetch_reliefweb())
 
     svc.producer.send_and_wait.assert_not_called()
+
+
+def test_fetch_reliefweb_skips_when_appname_missing(monkeypatch):
+    """ReliefWeb polling should short-circuit before making a request without an appname."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "")
+    svc = make_service()
+
+    run(svc.fetch_reliefweb())
+
+    svc.session.post.assert_not_called()
+    svc.producer.send_and_wait.assert_not_called()
+    assert svc._reliefweb_disabled_reason is not None
+
+
+def test_fetch_reliefweb_disables_after_unapproved_appname(monkeypatch):
+    """A 403 approved-appname error should disable subsequent ReliefWeb polls until restart."""
+    monkeypatch.setattr(svc_mod, "RELIEFWEB_APPNAME", "bad-appname")
+    svc = make_service()
+    svc.session.post = MagicMock(
+        return_value=_make_post_mock(
+            403,
+            {
+                "status": 403,
+                "error": {
+                    "message": "You are not using an approved appname.",
+                },
+            },
+        )
+    )
+
+    run(svc.fetch_reliefweb())
+    run(svc.fetch_reliefweb())
+
+    svc.session.post.assert_called_once()
+    svc.producer.send_and_wait.assert_not_called()
+    assert svc._reliefweb_disabled_reason is not None
