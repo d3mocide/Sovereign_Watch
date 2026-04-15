@@ -184,6 +184,8 @@ services:
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - POLL_INTERVAL=900
       - REDIS_URL=redis://sovereign-redis:6379
+      - GDELT_CONFLICT_ONLY=${GDELT_CONFLICT_ONLY:-true}
+      - RELIEFWEB_POLL_INTERVAL=${RELIEFWEB_POLL_INTERVAL:-1800}
     networks:
       - sovereign-net-backend
     depends_on:
