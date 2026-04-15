@@ -32,7 +32,7 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({
   const orbitalPercent = total > 0 ? (orbitalCount / total) * 100 : 0;
 
   return (
-    <div className="flex flex-col overflow-hidden widget-panel">
+    <div className="flex h-auto w-full flex-col overflow-clip widget-panel">
       <LayerVisibilityControls
         filters={filters}
         onFilterChange={onFilterChange}

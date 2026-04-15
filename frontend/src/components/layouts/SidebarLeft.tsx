@@ -53,7 +53,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   sendAction = () => {},
 }) => {
   return (
-    <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000 overflow-y-auto overflow-x-hidden">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-clip animate-in fade-in duration-1000">
       {/* Search Widget */}
       {mapActions && (
         <SearchWidget key="search-widget" mapActions={mapActions} onEntitySelect={onEntitySelect} />
@@ -72,7 +72,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       )}
 
       {/* 2. System Intelligence Feed - Takes remaining space */}
-      <div key="intel-feed" className="flex-1 min-h-[300px] overflow-hidden flex flex-col">
+      <div key="intel-feed" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <IntelFeed
           events={events}
           onEntitySelect={onEntitySelect}
@@ -97,7 +97,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
       />
 
       {/* 4. Metrics, Analytics & Map Layers */}
-      <div className="shrink-0">
+      <div className="w-full shrink-0">
         <SystemStatus
           trackCounts={trackCounts}
           filters={filters}

@@ -33,6 +33,20 @@ interface LayerVisibilityControlsProps {
 export const LayerVisibilityControls: React.FC<
   LayerVisibilityControlsProps
 > = ({ filters, onFilterChange, radiorefEnabled }) => {
+  const preventMouseFocusScroll = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("label") || target.closest("button")) {
+      event.preventDefault();
+    }
+  };
+
+  const suppressHiddenInputFocus = (event: React.FocusEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLInputElement && target.classList.contains("sr-only")) {
+      target.blur();
+    }
+  };
+
   // Persistent expansion states (Map Layers panel)
   const [showLayers, setShowLayers] = useState(() => {
     return localStorage.getItem("ui_layers_expanded") === "true";
@@ -300,7 +314,11 @@ export const LayerVisibilityControls: React.FC<
 
       {/* Expanded layer controls panel */}
       {showLayers && filters && onFilterChange && (
-        <div className="p-2 space-y-2 border-b border-white/10 bg-black/60 max-h-[60vh] overflow-y-auto">
+        <div
+          className="max-h-[26vh] space-y-2 overflow-y-auto border-b border-white/10 bg-black/60 p-2"
+          onMouseDownCapture={preventMouseFocusScroll}
+          onFocusCapture={suppressHiddenInputFocus}
+        >
           {/* RF Infrastructure */}
           <div className="flex flex-col gap-1">
             <div
