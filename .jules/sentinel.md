@@ -50,3 +50,7 @@
 **Vulnerability:** Denial of Service (DoS) via Unhandled Exception
 **Learning:** Blind usage of `request.client.host` in `backend/api/routers/auth.py` rate limiting logic caused an `AttributeError` when `request.client` was `None` (e.g. behind certain proxies). This crash acts as an unhandled exception, creating a Denial of Service vector where a malicious actor or misconfigured proxy could crash the request handling, bypassing rate limits or bringing down the service.
 **Prevention:** Safely extract client IP addresses using fallback logic (e.g. `request.client.host if request.client and request.client.host else "unknown"`) to guarantee that rate-limiting logic does not encounter null reference errors.
+## 2026-05-24 - Missing Rate Limiting on Authenticated DELETE Endpoint
+**Vulnerability:** Denial of Service (DoS) / Resource Exhaustion
+**Learning:** `backend/api/routers/system.py` had rate limiting on the `POST /api/watchlist` endpoint but not the `DELETE /api/watchlist/{icao24}` endpoint. While authenticated (requiring the "operator" role), a compromised account or buggy client could flood the Redis cache with `zrem` operations, potentially leading to resource exhaustion or performance degradation across the system.
+**Prevention:** Consistently apply rate limiting to *all* write operations (POST, PUT, PATCH, DELETE) that interact with the database or cache, even if they require authentication. Ensure endpoints that mutate shared state are protected symmetrically.

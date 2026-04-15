@@ -342,10 +342,28 @@ async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
 @router.delete(
     "/api/watchlist/{icao24}", dependencies=[Depends(require_role("operator"))]
 )
-async def remove_from_watchlist(icao24: str):
+async def remove_from_watchlist(icao24: str, request: Request):
     """Remove an ICAO24 from the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
+
+    # Rate Limiting
+    if request.client and request.client.host:
+        client_ip = request.client.host
+        rl_key = f"rate_limit:watchlist_delete:{client_ip}"
+        try:
+            req_count = await db.redis_client.incr(rl_key)
+            if req_count == 1:
+                await db.redis_client.expire(rl_key, 60)
+            if req_count > 20:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded. Please try again later.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
 
     icao24 = icao24.lower().strip()
 
