@@ -12,6 +12,7 @@ Run all including live feed check (requires FIRMS_MAP_KEY):
     uv run python -m pytest tests/test_firms.py -v
 """
 
+import asyncio
 import os
 import sys
 import textwrap
