@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import asyncio
+import ipaddress
+import socket
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -281,6 +284,22 @@ def _extract_title(html: str) -> str:
     return _normalize_space(unescape(re.sub(r"<[^>]+>", " ", m.group(1))))
 
 
+async def _is_safe_host(host: str) -> bool:
+    """Verify that a host resolves to a public, safe IP address to prevent SSRF."""
+    try:
+        loop = asyncio.get_running_loop()
+        addrs = await loop.getaddrinfo(host, None)
+        for addr in addrs:
+            ip = addr[4][0]
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified:
+                return False
+        return True
+    except socket.gaierror:
+        # If it doesn't resolve, treat it as unsafe to connect to
+        return False
+
+
 @router.get("/api/news/article")
 async def get_article_content(url: str = Query(..., min_length=8, max_length=2048)):
     """
@@ -292,8 +311,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
         raise HTTPException(status_code=400, detail="Invalid article URL")
 
     host = parsed.hostname or ""
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+    is_safe = await _is_safe_host(host)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail="Local/Private URLs are not allowed")
 
     try:
         async with httpx.AsyncClient(
