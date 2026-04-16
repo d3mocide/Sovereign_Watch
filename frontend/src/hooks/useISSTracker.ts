@@ -62,6 +62,27 @@ export const useISSTracker = ({
     [trackLength],
   );
 
+  /** Normalise a raw position from the REST endpoint or WebSocket.
+   * The poller writes `timestamp` as a Unix epoch integer (seconds);
+   * the track API returns ISO-8601 strings from the DB.  Always convert
+   * to ISO here so toOrderedTrack's `typeof === 'string'` guard passes. */
+  const normalisePosition = useCallback((raw: Record<string, unknown>): ISSPosition => {
+    const ts = raw.timestamp;
+    const timestamp =
+      typeof ts === "string"
+        ? ts
+        : typeof ts === "number"
+          ? new Date(ts * 1000).toISOString()
+          : new Date().toISOString();
+    return {
+      lat:          raw.lat as number,
+      lon:          raw.lon as number,
+      timestamp,
+      altitude_km:  (raw.altitude_km as number | null) ?? null,
+      velocity_kms: (raw.velocity_kms as number | null) ?? null,
+    };
+  }, []);
+
   const fetchRest = useCallback(async () => {
     try {
       const res = await fetch(REST_PATH);
@@ -74,12 +95,12 @@ export const useISSTracker = ({
         "lon" in data &&
         "timestamp" in data
       ) {
-        appendPosition(data as ISSPosition);
+        appendPosition(normalisePosition(data as Record<string, unknown>));
       }
     } catch {
       // silently ignore REST fetch failures
     }
-  }, [appendPosition]);
+  }, [appendPosition, normalisePosition]);
 
   const fetchTrack = useCallback(async () => {
     try {
@@ -131,7 +152,7 @@ export const useISSTracker = ({
           "lon" in data &&
           "timestamp" in data
         ) {
-          appendPosition(data as ISSPosition);
+          appendPosition(normalisePosition(data as Record<string, unknown>));
         }
       } catch {
         // ignore malformed messages
@@ -158,7 +179,7 @@ export const useISSTracker = ({
     ws.onerror = () => {
       ws.close();
     };
-  }, [appendPosition, fetchRest]);
+  }, [appendPosition, fetchRest, normalisePosition]);
 
   // Keep connectRef in sync so the onclose handler always calls the latest version
   useEffect(() => {

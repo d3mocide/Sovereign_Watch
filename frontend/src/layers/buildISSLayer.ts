@@ -34,6 +34,11 @@ function toOrderedTrack(track: ISSPosition[]): ISSPosition[] {
         .reverse();
 }
 
+// 10-minute gap threshold: the ISS polls at 5s, so anything larger than this
+// is an obvious data discontinuity (poller restart, network outage, etc.).
+// We break the path at these gaps rather than drawing a misleading segment.
+const MAX_TRACK_GAP_MS = 10 * 60 * 1000;
+
 function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
     const ordered = toOrderedTrack(track);
     if (ordered.length < 2) {
@@ -48,6 +53,12 @@ function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
         const curr = ordered[index];
         const crossed = Math.abs(curr.lon - prev.lon) > 180;
 
+        // Also break on large time gaps (poller restart / outage) so we don't
+        // draw a misleading straight-line segment across the globe.
+        const prevMs = new Date(prev.timestamp).getTime();
+        const currMs = new Date(curr.timestamp).getTime();
+        const timeGapTooLarge = (currMs - prevMs) > MAX_TRACK_GAP_MS;
+
         if (crossed) {
             // Interpolate latitude at the antimeridian (±180)
             const direction = curr.lon - prev.lon > 0 ? -1 : 1; // 1: E->W (+180), -1: W->E (-180)
@@ -55,7 +66,7 @@ function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
             const otherLon = direction === 1 ? -180 : 180;
 
             // Simple linear interpolation for latitude
-            let lon1 = prev.lon;
+            const lon1 = prev.lon;
             let lon2 = curr.lon;
             if (direction === 1) lon2 += 360;
             else lon2 -= 360;
@@ -69,6 +80,12 @@ function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
 
             // Start next segment from the opposite edge
             currentSegment = [[otherLon, interLat], [curr.lon, curr.lat]];
+        } else if (timeGapTooLarge) {
+            // Data gap: close the current segment and start a fresh one.
+            if (currentSegment.length >= 2) {
+                segments.push({ path: currentSegment });
+            }
+            currentSegment = [[curr.lon, curr.lat]];
         } else {
             currentSegment.push([curr.lon, curr.lat]);
         }

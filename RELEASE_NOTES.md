@@ -1,29 +1,43 @@
-# Pre-Release Gate - Patch Candidate
+# Release - v1.0.6 - Thermal Watch
 
-## Status
-This patch candidate packages a large verified set of backend ingestion fixes, FIRMS scope and cache corrections, frontend map interaction repairs, and release-hygiene updates. The branch is not ready for a GO decision yet because two live-map regressions remain open at the release gate.
+## Summary
 
-## Verified Scope
-- **FIRMS Scope and Cache Corrections**: Mission-mode FIRMS and dark-vessel requests now resolve the active mission area explicitly, while global FIRMS requests use a dedicated live world-feed cache/fallback path instead of reusing the mission cache.
-- **Dark-Vessel Backend Land Masking**: The backend FIRMS router now excludes land-intersecting hotspots before dark-vessel matching and loads the world land-mask asset safely in the backend container.
-- **Space-Pulse Cadence Recovery**: Orbital startup now primes from cached TLEs when available, FIRMS and space-weather cadence is persisted in Redis, and daily TLE refresh behavior is aligned with the configured UTC fetch hour.
-- **SatNOGS and Infra Recovery**: SatNOGS pagination loops now advance correctly with backoff, PeeringDB IXPs recover coordinates from facility centroids, and outage ingestion regained its Nominatim geocoder.
-- **Map UX Repairs**: FIRMS control layout, outage selection routing, and ISS layer rendering code paths were all updated and verified at the code/test level.
+v1.0.6 delivers the FIRMS thermal intelligence layer and dark-vessel anomaly engine to operators, resolves the two hold items that blocked the v1.0.6 candidate, and closes out a sweep of backend ingestion reliability fixes. The ISS ground-track now updates live in the animation loop and renders cleanly after container restarts. Fire hotspot data loads globally out of the box.
 
-## Verification Summary
-- `docker compose exec sovereign-backend sh -lc "uv tool run ruff check . && uv run python -m pytest"`
-	- Result: passed (`145` backend API tests).
-- Prior targeted verification recorded in task logs:
-	- Frontend lint, typecheck, and test suites passed for the ISS/FIRMS interaction changes.
-	- `space_pulse` lint and container pytest passed for cadence and scheduler fixes.
-	- Targeted infra poller verification passed for the outage geocoder and IXP recovery changes.
+## Key Features
 
-## Hold Items
-- **ISS Rendering**: The ISS map render path has been reworked, but live behavior is still reported as broken. This needs runtime validation in the actual UI before the patch can be promoted.
-- **FIRMS Dark Vessels**: Frontend mission scoping and backend land masking are in place, but live dark-vessel behavior is still reported as broken. This also needs runtime validation before release.
+- **NRT NASA FIRMS Thermal Layer** — VIIRS/MODIS thermal infrared hotspots on the tactical map with FRP-scaled radii and confidence-coded colors.
+- **Dark Vessel Anomaly Detection** — Backend engine cross-references FIRMS heat signatures against AIS vessel positions. Vessel-scale hotspots with no AIS broadcast within 5nm/2h are surfaced as anomaly candidates.
+- **Live ISS Ground Track** — WebSocket-delivered positions now normalise Unix integer timestamps to ISO-8601 on arrival, keeping the orbital trail current in the animation loop.
+- **ISS Track Gap Detection** — Consecutive positions separated by >10 minutes start a new path segment, eliminating the distorted line artifact after container restarts.
 
-## Recommendation
-Keep the candidate at **HOLD**. The verified fixes are strong enough to preserve as the patch set for the next release, but the release gate should stay closed until the live ISS and FIRMS dark-vessel regressions are resolved or explicitly deferred.
+## Bug Fixes
 
-**SITREP Status: [HOLD]**
-**Known blockers remain: ISS Rendering, FIRMS Dark Vessels.**
+- FIRMS global default changed to `true` — operators see worldwide fire data on first load.
+- ISS live-track timestamps normalised at the hook boundary (`useISSTracker`) so all sources (WebSocket, REST, DB) produce trail points that pass the `buildISSLayer` filter.
+- ISS track gap rendering fixed in `splitTrackAtAntimeridian`.
+- SatNOGS pagination loop indentation corrected; PeeringDB IXP coordinates recovered from facility centroids; IODA Nominatim geocoder restored.
+
+## Technical Details
+
+- TimescaleDB migration **V004** adds `firms_hotspots` hypertable and `dark_vessel_candidates` table.
+- `space_pulse` cadence policy: daily TLE refresh gated on UTC hour, FIRMS/space-weather cadence persisted in Redis across restarts.
+- No breaking API or schema changes, no new required environment variables.
+
+## Verification
+
+- Frontend: `pnpm run lint` ✅ · `pnpm run typecheck` ✅ · `pnpm run test` ✅ (18/18 files, 268/268 tests)
+- Backend API: `uv tool run ruff check . && uv run python -m pytest` ✅ (145 tests)
+- Targeted poller verification: `space_pulse`, `infra_poller` lint + pytest ✅
+
+## Upgrade Instructions
+
+```bash
+git pull origin main
+docker compose pull
+docker compose up -d --build
+```
+
+TimescaleDB migration V004 runs automatically on backend startup.
+
+**SITREP Status: [GO]**

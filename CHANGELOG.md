@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-04-15
+
 ### Added
 
 - **NRT NASA FIRMS Thermal Layer**: Integrated NASA VIIRS/MODIS thermal infrared data into the tactical map. Features FRP-scaled radii (12km–80km), confidence-coded fill colors, and 10-minute polling via the `space_pulse` ingestion container.
@@ -14,6 +16,7 @@
 - **Alert UI De-cluttering**: Removed the intrusive pulsing red indicator and `animate-ping` effect from the TopBar alerts widget, replacing it with a static high-contrast alert state for a cleaner HUD experience.
 - **Thermal Visibility Tuning**: Significant increase to `radiusMinPixels` (fixed at 6px) and base meter radius for FIRMS hotspots to ensure reliable identification on both the 3D globe and 2D mercator views.
 - **Filter Initialization**: Updated `DEFAULT_FILTERS` to include `showFIRMS` and `showDarkVessels`, ensuring consistent layer state and persistence.
+- **FIRMS Global Default**: `firmsGlobal` now defaults to `true` so operators see worldwide fire data on first load rather than an empty mission-area result.
 - **FIRMS Scope Contract**: FIRMS and dark-vessel frontend fetches now resolve the active mission area explicitly in mission mode and only request full-world data when the FIRMS global toggle is enabled.
 - **Global FIRMS Fallback Path**: The backend API now serves true global FIRMS requests from a dedicated live world-feed cache/fallback path rather than reusing the mission-scoped Redis cache.
 - **Space-Pulse Cadence Policy**: Orbital TLE refreshes now follow a daily UTC-hour gate with cached startup priming, while FIRMS and space-weather poll cadence is persisted in Redis across restarts.
@@ -22,6 +25,8 @@
 
 ### Fixed
 
+- **ISS Live Track Updates**: WebSocket and REST positions now have their Unix-integer timestamps normalised to ISO-8601 before entering the track buffer, resolving the bug where the ground trail never updated after page load.
+- **ISS Track Gap Rendering**: `splitTrackAtAntimeridian` now detects time gaps >10 minutes between consecutive positions and begins a new path segment, eliminating the distorted straight-line artefact seen after container restarts.
 - **Synthetic Entity UI Stabilization**: Fixed right-sidebar header icons and subtitles in `InfraView.tsx` to explicitly label FIRMS and Dark Vessels (THERMAL / ANOMALY) instead of defaulting to "LANDING_STATION".
 - **Tactical Tooltip Misclassification**: Corrected `MapTooltip.tsx` layout and icons to support synthetic entities, eliminating the "AVIONICS" fallback label for maritime and thermal anomalies.
 - **Tactical Map Scope Errors**: Resolved `ReferenceError` issues where infrastructure detection variables were utilized outside their valid scope.
@@ -31,11 +36,6 @@
 - **SatNOGS Pagination Loop**: Fixed indentation bugs that prevented successful page traversal and inter-page backoff in both SatNOGS ingestion adapters.
 - **PeeringDB IXP Recovery**: Infra ingestion now backfills missing IXP coordinates from facility centroids and bypasses cooldown when the previous ingest produced zero IXPs.
 - **IODA Geocoding Regression**: Restored the Nominatim-backed geocoder used by outage ingestion and hardened outage feature selection in tactical/orbital map interactions.
-
-### Known Issues
-
-- **ISS Rendering Runtime Validation Pending**: The ISS track/marker render path has code-level fixes and passing frontend verification, but live runtime behavior is still reported as broken and requires follow-up validation before a patch release can be called GO.
-- **FIRMS Dark-Vessel Runtime Validation Pending**: Mission scoping and backend land masking are patched and verified in tests, but live map behavior is still reported as broken and requires additional runtime investigation before release.
 
 ## [1.0.5] - 2026-04-14
 
