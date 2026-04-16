@@ -298,11 +298,13 @@ async def get_gdelt_actors(
                             "material_conflict": 0,
                             "verbal_coop": 0,
                             "material_coop": 0,
+                            "mentions_total": 0,
                         },
                     )
                     bucket["event_count"] += 1
                     bucket["lat_total"] += float(lat)
                     bucket["lon_total"] += float(lon)
+                    bucket["mentions_total"] += int(event.get("num_mentions") or 1)
                     goldstein = event.get("goldstein")
                     if goldstein is not None:
                         bucket["goldstein_total"] += float(goldstein)
@@ -319,7 +321,7 @@ async def get_gdelt_actors(
 
                 rows = sorted(
                     actor_buckets.values(),
-                    key=lambda row: (-row["event_count"], row["actor"]),
+                    key=lambda row: (-row["mentions_total"], row["actor"]),
                 )[:limit]
             else:
                 rows = [
@@ -327,12 +329,13 @@ async def get_gdelt_actors(
                     for row in await conn.fetch(
                     """
                     SELECT
-                        actor1_country                          AS actor,
-                        'COUNTRY'                              AS actor_type,
-                        COUNT(*)                               AS event_count,
-                        AVG(goldstein)                         AS avg_goldstein,
-                        AVG(lat)                               AS centroid_lat,
-                        AVG(lon)                               AS centroid_lon,
+                        actor1_country                                    AS actor,
+                        'COUNTRY'                                        AS actor_type,
+                        COUNT(*)                                         AS event_count,
+                        COALESCE(SUM(num_mentions), COUNT(*))            AS weighted_mentions,
+                        AVG(goldstein)                                   AS avg_goldstein,
+                        AVG(lat)                                         AS centroid_lat,
+                        AVG(lon)                                         AS centroid_lon,
                         SUM(CASE WHEN quad_class = 3 THEN 1 ELSE 0 END) AS verbal_conflict,
                         SUM(CASE WHEN quad_class = 4 THEN 1 ELSE 0 END) AS material_conflict,
                         SUM(CASE WHEN quad_class = 1 THEN 1 ELSE 0 END) AS verbal_coop,
@@ -343,7 +346,7 @@ async def get_gdelt_actors(
                       AND actor1_country <> ''
                       AND lat IS NOT NULL
                     GROUP BY actor1_country
-                    ORDER BY event_count DESC
+                    ORDER BY weighted_mentions DESC
                     LIMIT $2
                     """,
                     str(hours),
@@ -360,11 +363,20 @@ async def get_gdelt_actors(
                     if r["goldstein_count"]
                     else 0.0
                 )
-            if avg_g <= -5.0:
+            event_count = int(r.get("event_count") or 1)
+            material_conflict = int(r.get("material_conflict") or 0)
+            material_ratio = material_conflict / event_count
+            # Composite threat score: avg Goldstein amplified by material (kinetic) ratio.
+            # A country with high diplomatic/media coverage but low kinetic ratio will
+            # produce a score close to avg_goldstein; genuine conflict zones with high
+            # material ratios amplify the negative score proportionally.
+            # Score range: roughly -20 (pure kinetic) to +20 (fully cooperative).
+            threat_score = avg_g * (1.0 + material_ratio)
+            if threat_score <= -6.0:
                 threat_level = "CRITICAL"
-            elif avg_g <= -2.0:
+            elif threat_score <= -3.0:
                 threat_level = "ELEVATED"
-            elif avg_g < 0.0:
+            elif threat_score < 0.0:
                 threat_level = "MONITORING"
             else:
                 threat_level = "STABLE"
@@ -386,6 +398,9 @@ async def get_gdelt_actors(
                     "material_conflict": int(r.get("material_conflict") or 0),
                     "verbal_coop": int(r.get("verbal_coop") or 0),
                     "material_coop": int(r.get("material_coop") or 0),
+                    "threat_score": round(threat_score, 2),
+                    "material_ratio": round(material_ratio, 3),
+                    "weighted_mentions": int(r.get("weighted_mentions") or r.get("mentions_total") or r.get("event_count") or 0),
                 }
             )
 

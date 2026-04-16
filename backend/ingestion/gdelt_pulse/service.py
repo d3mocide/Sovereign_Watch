@@ -281,9 +281,13 @@ class GDELTPulseService:
                     except (ValueError, IndexError):
                         continue
 
+                filter_note = (
+                    f" ({events_filtered} conflict-only filtered)"
+                    if GDELT_CONFLICT_ONLY and events_filtered
+                    else ""
+                )
                 logger.info(
-                    f"Published {events_sent} GDELT conflict events "
-                    f"({events_filtered} filtered) to gdelt_raw topic."
+                    f"Published {events_sent} GDELT events{filter_note} to gdelt_raw topic."
                 )
 
     # ------------------------------------------------------------------
