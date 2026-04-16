@@ -5,6 +5,7 @@ import type { IntelEvent, MapFilters, RFMode } from "../types";
 type ViewMode = "TACTICAL" | "ORBITAL" | "RADIO" | "DASHBOARD" | "INTEL";
 
 const H3_RISK_MODE_PREF_KEY_PREFIX = "mapFilters:showH3Risk:";
+const FIRMS_PREF_KEY = "pref_showFIRMS";
 
 function defaultH3RiskForMode(viewMode: ViewMode): boolean {
   return viewMode === "INTEL";
@@ -72,8 +73,7 @@ const DEFAULT_FILTERS: MapFilters = {
   airspaceZoneTypes: ["PROHIBITED", "RESTRICTED", "DANGER", "WARNING", "TRA", "TSA", "ADIZ", "MILITARY"],
   showClusters: true,
   clusterLookbackHours: 24,
-  showFIRMS: true,
-  firmsGlobal: true,
+  showFIRMS: false,
   showDarkVessels: true,
 };
 
@@ -111,6 +111,9 @@ function initFilters(viewMode: ViewMode): MapFilters {
   if (saved) {
     try {
       const merged = { ...DEFAULT_FILTERS, ...JSON.parse(saved) };
+      if (localStorage.getItem(FIRMS_PREF_KEY) === null) {
+        merged.showFIRMS = DEFAULT_FILTERS.showFIRMS;
+      }
       const modePref = readH3RiskModePref(viewMode);
       merged.showH3Risk = modePref ?? defaultH3RiskForMode(viewMode);
       return merged;

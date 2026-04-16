@@ -277,7 +277,11 @@ export function TacticalMap({
       const isTower = props.fcc_id !== undefined;
       const isNwsAlert = props.event !== undefined || props.headline !== undefined;
       const isOutage = isOutageFeature(props, obj);
-      const isISS = props.type === "iss_marker" || String(obj.id).startsWith("iss-");
+      const isISS =
+        props.entity_type === "iss" ||
+        props.type === "iss_marker" ||
+        obj.type === "iss" ||
+        String(obj.id).startsWith("iss-");
       const isDNS = (obj as any).letter !== undefined;
       const isAirspace = props.zone_id !== undefined;
 
@@ -350,7 +354,11 @@ export function TacticalMap({
         prev?.type === "outage" ||
         prev?.type === "tower" ||
         prev?.type === "buoy" ||
-        prev?.type === "nws_alert"
+        prev?.type === "nws_alert" ||
+        prev?.type === "iss" ||
+        prev?.type === "firms_hotspot" ||
+        prev?.type === "dark_vessel" ||
+        prev?.type === "airspace"
           ? null
           : prev,
       );

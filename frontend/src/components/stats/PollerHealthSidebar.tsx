@@ -47,7 +47,17 @@ export default function PollerHealthSidebar({ healthData }: Props) {
                     <span className="text-primary opacity-40 group-hover:opacity-100 transition-opacity">
                       {pollerIcon(p)}
                     </span>
-                    <div className="text-[9px] font-black text-on-surface truncate">{p.name}</div>
+                    <div className="min-w-0">
+                      <div className="text-[9px] font-black text-on-surface truncate">{p.name}</div>
+                      {p.detail ? (
+                        <div
+                          className="text-[7px] text-on-surface-variant/80 tracking-tight truncate"
+                          title={p.detail}
+                        >
+                          {p.detail}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className={`w-1 h-1 rounded-full ${colorClass} shadow-[0_0_5px_rgba(57,255,20,0.5)]`}></div>
                 </div>

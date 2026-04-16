@@ -13,9 +13,11 @@ Run all including live feed check (requires FIRMS_MAP_KEY):
 """
 
 import asyncio
+import json
 import os
 import sys
 import textwrap
+import time
 from unittest.mock import AsyncMock
 from datetime import UTC, datetime
 
@@ -31,8 +33,10 @@ os.environ.setdefault("FIRMS_MAP_KEY", "test-placeholder")
 
 from sources.firms import (  # noqa: E402
     FIRMSSource,
+    FIRMS_SOURCES,
     REDIS_KEY_LAST_FETCH,
-    _bbox_from_mission,
+    REDIS_KEY_SOURCE_STATUS,
+    _parse_firms_sources,
     _parse_modis_confidence,
     _parse_viirs_confidence,
     _rows_to_geojson,
@@ -48,33 +52,15 @@ def make_source() -> FIRMSSource:
     return FIRMSSource(client=None, redis_client=None, db_url="postgresql://localhost/test")
 
 
-# ---------------------------------------------------------------------------
-# Bounding-box helpers
-# ---------------------------------------------------------------------------
+class TestConfiguredSources:
+    def test_empty_value_uses_default_sources(self):
+        assert _parse_firms_sources("") == FIRMS_SOURCES
 
-class TestBboxFromMission:
-    def test_output_order(self):
-        west, south, east, north = _bbox_from_mission(45.5, -122.7, 150)
-        assert west < east
-        assert south < north
-
-    def test_symmetry_around_center(self):
-        lat, lon = 45.5, -122.7
-        west, south, east, north = _bbox_from_mission(lat, lon, 150)
-        # Within floating-point tolerance the bbox should be symmetric
-        assert abs((lon - west) - (east - lon)) < 0.001
-        assert abs((lat - south) - (north - lat)) < 0.001
-
-    def test_clamps_to_valid_range(self):
-        # Use a point very close to the north pole — north should clamp to 90
-        _, _, _, north = _bbox_from_mission(89.9, 0.0, 1000)
-        assert north <= 90.0
-
-    def test_radius_scaling(self):
-        _, s1, _, n1 = _bbox_from_mission(45.0, 0.0, 100)
-        _, s2, _, n2 = _bbox_from_mission(45.0, 0.0, 200)
-        # Larger radius → wider bbox
-        assert (n2 - s2) > (n1 - s1)
+    def test_comma_separated_value_is_deduplicated(self):
+        assert _parse_firms_sources("VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_SNPP_NRT") == [
+            "VIIRS_SNPP_NRT",
+            "VIIRS_NOAA20_NRT",
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -190,12 +176,8 @@ _MODIS_CSV = textwrap.dedent("""\
 
 class TestParseCsv:
     def _parse_with_source(self, csv_body: str, source: str = "VIIRS_SNPP_NRT"):
-        """Parse CSV with a temporarily overridden FIRMS_SOURCE constant."""
-        import sources.firms as firms_mod
-        from unittest.mock import patch
         src = make_source()
-        with patch.object(firms_mod, "FIRMS_SOURCE", source):
-            return src._parse_csv(csv_body)
+        return src._parse_csv(csv_body, source=source)
 
     def test_viirs_parses_two_valid_rows(self):
         db_rows, dicts = self._parse_with_source(_VIIRS_CSV, "VIIRS_SNPP_NRT")
@@ -230,12 +212,9 @@ class TestParseCsv:
 
     def test_deduplication(self):
         # Feed the same CSV twice through the same src instance — second pass yields 0 rows
-        import sources.firms as firms_mod
-        from unittest.mock import patch
         src = make_source()
-        with patch.object(firms_mod, "FIRMS_SOURCE", "VIIRS_SNPP_NRT"):
-            rows1, _ = src._parse_csv(_VIIRS_CSV)
-            rows2, _ = src._parse_csv(_VIIRS_CSV)
+        rows1, _ = src._parse_csv(_VIIRS_CSV, source="VIIRS_SNPP_NRT")
+        rows2, _ = src._parse_csv(_VIIRS_CSV, source="VIIRS_SNPP_NRT")
         assert len(rows1) == 2
         assert len(rows2) == 0   # all keys already in _seen_keys
 
@@ -276,9 +255,7 @@ class TestFIRMSSourceInstantiation:
         assert len(src._seen_keys) == 0
 
 
-def test_global_mode_uses_world_area_endpoint(monkeypatch):
-    import sources.firms as firms_mod
-
+def test_firms_poll_uses_world_area_endpoint():
     src = FIRMSSource(client=None, redis_client=AsyncMock(), db_url="postgresql://x/y")
     src._set_last_fetch = AsyncMock()
     src._update_redis_cache = AsyncMock()
@@ -286,15 +263,47 @@ def test_global_mode_uses_world_area_endpoint(monkeypatch):
     response = AsyncMock()
     response.raise_for_status.return_value = None
     response.text = "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
-    fetch_mock = AsyncMock(return_value=response)
-    monkeypatch.setattr(firms_mod, "FIRMS_BBOX_MODE", "global")
-    src.fetch_with_retry = fetch_mock
+    src._fetch_source_csv = AsyncMock(return_value=response.text)
 
     asyncio.run(src._poll())
 
-    called_url = fetch_mock.await_args.args[0]
-    assert "/api/area/csv/" in called_url
-    assert called_url.endswith("/VIIRS_SNPP_NRT/world/1")
+    src._fetch_source_csv.assert_any_await("VIIRS_NOAA20_NRT")
+
+
+@pytest.mark.anyio
+async def test_cache_is_empty_detects_missing_hotspot_cache():
+    redis_client = AsyncMock()
+    redis_client.get = AsyncMock(return_value=None)
+    src = FIRMSSource(client=None, redis_client=redis_client, db_url="postgresql://x/y")
+
+    assert await src._cache_is_empty() is True
+
+
+@pytest.mark.anyio
+async def test_cache_is_empty_detects_present_hotspot_cache():
+    redis_client = AsyncMock()
+    redis_client.get = AsyncMock(return_value='{"type":"FeatureCollection","features":[]}')
+    src = FIRMSSource(client=None, redis_client=redis_client, db_url="postgresql://x/y")
+
+    assert await src._cache_is_empty() is False
+
+
+def test_empty_cache_refresh_only_bypasses_cooldown_once():
+    src = FIRMSSource(client=None, redis_client=AsyncMock(), db_url="postgresql://x/y")
+
+    last_fetch = time.time() - 30
+    elapsed = time.time() - last_fetch
+    assert elapsed < src.fetch_interval
+
+    should_bypass = elapsed < src.fetch_interval and not src._empty_cache_refresh_attempted
+    if should_bypass:
+        src._empty_cache_refresh_attempted = True
+
+    assert should_bypass is True
+    assert src._empty_cache_refresh_attempted is True
+
+    should_bypass_again = elapsed < src.fetch_interval and not src._empty_cache_refresh_attempted
+    assert should_bypass_again is False
 
 
 class TestFIRMSRedisCadence:
@@ -328,6 +337,33 @@ class TestFIRMSRedisCadence:
         assert float(call_args.args[1]) > 0
         assert call_args.kwargs["ex"] == 1200
 
+    @pytest.mark.anyio
+    async def test_write_source_status_persists_per_source_snapshot(self):
+        redis_client = AsyncMock()
+        redis_client.setex = AsyncMock()
+        src = FIRMSSource(
+            client=None,
+            redis_client=redis_client,
+            db_url="postgresql://x/y",
+        )
+
+        await src._write_source_status(
+            [
+                {"source": "VIIRS_NOAA20_NRT", "status": "ok", "count": 515},
+                {"source": "VIIRS_SNPP_NRT", "status": "empty", "count": 0},
+            ],
+            total_hotspots=515,
+            successful_sources=2,
+        )
+
+        redis_client.setex.assert_awaited_once()
+        call_args = redis_client.setex.await_args
+        assert call_args.args[0] == REDIS_KEY_SOURCE_STATUS
+        payload = json.loads(call_args.args[2])
+        assert payload["total_hotspots"] == 515
+        assert payload["successful_sources"] == 2
+        assert payload["sources"][0]["source"] == "VIIRS_NOAA20_NRT"
+
 
 # ---------------------------------------------------------------------------
 # Live integration test — skipped unless FIRMS_MAP_KEY is set in environment
@@ -359,10 +395,7 @@ def test_live_firms_fetch():
     real_key = os.environ["FIRMS_MAP_KEY"]
     firms_mod.FIRMS_MAP_KEY = real_key
 
-    # Use Portland, OR area — CENTER_LAT/LON defaults
-    west, south, east, north = _bbox_from_mission(45.5152, -122.6784, 150)
-    bbox_str = f"{west:.4f},{south:.4f},{east:.4f},{north:.4f}"
-    url = f"{firms_mod.FIRMS_BASE_URL}/{real_key}/VIIRS_SNPP_NRT/{bbox_str}/1"
+    url = f"{firms_mod.FIRMS_BASE_URL}/{real_key}/VIIRS_NOAA20_NRT/world/1"
 
     print(f"\n[FIRMS live test] GET {url}")
 
@@ -384,7 +417,7 @@ def test_live_firms_fetch():
 
     # Parse the response
     src = FIRMSSource(redis_client=None, db_url="postgresql://localhost/test")
-    db_rows, dicts = src._parse_csv(resp.text)
+    db_rows, dicts = src._parse_csv(resp.text, source="VIIRS_NOAA20_NRT")
 
     print(f"[FIRMS live test] Parsed {len(db_rows)} hotspots (after FRP filter >= {firms_mod.FIRMS_MIN_FRP} MW)")
 

@@ -287,7 +287,6 @@ export interface MapFilters {
   showNWSAlerts?: boolean;
   // NASA FIRMS thermal hotspot + dark vessel detection
   showFIRMS?: boolean;
-  firmsGlobal?: boolean;       // true = fetch world-wide hotspots, false = mission area only
   showDarkVessels?: boolean;
   // Phase 2 — ST-DBSCAN cluster overlay
   showClusters?: boolean;

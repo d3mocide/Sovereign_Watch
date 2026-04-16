@@ -23,6 +23,8 @@ interface ISSPathSegment {
     path: [number, number][];
 }
 
+const ISS_MARKER_ID = "iss-marker";
+
 function toOrderedTrack(track: ISSPosition[]): ISSPosition[] {
     return [...track]
         .filter(
@@ -100,10 +102,12 @@ function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
 
 function toIssFeature(position: ISSPosition) {
     return {
+        id: ISS_MARKER_ID,
         type: "iss",
         properties: {
             name: "ISS (International Space Station)",
             entity_type: "iss",
+            type: "iss_marker",
             lat: position.lat,
             lon: position.lon,
             altitude_km: position.altitude_km,
@@ -121,7 +125,10 @@ export function buildISSLayer({
     onSelect,
 }: ISSLayerOptions) {
     const layers = [];
-    const trackSegments = splitTrackAtAntimeridian(track);
+    const trackWithLivePosition = position
+        ? [position, ...track.filter((point) => point.timestamp !== position.timestamp)]
+        : track;
+    const trackSegments = splitTrackAtAntimeridian(trackWithLivePosition);
 
     if (trackSegments.length > 0) {
         layers.push(
@@ -145,13 +152,14 @@ export function buildISSLayer({
 
     if (position) {
         const markerData = [position];
-        const markerAltitudeMeters = (position.altitude_km ?? 0) * 1000;
 
         layers.push(
             new ScatterplotLayer<ISSPosition>({
                 id: `iss-position-glow-${globeMode ? "globe" : "merc"}`,
                 data: markerData,
-                getPosition: (point) => [point.lon, point.lat, markerAltitudeMeters],
+                // Anchor the marker on the ground track so the visible beacon and
+                // history trail terminate at the same screen position.
+                getPosition: (point) => [point.lon, point.lat, 0],
                 getRadius: 18,
                 radiusUnits: "pixels",
                 filled: true,
@@ -167,7 +175,7 @@ export function buildISSLayer({
             new ScatterplotLayer<ISSPosition>({
                 id: `iss-position-core-${globeMode ? "globe" : "merc"}`,
                 data: markerData,
-                getPosition: (point) => [point.lon, point.lat, markerAltitudeMeters],
+                getPosition: (point) => [point.lon, point.lat, 0],
                 getRadius: 6,
                 radiusUnits: "pixels",
                 filled: true,

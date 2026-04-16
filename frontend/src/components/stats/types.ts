@@ -8,6 +8,7 @@ export interface PollerHealth {
   last_success: number | null;
   last_error_ts: number | null;
   last_error_msg: string | null;
+  detail?: string | null;
   history?: number[];
 }
 

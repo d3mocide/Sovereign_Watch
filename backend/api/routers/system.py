@@ -16,6 +16,49 @@ from models.schemas import AIModelRequest, MissionLocation, WatchlistAddRequest
 router = APIRouter()
 logger = logging.getLogger("SovereignWatch.System")
 
+FIRMS_SOURCE_STATUS_KEY = "firms:source_status"
+
+
+def _format_firms_source_label(source: str) -> str:
+    if source.startswith("VIIRS_") and source.endswith("_NRT"):
+        return source[len("VIIRS_") : -len("_NRT")]
+    if source.endswith("_NRT"):
+        return source[: -len("_NRT")]
+    return source
+
+
+def _build_firms_detail(snapshot_raw: str | None) -> str | None:
+    if not snapshot_raw:
+        return None
+
+    try:
+        snapshot = json.loads(snapshot_raw)
+    except Exception:
+        return None
+
+    sources = snapshot.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return None
+
+    parts: list[str] = []
+    for item in sources:
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or "").strip()
+        status = str(item.get("status") or "unknown").strip().lower()
+        count = item.get("count")
+        label = _format_firms_source_label(source) if source else "UNKNOWN"
+        if status == "ok":
+            parts.append(f"{label}:{count}")
+        elif status == "empty":
+            parts.append(f"{label}:empty")
+        elif status == "error":
+            parts.append(f"{label}:error")
+        else:
+            parts.append(f"{label}:{status}")
+
+    return " | ".join(parts) if parts else None
+
 # ---------------------------------------------------------------------------
 # AI model registry — read from models.yaml at project root (mounted in Docker).
 # ---------------------------------------------------------------------------
@@ -404,6 +447,8 @@ async def get_poller_health():
         (anthropic_key and anthropic_key != "your_key_here")
         or (gemini_key and gemini_key != "your_key_here")
     )
+    firms_key = os.getenv("FIRMS_MAP_KEY", "")
+    firms_has_creds = bool(firms_key and firms_key != "your_key_here")
 
     # (id, name, group, fetch_key, error_key, stale_after_s, has_creds)
     # fetch_key="__space_weather__" = special: parse timestamp from kp_current JSON
@@ -471,6 +516,15 @@ async def get_poller_health():
             "poller:space_weather:last_error",
             2 * 3600,
             True,
+        ),
+        (
+            "firms",
+            "NASA FIRMS",
+            "Environment",
+            "firms_pulse:last_fetch",
+            "poller:firms:last_error",
+            30 * 60,
+            firms_has_creds,
         ),
         (
             "gdelt",
@@ -598,6 +652,7 @@ async def get_poller_health():
         if error_key:
             keys_to_fetch.append(error_key)
     keys_to_fetch.append("space_weather:kp_current")
+    keys_to_fetch.append(FIRMS_SOURCE_STATUS_KEY)
 
     try:
         raw_values = await asyncio.gather(
@@ -668,6 +723,7 @@ async def get_poller_health():
         return status, last_success, last_error_ts, last_error_msg
 
     results = []
+    firms_detail = _build_firms_detail(kv.get(FIRMS_SOURCE_STATUS_KEY))
     for sid, name, group, fetch_key, error_key, stale_s, has_creds in POLLER_SPECS:
         status, last_success, last_error_ts, last_error_msg = _compute(
             fetch_key, error_key, stale_s, has_creds
@@ -702,6 +758,7 @@ async def get_poller_health():
                 "last_success": last_success,
                 "last_error_ts": last_error_ts,
                 "last_error_msg": last_error_msg,
+                "detail": firms_detail if sid == "firms" else None,
                 "stale_after_s": stale_s,
                 "history": history,
             }

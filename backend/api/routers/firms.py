@@ -15,7 +15,7 @@ GET /api/firms/dark-vessels
     avoid repeated expensive PostGIS cross-joins.
 
 Both endpoints return an empty FeatureCollection when no data is available
-(poller has not yet run, or no detections in the mission area).
+(poller has not yet run, or no detections are available in the requested window).
 """
 
 import csv
@@ -36,12 +36,34 @@ logger = logging.getLogger("SovereignWatch.FIRMS")
 
 # Redis keys (must match space_pulse/sources/firms.py)
 _REDIS_HOTSPOT_KEY    = "firms:latest_geojson"
-_REDIS_HOTSPOT_GLOBAL_KEY = "firms:global_live_geojson"
 _REDIS_DV_CACHE_KEY   = "firms:dark_vessel_candidates"
 
 FIRMS_MAP_KEY = os.getenv("FIRMS_MAP_KEY", "").strip()
-FIRMS_SOURCE = os.getenv("FIRMS_SOURCE", "VIIRS_SNPP_NRT").strip() or "VIIRS_SNPP_NRT"
-FIRMS_BBOX_MODE = os.getenv("FIRMS_BBOX_MODE", "mission").strip().lower() or "mission"
+_DEFAULT_FIRMS_SOURCES = [
+    "VIIRS_NOAA20_NRT",
+    "VIIRS_NOAA21_NRT",
+    "VIIRS_SNPP_NRT",
+]
+
+
+def _parse_firms_sources(raw_value: str | None) -> list[str]:
+    if not raw_value:
+        return _DEFAULT_FIRMS_SOURCES.copy()
+
+    parsed: list[str] = []
+    seen: set[str] = set()
+    for value in raw_value.split(","):
+        source = value.strip()
+        if not source or source in seen:
+            continue
+        seen.add(source)
+        parsed.append(source)
+
+    return parsed or _DEFAULT_FIRMS_SOURCES.copy()
+
+
+FIRMS_SOURCE = os.getenv("FIRMS_SOURCE", "")
+FIRMS_SOURCES = _parse_firms_sources(FIRMS_SOURCE)
 FIRMS_GLOBAL_CACHE_TTL_S = 600
 _DEFAULT_LANDMASK_CONTAINER_PATH = Path("/app/support/world-countries.json")
 
@@ -367,25 +389,35 @@ async def _fetch_live_global_hotspots(
         return None
 
     days_back = max(1, math.ceil(hours_back / 24))
-    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_MAP_KEY}/{FIRMS_SOURCE}/world/{days_back}"
+    aggregated_rows: list[dict] = []
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+            for source in FIRMS_SOURCES:
+                url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_MAP_KEY}/{source}/world/{days_back}"
+                try:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                except Exception as exc:
+                    logger.warning("FIRMS live global fetch failed for %s: %s", source, exc)
+                    continue
+
+                rows = _parse_firms_csv_to_rows(
+                    resp.text,
+                    source=source,
+                    hours_back=hours_back,
+                    min_frp=min_frp,
+                    confidence=confidence,
+                    limit=max(limit - len(aggregated_rows), 0),
+                )
+                aggregated_rows.extend(rows)
+                if len(aggregated_rows) >= limit:
+                    break
     except Exception as exc:
-        logger.warning("FIRMS live global fetch failed: %s", exc)
+        logger.warning("FIRMS live global fetch setup failed: %s", exc)
         return None
 
-    rows = _parse_firms_csv_to_rows(
-        resp.text,
-        source=FIRMS_SOURCE,
-        hours_back=hours_back,
-        min_frp=min_frp,
-        confidence=confidence,
-        limit=limit,
-    )
-    return _rows_to_geojson(rows, FIRMS_SOURCE, "global_live")
+    return _rows_to_geojson(aggregated_rows, ",".join(FIRMS_SOURCES), "global_live")
 
 
 # ---------------------------------------------------------------------------
@@ -415,12 +447,12 @@ async def get_firms_hotspots(
         and not confidence
     )
 
-    # Global requests need true world data. Do not reuse mission-scoped FIRMS cache
-    # as if it were global; prefer a dedicated global cache and live fallback.
+    # The FIRMS ingest path is always global, so the primary hotspot cache is
+    # already world-scoped. Prefer it for default global requests and fall back
+    # to a live NASA world query when the cache is empty.
     if using_default_global_request and db.redis_client:
         try:
-            cache_key = _REDIS_HOTSPOT_KEY if FIRMS_BBOX_MODE == "global" else _REDIS_HOTSPOT_GLOBAL_KEY
-            cached = await db.redis_client.get(cache_key)
+            cached = await db.redis_client.get(_REDIS_HOTSPOT_KEY)
             if cached:
                 parsed = json.loads(cached)
                 if parsed.get("features"):
@@ -438,7 +470,7 @@ async def get_firms_hotspots(
         if live_result and live_result.get("features"):
             try:
                 await db.redis_client.setex(
-                    _REDIS_HOTSPOT_GLOBAL_KEY,
+                    _REDIS_HOTSPOT_KEY,
                     FIRMS_GLOBAL_CACHE_TTL_S,
                     json.dumps(live_result),
                 )

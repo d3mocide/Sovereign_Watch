@@ -1,11 +1,5 @@
 import type { FeatureCollection } from "geojson";
 import { useEffect, useRef, useState } from "react";
-import { getMissionArea } from "../api/missionArea";
-
-export interface UseInfraDataOptions {
-  /** When true the FIRMS fetch uses global world-wide bbox instead of mission-area defaults. */
-  firmsGlobal?: boolean;
-}
 import type { DnsRootServer } from "../types";
 
 const isFeatureCollection = (value: unknown): value is FeatureCollection => {
@@ -123,61 +117,13 @@ const fallbackEmpty: FeatureCollection = {
   features: [],
 };
 
-function buildMissionBboxParams(mission: { lat: number; lon: number; radius_nm: number }) {
-  const radiusDeg = mission.radius_nm / 60;
-  const cosLat = Math.cos((mission.lat * Math.PI) / 180);
-  const safeCosLat = Math.max(Math.abs(cosLat), 0.0001);
-  const lonOffset = radiusDeg / safeCosLat;
+const GLOBAL_FIRMS_HOTSPOTS_URL =
+  "/api/firms/hotspots?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180";
 
-  const minLat = Math.max(-90, mission.lat - radiusDeg);
-  const maxLat = Math.min(90, mission.lat + radiusDeg);
-  const minLon = Math.max(-180, mission.lon - lonOffset);
-  const maxLon = Math.min(180, mission.lon + lonOffset);
+const GLOBAL_DARK_VESSELS_URL =
+  "/api/firms/dark-vessels?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180";
 
-  const params = new URLSearchParams({
-    hours_back: "24",
-    min_lat: String(minLat),
-    max_lat: String(maxLat),
-    min_lon: String(minLon),
-    max_lon: String(maxLon),
-  });
-
-  return params.toString();
-}
-
-function appendQueryParams(baseQuery: string, extraParams: Record<string, string>) {
-  const params = new URLSearchParams(baseQuery);
-  for (const [key, value] of Object.entries(extraParams)) {
-    params.set(key, value);
-  }
-  return params.toString();
-}
-
-async function getMissionFirmsUrl() {
-  try {
-    const mission = await getMissionArea();
-    if (mission && Number.isFinite(mission.lat) && Number.isFinite(mission.lon) && Number.isFinite(mission.radius_nm)) {
-      return `/api/firms/hotspots?${buildMissionBboxParams(mission)}`;
-    }
-  } catch {
-    // Fall through to env-default mission area below.
-  }
-
-  const fallbackMission = {
-    lat: parseFloat(import.meta.env.VITE_CENTER_LAT || "45.5152"),
-    lon: parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
-    radius_nm: parseFloat(import.meta.env.VITE_COVERAGE_RADIUS_NM || "150"),
-  };
-  return `/api/firms/hotspots?${buildMissionBboxParams(fallbackMission)}`;
-}
-
-async function getMissionDarkVesselsUrl() {
-  const firmsUrl = await getMissionFirmsUrl();
-  const queryString = firmsUrl.split("?")[1] ?? "";
-  return `/api/firms/dark-vessels?${appendQueryParams(queryString, { hours_back: "24" })}`;
-}
-
-export const useInfraData = (options?: UseInfraDataOptions) => {
+export const useInfraData = () => {
   const [cablesData, setCablesData] = useState<FeatureCollection | null>(null);
   const [stationsData, setStationsData] = useState<FeatureCollection | null>(
     null,
@@ -199,10 +145,6 @@ export const useInfraData = (options?: UseInfraDataOptions) => {
 
   // Track whether PeeringDB data has been fetched once (it's global, no bbox needed)
   const peeringdbFetchedRef = useRef(false);
-
-  // Stable ref so the FIRMS interval callback always sees the latest global flag
-  // without needing to recreate the interval on every render.
-  const firmsGlobalRef = useRef<boolean>(!!options?.firmsGlobal);
 
   useEffect(() => {
     const fetchCables = async () => {
@@ -311,10 +253,7 @@ export const useInfraData = (options?: UseInfraDataOptions) => {
 
     const fetchDarkVessels = async () => {
       try {
-        const url = firmsGlobalRef.current
-          ? "/api/firms/dark-vessels?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180"
-          : await getMissionDarkVesselsUrl();
-        const res = await fetch(url);
+        const res = await fetch(GLOBAL_DARK_VESSELS_URL);
         const data: unknown = await res.json();
         if (isFeatureCollection(data)) {
           setDarkVesselData(data);
@@ -368,20 +307,13 @@ export const useInfraData = (options?: UseInfraDataOptions) => {
       clearInterval(dnsInterval);
       clearInterval(dvInterval);
     };
-  }, [options?.firmsGlobal]);
+  }, []);
 
-  // ── FIRMS fetch — owns its own interval and re-fires when firmsGlobal toggles ──
+  // ── FIRMS fetch — always use global coverage ──
   useEffect(() => {
-    firmsGlobalRef.current = !!options?.firmsGlobal;
-
     const fetchFirms = async () => {
-      // Explicit full-world bbox params when in global mode so the API skips
-      // the mission-area Redis cache and queries the DB with a world envelope.
       try {
-        const url = firmsGlobalRef.current
-          ? "/api/firms/hotspots?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180"
-          : await getMissionFirmsUrl();
-        const res = await fetch(url);
+        const res = await fetch(GLOBAL_FIRMS_HOTSPOTS_URL);
         const data: unknown = await res.json();
         if (isFeatureCollection(data)) {
           setFirmsData(data);
@@ -397,7 +329,7 @@ export const useInfraData = (options?: UseInfraDataOptions) => {
     fetchFirms();
     const firmsInterval = setInterval(fetchFirms, 5 * 60 * 1000);
     return () => clearInterval(firmsInterval);
-  }, [options?.firmsGlobal]);
+  }, []);
 
   return {
     cablesData,
