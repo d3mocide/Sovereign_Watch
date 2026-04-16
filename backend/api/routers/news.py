@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import re
+import asyncio
+import ipaddress
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -292,8 +294,24 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
         raise HTTPException(status_code=400, detail="Invalid article URL")
 
     host = parsed.hostname or ""
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+    if not host:
+        raise HTTPException(status_code=400, detail="Invalid article URL")
+
+    # Prevent SSRF: Resolve hostname and ensure it does not map to an internal IP
+    try:
+        loop = asyncio.get_running_loop()
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        addr_info = await loop.getaddrinfo(host, port)
+        for _, _, _, _, sockaddr in addr_info:
+            ip = sockaddr[0]
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified:
+                raise HTTPException(status_code=400, detail="Internal/private URLs are not allowed")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        logger.warning(f"DNS resolution failed for {host}: {e}")
+        raise HTTPException(status_code=400, detail="Could not resolve hostname")
 
     try:
         async with httpx.AsyncClient(
