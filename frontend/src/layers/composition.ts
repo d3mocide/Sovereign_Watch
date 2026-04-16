@@ -321,6 +321,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       darkVesselData ?? null,
       !!filters?.showDarkVessels,
       globeMode,
+      now,
       setHoveredInfra,
       setSelectedInfra,
     ),

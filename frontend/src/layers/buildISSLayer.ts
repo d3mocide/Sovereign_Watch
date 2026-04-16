@@ -44,19 +44,34 @@ function splitTrackAtAntimeridian(track: ISSPosition[]): ISSPathSegment[] {
     let currentSegment: [number, number][] = [[ordered[0].lon, ordered[0].lat]];
 
     for (let index = 1; index < ordered.length; index += 1) {
-        const previous = ordered[index - 1];
-        const current = ordered[index];
-        const crossedAntimeridian = Math.abs(current.lon - previous.lon) > 180;
+        const prev = ordered[index - 1];
+        const curr = ordered[index];
+        const crossed = Math.abs(curr.lon - prev.lon) > 180;
 
-        if (crossedAntimeridian) {
-            if (currentSegment.length >= 2) {
-                segments.push({ path: currentSegment });
-            }
-            currentSegment = [[current.lon, current.lat]];
-            continue;
+        if (crossed) {
+            // Interpolate latitude at the antimeridian (±180)
+            const direction = curr.lon - prev.lon > 0 ? -1 : 1; // 1: E->W (+180), -1: W->E (-180)
+            const targetLon = direction === 1 ? 180 : -180;
+            const otherLon = direction === 1 ? -180 : 180;
+
+            // Simple linear interpolation for latitude
+            let lon1 = prev.lon;
+            let lon2 = curr.lon;
+            if (direction === 1) lon2 += 360;
+            else lon2 -= 360;
+
+            const t = (targetLon - lon1) / (lon2 - lon1);
+            const interLat = prev.lat + t * (curr.lat - prev.lat);
+
+            // Close current segment at the edge
+            currentSegment.push([targetLon, interLat]);
+            segments.push({ path: currentSegment });
+
+            // Start next segment from the opposite edge
+            currentSegment = [[otherLon, interLat], [curr.lon, curr.lat]];
+        } else {
+            currentSegment.push([curr.lon, curr.lat]);
         }
-
-        currentSegment.push([current.lon, current.lat]);
     }
 
     if (currentSegment.length >= 2) {

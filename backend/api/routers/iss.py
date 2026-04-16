@@ -49,8 +49,8 @@ async def get_iss_position():
 
 
 @router.get("/api/infrastructure/iss/track", dependencies=_viewer_auth)
-async def get_iss_track(points: int = 720):
-    """Return the last N ISS positions from the archive (default 720 ≈ 1 orbit at 5s cadence)."""
+async def get_iss_track(points: int = 1080):
+    """Return the last N ISS positions from the archive (default 1080 ≈ 1.5 orbits at 5s cadence)."""
     if not db.pool:
         raise HTTPException(status_code=503, detail="Database not connected")
 

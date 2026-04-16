@@ -13,7 +13,7 @@ import type { ISSPosition } from "../types";
 
 const WS_PATH = "/ws/infrastructure/iss-stream";
 const REST_PATH = "/api/infrastructure/iss/position";
-const DEFAULT_TRACK_LENGTH = 720; // ~1 orbit at 5s cadence
+const DEFAULT_TRACK_LENGTH = 1080; // ~1.5 orbits at 5s cadence
 const REST_FALLBACK_INTERVAL_MS = 10_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 

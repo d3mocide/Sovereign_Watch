@@ -131,12 +131,15 @@ def _candidate_landmask_paths() -> list[Path]:
 
     module_path = Path(__file__).resolve()
     for parent in module_path.parents:
+        # Check local support dir (standard layout)
+        candidates.append(parent / "support" / "world-countries.json")
+        # Check frontend public (alternative layout)
         candidates.append(parent / "frontend" / "public" / "world-countries.json")
 
     unique_candidates: list[Path] = []
     seen: set[str] = set()
     for candidate in candidates:
-        candidate_key = str(candidate)
+        candidate_key = str(candidate.resolve()) if candidate.exists() else str(candidate)
         if candidate_key in seen:
             continue
         seen.add(candidate_key)
@@ -165,9 +168,9 @@ def _load_world_land_geometry_geojson() -> list[str]:
         geometries = _extract_land_geometry_geojson(feature_collection)
         if geometries:
             logger.info(
-                "Loaded %d land geometries for FIRMS dark-vessel masking from %s",
+                "Loaded %d land geometries for FIRMS dark-vessel masking from: %s",
                 len(geometries),
-                path,
+                path.resolve(),
             )
             return geometries
 

@@ -48,10 +48,14 @@ export function buildDarkVesselLayer(
   darkVesselData: FeatureCollection | null,
   visible: boolean,
   globeMode: boolean,
+  now: number,
   setHoveredInfra: (info: unknown) => void,
   setSelectedInfra: (info: unknown) => void,
 ): Layer[] {
   if (!visible || !darkVesselData?.features?.length) return [];
+
+  // Heartbeat pulse: 1.5s period
+  const pulse = (Math.sin(now / 240) + 1) / 2;
 
   // Add layer tag to features for the picker
   const data = darkVesselData.features.map(f => ({
@@ -79,14 +83,26 @@ export function buildDarkVesselLayer(
       opacity: 1.0,
 
       getPosition: (d) => d.geometry.coordinates as [number, number],
-      getRadius: (d) => ringRadius(d.properties.risk_score),
+      getRadius: (d) => {
+        const base = ringRadius(d.properties.risk_score);
+        if (d.properties.risk_severity === "CRITICAL") {
+           return base * (1.0 + pulse * 0.15); // Pulsing expansion
+        }
+        return base;
+      },
       radiusUnits: "meters",
       radiusMinPixels: 6,
       radiusMaxPixels: 80,
 
       filled: false,
       stroked: true,
-      getLineColor: (d) => severityColor(d.properties.risk_severity),
+      getLineColor: (d) => {
+        const color = severityColor(d.properties.risk_severity);
+        if (d.properties.risk_severity === "CRITICAL") {
+          return [color[0], color[1], color[2], 160 + pulse * 95]; // Pulsing opacity
+        }
+        return color;
+      },
       lineWidthMinPixels: 2,
       lineWidthMaxPixels: 4,
 
@@ -107,7 +123,13 @@ export function buildDarkVesselLayer(
       radiusMaxPixels: 16,
 
       filled: true,
-      getFillColor: (d) => severityColor(d.properties.risk_severity),
+      getFillColor: (d) => {
+        const color = severityColor(d.properties.risk_severity);
+        if (d.properties.risk_severity === "CRITICAL") {
+           return [color[0], color[1], color[2], 200 + pulse * 55];
+        }
+        return color;
+      },
       stroked: true,
       getLineColor: [255, 255, 255, 180],
       lineWidthMinPixels: 1,
