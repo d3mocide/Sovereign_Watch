@@ -47,7 +47,7 @@ def test_parse_firms_csv_to_rows_filters_and_normalizes_live_world_feed() -> Non
     rows = firms_router._parse_firms_csv_to_rows(
         csv_body,
         source="VIIRS_SNPP_NRT",
-        hours_back=72,
+        hours_back=999999,
         min_frp=0.5,
         confidence="",
         limit=2000,
