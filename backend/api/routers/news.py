@@ -1,4 +1,7 @@
 import json
+import ipaddress
+import socket
+import asyncio
 import logging
 import os
 import re
@@ -294,6 +297,18 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
     host = parsed.hostname or ""
     if host in {"localhost", "127.0.0.1", "::1"}:
         raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+
+    loop = asyncio.get_running_loop()
+    try:
+        addr_info = await loop.getaddrinfo(host, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="Could not resolve hostname")
+
+    for info in addr_info:
+        ip_str = info[4][0]
+        ip_obj = ipaddress.ip_address(ip_str)
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified:
+            raise HTTPException(status_code=400, detail="SSRF protection: Cannot access internal or private IPs")
 
     try:
         async with httpx.AsyncClient(

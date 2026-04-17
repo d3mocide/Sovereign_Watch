@@ -54,3 +54,7 @@
 **Vulnerability:** Denial of Service (DoS) / Resource Exhaustion
 **Learning:** `backend/api/routers/system.py` had rate limiting on the `POST /api/watchlist` endpoint but not the `DELETE /api/watchlist/{icao24}` endpoint. While authenticated (requiring the "operator" role), a compromised account or buggy client could flood the Redis cache with `zrem` operations, potentially leading to resource exhaustion or performance degradation across the system.
 **Prevention:** Consistently apply rate limiting to *all* write operations (POST, PUT, PATCH, DELETE) that interact with the database or cache, even if they require authentication. Ensure endpoints that mutate shared state are protected symmetrically.
+## 2026-06-25 - Fix SSRF Vulnerability in News Proxy
+**Vulnerability:** Server-Side Request Forgery (SSRF)
+**Learning:** `backend/api/routers/news.py` used superficial string matching on the host (e.g. `host in {"localhost", "127.0.0.1", "::1"}`) before making requests via `httpx`. Attackers could bypass this by providing URLs resolving to internal networks (e.g., `http://127.1`, `http://0.0.0.0`, `http://169.254.169.254`).
+**Prevention:** To prevent SSRF when fetching external URLs, always resolve the hostname asynchronously using `asyncio.get_running_loop().getaddrinfo()` and verify the resulting IP addresses are not private, loopback, multicast, or unspecified (using the `ipaddress` module) before making the request.
