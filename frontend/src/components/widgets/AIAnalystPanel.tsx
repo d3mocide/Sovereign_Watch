@@ -41,7 +41,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
   autoRunTrigger,
   isSidebarClosed = false
 }) => {
-  const { text, isStreaming, error, generatedAt, run, reset } = useAnalysis();
+  const { text, isStreaming, error, advisory, generatedAt, run, reset } = useAnalysis();
   const { config: aiConfig, isSaving, selectModel } = useAIConfig();
   const { hasRole } = useAuth();
   const entityUid = entity?.uid;
@@ -417,6 +417,17 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent selection:bg-hud-green/30 relative z-10"
           >
+            {advisory && (
+              <div className="mb-4 flex flex-col gap-3 p-4 bg-amber-500/5 border border-amber-500/30 rounded-sm">
+                <div className="flex items-center gap-2 text-amber-400">
+                    <AlertTriangle size={14} />
+                    <span className="text-[10px] font-black tracking-[.3em] uppercase">Model Overloaded</span>
+                </div>
+                <div className="text-[11px] font-mono text-white/70 leading-relaxed border-l border-amber-500/20 pl-3">
+                    {advisory}
+                </div>
+              </div>
+            )}
             {error ? (
               <div className="flex flex-col gap-3 p-4 bg-red-500/5 border border-red-500/30 rounded-sm">
                 <div className="flex items-center gap-2 text-red-500">

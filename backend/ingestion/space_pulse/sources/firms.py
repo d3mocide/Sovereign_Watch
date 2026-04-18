@@ -55,6 +55,10 @@ DEFAULT_FIRMS_SOURCES = [
     "VIIRS_SNPP_NRT",
 ]
 
+FIRMS_SOURCE_ALIASES = {
+    "VIIRS_SNPP_NR": "VIIRS_SNPP_NRT",
+}
+
 
 def _parse_firms_sources(raw_value: str | None) -> list[str]:
     if not raw_value:
@@ -64,6 +68,14 @@ def _parse_firms_sources(raw_value: str | None) -> list[str]:
     seen: set[str] = set()
     for value in raw_value.split(","):
         source = value.strip()
+        normalized_source = FIRMS_SOURCE_ALIASES.get(source, source)
+        if normalized_source != source:
+            logger.warning(
+                "FIRMS: normalizing source alias %s -> %s",
+                source,
+                normalized_source,
+            )
+        source = normalized_source
         if not source or source in seen:
             continue
         seen.add(source)
@@ -357,7 +369,8 @@ class FIRMSSource(BaseSource):
 
                 await self._poll()
                 await self._set_last_fetch()
-                self._empty_cache_refresh_attempted = False
+                if not await self._cache_is_empty():
+                    self._empty_cache_refresh_attempted = False
             except Exception as exc:
                 logger.exception("FIRMS poll error")
                 if self.redis_client:

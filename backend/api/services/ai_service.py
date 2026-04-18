@@ -12,6 +12,21 @@ logger = logging.getLogger("SovereignWatch.AIService")
 _LITELLM_CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/litellm_config.yaml")
 
 
+class AIModelOverloadedError(Exception):
+    """Raised when the upstream model is temporarily overloaded."""
+
+
+def _is_model_overloaded_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return (
+        "serviceunavailableerror" in text
+        or '"status": "unavailable"' in text
+        or "currently experiencing high demand" in text
+        or "please try again later" in text
+        or "503 service unavailable" in text
+    )
+
+
 class AIService:
     """
     Unified AI Service Layer for Sovereign Watch.
@@ -160,6 +175,9 @@ class AIService:
                     yield content
         except Exception as e:
             logger.error(f"AI Stream Error: {e}")
+            if _is_model_overloaded_error(e):
+                yield "Error: AI model temporarily overloaded. Please try again shortly."
+                return
             yield f"Error: {str(e)}"
 
     async def generate_static(self, system_prompt: str, user_prompt: str) -> str:
@@ -178,7 +196,12 @@ class AIService:
                 ],
             )
             return response.choices[0].message.content
-        except Exception:
+        except Exception as exc:
+            if _is_model_overloaded_error(exc):
+                logger.warning("AI model overloaded for model: %s", model_name)
+                raise AIModelOverloadedError(
+                    "AI model temporarily overloaded. Please try again shortly."
+                ) from exc
             logger.exception("AI Static Error for model: %s", model_name)
             raise
 

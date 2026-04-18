@@ -26,25 +26,17 @@ import {
   X,
 } from "lucide-react";
 import type { WebSDRNode } from "../../types";
+import { buildEmbedUrl, buildLaunchUrl, WEBSDR_MODES, type WebSDRMode } from "./websdrUrl";
 
 // ---------------------------------------------------------------------------
 // Mode helpers
 // ---------------------------------------------------------------------------
 
-const WEBSDR_MODES = ["usb", "lsb", "am", "cw", "fm"] as const;
-type WebSDRMode = typeof WEBSDR_MODES[number];
-
-/** Format frequency kHz → WebSDR ?tune= value. */
-function tuneParam(freqKhz: number, mode: WebSDRMode): string {
-  // WebSDR accepts frequencies in kHz with up to 3 decimal places
-  const freq = freqKhz % 1 === 0 ? String(freqKhz) : freqKhz.toFixed(3);
-  return `${freq}${mode}`;
-}
-
-/** Construct the full WebSDR URL with tune parameter. */
-function buildUrl(node: WebSDRNode, freqKhz: number, mode: WebSDRMode): string {
-  const base = node.url.endsWith("/") ? node.url : node.url + "/";
-  return `${base}?tune=${tuneParam(freqKhz, mode)}`;
+function getPageProtocol(): string {
+  if (typeof window !== "undefined" && window.location?.protocol) {
+    return window.location.protocol;
+  }
+  return "http:";
 }
 
 // ---------------------------------------------------------------------------
@@ -94,20 +86,34 @@ export default function WebSDRPanel({
   onClose,
   fullScreen = false,
 }: Props) {
+  const launchUrlFor = useCallback(
+    (targetNode: WebSDRNode, targetFreqKhz: number, targetMode: WebSDRMode) =>
+      buildLaunchUrl(targetNode, targetFreqKhz, targetMode),
+    [],
+  );
+  const embedUrlFor = useCallback(
+    (targetNode: WebSDRNode, targetFreqKhz: number, targetMode: WebSDRMode) =>
+      buildEmbedUrl(targetNode, targetFreqKhz, targetMode),
+    [],
+  );
   const [freqKhz, setFreqKhz] = useState(initialFreqKhz);
   const [freqInput, setFreqInput] = useState(String(initialFreqKhz));
   const [mode, setMode] = useState<WebSDRMode>(initialMode);
-  const [iframeUrl, setIframeUrl] = useState(() => buildUrl(node, initialFreqKhz, initialMode));
+  const [iframeUrl, setIframeUrl] = useState(() => embedUrlFor(node, initialFreqKhz, initialMode));
+  const [launchUrl, setLaunchUrl] = useState(() => launchUrlFor(node, initialFreqKhz, initialMode));
   const [iframeBlocked, setIframeBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const originalUrlProtocol = new URL(node.url).protocol;
+  const iframeUsesHttpsUpgrade = getPageProtocol() === "https:" && originalUrlProtocol === "http:";
 
   // When freq or mode changes, rebuild the iframe URL
   const applyTune = useCallback((newFreq: number, newMode: WebSDRMode) => {
-    setIframeUrl(buildUrl(node, newFreq, newMode));
+    setIframeUrl(embedUrlFor(node, newFreq, newMode));
+    setLaunchUrl(launchUrlFor(node, newFreq, newMode));
     setLoading(true);
     setIframeBlocked(false);
-  }, [node]);
+  }, [embedUrlFor, launchUrlFor, node]);
 
   // Commit frequency input on Enter or blur
   const commitFreq = useCallback(() => {
@@ -156,8 +162,8 @@ export default function WebSDRPanel({
   }, []);
 
   const openInNewTab = useCallback(() => {
-    window.open(iframeUrl, "_blank", "noopener,noreferrer");
-  }, [iframeUrl]);
+    window.open(launchUrl, "_blank", "noopener,noreferrer");
+  }, [launchUrl]);
 
   // Bands display (shorten for the header chip)
   const bandChips = node.bands.slice(0, 5);
@@ -321,6 +327,11 @@ export default function WebSDRPanel({
                   {node.name} prevents iframe embedding. Open it in a new
                   browser tab — the frequency will be pre-tuned automatically.
                 </p>
+                {iframeUsesHttpsUpgrade && (
+                  <p className="text-[11px] text-amber-400/80 mb-4">
+                    This receiver advertises an HTTP endpoint, so embedded mode was upgraded to HTTPS to avoid mixed-content blocking.
+                  </p>
+                )}
                 <button
                   onClick={openInNewTab}
                   className="flex items-center gap-2 px-4 py-2 rounded-md bg-violet-500/15 border border-violet-500/30 text-violet-400 hover:bg-violet-500/25 transition-colors text-sm font-semibold"
@@ -354,6 +365,9 @@ export default function WebSDRPanel({
           <span className="text-[10px] font-mono text-slate-600 truncate flex-1" title={iframeUrl}>
             {iframeUrl}
           </span>
+          {iframeUsesHttpsUpgrade && (
+            <span className="text-[10px] text-amber-400/80 shrink-0">HTTPS-upgraded embed</span>
+          )}
           <button
             onClick={openInNewTab}
             className="text-[10px] text-violet-500 hover:text-violet-400 transition-colors shrink-0 flex items-center gap-0.5"

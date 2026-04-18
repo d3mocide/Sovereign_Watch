@@ -89,6 +89,49 @@ class _FailingAsyncClient:
         raise httpx.ConnectError("network down")
 
 
+class _TimeoutThenSuccessAsyncClient:
+    def __init__(self):
+        self.calls = 0
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, _url: str):
+        self.calls += 1
+        if self.calls == 1:
+            raise httpx.ConnectTimeout("timed out")
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 1,
+                    "name": "Station One",
+                    "status": "Online",
+                    "online": True,
+                    "last_seen": "2026-04-17T18:12:00Z",
+                    "lat": 35.0,
+                    "lng": -97.0,
+                    "alt": 10,
+                }
+            ],
+            request=httpx.Request("GET", "https://network.satnogs.org/api/stations/"),
+        )
+
+
+class _TimeoutAsyncClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, _url: str):
+        raise httpx.ConnectTimeout("timed out")
+
+
 @pytest.mark.asyncio
 async def test_stations_returns_empty_payload_when_upstream_network_fails() -> None:
     mock_redis = MagicMock()
@@ -109,3 +152,48 @@ async def test_stations_returns_empty_payload_when_upstream_network_fails() -> N
     assert body["meta"]["source"] == "upstream_network_error"
     assert body["meta"]["count"] == 0
     assert body["meta"]["error"] == "Failed to fetch upstream SatNOGS network stations"
+
+
+@pytest.mark.asyncio
+async def test_stations_retries_once_after_timeout_and_succeeds() -> None:
+    mock_redis = MagicMock()
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.set = AsyncMock()
+    mock_redis.delete = AsyncMock()
+    retrying_client = _TimeoutThenSuccessAsyncClient()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        with patch("core.database.db.redis_client", mock_redis), patch(
+            "routers.satnogs.httpx.AsyncClient", return_value=retrying_client
+        ):
+            response = await client.get("/api/satnogs/stations?include_meta=true")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert retrying_client.calls == 2
+    assert body["meta"]["source"] == "live"
+    assert body["meta"]["count"] == 1
+    assert body["stations"][0]["status"] == "online"
+
+
+@pytest.mark.asyncio
+async def test_stations_returns_timeout_metadata_when_retries_exhausted() -> None:
+    mock_redis = MagicMock()
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.set = AsyncMock()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        with patch("core.database.db.redis_client", mock_redis), patch(
+            "routers.satnogs.httpx.AsyncClient", return_value=_TimeoutAsyncClient()
+        ):
+            response = await client.get("/api/satnogs/stations?include_meta=true")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stations"] == []
+    assert body["meta"]["source"] == "upstream_timeout"
+    assert body["meta"]["error"] == "SatNOGS upstream request timed out"

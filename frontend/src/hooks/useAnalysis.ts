@@ -6,6 +6,7 @@ export type AnalysisState = {
   text: string;
   isStreaming: boolean;
   error: string | null;
+  advisory: string | null;
   generatedAt: Date | null;
 };
 
@@ -25,6 +26,7 @@ const INITIAL_STATE: AnalysisState = {
   text: '',
   isStreaming: false,
   error: null,
+  advisory: null,
   generatedAt: null,
 };
 
@@ -55,18 +57,19 @@ export function useAnalysis(): UseAnalysisReturn {
     readerRef.current?.cancel().catch(() => undefined);
     readerRef.current = null;
 
-    setState({ text: '', isStreaming: true, error: null, generatedAt: null });
+    setState({ text: '', isStreaming: true, error: null, advisory: null, generatedAt: null });
 
     try {
       // Use domain personas for air/sea/orbital CoT entities.
       if (!isSitrep && entity) {
         try {
-          const domainText = await runDomainAnalysis(entity, lookbackHours, mode);
-          if (domainText) {
+          const domainResult = await runDomainAnalysis(entity, lookbackHours, mode);
+          if (domainResult) {
             setState({
-              text: domainText,
+              text: domainResult.text,
               isStreaming: false,
               error: null,
+              advisory: domainResult.advisory,
               generatedAt: new Date(),
             });
             return;
@@ -122,7 +125,13 @@ export function useAnalysis(): UseAnalysisReturn {
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      setState(prev => ({ ...prev, isStreaming: false, error: message }));
+      const overloaded = /temporarily overloaded|high demand|service unavailable|unavailable/i.test(message);
+      setState(prev => ({
+        ...prev,
+        isStreaming: false,
+        error: overloaded ? null : message,
+        advisory: overloaded ? 'AI model temporarily overloaded. Please try again shortly.' : null,
+      }));
     } finally {
       readerRef.current = null;
     }

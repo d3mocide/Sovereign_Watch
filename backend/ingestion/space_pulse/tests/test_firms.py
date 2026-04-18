@@ -306,6 +306,29 @@ def test_empty_cache_refresh_only_bypasses_cooldown_once():
     assert should_bypass_again is False
 
 
+def test_parse_firms_sources_normalizes_snpp_alias():
+    assert _parse_firms_sources("VIIRS_SNPP_NR,VIIRS_NOAA20_NRT") == [
+        "VIIRS_SNPP_NRT",
+        "VIIRS_NOAA20_NRT",
+    ]
+
+
+@pytest.mark.anyio
+async def test_empty_cache_bypass_stays_armed_until_cache_exists():
+    redis_client = AsyncMock()
+    src = FIRMSSource(client=None, redis_client=redis_client, db_url="postgresql://x/y")
+
+    src._get_last_fetch = AsyncMock(side_effect=[time.time() - 30, time.time() - 30])
+    src._cache_is_empty = AsyncMock(side_effect=[True, True, True])
+    src._poll = AsyncMock(side_effect=[asyncio.CancelledError()])
+    src._set_last_fetch = AsyncMock()
+
+    with pytest.raises(asyncio.CancelledError):
+        await src.run()
+
+    assert src._empty_cache_refresh_attempted is True
+
+
 class TestFIRMSRedisCadence:
     @pytest.mark.anyio
     async def test_get_last_fetch_reads_redis_timestamp(self):

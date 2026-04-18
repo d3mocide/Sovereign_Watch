@@ -33,6 +33,9 @@ CACHE_TTL_STATIONS = 300  # 5 minutes — station availability changes frequentl
 CACHE_TTL_STATIONS_STALE = 3600  # 1 hour fallback when upstream is temporarily down
 CACHE_TTL_STATIONS_ERROR = 60  # 1 minute failure backoff to avoid hammering upstream
 MAX_STATIONS_BACKOFF = 6 * 3600  # Cap externally requested backoff at 6 hours
+SATNOGS_STATIONS_URL = "https://network.satnogs.org/api/stations/"
+SATNOGS_STATIONS_TIMEOUT = httpx.Timeout(15.0, connect=20.0)
+SATNOGS_STATIONS_TIMEOUT_RETRIES = 1
 
 _THROTTLE_DETAIL_RE = re.compile(r"expected available in\s+(\d+)\s+seconds", re.IGNORECASE)
 
@@ -143,6 +146,30 @@ def _normalize_station_status(raw_status: object, online_flag: object) -> str:
     if status in {"down", "bad", "inactive"}:
         return "offline"
     return "unknown"
+
+
+async def _fetch_upstream_stations(client: httpx.AsyncClient) -> list[dict] | dict:
+    last_timeout: httpx.TimeoutException | None = None
+    for attempt in range(SATNOGS_STATIONS_TIMEOUT_RETRIES + 1):
+        try:
+            resp = await client.get(SATNOGS_STATIONS_URL)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and "results" in data:
+                return data["results"]
+            return data
+        except httpx.TimeoutException as exc:
+            last_timeout = exc
+            if attempt < SATNOGS_STATIONS_TIMEOUT_RETRIES:
+                logger.warning(
+                    "SatNOGS upstream timeout on attempt %s/%s; retrying",
+                    attempt + 1,
+                    SATNOGS_STATIONS_TIMEOUT_RETRIES + 1,
+                )
+                continue
+            raise last_timeout
+
+    raise last_timeout or httpx.ConnectTimeout("SatNOGS upstream timed out")
 
 
 @router.get("/transmitters")
@@ -411,14 +438,9 @@ async def get_stations(
             "User-Agent": "SovereignWatch/1.0 (admin@sovereignwatch.local)",
             "Accept": "application/json",
         }
-        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
-            resp = await client.get("https://network.satnogs.org/api/stations/")
-            resp.raise_for_status()
-
-            # The API might return paginated results or a flat list. Usually it's a flat list.
-            data = resp.json()
-            if isinstance(data, dict) and "results" in data:
-                data = data["results"]
+        async with httpx.AsyncClient(timeout=SATNOGS_STATIONS_TIMEOUT, headers=headers) as client:
+            # Retry one transient timeout before falling back to cache/empty payload.
+            data = await _fetch_upstream_stations(client)
 
             # Filter and simplify fields to minimize payload
             stations = []
@@ -517,6 +539,44 @@ async def get_stations(
                 if exc.response.status_code == 429
                 else "Failed to fetch upstream SatNOGS network stations"
             ),
+        )
+
+    except httpx.TimeoutException as exc:
+        if db.redis_client:
+            await db.redis_client.set(
+                error_backoff_key,
+                _build_backoff_payload(
+                    retry_after_s=CACHE_TTL_STATIONS_ERROR,
+                    reason="timeout",
+                ),
+                ex=CACHE_TTL_STATIONS_ERROR,
+            )
+            stale = await db.redis_client.get(stale_cache_key)
+            if stale:
+                logger.warning(
+                    "SatNOGS upstream timeout (%s), serving stale stations "
+                    "(include_offline=%s)",
+                    type(exc).__name__,
+                    include_offline,
+                )
+                return _stations_response(
+                    json.loads(stale),
+                    include_meta=include_meta,
+                    source="stale_timeout",
+                    stale=True,
+                )
+
+        logger.warning(
+            "SatNOGS stations request timed out after %s attempt(s) "
+            "(error_type=%s, include_offline=%s)",
+            SATNOGS_STATIONS_TIMEOUT_RETRIES + 1,
+            type(exc).__name__,
+            include_offline,
+        )
+        return _empty_stations_response(
+            include_meta=include_meta,
+            source="upstream_timeout",
+            error="SatNOGS upstream request timed out",
         )
 
     except httpx.HTTPError as exc:

@@ -30,7 +30,7 @@ from services.sequence_evaluation_engine import (
 )
 from services.spatial_temporal_alignment import SpatialTemporalAlignment
 from services.stdbscan import detect_clusters
-from services.ai_service import ai_service
+from services.ai_service import AIModelOverloadedError, ai_service
 from core.database import db
 
 logger = logging.getLogger(__name__)
@@ -1791,6 +1791,8 @@ class DomainAnalysisResponse(BaseModel):
     risk_score: float
     indicators: List[str]
     context_snapshot: Dict
+    ai_status: Optional[str] = None
+    ai_notice: Optional[str] = None
 
 
 def _coerce_context_map(value: object) -> Dict:
@@ -2038,12 +2040,24 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
             system_prompt=persona["sys"] + "\n" + persona["inst"],
             user_prompt=user_prompt,
         )
+        ai_status = None
+        ai_notice = None
+    except AIModelOverloadedError as exc:
+        logger.warning("Air domain LLM overloaded, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Air domain: {entity_count} ADS-B tracks in {request.lookback_hours}h. "
+            + ("; ".join(indicators) if indicators else "No anomalies detected.")
+        )
+        ai_status = "overloaded"
+        ai_notice = str(exc)
     except Exception as exc:
         logger.warning("Air domain LLM failed, using heuristic narrative: %s", exc)
         narrative = (
             f"Air domain: {entity_count} ADS-B tracks in {request.lookback_hours}h. "
             + ("; ".join(indicators) if indicators else "No anomalies detected.")
         )
+        ai_status = None
+        ai_notice = None
 
     return DomainAnalysisResponse(
         domain="air",
@@ -2052,6 +2066,8 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         risk_score=round(risk_score, 3),
         indicators=indicators,
         context_snapshot=context,
+        ai_status=ai_status,
+        ai_notice=ai_notice,
     )
 
 
@@ -2199,12 +2215,24 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
             system_prompt=persona["sys"] + "\n" + persona["inst"],
             user_prompt=user_prompt,
         )
+        ai_status = None
+        ai_notice = None
+    except AIModelOverloadedError as exc:
+        logger.warning("Sea domain LLM overloaded, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Sea domain: {entity_count} AIS tracks in {request.lookback_hours}h. "
+            + ("; ".join(indicators) if indicators else "No anomalies detected.")
+        )
+        ai_status = "overloaded"
+        ai_notice = str(exc)
     except Exception as exc:
         logger.warning("Sea domain LLM failed, using heuristic narrative: %s", exc)
         narrative = (
             f"Sea domain: {entity_count} AIS tracks in {request.lookback_hours}h. "
             + ("; ".join(indicators) if indicators else "No anomalies detected.")
         )
+        ai_status = None
+        ai_notice = None
 
     return DomainAnalysisResponse(
         domain="sea",
@@ -2213,6 +2241,8 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         risk_score=round(risk_score, 3),
         indicators=indicators,
         context_snapshot=context,
+        ai_status=ai_status,
+        ai_notice=ai_notice,
     )
 
 
@@ -2333,12 +2363,24 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
             system_prompt=persona["sys"] + "\n" + persona["inst"],
             user_prompt=user_prompt,
         )
+        ai_status = None
+        ai_notice = None
+    except AIModelOverloadedError as exc:
+        logger.warning("Orbital domain LLM overloaded, using heuristic narrative: %s", exc)
+        narrative = (
+            f"Orbital/space-weather: Kp={kp_val or 'N/A'} ({storm_level or 'unknown'}). "
+            + ("; ".join(indicators) if indicators else "Nominal space weather conditions.")
+        )
+        ai_status = "overloaded"
+        ai_notice = str(exc)
     except Exception as exc:
         logger.warning("Orbital domain LLM failed, using heuristic narrative: %s", exc)
         narrative = (
             f"Orbital/space-weather: Kp={kp_val or 'N/A'} ({storm_level or 'unknown'}). "
             + ("; ".join(indicators) if indicators else "Nominal space weather conditions.")
         )
+        ai_status = None
+        ai_notice = None
 
     return DomainAnalysisResponse(
         domain="orbital",
@@ -2347,4 +2389,6 @@ async def analyze_orbital_domain(request: DomainAnalysisRequest) -> DomainAnalys
         risk_score=round(risk_score, 3),
         indicators=indicators,
         context_snapshot=context,
+        ai_status=ai_status,
+        ai_notice=ai_notice,
     )

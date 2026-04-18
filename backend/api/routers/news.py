@@ -30,7 +30,6 @@ DEFAULT_RSS_URLS = ",".join(
         "https://www.aljazeera.com/xml/rss/all.xml",
         "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
         "https://theaviationist.com/feed/",
-        "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
     ]
 )
 

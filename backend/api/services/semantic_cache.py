@@ -70,8 +70,8 @@ class SovereignSemanticCache:
             )
         except ImportError:
             logger.warning(
-                "redisvl not installed — SemanticCache disabled.  "
-                "Add redisvl>=0.3.0 to pyproject.toml to enable."
+                "redisvl not importable in the current backend runtime — SemanticCache disabled.  "
+                "The dependency is declared in pyproject.toml, so rebuild or reinstall the backend API environment."
             )
         except Exception as exc:
             logger.warning("SemanticCache init failed (degraded gracefully): %s", exc)

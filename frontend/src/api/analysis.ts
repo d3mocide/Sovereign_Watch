@@ -28,6 +28,13 @@ export interface DomainAnalysisResponse {
   narrative: string;
   indicators: string[];
   context_snapshot: Record<string, unknown>;
+  ai_status?: string | null;
+  ai_notice?: string | null;
+}
+
+export interface DomainAnalysisResult {
+  text: string;
+  advisory: string | null;
 }
 
 function inferDomainFromEntity(entity: CoTEntity | null): DomainKind | null {
@@ -95,7 +102,7 @@ export async function runDomainAnalysis(
   entity: CoTEntity,
   lookbackHours: number,
   mode: string = "tactical",
-): Promise<string | null> {
+): Promise<DomainAnalysisResult | null> {
   const domain = inferDomainFromEntity(entity);
   if (!domain) return null;
 
@@ -118,7 +125,13 @@ export async function runDomainAnalysis(
   }
 
   const data = (await response.json()) as DomainAnalysisResponse;
-  return formatDomainAnalysisText(data);
+  return {
+    text: formatDomainAnalysisText(data),
+    advisory:
+      data.ai_status === "overloaded"
+        ? (data.ai_notice ?? "AI model temporarily overloaded. Please try again shortly.")
+        : null,
+  };
 }
 
 /**

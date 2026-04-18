@@ -15,6 +15,7 @@ from .test_stubs import install_common_test_stubs  # noqa: E402
 install_common_test_stubs()
 
 import routers.ai_router as ai_router  # noqa: E402
+from services.ai_service import AIModelOverloadedError  # noqa: E402
 
 
 class _FakeRedis:
@@ -104,3 +105,46 @@ async def test_analyze_air_domain_uses_region_scoped_nws_alerts():
     assert "66" not in prompt
     assert "1.0" not in prompt
     assert "below mission threshold" in prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_air_domain_flags_model_overload_notice():
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    mock_conn.fetchrow = AsyncMock(
+        return_value={"count": 0, "severe_count": 0, "extreme_count": 0}
+    )
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    redis_payloads = {
+        "nws:alerts:summary": json.dumps({"count": 0, "severe_count": 0, "extreme_count": 0}),
+        "nws:alerts:active": json.dumps({"type": "FeatureCollection", "features": []}),
+        "space_weather:kp_current": json.dumps({"kp": 1.0, "storm_level": "Quiet"}),
+    }
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
+        patch.object(
+            ai_router.ai_service,
+            "generate_static",
+            AsyncMock(
+                side_effect=AIModelOverloadedError(
+                    "AI model temporarily overloaded. Please try again shortly."
+                )
+            ),
+        ),
+    ):
+        response = await ai_router.analyze_air_domain(
+            ai_router.DomainAnalysisRequest(
+                h3_region="8728f2ba8ffffff",
+                lookback_hours=24,
+            )
+        )
+
+    assert response.ai_status == "overloaded"
+    assert response.ai_notice == "AI model temporarily overloaded. Please try again shortly."
+    assert "Air domain:" in response.narrative

@@ -17,12 +17,15 @@ Added a shared frontend URL resolver that prefers same-origin proxy paths whenev
 - Updated the frontend static nginx config so `index.html` is not cached after deploys, reducing stale bundle/API-route issues behind proxies and CDNs.
 - Added explicit deck.gl text character sets for labels that render the middle-dot separator, removing the missing glyph warning.
 - Hardened `/api/satnogs/stations` so upstream SatNOGS outages return an empty dataset with diagnostic metadata instead of surfacing a hard browser-facing `502` when no cache is available.
+- Hardened the FIRMS poller against the legacy `VIIRS_SNPP_NR` source alias and fixed the empty-cache cooldown bypass so an empty Redis cache no longer triggers a tight re-poll loop every second.
+- Added analyst-panel overload handling so provider `503 / high demand` responses surface as a dedicated warning while heuristic fallback content still renders.
 
 ## Verification
 
 - `cd frontend && pnpm run lint` passed.
 - `cd frontend && pnpm run typecheck` passed.
 - `cd frontend && pnpm run test` passed `(18 files, 268 tests)`.
+- Backend AI verification to be run with the API-targeted lint and pytest commands after the overload handling changes.
 
 ## Benefits
 
