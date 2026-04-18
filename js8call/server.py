@@ -158,9 +158,8 @@ FAILOVER_MAX_CANDIDATES: int = 3
 def _udp_send(msg: dict) -> None:
     """Send a single UDP datagram to the JS8Call API port. Fire-and-forget."""
     try:
-        tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        tx.sendto(json.dumps(msg).encode("utf-8") + b"\n", ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
-        tx.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as tx:
+            tx.sendto(json.dumps(msg).encode("utf-8") + b"\n", ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
     except Exception as exc:
         logger.warning("UDP send failed: %s", exc)
 

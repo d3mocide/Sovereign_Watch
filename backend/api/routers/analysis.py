@@ -301,8 +301,9 @@ async def analyze_track(
             # Run detectors
             rendezvous = escalation_detector.detect_rendezvous(tak_clauses)
             if rendezvous:
+                descs = "; ".join(r.description for r in rendezvous)
                 behavioral_signals.append(
-                    f"[SIGNAL] Multi-entity rendezvous: {rendezvous.description}"
+                    f"[SIGNAL] Multi-entity rendezvous: {descs}"
                 )
 
             clustering = escalation_detector.detect_anomaly_concentration(tak_clauses)
@@ -313,8 +314,9 @@ async def analyze_track(
 
             emergency = escalation_detector.detect_emergency_transponders(tak_clauses)
             if emergency:
+                descs = "; ".join(e.description for e in emergency)
                 behavioral_signals.append(
-                    f"[SIGNAL] Emergency Squawk: {emergency.description}"
+                    f"[SIGNAL] Emergency Squawk: {descs}"
                 )
         except Exception as e:
             logger.warning(f"Escalation detection failed for analysis: {e}")
@@ -331,8 +333,8 @@ async def analyze_track(
                 intel_context = "\nCORRELATED INTEL (50km):\n" + "\n".join(
                     [f"- [{r['timestamp']}] {r['content']}" for r in intel_rows]
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Intel context lookup failed: %s", e)
 
     # --- 4. PERSONA & PROMPT ---
     mode_normalized = (req.mode or "tactical").strip().lower()

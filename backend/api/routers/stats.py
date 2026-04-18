@@ -244,7 +244,7 @@ async def get_sensor_intelligence():
                 "horizon": round(r["max_dist_nm"] or 0, 1),
             }
             for r in octant_records
-            if r["octant"] is not None
+            if r["octant"] is not None and 0 <= int(r["octant"]) < len(OCT_LABELS)
         ]
 
         return {

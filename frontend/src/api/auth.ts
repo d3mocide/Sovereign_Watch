@@ -167,7 +167,7 @@ export async function deactivateUser(userId: number): Promise<void> {
     method: 'DELETE',
     headers: authHeaders(),
   });
-  if (!res.ok && res.status !== 204) {
+  if (!res.ok) {
     await handleResponse<void>(res);
   }
 }
