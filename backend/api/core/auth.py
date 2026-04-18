@@ -33,9 +33,6 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Roles in ascending order of privilege
 ROLES = ("viewer", "operator", "admin")
 
-_bearer_scheme = HTTPBearer(auto_error=False)
-
-
 def hash_password(plain: str) -> str:
     return _pwd_context.hash(plain)
 

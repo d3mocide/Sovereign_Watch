@@ -231,7 +231,6 @@ class KiwiClient:
         self._ws   = None
         self._host = host
         self._port = port
-        self._password = password
 
         extra_headers = {
             "Origin": f"http://{host}:{port}",
