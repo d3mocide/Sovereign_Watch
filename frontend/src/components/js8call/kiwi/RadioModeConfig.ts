@@ -35,6 +35,8 @@ export const KIWI_MODES = [
   "iq",
 ] as const;
 
+import { resolveWebSocketUrl } from "../../../utils/network";
+
 export type KiwiMode = (typeof KIWI_MODES)[number];
 
 export const MODE_INFO: Record<KiwiMode, { label: string; bw: number }> = {
@@ -52,12 +54,7 @@ export const MODE_INFO: Record<KiwiMode, { label: string; bw: number }> = {
 };
 
 export function getWsBaseUrl(): string {
-  const envUrl = import.meta.env.VITE_JS8_WS_URL;
-  if (envUrl && !envUrl.includes("localhost")) {
-    return envUrl;
-  }
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/js8/ws/js8`;
+  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8");
 }
 
 export const WS_BASE_URL = getWsBaseUrl();

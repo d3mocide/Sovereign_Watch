@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import os
 import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from .test_stubs import install_common_test_stubs  # noqa: E402
 
 install_common_test_stubs()
 
+from core.auth import get_current_user  # noqa: E402
+from main import app  # noqa: E402
 from routers.satnogs import (  # noqa: E402
     CACHE_TTL_STATIONS_ERROR,
     MAX_STATIONS_BACKOFF,
@@ -18,6 +23,18 @@ from routers.satnogs import (  # noqa: E402
     _parse_backoff_payload,
     _sanitize_backoff_seconds,
 )
+
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": 1,
+        "username": "admin",
+        "role": "admin",
+        "is_active": True,
+    }
+    yield
+    app.dependency_overrides.clear()
 
 
 def test_extract_retry_after_seconds_prefers_header_value() -> None:
@@ -59,3 +76,36 @@ def test_build_and_parse_backoff_payload_round_trip() -> None:
     assert payload["reason"] == "http_429"
     assert payload["retry_after_s"] == 2079
     assert isinstance(payload["backoff_until"], int)
+
+
+class _FailingAsyncClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, _url: str):
+        raise httpx.ConnectError("network down")
+
+
+@pytest.mark.asyncio
+async def test_stations_returns_empty_payload_when_upstream_network_fails() -> None:
+    mock_redis = MagicMock()
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.set = AsyncMock()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        with patch("core.database.db.redis_client", mock_redis), patch(
+            "routers.satnogs.httpx.AsyncClient", return_value=_FailingAsyncClient()
+        ):
+            response = await client.get("/api/satnogs/stations?include_meta=true")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stations"] == []
+    assert body["meta"]["source"] == "upstream_network_error"
+    assert body["meta"]["count"] == 0
+    assert body["meta"]["error"] == "Failed to fetch upstream SatNOGS network stations"

@@ -43,18 +43,23 @@ def _stations_response(
     include_meta: bool,
     source: str,
     stale: bool,
+    error: str | None = None,
 ) -> list[dict] | dict:
     if not include_meta:
         return stations
 
+    meta: dict[str, object] = {
+        "source": source,
+        "stale": stale,
+        "count": len(stations),
+        "served_at": int(time.time()),
+    }
+    if error:
+        meta["error"] = error
+
     return {
         "stations": stations,
-        "meta": {
-            "source": source,
-            "stale": stale,
-            "count": len(stations),
-            "served_at": int(time.time()),
-        },
+        "meta": meta,
     }
 
 
@@ -111,6 +116,18 @@ def _parse_backoff_payload(raw_payload: str | bytes | None) -> dict | None:
         return None
 
     return payload
+
+
+def _empty_stations_response(
+    *, include_meta: bool, source: str, error: str
+) -> list[dict] | dict:
+    return _stations_response(
+        [],
+        include_meta=include_meta,
+        source=source,
+        stale=False,
+        error=error,
+    )
 
 
 def _normalize_station_status(raw_status: object, online_flag: object) -> str:
@@ -488,14 +505,19 @@ async def get_stations(
             retry_after_s,
             exc_info=True,
         )
-        raise HTTPException(
-            status_code=503 if exc.response.status_code == 429 else 502,
-            detail=(
+        return _empty_stations_response(
+            include_meta=include_meta,
+            source=(
+                "upstream_rate_limited"
+                if exc.response.status_code == 429
+                else "upstream_http_error"
+            ),
+            error=(
                 f"SatNOGS upstream rate limited requests; retry in {retry_after_s}s"
                 if exc.response.status_code == 429
                 else "Failed to fetch upstream SatNOGS network stations"
             ),
-        ) from exc
+        )
 
     except httpx.HTTPError as exc:
         if db.redis_client:
@@ -529,7 +551,8 @@ async def get_stations(
             include_offline,
             exc_info=True,
         )
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to fetch upstream SatNOGS network stations",
-        ) from exc
+        return _empty_stations_response(
+            include_meta=include_meta,
+            source="upstream_network_error",
+            error="Failed to fetch upstream SatNOGS network stations",
+        )

@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { WebSDRNode } from '../types';
+import { resolveHttpUrl } from '../utils/network';
 
 const getNodesUrl = () => {
-  const envUrl = import.meta.env.VITE_JS8_BASE_URL;
-  if (envUrl && !envUrl.includes('localhost')) {
-    return `${envUrl}/api/websdr/nodes`;
-  }
-  return `${window.location.protocol}//${window.location.host}/js8/api/websdr/nodes`;
+  return resolveHttpUrl(import.meta.env.VITE_JS8_BASE_URL, '/js8/api/websdr/nodes');
 };
 
 const NODES_URL = getNodesUrl();

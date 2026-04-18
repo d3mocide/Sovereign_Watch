@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { KiwiNode } from '../types';
+import { resolveHttpUrl } from '../utils/network';
 
 const getNODES_URL = () => {
-  const envUrl = import.meta.env.VITE_JS8_BASE_URL;
-  if (envUrl && !envUrl.includes('localhost')) {
-    return `${envUrl}/api/kiwi/nodes`;
-  }
-  return `${window.location.protocol}//${window.location.host}/js8/api/kiwi/nodes`;
+  return resolveHttpUrl(import.meta.env.VITE_JS8_BASE_URL, '/js8/api/kiwi/nodes');
 };
 
 const NODES_URL = getNODES_URL();

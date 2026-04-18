@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import type { JS8LogEntry, JS8Station, JS8StatusLine } from "../types";
+import { resolveWebSocketUrl } from "../utils/network";
 
 const asString = (value: unknown, fallback = ""): string =>
   typeof value === "string" ? value : fallback;
@@ -22,15 +23,7 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     : null;
 
 const getJS8WSUrl = () => {
-  const envUrl = import.meta.env.VITE_JS8_WS_URL;
-  if (envUrl && !envUrl.includes("localhost")) {
-    const base = envUrl.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
-    // If it already ends with the path, return it, otherwise append it
-    return base.endsWith("/js8/ws/js8") ? base : `${base}/js8/ws/js8`;
-  }
-  // Default to proxy-friendly relative URL based on current origin
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/js8/ws/js8`;
+  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8");
 };
 
 const WS_URL = getJS8WSUrl();

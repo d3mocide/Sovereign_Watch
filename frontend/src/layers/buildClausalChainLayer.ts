@@ -454,6 +454,7 @@ export function buildClausalChainLayer(
       pickable: false,
       getPosition: (d) => [d.position[0], d.position[1], 0],
       getText: (d) => d.text,
+      characterSet: Array.from(new Set(textData.flatMap((d) => Array.from(d.text)))),
       getSize: 11,
       getColor: [226, 232, 240, 230],
       getPixelOffset: [10, -14],

@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import { getToken } from "../api/auth";
+import { resolveWebSocketUrl } from "../utils/network";
 
 export interface WorkerProtocolOptions {
   /** Ref that will be populated with the running Worker instance. */
@@ -54,14 +55,7 @@ export function startWorkerProtocol({
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const getWsUrl = () => {
-    const envUrl = import.meta.env.VITE_API_URL;
-    let base = "";
-    if (envUrl && !envUrl.includes("localhost")) {
-      const normalizedBase = envUrl.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
-      base = normalizedBase.replace("http", "ws") + "/api/tracks/live";
-    } else {
-      base = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/tracks/live`;
-    }
+    const base = resolveWebSocketUrl(import.meta.env.VITE_API_URL, "/api/tracks/live");
     const tok = getToken();
     return tok ? `${base}?token=${encodeURIComponent(tok)}` : base;
   };

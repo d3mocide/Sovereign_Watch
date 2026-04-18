@@ -120,6 +120,7 @@ export function buildClusterLayer(
       data: withPolygon,
       getPosition: (d) => [d.centroid_lon, d.centroid_lat],
       getText: (d) => `CLSTR·${d.entity_count}`,
+      characterSet: "CLSTR·0123456789",
       getSize: 10,
       getColor: [6, 182, 212, 220],
       background: true,

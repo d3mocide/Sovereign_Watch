@@ -13,7 +13,7 @@ logger = logging.getLogger("rf_pulse.ard")
 
 ARD_CSV_URL = (
     "https://raw.githubusercontent.com/"
-    "Amateur-Repeater-Directory/ARD-RepeaterList/refs/heads/main/MasterList/MasterRepeater.json"
+    "d3mocide/ard-repeaterlist/refs/heads/main/MasterList/MasterRepeater.json"
 )
 ARD_TIMEOUT = 30.0
 
