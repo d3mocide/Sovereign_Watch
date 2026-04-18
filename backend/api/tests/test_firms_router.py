@@ -42,7 +42,7 @@ def test_extract_land_geometry_geojson_keeps_only_polygonal_features() -> None:
 
 
 def test_parse_firms_csv_to_rows_filters_and_normalizes_live_world_feed() -> None:
-    csv_body = """latitude,longitude,bright_ti4,frp,confidence,satellite,acq_date,acq_time,daynight\n45.5,-122.6,330.1,12.4,h,SNPP,2026-04-14,0402,N\n46.1,-123.0,310.0,0.1,l,SNPP,2026-04-14,0404,D\n"""
+    csv_body = """latitude,longitude,bright_ti4,frp,confidence,satellite,acq_date,acq_time,daynight\n45.5,-122.6,330.1,12.4,h,SNPP,2026-04-18,0402,N\n46.1,-123.0,310.0,0.1,l,SNPP,2026-04-18,0404,D\n"""
 
     rows = firms_router._parse_firms_csv_to_rows(
         csv_body,
