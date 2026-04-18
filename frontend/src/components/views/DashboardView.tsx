@@ -273,21 +273,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </span>
         </div>
 
-        {/* Alerts badge */}
-        {alerts.length > 0 && (
-          <>
-            <div className="h-3 w-px bg-white/10" />
-            <div className="flex items-center gap-1.5">
-              <AlertTriangle
-                size={10}
-                className="text-alert-red animate-pulse"
-              />
-              <span className="text-[10px] text-alert-red font-bold">
-                {alerts.length} ALERT{alerts.length !== 1 ? "S" : ""}
-              </span>
-            </div>
-          </>
-        )}
+        {/* Alerts badge removed as requested */}
 
         <span className="ml-auto text-[8px] text-white/15 uppercase tracking-widest hidden xl:block">
           DASHBOARD // SITUATIONAL AWARENESS

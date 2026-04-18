@@ -1,46 +1,55 @@
 import React, { useEffect, useState } from "react";
 
-interface StreamStatus {
+interface PollerHealth {
   id: string;
   name: string;
+  group: string;
   status: string;
 }
 
-const STREAM_ABBR: Record<string, string> = {
-  aviation: "ADSB",
+const DASHBOARD_STREAMS: Record<string, string> = {
+  adsb: "ADSB",
   maritime: "AIS",
   orbital: "ORB",
   radioref: "RREF",
-  rf_public: "RF",
+  rf_ard: "RF",
   ai: "AI",
 };
 
 function streamDotClass(status: string): string {
-  if (status === "Active") return "bg-hud-green shadow-[0_0_4px_#00ff41]";
-  if (status === "Missing Key") return "bg-amber-400 shadow-[0_0_4px_#fbbf24]";
+  if (status === "healthy" || status === "active") return "bg-hud-green shadow-[0_0_4px_#00ff41]";
+  if (status === "stale" || status === "pending" || status === "no_credentials") return "bg-amber-400 shadow-[0_0_4px_#fbbf24]";
+  if (status === "error") return "bg-alert-red shadow-[0_0_4px_#ff0000]";
   return "bg-white/20";
 }
 
 function streamTextClass(status: string): string {
-  if (status === "Active") return "text-hud-green";
-  if (status === "Missing Key") return "text-amber-400";
+  if (status === "healthy" || status === "active") return "text-hud-green";
+  if (status === "stale" || status === "pending" || status === "no_credentials") return "text-amber-400";
+  if (status === "error") return "text-alert-red";
   return "text-white/25";
 }
 
 export const StreamStatusMonitor: React.FC = () => {
-  const [streamStatuses, setStreamStatuses] = useState<StreamStatus[]>([]);
+  const [streamStatuses, setStreamStatuses] = useState<PollerHealth[]>([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch("/api/config/streams");
-        if (r.ok) setStreamStatuses(await r.json());
+        const r = await fetch("/api/config/poller-health");
+        if (r.ok) {
+          const data: PollerHealth[] = await r.json();
+          const relevant = data.filter((s) => DASHBOARD_STREAMS[s.id]);
+          const order = Object.keys(DASHBOARD_STREAMS);
+          relevant.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+          setStreamStatuses(relevant);
+        }
       } catch {
         /* non-critical */
       }
     };
     load();
-    const t = setInterval(load, 60_000);
+    const t = setInterval(load, 30_000);
     return () => clearInterval(t);
   }, []);
 
@@ -63,7 +72,7 @@ export const StreamStatusMonitor: React.FC = () => {
                 className={`h-1.5 w-1.5 rounded-full ${streamDotClass(s.status)}`}
               />
               <span className={`text-[9px] ${streamTextClass(s.status)}`}>
-                {STREAM_ABBR[s.id] ?? s.id.toUpperCase()}
+                {DASHBOARD_STREAMS[s.id]}
               </span>
             </div>
           ))

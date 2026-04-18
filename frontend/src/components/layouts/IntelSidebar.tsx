@@ -235,27 +235,27 @@ export function IntelSidebar({
 
       {/* Conflict Zones */}
       <div className="flex flex-col flex-none max-h-[35%] bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative">
-        <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
+        <div className="shrink-0 flex flex-col gap-1 px-3 py-2 border-b border-white/10 bg-white/5">
           <div className="flex items-center gap-2">
             <AlertTriangle size={12} className="text-red-400 opacity-80" />
             <span className="text-[10px] font-bold tracking-[.3em] text-white/80 uppercase">
               ACTIVE CONFLICT ZONES
             </span>
-            <span className="text-[10px] font-black tabular-nums">
-              <span className="text-red-500">
-                [{conflictZones.filter((z) => z.threat_level === "CRITICAL").length}]
-              </span>
-              {conflictZones.filter((z) => z.threat_level === "ELEVATED").length > 0 && (
-                <span className="text-amber-500 ml-0.5">
-                  +{conflictZones.filter((z) => z.threat_level === "ELEVATED").length}
-                </span>
-              )}
-              {conflictZones.filter((z) => z.threat_level === "MONITORING").length > 0 && (
-                <span className="text-yellow-500/60 ml-0.5">
-                  +{conflictZones.filter((z) => z.threat_level === "MONITORING").length}
-                </span>
-              )}
+          </div>
+          <div className="pl-5 flex items-center gap-1.5 text-[10px] font-black tabular-nums uppercase tracking-widest">
+            <span className="text-red-500">
+              {conflictZones.filter((z) => z.threat_level === "CRITICAL").length} ACTIVE
             </span>
+            {conflictZones.filter((z) => z.threat_level === "ELEVATED").length > 0 && (
+              <span className="text-amber-500 ml-1">
+                +{conflictZones.filter((z) => z.threat_level === "ELEVATED").length} ELEV
+              </span>
+            )}
+            {conflictZones.filter((z) => z.threat_level === "MONITORING").length > 0 && (
+              <span className="text-yellow-500/60 ml-1">
+                +{conflictZones.filter((z) => z.threat_level === "MONITORING").length} WATCH
+              </span>
+            )}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">

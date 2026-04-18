@@ -47,10 +47,10 @@ function hotspotBloomRadius(frp: number | null): number {
   return Math.min(2_000 + scaled, 18_000);
 }
 
-function hotspotRingRadiusPixels(frp: number | null, pulse: number): number {
+function hotspotRingRadiusPixels(frp: number | null): number {
   const frpVal = Math.max(0, frp ?? 0);
   const scaled = Math.min(Math.sqrt(frpVal) * 0.6, 7);
-  return 10 + scaled + pulse * 4;
+  return 12 + scaled;
 }
 
 function hotspotCoreRadiusPixels(frp: number | null): number {
@@ -62,23 +62,21 @@ export function buildFIRMSLayer(
   firmsData: FeatureCollection | null,
   visible: boolean,
   globeMode: boolean,
-  now: number,
+  _now: number,
   setHoveredInfra: (info: unknown) => void,
   setSelectedInfra: (info: unknown) => void,
 ): Layer[] {
   if (!visible || !firmsData?.features?.length) return [];
 
-  const pulse = (Math.sin(now / 420) + 1) / 2;
-
-  // Add layer tag to features for the picker
-  const data = firmsData.features.map(f => ({
-    ...f,
-    properties: {
-      ...f.properties,
-      layer: "firms",
-      type: "firms_hotspot"
+  // In-place property injection to avoid frame-loop mapping overhead
+  if (firmsData.features.length > 0 && typeof firmsData.features[0].properties?.layer === "undefined") {
+    for (let i = 0; i < firmsData.features.length; i++) {
+      if (!firmsData.features[i].properties) firmsData.features[i].properties = {};
+      firmsData.features[i].properties!.layer = "firms";
+      firmsData.features[i].properties!.type = "firms_hotspot";
     }
-  })) as any[];
+  }
+  const data = firmsData.features;
 
   const layerParams = {
     parameters: {
@@ -104,7 +102,7 @@ export function buildFIRMSLayer(
       stroked: false,
       getFillColor: (d) => withAlpha(
         hotspotColor(d.properties.confidence, d.properties.daynight),
-        42 + Math.round(pulse * 18),
+        50,
       ),
 
       ...layerParams,
@@ -118,7 +116,7 @@ export function buildFIRMSLayer(
 
       getPosition: (d) => d.geometry.coordinates as [number, number],
 
-      getRadius: (d) => hotspotRingRadiusPixels(d.properties.frp, pulse),
+      getRadius: (d) => hotspotRingRadiusPixels(d.properties.frp),
       radiusUnits: "pixels",
       radiusMinPixels: 9,
       radiusMaxPixels: 22,
@@ -127,7 +125,7 @@ export function buildFIRMSLayer(
       stroked: true,
       getLineColor: (d) => withAlpha(
         hotspotColor(d.properties.confidence, d.properties.daynight),
-        150 + Math.round(pulse * 70),
+        185,
       ),
       lineWidthMinPixels: 2,
       lineWidthMaxPixels: 4,

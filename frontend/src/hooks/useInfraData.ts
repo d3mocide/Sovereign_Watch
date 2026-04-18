@@ -118,7 +118,7 @@ const fallbackEmpty: FeatureCollection = {
 };
 
 const GLOBAL_FIRMS_HOTSPOTS_URL =
-  "/api/firms/hotspots?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180";
+  "/api/firms/hotspots?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180&confidence=high&min_frp=1.0";
 
 const GLOBAL_DARK_VESSELS_URL =
   "/api/firms/dark-vessels?hours_back=24&min_lat=-90&max_lat=90&min_lon=-180&max_lon=180";

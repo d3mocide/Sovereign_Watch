@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-04-18
+
+### Changed
+
+- **UI Optimization** — Refactored Active Conflict Zones and Intel Sidebar headers to utilize responsive multi-line wraps for massive incident counters.
+- **Top Bar De-Cluttering** — Removed the redundant Alerts badge from the situational overhead dashboard.
+
+### Fixed
+
+- **Stream Status Monitor** — Re-wired the stream status monitor to directly query `/api/config/poller-health`, allowing operators to view exactly when source streams (ADSB, Maritime, GDELT, RREF, etc.) fall into `STALE`, `ERROR`, or `PENDING` states.
+- **FIRMS Layer Error Handling** — Cleaned up strict mode warnings when parsing thermal map metadata.
 ## [1.0.7] - 2026-04-18
 
 ### Security

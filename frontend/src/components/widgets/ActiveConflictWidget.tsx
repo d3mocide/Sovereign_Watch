@@ -72,13 +72,15 @@ export const ActiveConflictWidget: React.FC = () => {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
-        <AlertTriangle size={11} className="text-red-400/70" />
-        <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
-          Active Conflict Zones
-        </span>
+      <div className="flex flex-col gap-1 px-3 py-2 bg-black/50 border-b border-white/5 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={11} className="text-red-400/70" />
+          <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">
+            Active Conflict Zones
+          </span>
+        </div>
         {zones.length > 0 && (
-          <span className="ml-auto text-[9px] font-black tabular-nums">
+          <div className="pl-5 text-[9px] font-black tabular-nums tracking-wider uppercase">
             <span className="text-red-400/60">
               {zones.filter((z) => z.threat_level === "CRITICAL").length > 0
                 ? zones.filter((z) => z.threat_level === "CRITICAL").length
@@ -87,17 +89,17 @@ export const ActiveConflictWidget: React.FC = () => {
             </span>
             {zones.filter((z) => z.threat_level === "MONITORING").length > 0 &&
               zones.filter((z) => z.threat_level === "CRITICAL" || z.threat_level === "ELEVATED").length > 0 && (
-              <span className="text-yellow-500/40 ml-1">
+              <span className="text-yellow-500/40 ml-2">
                 +{zones.filter((z) => z.threat_level === "MONITORING").length} watch
               </span>
             )}
             {zones.filter((z) => z.threat_level === "CRITICAL").length === 0 &&
               zones.filter((z) => z.threat_level === "MONITORING").length > 0 && (
-              <span className="text-yellow-500/40">
+              <span className="text-yellow-500/40 ml-2">
                 {zones.filter((z) => z.threat_level === "MONITORING").length} watch
               </span>
             )}
-          </span>
+          </div>
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
