@@ -1,7 +1,10 @@
+import asyncio
+import ipaddress
 import json
 import logging
 import os
 import re
+import socket
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -292,16 +295,48 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
         raise HTTPException(status_code=400, detail="Invalid article URL")
 
     host = parsed.hostname or ""
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+
+    # Check if host is an IP directly to avoid DNS lookup for bare IPs
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_multicast or ip.is_unspecified:
+            raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+    except ValueError:
+        pass # Proceed to DNS resolution
+
+    # Asynchronously resolve the host to prevent SSRF and DNS rebinding attacks
+    loop = asyncio.get_running_loop()
+    try:
+        addr_info = await loop.getaddrinfo(host, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+        # To prevent TOCTOU (DNS Rebinding), we take the resolved safe IP
+        # and connect directly to it, overriding the Host header so the server still sees the domain.
+        safe_ip = None
+        for res in addr_info:
+            ip = ipaddress.ip_address(res[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_multicast or ip.is_unspecified:
+                raise HTTPException(status_code=400, detail="Local URLs are not allowed")
+            if safe_ip is None:
+                # Keep the first safe IP
+                safe_ip = res[4][0]
+
+        if not safe_ip:
+            raise HTTPException(status_code=400, detail="Could not resolve host to a valid IP")
+
+    except (socket.gaierror, ValueError):
+        raise HTTPException(status_code=400, detail="Could not resolve host")
 
     try:
+        # Reconstruct URL with the safe IP to prevent DNS rebinding
+        port_str = f":{parsed.port}" if parsed.port else ""
+        safe_url = parsed._replace(netloc=f"{safe_ip}{port_str}").geturl()
+
         async with httpx.AsyncClient(
             timeout=ARTICLE_TIMEOUT, follow_redirects=True
         ) as client:
             resp = await client.get(
-                url,
+                safe_url,
                 headers={
+                    "Host": host,
                     "User-Agent": "SovereignWatch/1.0",
                     "Accept": "text/html,application/xhtml+xml",
                 },
