@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,7 +43,17 @@ def test_extract_land_geometry_geojson_keeps_only_polygonal_features() -> None:
 
 
 def test_parse_firms_csv_to_rows_filters_and_normalizes_live_world_feed() -> None:
-    csv_body = """latitude,longitude,bright_ti4,frp,confidence,satellite,acq_date,acq_time,daynight\n45.5,-122.6,330.1,12.4,h,SNPP,2026-04-14,0402,N\n46.1,-123.0,310.0,0.1,l,SNPP,2026-04-14,0404,D\n"""
+    # Use a recent acquisition date (1 hour ago) so the rows always fall within
+    # the hours_back=72 window regardless of when this test runs.
+    recent_dt = datetime.now(UTC) - timedelta(hours=1)
+    acq_date = recent_dt.strftime("%Y-%m-%d")
+    acq_time = recent_dt.strftime("%H%M")
+
+    csv_body = (
+        f"latitude,longitude,bright_ti4,frp,confidence,satellite,acq_date,acq_time,daynight\n"
+        f"45.5,-122.6,330.1,12.4,h,SNPP,{acq_date},{acq_time},N\n"
+        f"46.1,-123.0,310.0,0.1,l,SNPP,{acq_date},{acq_time},D\n"
+    )
 
     rows = firms_router._parse_firms_csv_to_rows(
         csv_body,

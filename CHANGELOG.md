@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-04-18
+
+### Security
+
+- **SSRF Fix in News Article Extraction** — Hardened the `/api/news/article` reader endpoint against Server-Side Request Forgery; private/loopback addresses and non-HTTP schemes are now blocked before fetch.
+
+### Fixed
+
+- **AI Model Overload Advisory** — Domain agents (air, sea, orbital) now surface an amber `Model Overloaded` notice in the Analyst Panel when the LLM provider returns `503 / high demand` instead of silently showing heuristic fallback text.
+- **SatNOGS Timeout Resilience** — Added one retry for transient SatNOGS station fetch timeouts; timeout failures are now distinguished from broader network errors in the degraded-response metadata.
+- **News Feed Noise** — Removed DefenseNews from the default RSS feed set (intermittent `42` non-standard HTTP status); it remains configurable via env.
+- **Semantic Cache Warning Clarity** — Corrected the `redisvl` runtime-missing warning to avoid incorrectly instructing operators to edit `pyproject.toml`.
+- **HTTPS Reverse-Proxy WebSocket Fix** — Added a shared frontend URL resolver that promotes `ws://`/`http://` build-time endpoints to same-origin wss/https paths when served behind TLS, eliminating mixed-content WebSocket failures.
+- **WebSDR Mixed-Content Iframe** — WebSDR receiver iframes are now HTTPS-upgraded when discovered via an `http://` directory entry; the original URL is preserved as an external fallback link.
+- **FIRMS Poller Alias & Cooldown Loop** — Normalized the legacy `VIIRS_SNPP_NR` source alias to prevent repeated `400` errors; fixed the empty-cache cooldown-bypass guard to prevent tight re-poll loops when upstream returns no hotspots.
+- **FIRMS Test Stale Date** — Replaced the hardcoded `acq_date` fixture in the FIRMS router test with a dynamically computed value so the test never expires.
+- **Linkage Audit Form Accessibility** — Added explicit `htmlFor`/`id` attribute pairs to all `LinkageAuditView` form inputs.
+
+### Changed
+
+- **Active Conflict Zone Recalibration** — Recalibrated threat-score thresholds to match real-world GDELT distributions (CRITICAL ≤ −4.5, ELEVATED ≤ −2.0). Added a material-conflict volume shortcut: actors with >150 kinetic events promoted to CRITICAL; >50 promotes MONITORING to ELEVATED. The Intel Globe conflict zone panel now includes MONITORING-level actors with a WATCH badge.
+- **GDELT Conflict Filter & ReliefWeb Pulse Config** — `gdelt_pulse` now exposes configurable conflict-filter keywords and `ReliefWeb` appname via environment variables; GDELT event logging enhanced with structured metadata.
+- **Frontend Static Nginx Cache** — `frontend/nginx-spa.conf` no longer caches `index.html`, reducing stale-bundle issues behind CDNs and reverse proxies after deploys.
+- **Deck.gl Text Character Sets** — Explicit character sets added for label layers that render the middle-dot separator, eliminating missing-glyph console warnings.
+
 ## [1.0.6] - 2026-04-15
 
 ### Added

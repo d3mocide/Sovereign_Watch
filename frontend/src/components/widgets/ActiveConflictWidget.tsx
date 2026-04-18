@@ -15,6 +15,8 @@ function threatColor(level: ActorEntry["threat_level"]): string {
       return "text-red-400";
     case "ELEVATED":
       return "text-amber-400";
+    case "MONITORING":
+      return "text-yellow-400";
     default:
       return "text-yellow-400";
   }
@@ -31,6 +33,13 @@ function threatBadge(level: ActorEntry["threat_level"]): string {
   }
 }
 
+function conflictZoneBadgeLabel(level: ActorEntry["threat_level"]): string {
+  if (level === "CRITICAL") return "CRIT";
+  if (level === "ELEVATED") return "ELEV";
+  return "WATCH";
+}
+
+
 export const ActiveConflictWidget: React.FC = () => {
   const [zones, setZones] = useState<ActorEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +53,9 @@ export const ActiveConflictWidget: React.FC = () => {
           setZones(
             data.filter(
               (a) =>
-                a.threat_level === "CRITICAL" || a.threat_level === "ELEVATED",
+                a.threat_level === "CRITICAL" ||
+                a.threat_level === "ELEVATED" ||
+                a.threat_level === "MONITORING",
             ),
           );
         }
@@ -67,8 +78,25 @@ export const ActiveConflictWidget: React.FC = () => {
           Active Conflict Zones
         </span>
         {zones.length > 0 && (
-          <span className="ml-auto text-[9px] text-red-400/60">
-            {zones.length} active
+          <span className="ml-auto text-[9px] font-black tabular-nums">
+            <span className="text-red-400/60">
+              {zones.filter((z) => z.threat_level === "CRITICAL").length > 0
+                ? zones.filter((z) => z.threat_level === "CRITICAL").length
+                : zones.length}{" "}
+              active
+            </span>
+            {zones.filter((z) => z.threat_level === "MONITORING").length > 0 &&
+              zones.filter((z) => z.threat_level === "CRITICAL" || z.threat_level === "ELEVATED").length > 0 && (
+              <span className="text-yellow-500/40 ml-1">
+                +{zones.filter((z) => z.threat_level === "MONITORING").length} watch
+              </span>
+            )}
+            {zones.filter((z) => z.threat_level === "CRITICAL").length === 0 &&
+              zones.filter((z) => z.threat_level === "MONITORING").length > 0 && (
+              <span className="text-yellow-500/40">
+                {zones.filter((z) => z.threat_level === "MONITORING").length} watch
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -99,7 +127,7 @@ export const ActiveConflictWidget: React.FC = () => {
                 <span
                   className={`text-[7px] font-black px-1 py-px rounded-sm tracking-[.1em] uppercase flex-shrink-0 ${threatBadge(zone.threat_level)}`}
                 >
-                  {zone.threat_level === "CRITICAL" ? "CRIT" : "ELEV"}
+                  {conflictZoneBadgeLabel(zone.threat_level)}
                 </span>
               </div>
               <div className="flex items-center gap-3 mt-0.5 pl-6">

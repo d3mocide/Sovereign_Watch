@@ -59,7 +59,7 @@ function threatBorderColor(level: ActorEntry["threat_level"]): string {
     case "ELEVATED":
       return "border-amber-500/40";
     case "MONITORING":
-      return "border-yellow-500/40";
+      return "border-yellow-500/30";
     default:
       return "border-white/10";
   }
@@ -75,6 +75,15 @@ function threatBadgeBg(level: ActorEntry["threat_level"]): string {
       return "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30";
     default:
       return "bg-white/5 text-white/40 border border-white/10";
+  }
+}
+
+function conflictZoneBadgeLabel(level: ActorEntry["threat_level"]): string {
+  switch (level) {
+    case "CRITICAL": return "CRITICAL";
+    case "ELEVATED": return "ELEVATED";
+    case "MONITORING": return "WATCH";
+    default: return level;
   }
 }
 
@@ -153,7 +162,10 @@ export function IntelSidebar({
   }, [fetchActors]);
 
   const conflictZones = actors.filter(
-    (a) => a.threat_level === "CRITICAL" || a.threat_level === "ELEVATED",
+    (a) =>
+      a.threat_level === "CRITICAL" ||
+      a.threat_level === "ELEVATED" ||
+      a.threat_level === "MONITORING",
   );
   const allActors = actors.slice(0, 20);
 
@@ -229,8 +241,20 @@ export function IntelSidebar({
             <span className="text-[10px] font-bold tracking-[.3em] text-white/80 uppercase">
               ACTIVE CONFLICT ZONES
             </span>
-            <span className="text-[10px] text-red-500 font-black tabular-nums">
-              [{conflictZones.length}]
+            <span className="text-[10px] font-black tabular-nums">
+              <span className="text-red-500">
+                [{conflictZones.filter((z) => z.threat_level === "CRITICAL").length}]
+              </span>
+              {conflictZones.filter((z) => z.threat_level === "ELEVATED").length > 0 && (
+                <span className="text-amber-500 ml-0.5">
+                  +{conflictZones.filter((z) => z.threat_level === "ELEVATED").length}
+                </span>
+              )}
+              {conflictZones.filter((z) => z.threat_level === "MONITORING").length > 0 && (
+                <span className="text-yellow-500/60 ml-0.5">
+                  +{conflictZones.filter((z) => z.threat_level === "MONITORING").length}
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -268,7 +292,7 @@ export function IntelSidebar({
                   <span
                     className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm tracking-[.2em] backdrop-blur-md uppercase ${threatBadgeBg(zone.threat_level)}`}
                   >
-                    {zone.threat_level}
+                    {conflictZoneBadgeLabel(zone.threat_level)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 mt-1 pl-7">

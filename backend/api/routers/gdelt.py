@@ -371,15 +371,27 @@ async def get_gdelt_actors(
             # produce a score close to avg_goldstein; genuine conflict zones with high
             # material ratios amplify the negative score proportionally.
             # Score range: roughly -20 (pure kinetic) to +20 (fully cooperative).
+            #
+            # Thresholds calibrated against observed GDELT distributions:
+            #   Ukraine/Israel/Gaza typically cluster in the -3 to -5 Goldstein band,
+            #   which the old -6.0 CRITICAL gate would never catch.
             threat_score = avg_g * (1.0 + material_ratio)
-            if threat_score <= -6.0:
+            if threat_score <= -4.5:
                 threat_level = "CRITICAL"
-            elif threat_score <= -3.0:
+            elif threat_score <= -2.0:
                 threat_level = "ELEVATED"
             elif threat_score < 0.0:
                 threat_level = "MONITORING"
             else:
                 threat_level = "STABLE"
+
+            # Material-conflict volume shortcut: high kinetic event counts indicate an
+            # ongoing armed conflict regardless of the diluted Goldstein average.
+            # Thresholds: >150 material events → CRITICAL; >50 → at least ELEVATED.
+            if material_conflict > 150 and threat_level != "CRITICAL":
+                threat_level = "CRITICAL"
+            elif material_conflict > 50 and threat_level == "MONITORING":
+                threat_level = "ELEVATED"
 
             result.append(
                 {

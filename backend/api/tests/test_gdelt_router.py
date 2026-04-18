@@ -196,3 +196,100 @@ async def test_gdelt_linkage_audit_returns_side_by_side_payload(mock_review):
     assert result["experimental"]["counts"]["second_order_only"] == 1
     assert result["comparison"]["experimental_only_count"] == 1
     mock_review.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Threat threshold calibration tests (covers recalibrated gates and shortcuts)
+# ---------------------------------------------------------------------------
+
+def _make_db_row(actor: str, avg_goldstein: float, material_conflict: int, event_count: int) -> dict:
+    """Minimal asyncpg-compatible row dict for threshold testing."""
+    return {
+        "actor": actor,
+        "actor_type": "COUNTRY",
+        "event_count": event_count,
+        "weighted_mentions": event_count,
+        "avg_goldstein": avg_goldstein,
+        "centroid_lat": 0.0,
+        "centroid_lon": 0.0,
+        "verbal_conflict": 0,
+        "material_conflict": material_conflict,
+        "verbal_coop": 0,
+        "material_coop": 0,
+    }
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_threat_threshold_critical_at_minus_4_5():
+    """threat_score exactly at the new -4.5 boundary → CRITICAL."""
+    row = _make_db_row("TST", avg_goldstein=-4.5, material_conflict=0, event_count=10)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "CRITICAL"
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_threat_threshold_elevated_at_minus_2_0():
+    """threat_score exactly at the new -2.0 boundary → ELEVATED."""
+    row = _make_db_row("TST", avg_goldstein=-2.0, material_conflict=0, event_count=10)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "ELEVATED"
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_threat_threshold_monitoring_below_zero():
+    """threat_score between -2.0 and 0 → MONITORING."""
+    row = _make_db_row("TST", avg_goldstein=-1.0, material_conflict=0, event_count=10)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "MONITORING"
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_material_shortcut_promotes_monitoring_to_elevated():
+    """More than 50 material events promote MONITORING → ELEVATED."""
+    # avg_g=-0.5, material_ratio=51/200=0.255 → score=-0.628 → MONITORING baseline
+    # shortcut: 51 > 50 and MONITORING → promote to ELEVATED
+    row = _make_db_row("TST", avg_goldstein=-0.5, material_conflict=51, event_count=200)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "ELEVATED"
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_material_shortcut_promotes_to_critical():
+    """More than 150 material events promote any level → CRITICAL."""
+    # avg_g=-2.5, material_ratio=151/500=0.302 → score=-3.255 → ELEVATED baseline
+    # shortcut: 151 > 150 → CRITICAL
+    row = _make_db_row("TST", avg_goldstein=-2.5, material_conflict=151, event_count=500)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "CRITICAL"
+
+
+@patch.object(gdelt_router.db, "redis_client", None)
+@pytest.mark.asyncio
+async def test_stable_actor_not_promoted_by_material_shortcut():
+    """STABLE actor with low material count must remain STABLE."""
+    row = _make_db_row("TST", avg_goldstein=1.0, material_conflict=10, event_count=100)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result[0]["threat_level"] == "STABLE"
