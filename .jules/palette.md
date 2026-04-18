@@ -75,3 +75,7 @@
 ## 2026-04-15 - Explicit Label Associations
 **Learning:** In LinkageAuditView, inputs were nested inside `<label>` tags without `htmlFor` or `id` attributes. While technically valid HTML (implicit labeling), it can be fragile with some assistive technologies and fails strict accessibility audits. Explicitly linking labels using `htmlFor` matching the input's `id` provides a more robust and predictable experience for screen readers without altering the visual design.
 **Action:** Always prefer explicit labeling (`htmlFor` + `id`) over implicit labeling (nesting) for forms, even when building rapid internal tools.
+
+## 2024-05-18 - Missing ARIA Labels on Icon-Only Close Buttons
+**Learning:** Found that custom `Close` buttons (like `<X />` icons) in application popovers or overlay widgets (like System Health and System Settings) frequently omit explicit `aria-label` and `title` attributes if they were implemented without using a standard accessible `Dialog` component.
+**Action:** When auditing custom overlays and widgets, explicitly check the structural controls (like 'close', 'minimize', or 'refresh' icon buttons) for `aria-label` attributes to ensure they are accessible to screen readers.
