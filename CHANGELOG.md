@@ -19,6 +19,13 @@
 - **FIRMS Poller Alias & Cooldown Loop** — Normalized the legacy `VIIRS_SNPP_NR` source alias to prevent repeated `400` errors; fixed the empty-cache cooldown-bypass guard to prevent tight re-poll loops when upstream returns no hotspots.
 - **FIRMS Test Stale Date** — Replaced the hardcoded `acq_date` fixture in the FIRMS router test with a dynamically computed value so the test never expires.
 - **Linkage Audit Form Accessibility** — Added explicit `htmlFor`/`id` attribute pairs to all `LinkageAuditView` form inputs.
+- **Analysis Router `AttributeError` Crash** — `detect_rendezvous()` and `detect_emergency_transponders()` return lists; code erroneously called `.description` on the list itself, causing a runtime `AttributeError` whenever multiple anomalies fired simultaneously. Fixed by iterating and joining descriptions.
+- **Analysis Router Silent DB Error** — Bare `except Exception: pass` on intel-context lookup replaced with `logger.debug(...)` so database failures are diagnosable.
+- **Stats Router Octant Bounds Crash** — Octant index into `OCT_LABELS` now guarded with `0 <= octant < 8` to prevent `IndexError` on unexpected database values.
+- **JS8Call UDP Socket Leak** — `_udp_send()` now uses `with socket.socket(...) as tx:` so the socket is unconditionally closed even when the send raises an exception.
+- **KiwiSDR Password Retention** — Removed unnecessary `self._password` field in `kiwi_client.py`; the credential was stored but never read, creating needless in-memory sensitive-data retention.
+- **Frontend GeoJSON Error Handling** — `res.json()` in `App.tsx` is now guarded by a `res.ok` check; HTTP error bodies are no longer silently parsed as valid GeoJSON.
+- **Auth Unreachable Condition** — Simplified `!res.ok && res.status !== 204` to `!res.ok` in `auth.ts`; the 204 clause was unreachable because 204 is a 2xx status (`res.ok` is already `true`).
 
 ### Changed
 

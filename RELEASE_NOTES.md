@@ -44,6 +44,24 @@ The ACTIVE CONFLICT ZONES panel previously showed `[0]` almost always, even with
 
 ---
 
+### 🐛 Code Review Bug Audit
+
+A parallel audit identified and patched 7 confirmed bugs across the backend, frontend, and JS8Call service:
+
+| Component | Bug | Severity |
+|-----------|-----|----------|
+| `analysis.py` | `detect_rendezvous()` / `detect_emergency_transponders()` called `.description` on a list → `AttributeError` crash when multiple anomalies fired simultaneously | **High** |
+| `stats.py` | Octant index into `OCT_LABELS` without bounds check → `IndexError` on unexpected DB data | Medium |
+| `js8call/server.py` | UDP send socket not closed in exception path → resource leak | Medium |
+| `App.tsx` | `res.json()` called before `res.ok` check → HTTP error bodies silently parsed as valid GeoJSON | Medium |
+| `analysis.py` | Bare `except Exception: pass` on intel-context DB lookup → failures completely invisible | Low |
+| `kiwi_client.py` | `self._password` stored but never read → unnecessary sensitive-data retention in memory | Low |
+| `auth.ts` | `res.status !== 204` guard unreachable (204 is 2xx, `res.ok` already `true`) → dead code | Low |
+
+A second set of findings (pool exhaustion risk, lock-free read in `kiwi_directory.py`, orphaned subprocess handles) was documented in the task log as a backlog for the next audit cycle.
+
+---
+
 ### ⚙️ Configuration
 
 - **GDELT Conflict Keywords** — Now configurable via `GDELT_CONFLICT_KEYWORDS` env var without a code change.
