@@ -161,7 +161,6 @@ async def test_get_dark_vessels_applies_land_mask_geometries() -> None:
     conn.fetch = AsyncMock(return_value=[])
     pool = MagicMock()
     pool.acquire.return_value = _Acquire(conn)
-    land_geometries = ['{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}']
 
     with patch.object(firms_router.db, "redis_client", None), patch.object(
         firms_router.db, "pool", pool
