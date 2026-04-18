@@ -15,6 +15,7 @@ Poll interval: 5 seconds (matches ISS ~7.7 km/s ground track resolution).
 import asyncio
 import json
 import logging
+import time
 from datetime import UTC, datetime
 
 import asyncpg
@@ -52,6 +53,14 @@ class ISSSource(BaseSource):
                 await self._poll()
             except Exception as exc:
                 logger.error("ISS fetch error: %s", repr(exc))
+                try:
+                    await self.redis_client.set(
+                        "poller:infra_iss:last_error",
+                        json.dumps({"ts": time.time(), "msg": str(exc)}),
+                        ex=86400,
+                    )
+                except Exception:
+                    pass
 
             await asyncio.sleep(self.poll_interval_s)
 
@@ -132,6 +141,7 @@ class ISSSource(BaseSource):
             "velocity_kms": record["velocity_kms"],
         })
         await self.redis_client.set("infra:iss_latest", payload, ex=60)
+        await self.redis_client.set("infra:last_iss_fetch", str(time.time()), ex=60)
 
         # 2. Publish to Redis (real-time broadcast layer for WebSockets)
         await self.redis_client.publish("infrastructure:iss-position", payload)

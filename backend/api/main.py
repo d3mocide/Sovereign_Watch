@@ -94,8 +94,21 @@ async def lifespan(app: FastAPI):
             async with db.pool.acquire() as conn:
                 await conn.execute("ALTER EXTENSION timescaledb UPDATE;")
                 logger.info("TimescaleDB extension check/update completed")
+                
+                # Check and populate world_land_polygons if empty
+                count = await conn.fetchval("SELECT count(*) FROM world_land_polygons")
+                if count == 0:
+                    from routers.firms import _WORLD_LAND_GEOMETRIES
+                    if _WORLD_LAND_GEOMETRIES:
+                        logger.info(f"Initializing world_land_polygons with {len(_WORLD_LAND_GEOMETRIES)} geometries...")
+                        # Run via executemany for efficiency
+                        await conn.executemany(
+                            "INSERT INTO world_land_polygons (geom) VALUES (ST_SetSRID(ST_GeomFromGeoJSON($1), 4326))",
+                            [(geo_str,) for geo_str in _WORLD_LAND_GEOMETRIES]
+                        )
+                        logger.info("world_land_polygons initialized.")
     except Exception as e:
-        logger.warning(f"Failed to auto-update TimescaleDB extension: {e}")
+        logger.warning(f"Failed to auto-update TimescaleDB extension or init polygons: {e}")
 
     # Install Redis log handler so all SovereignWatch log records are
     # captured in the ``logs:recent`` list for the Operations dashboard.

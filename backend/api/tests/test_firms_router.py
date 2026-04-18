@@ -165,13 +165,10 @@ async def test_get_dark_vessels_applies_land_mask_geometries() -> None:
 
     with patch.object(firms_router.db, "redis_client", None), patch.object(
         firms_router.db, "pool", pool
-    ), patch.object(
-        firms_router, "_WORLD_LAND_GEOMETRIES", land_geometries
     ):
         result = await firms_router.get_dark_vessels()
 
     assert result["type"] == "FeatureCollection"
     fetch_args = conn.fetch.await_args.args
-    assert "land_polygons" in fetch_args[0]
+    assert "world_land_polygons" in fetch_args[0]
     assert "ST_Intersects" in fetch_args[0]
-    assert fetch_args[10] == land_geometries

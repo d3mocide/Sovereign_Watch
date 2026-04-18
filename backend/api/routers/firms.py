@@ -627,16 +627,12 @@ async def get_dark_vessels(
           AND f.frp >= $6
           AND f.confidence IN ('nominal', 'high')
     ),
-    land_polygons AS (
-        SELECT ST_SetSRID(ST_GeomFromGeoJSON(geom_text), 4326) AS geom
-        FROM unnest($10::text[]) AS geom_text
-    ),
     maritime_hotspots AS (
         SELECT h.*
         FROM hotspots h
         WHERE NOT EXISTS (
             SELECT 1
-            FROM land_polygons lp
+            FROM world_land_polygons lp
             WHERE ST_Intersects(lp.geom, h.geom)
         )
     ),
@@ -689,7 +685,6 @@ async def get_dark_vessels(
                 str(ais_window_h),
                 match_radius_m,
                 match_radius_nm * 0.8,   # inner threshold: vessels within 80% of radius aren't dark
-                _WORLD_LAND_GEOMETRIES,
             )
     except Exception as exc:
         logger.error("Dark vessel query failed: %s", repr(exc))

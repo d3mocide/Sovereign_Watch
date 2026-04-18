@@ -299,8 +299,26 @@ class OrbitalSource(BaseSource):
                         "Orbital TLE: no cached state available; fetching immediately to seed live propagation.")
                     try:
                         await self.fetch_tle_data()
+                        await self.redis_client.set(
+                            "orbital_pulse:last_fetch", str(time.time()),
+                            ex=self.fetch_interval_hours * 3600 * 4,
+                        )
                     except Exception as exc:
                         logger.error("Initial TLE seed fetch error: %s", repr(exc))
+                else:
+                    newest_mtime = 0
+                    for endpoint, param_val in self.groups:
+                        param_name = "FILE" if "sup-gp" in endpoint else "GROUP"
+                        cache_path = self._get_cache_path(endpoint, param_name, param_val)
+                        if os.path.exists(cache_path):
+                            mtime = os.path.getmtime(cache_path)
+                            if mtime > newest_mtime:
+                                newest_mtime = mtime
+                    if newest_mtime > 0:
+                        await self.redis_client.set(
+                            "orbital_pulse:last_fetch", str(newest_mtime),
+                            ex=self.fetch_interval_hours * 3600 * 4,
+                        )
 
             now_dt = datetime.now(UTC)
             last_fetch_ts = await self._get_last_fetch_timestamp()

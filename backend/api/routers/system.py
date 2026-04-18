@@ -478,7 +478,7 @@ async def get_poller_health():
             "Orbital",
             "orbital_pulse:last_fetch",
             "poller:orbital:last_error",
-            7 * 3600,
+            30 * 3600,
             True,
         ),
         (

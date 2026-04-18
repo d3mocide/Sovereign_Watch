@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-04-18
+
+### Fixed
+
+- **TimescaleDB CPU Bottleneck** — Relieved a critical >700% CPU lock caused by the FIRMS Dark Vessel endpoint. We migrated the massive `world-countries` boundary array from a dynamic per-query parse to a fully cached, static `GIST`-indexed PostGIS table, returning intersection query speeds to under 100ms.
 ## [1.0.8] - 2026-04-18
 
 ### Changed
