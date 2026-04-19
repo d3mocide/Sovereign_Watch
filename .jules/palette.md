@@ -75,3 +75,6 @@
 ## 2026-04-15 - Explicit Label Associations
 **Learning:** In LinkageAuditView, inputs were nested inside `<label>` tags without `htmlFor` or `id` attributes. While technically valid HTML (implicit labeling), it can be fragile with some assistive technologies and fails strict accessibility audits. Explicitly linking labels using `htmlFor` matching the input's `id` provides a more robust and predictable experience for screen readers without altering the visual design.
 **Action:** Always prefer explicit labeling (`htmlFor` + `id`) over implicit labeling (nesting) for forms, even when building rapid internal tools.
+## 2025-02-23 - Form Accessibility (htmlFor and id)
+**Learning:** Found instances where `<label>` elements were missing the `htmlFor` attribute and their corresponding `<input>` elements were missing `id` attributes. This breaks the semantic association required by screen readers and removes the click-to-focus functionality.
+**Action:** When creating or modifying forms, always ensure that every `<label>` has an `htmlFor` attribute that exactly matches the `id` of its corresponding input field.
