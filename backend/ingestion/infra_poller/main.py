@@ -988,8 +988,8 @@ class InfraPollerService:
                         json.dumps({"ts": time.time(), "msg": str(e)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
             await asyncio.sleep(interval_s)
 
     async def _fetch_cables_and_stations(self):
@@ -1152,8 +1152,8 @@ class InfraPollerService:
                         json.dumps({"ts": time.time(), "msg": str(e)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
             await asyncio.sleep(interval_s)
 
     async def _download_fcc_zip(self, dest_path: str) -> None:
@@ -1215,8 +1215,8 @@ class InfraPollerService:
             if tmp_path:
                 try:
                     os.remove(tmp_path)
-                except OSError:
-                    pass
+                except OSError as e:
+                    logger.debug("Failed to remove temp FCC zip %s: %s", tmp_path, e)
 
     # -----------------------------------------------------------------------
     # NDBC loop — 15-minute interval, ETag caching
@@ -1237,8 +1237,8 @@ class InfraPollerService:
                         json.dumps({"ts": time.time(), "msg": str(e)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
             await asyncio.sleep(interval_s)
 
     async def _fetch_and_ingest_ndbc(self):
@@ -1329,8 +1329,8 @@ class InfraPollerService:
                         json.dumps({"ts": time.time(), "msg": str(e)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
             await asyncio.sleep(interval_s)
 
     async def _fetch_and_ingest_peeringdb(self):

@@ -318,8 +318,8 @@ class PollerService:
                                 await self.redis_client.set(
                                     "adsb:last_fetch", str(fetched_at), ex=600
                                 )
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug("Redis heartbeat write failed: %s", e)
 
                     # Update cell priority based on observed traffic.
                     # Use raw count (pre-arbitration) as the activity signal.
@@ -342,8 +342,8 @@ class PollerService:
                         json.dumps({"ts": time.time(), "msg": str(e)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
                 await asyncio.sleep(5)
 
     async def opensky_loop(self):

@@ -111,8 +111,8 @@ class GDELTPulseService:
                             json.dumps({"ts": time.time(), "msg": str(e)}),
                             ex=86400,
                         )
-                    except Exception:
-                        pass
+                    except Exception as re:
+                        logger.debug("Redis error-state write failed: %s", re)
 
             logger.info(f"GDELT sleeping for {GDELT_POLL_INTERVAL}s...")
             await asyncio.sleep(GDELT_POLL_INTERVAL)
@@ -147,8 +147,8 @@ class GDELTPulseService:
                     await self.redis.set(
                         "gdelt_pulse:last_fetch", str(time.time()), ex=GDELT_POLL_INTERVAL * 4
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Redis heartbeat write failed: %s", e)
 
     async def fetch_and_parse(self, url: str):
         """Download zip, extract CSV, and push conflict events to Kafka.
@@ -278,7 +278,8 @@ class GDELTPulseService:
                         )
                         events_sent += 1
 
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        logger.debug("Skipping malformed GDELT row: %s", e)
                         continue
 
                 filter_note = (
@@ -308,8 +309,8 @@ class GDELTPulseService:
                             json.dumps({"ts": time.time(), "msg": str(e)}),
                             ex=86400,
                         )
-                    except Exception:
-                        pass
+                    except Exception as re:
+                        logger.debug("Redis error-state write failed: %s", re)
 
             logger.info(f"ReliefWeb sleeping for {RELIEFWEB_POLL_INTERVAL}s...")
             await asyncio.sleep(RELIEFWEB_POLL_INTERVAL)
@@ -399,8 +400,8 @@ class GDELTPulseService:
                         dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
                         event_date_str = dt.strftime("%Y%m%d")
                         event_time_ms = int(dt.timestamp() * 1000)
-                    except ValueError:
-                        pass
+                    except ValueError as e:
+                        logger.debug("Failed to parse ReliefWeb created date '%s': %s", created_str, e)
 
                 # Emit one event per affected country for precise geolocation.
                 countries = fields.get("country", [])
@@ -458,8 +459,8 @@ class GDELTPulseService:
                 await self.redis.set(
                     "reliefweb_pulse:last_fetch", str(time.time()), ex=RELIEFWEB_POLL_INTERVAL * 4
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Redis heartbeat write failed: %s", e)
 
     def _disable_reliefweb(self, reason: str):
         if self._reliefweb_disabled_reason == reason:
@@ -471,5 +472,6 @@ class GDELTPulseService:
     async def _safe_reliefweb_error_body(self, resp: aiohttp.ClientResponse) -> str:
         try:
             return (await resp.text()).strip()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read ReliefWeb response body: %s", e)
             return ""

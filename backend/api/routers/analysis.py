@@ -156,9 +156,10 @@ async def analyze_track(
             LEFT JOIN metadata m ON true
         """
         try:
-            row = await db.pool.fetchrow(
-                track_query, lookback_uid, float(req.lookback_hours)
-            )
+            async with db.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    track_query, lookback_uid, float(req.lookback_hours)
+                )
             if row:
                 track_summary = dict(row)
         except Exception as e:
@@ -216,10 +217,11 @@ async def analyze_track(
 
             if not track_summary or track_summary["points"] == 0:
                 try:
-                    tower = await db.pool.fetchrow(
-                        "SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1",
-                        uid,
-                    )
+                    async with db.pool.acquire() as conn:
+                        tower = await conn.fetchrow(
+                            "SELECT * FROM infra_towers WHERE id::text = $1 OR fcc_id = $1",
+                            uid,
+                        )
                     if tower:
                         track_summary = {
                             "points": 1,
@@ -235,9 +237,10 @@ async def analyze_track(
                         not track_summary or track_summary["points"] == 0
                     ) and uid.startswith("gdelt-"):
                         ev_id = uid[6:]
-                        gd_row = await db.pool.fetchrow(
-                            "SELECT * FROM gdelt_events WHERE event_id = $1", ev_id
-                        )
+                        async with db.pool.acquire() as conn:
+                            gd_row = await conn.fetchrow(
+                                "SELECT * FROM gdelt_events WHERE event_id = $1", ev_id
+                            )
                         if gd_row:
                             track_summary = {
                                 "points": 1,

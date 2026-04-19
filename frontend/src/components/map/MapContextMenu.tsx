@@ -1,7 +1,9 @@
 import { useAuth } from '../../hooks/useAuth';
 import React from 'react';
-import { Crosshair, Save, Home, MapPin, Lock, Zap } from 'lucide-react';
+import { Crosshair, Save, Home, MapPin, Lock, Zap, Plane, Ship, Globe } from 'lucide-react';
 import { latLngToCell } from 'h3-js';
+
+type DomainType = 'air' | 'sea' | 'orbital';
 
 interface MapContextMenuProps {
   position: { x: number; y: number } | null;
@@ -10,6 +12,7 @@ interface MapContextMenuProps {
   onSaveLocation: (lat: number, lon: number) => void;
   onReturnHome: () => void;
   onAnalyzeRegionalRisk?: (h3Region: string, lat: number, lon: number) => void;
+  onDomainAnalyze?: (domain: DomainType, h3Region: string, lat: number, lon: number) => void;
   onClose: () => void;
 }
 
@@ -20,6 +23,7 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
   onSaveLocation,
   onReturnHome,
   onAnalyzeRegionalRisk,
+  onDomainAnalyze,
   onClose,
 }) => {
   const { hasRole } = useAuth();
@@ -46,6 +50,14 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
     if (onAnalyzeRegionalRisk) {
       const h3Region = latLngToCell(coordinates.lat, coordinates.lon, 7);
       onAnalyzeRegionalRisk(h3Region, coordinates.lat, coordinates.lon);
+      onClose();
+    }
+  };
+
+  const handleDomainAnalyze = (domain: DomainType) => {
+    if (onDomainAnalyze) {
+      const h3Region = latLngToCell(coordinates.lat, coordinates.lon, 7);
+      onDomainAnalyze(domain, h3Region, coordinates.lat, coordinates.lon);
       onClose();
     }
   };
@@ -112,6 +124,29 @@ export const MapContextMenu: React.FC<MapContextMenuProps> = ({
                     <div className="text-[10px] text-white/40">AI multi-INT assessment for H3 region</div>
                   </div>
                 </button>
+
+                {onDomainAnalyze && (
+                  <>
+                    <div className="border-t border-white/5 mx-3 my-1" />
+                    <div className="px-3 py-1 text-[9px] uppercase tracking-widest text-white/25 font-bold">Domain Intel</div>
+                    <div className="flex gap-1 px-3 pb-2">
+                      {([
+                        { domain: 'air' as DomainType, label: 'Air', Icon: Plane, color: 'text-sky-400/60 group-hover:text-sky-400', hover: 'hover:bg-sky-500/10' },
+                        { domain: 'sea' as DomainType, label: 'Sea', Icon: Ship, color: 'text-blue-400/60 group-hover:text-blue-400', hover: 'hover:bg-blue-500/10' },
+                        { domain: 'orbital' as DomainType, label: 'Space', Icon: Globe, color: 'text-violet-400/60 group-hover:text-violet-400', hover: 'hover:bg-violet-500/10' },
+                      ]).map(({ domain, label, Icon, color, hover }) => (
+                        <button
+                          key={domain}
+                          onClick={() => handleDomainAnalyze(domain)}
+                          className={`flex-1 flex flex-col items-center gap-1 py-1.5 rounded ${hover} transition-colors group`}
+                        >
+                          <Icon size={13} className={color} />
+                          <span className="text-[9px] text-white/50 group-hover:text-white/80">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             ) : (
                 <div className="px-3 py-2 flex items-center gap-2 opacity-50 select-none">
