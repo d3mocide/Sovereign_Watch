@@ -85,5 +85,13 @@ class Settings:
         os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "480")
     )
 
+    def validate(self) -> None:
+        """Raise RuntimeError for any configuration that is unsafe to run with."""
+        if self.AUTH_ENABLED and not self._raw_jwt_secret:
+            raise RuntimeError(
+                "JWT_SECRET_KEY must be set when AUTH_ENABLED=true. "
+                "Generate one with: openssl rand -hex 32"
+            )
+
 
 settings = Settings()

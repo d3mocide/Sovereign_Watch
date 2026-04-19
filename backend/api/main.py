@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI):
     """
     global historian_task_handle, rf_cleanup_task_handle
     # --- Startup ---
+    settings.validate()
     await db.connect()
     try:
         if db.pool:

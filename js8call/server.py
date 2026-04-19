@@ -795,6 +795,12 @@ async def lifespan(app: FastAPI):
     global _event_loop, _message_queue, js8_client_udp_transport
     global _kiwi_native, _kiwi_directory, _websdr_directory, _pacat_proc
 
+    if AUTH_ENABLED and not _JWT_SECRET_KEY:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be set when AUTH_ENABLED=true. "
+            "Generate one with: openssl rand -hex 32"
+        )
+
     _event_loop = asyncio.get_running_loop()
     _message_queue = asyncio.Queue(maxsize=500)
     broadcaster = asyncio.create_task(_queue_broadcaster())
