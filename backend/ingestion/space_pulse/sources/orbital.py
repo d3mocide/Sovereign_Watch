@@ -347,8 +347,8 @@ class OrbitalSource(BaseSource):
                         json.dumps({"ts": time.time(), "msg": str(exc)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
             if not self.running:
                 break
             await asyncio.sleep(self.fetch_interval_hours * 3600)

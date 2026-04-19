@@ -22,6 +22,7 @@ Usage::
 """
 
 import logging
+import time
 from typing import Optional
 
 logger = logging.getLogger("SovereignWatch.SemanticCache")
@@ -47,12 +48,17 @@ class SovereignSemanticCache:
     so the rest of the pipeline is unaffected.
     """
 
+    # Cooldown between re-initialisation attempts when Redis is unavailable.
+    _RETRY_COOLDOWN_S = 60.0
+
     def __init__(self):
         self._cache = None
         self._available = False
+        self._last_init_attempt: float = 0.0
 
     async def initialise(self, redis_url: str) -> None:
         """Attempt to connect and create the SemanticCache index."""
+        self._last_init_attempt = time.monotonic()
         try:
             from redisvl.extensions.llmcache import SemanticCache
 
@@ -111,4 +117,9 @@ async def get_semantic_cache(redis_url: str = "redis://sovereign-redis:6379") ->
     if _cache_instance is None:
         _cache_instance = SovereignSemanticCache()
         await _cache_instance.initialise(redis_url)
+    elif not _cache_instance._available:
+        elapsed = time.monotonic() - _cache_instance._last_init_attempt
+        if elapsed >= SovereignSemanticCache._RETRY_COOLDOWN_S:
+            logger.info("SemanticCache: retrying initialisation after %.0fs cooldown", elapsed)
+            await _cache_instance.initialise(redis_url)
     return _cache_instance
