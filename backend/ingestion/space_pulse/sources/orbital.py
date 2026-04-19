@@ -56,9 +56,9 @@ class OrbitalSource(BaseSource):
         self.sat_meta = []
         self.sat_array = None
 
-        self.fetch_interval_hours = 24
+        self.fetch_interval_hours = int(os.getenv("SPACE_TLE_FETCH_INTERVAL_HOURS", "6"))
         self.fetch_hour = int(
-            os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "2"))
+            os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "-1"))
         )
         self.propagate_interval_sec = 15
 
@@ -360,7 +360,7 @@ class OrbitalSource(BaseSource):
                 continue
 
             start_time = time.time()
-            now = datetime.utcnow()
+            now = datetime.now(UTC).replace(tzinfo=None)
             jd, fr = jday(
                 now.year,
                 now.month,
