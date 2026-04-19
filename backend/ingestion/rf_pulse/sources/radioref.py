@@ -36,6 +36,7 @@ import math
 import os
 import time
 from datetime import datetime, UTC
+from xml.sax.saxutils import escape as _xml_escape
 
 import aiohttp
 from lxml import etree
@@ -96,8 +97,8 @@ class RadioReferenceSource:
 
     async def _post_soap(self, method: str, params: dict, client: aiohttp.ClientSession) -> etree._Element:
         auth = self._auth_info()
-        auth_xml = "".join(f"<{k}>{v}</{k}>" for k, v in auth.items())
-        params_xml = "".join(f"<{k}>{v}</{k}>" for k, v in params.items())
+        auth_xml = "".join(f"<{k}>{_xml_escape(str(v))}</{k}>" for k, v in auth.items())
+        params_xml = "".join(f"<{k}>{_xml_escape(str(v))}</{k}>" for k, v in params.items())
         
         body = f"""<?xml version="1.0" encoding="utf-8"?>
 <soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
@@ -118,7 +119,7 @@ class RadioReferenceSource:
             resp.raise_for_status()
             content = await resp.read()
             # Parse XML and strip namespaces for easier searching
-            parser = etree.XMLParser(recover=True, remove_blank_text=True)
+            parser = etree.XMLParser(recover=True, remove_blank_text=True, load_dtd=False, no_network=True)
             root = etree.fromstring(content, parser)
             
             # Find the Body element

@@ -83,7 +83,7 @@ except ImportError as _ie:
 # ---------------------------------------------------------------------------
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
-JS8CALL_HOST = os.getenv("JS8CALL_HOST", "0.0.0.0")
+JS8CALL_HOST = os.getenv("JS8CALL_HOST", "127.0.0.1")
 JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
 JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))
@@ -517,7 +517,7 @@ def maidenhead_to_latlon(grid: str) -> tuple[float, float]:
       Sub:    A-X (latitude × 2.5'/60)
     """
     grid = grid.strip().upper()
-    if len(grid) < 4:
+    if not re.match(r'^[A-R]{2}[0-9]{2}([A-X]{2})?$', grid):
         return 0.0, 0.0
     try:
         lon = (ord(grid[0]) - ord('A')) * 20 - 180
@@ -694,6 +694,11 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
         logger.info("JS8Call UDP API listener active on port %d", JS8CALL_UDP_CLIENT_PORT)
 
     def datagram_received(self, data, addr):
+        # Only accept datagrams from localhost — JS8Call runs on the same host.
+        sender_ip = addr[0] if addr else ""
+        if sender_ip not in ("127.0.0.1", "::1"):
+            logger.warning("UDP: rejected datagram from unexpected source %s", sender_ip)
+            return
         try:
             line = data.decode("utf-8").strip()
             if not line:
@@ -706,8 +711,12 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
                 on_rx_spot(message)
             elif m_type == "STATION.STATUS":
                 on_station_status(message)
-        except Exception:
-            pass
+            elif m_type:
+                logger.debug("UDP: ignoring unknown message type %r from %s", m_type, sender_ip)
+        except json.JSONDecodeError as exc:
+            logger.warning("UDP: malformed JSON from %s: %s", sender_ip, exc)
+        except Exception as exc:
+            logger.error("UDP: unexpected error processing datagram from %s: %s", sender_ip, exc)
 
 
 # ===========================================================================
@@ -834,8 +843,8 @@ ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "ht
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -950,6 +959,9 @@ async def ws_js8(websocket: WebSocket) -> None:
             # ------------------------------------------------------------------
             elif action == "SET_FREQ":
                 freq = int(cmd.get("freq", 14074000))
+                if not (100_000 <= freq <= 500_000_000):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_FREQ: freq must be 100 kHz–500 MHz in Hz"})
+                    continue
                 # Forward dynamically to JS8Call UDP port
                 _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": freq, "PARAMS": {}})
 
@@ -987,6 +999,18 @@ async def ws_js8(websocket: WebSocket) -> None:
                 freq     = float(cmd.get("freq", 14074))
                 mode     = str(cmd.get("mode", "usb")).lower().strip()
                 password = str(cmd.get("password", ""))
+                if not host:
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: host is required"})
+                    continue
+                if not (1 <= port <= 65535):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: port must be 1–65535"})
+                    continue
+                if not (0.1 <= freq <= 30_000):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: freq must be 0.1–30000 kHz"})
+                    continue
+                if mode not in _KIWI_VALID_MODES:
+                    await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI: mode must be one of {sorted(_KIWI_VALID_MODES)}"})
+                    continue
 
                 if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
                     # Legacy subprocess path
@@ -1521,27 +1545,10 @@ async def get_websdr_nodes(
 
 @app.get("/health")
 async def health() -> dict:
-    kiwi_cfg = (
-        _kiwi_native.config
-        if (not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native)
-        else _kiwi_config
-    )
     return {
         "status": "ok",
         "js8call_connected": js8_client_udp_transport is not None,
         "kiwi_connected": _kiwi_is_running(),
-        "kiwi_config": kiwi_cfg,
-        "kiwi_mode": "native" if (not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI) else "subprocess",
-        "active_ws_clients": len(_ws_clients),
-        "heard_stations": len(_station_registry),
-        "bridge_port": BRIDGE_PORT,
-        "js8call_address": f"{JS8CALL_HOST}:{JS8CALL_UDP_CLIENT_PORT}",
-        # Phase 3 — failover stats
-        "failover_count": _failover_count,
-        "last_failover_at": _last_failover_at,
-        "candidate_nodes_available": _kiwi_directory.node_count if _kiwi_directory else 0,
-        "websdr_nodes_cached": _websdr_directory.node_count if _websdr_directory else 0,
-        "websdr_vhf_nodes": _websdr_directory.vhf_node_count if _websdr_directory else 0,
     }
 
 
@@ -1552,7 +1559,7 @@ async def health() -> dict:
 if __name__ == "__main__":
     uvicorn.run(
         "server:app",
-        host="0.0.0.0",
+        host=JS8CALL_HOST,
         port=BRIDGE_PORT,
         log_level="info",
         # reload=False in container – hot reload not useful in production
