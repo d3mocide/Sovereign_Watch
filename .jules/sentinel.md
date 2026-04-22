@@ -58,3 +58,7 @@
 **Vulnerability:** The `/api/news/article` endpoint was vulnerable to Server-Side Request Forgery (SSRF) because it fetched arbitrary user-supplied URLs with `httpx` to extract their text, only verifying that the host string was not literally `localhost`, `127.0.0.1`, or `::1`.
 **Learning:** Checking string literals is insufficient for SSRF protection because attackers can provide valid public domain names (like `127.0.0.1.nip.io`) that resolve to private or loopback IPs via DNS, or use other private IP ranges like `10.0.0.1` or the AWS metadata IP `169.254.169.254`.
 **Prevention:** Always asynchronously resolve the hostname to its IP addresses using `getaddrinfo` and strictly validate that the resolved IP addresses are safe (e.g. not private, loopback, multicast, or unspecified) using the `ipaddress` module before dispatching HTTP requests to third-party servers.
+## 2026-05-25 - Prevent URL Encoding Injection in DSN strings
+**Vulnerability:** Constructing `DB_DSN` dynamically from unescaped environment variables (like `POSTGRES_USER` or `POSTGRES_PASSWORD`) can lead to URI parsing errors or connection string injection if credentials contain URI-reserved characters (like `@`, `:`, `#`, or `?`).
+**Learning:** Python `urllib.parse.quote_plus` should always be used to encode credential fragments safely before interpolating them into a standard PostgreSQL or other DSN string.
+**Prevention:** Always use URL-encoding when building DSNs dynamically from configuration or environment variables.
