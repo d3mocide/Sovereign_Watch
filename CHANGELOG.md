@@ -4,7 +4,7 @@
 
 ### Added
 - **Domain Intelligence Context Menu**: Added a new "Domain Intel" section to the map right-click context menu, allowing operators to trigger domain-specialist AI analysis (Air, Sea, Space) for any H3 region. Results are rendered in a dedicated, color-coded analyst panel.
-- **NWS Alert Count Badge**: Integrated a live, self-refreshing (60s) alert count badge into the "NWS ALERTS" toggle in the Layer Visibility Controls. Escalates color (amber to red) based on severe weather volume.
+
 
 ### Changed
 - **TLE Fetch Interval Optimization**: Improved satellite position accuracy by increasing TLE refresh frequency from 24 hours to 6 hours. Added `SPACE_TLE_FETCH_INTERVAL_HOURS` environment variable for operator tuning.

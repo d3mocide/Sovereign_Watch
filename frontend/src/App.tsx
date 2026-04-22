@@ -19,6 +19,8 @@ import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { AnalysisFormatter } from "./components/widgets/AnalysisFormatter";
 import { GlobalTerminalWidget } from "./components/widgets/GlobalTerminalWidget";
 import { MaritimeRiskPanel } from "./components/widgets/MaritimeRiskPanel";
+import { NWSAlertsWidget } from "./components/widgets/NWSAlertsWidget";
+import { SpaceWeatherPanel } from "./components/map/SpaceWeatherPanel";
 import { NewsItem, NewsWidget } from "./components/widgets/NewsWidget";
 import { OsintTicker } from "./components/widgets/OsintTicker";
 import { TimeControls } from "./components/widgets/TimeControls";
@@ -364,6 +366,7 @@ function AuthenticatedApp() {
       parseMissionHash().lon ??
       parseFloat(import.meta.env.VITE_CENTER_LON || "-122.6784"),
   });
+  const { currentMission } = missionArea;
 
   const handleAnalyzeRegionalRisk = useCallback(
     async (h3Region: string, lat: number, lon: number) => {
@@ -520,17 +523,36 @@ function AuthenticatedApp() {
     (viewMode === "INTEL" &&
       !(isAIAnalystOpen && selectedEntity?.type === "sitrep"));
 
-  const regionalRiskOverlay =
+  const mapHudStack =
     viewMode === "TACTICAL" || viewMode === "ORBITAL" ? (
       <div
-        className="pointer-events-none absolute top-[74px] z-20 max-w-md"
+        className="pointer-events-none absolute top-[74px] z-20 flex flex-col items-end gap-3"
         style={{
           right: hasRightSidebarContent ? 380 : 20,
           transition: "right 0.3s ease-in-out",
         }}
       >
+        {/* 1. NWS Alerts (Tactical Only) */}
+        {viewMode === "TACTICAL" && filters?.showNWSAlerts !== false && (nwsAlertsData?.features?.length ?? 0) > 0 && (
+          <div className="pointer-events-auto">
+            <NWSAlertsWidget
+              nwsAlerts={nwsAlertsData}
+              mission={currentMission}
+              onEvent={addEvent}
+            />
+          </div>
+        )}
+
+        {/* 2. Space Weather (Orbital Only) */}
+        {viewMode === "ORBITAL" && (
+          <div className="pointer-events-auto">
+            <SpaceWeatherPanel visible={true} />
+          </div>
+        )}
+
+        {/* 3. Regional Risk Analysis */}
         {regionalRiskUi && (
-          <div className="pointer-events-auto border border-cyan-400/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl">
+          <div className="pointer-events-auto max-w-md border border-cyan-400/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-cyan-300/90 font-semibold">
                 <Radar size={12} />
@@ -614,6 +636,7 @@ function AuthenticatedApp() {
           </div>
         )}
 
+        {/* 4. Domain Analysis */}
         {domainAnalysisUi && (() => {
           const domainMeta: Record<"air" | "sea" | "orbital", { label: string; Icon: typeof Plane; accent: string; border: string; bg: string; narrativeBorder: string }> = {
             air:     { label: "Air Intel",     Icon: Plane, accent: "text-sky-300/90",    border: "border-sky-400/30",    bg: "bg-black/80",  narrativeBorder: "border-sky-400/15" },
@@ -622,7 +645,7 @@ function AuthenticatedApp() {
           };
           const { label, Icon, accent, border, bg, narrativeBorder } = domainMeta[domainAnalysisUi.domain];
           return (
-            <div className={`pointer-events-auto mt-2 border ${border} ${bg} backdrop-blur-xl rounded-sm shadow-2xl`}>
+            <div className={`pointer-events-auto border ${border} ${bg} backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden`}>
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
                 <div className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${accent} font-semibold`}>
                   <Icon size={12} />
@@ -1122,8 +1145,8 @@ function AuthenticatedApp() {
               darkVesselData={darkVesselData}
             />
 
-            {articleViewerOverlay}
-            {regionalRiskOverlay}
+             {articleViewerOverlay}
+             {mapHudStack}
 
             {replayMode && (
               <TimeControls
@@ -1203,7 +1226,7 @@ function AuthenticatedApp() {
             issPosition={issPosition}
             issTrack={issTrack}
             />
-            {regionalRiskOverlay}
+             {mapHudStack}
           </>
         ) : viewMode === "INTEL" ? (
           <div className="absolute inset-0 flex flex-col">

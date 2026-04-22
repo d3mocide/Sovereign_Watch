@@ -7,7 +7,7 @@ import React, {
   MutableRefObject,
 } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
+
 import type { FeatureCollection } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -789,23 +789,7 @@ export function OrbitalMap({
         <MapTooltip entity={hoveredEntity} position={hoverPosition} />
       )}
 
-      {/* Right HUD Stack — Space Weather + Pass Geometry */}
-      <div
-        className="flex flex-col gap-3"
-        style={{
-          position: "absolute",
-          top: 70,
-          right: selectedEntity ? 380 : 20,
-          zIndex: 100,
-          pointerEvents: "none",
-          transition: "right 0.3s ease-in-out",
-        }}
-      >
-        {/* Space Weather Panel — always at the top of the stack */}
-        <div style={{ pointerEvents: "auto" }}>
-          <SpaceWeatherPanel visible={true} />
-        </div>
-      </div>
+
     </>
   );
 }

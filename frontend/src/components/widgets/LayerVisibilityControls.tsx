@@ -47,20 +47,7 @@ export const LayerVisibilityControls: React.FC<
     }
   };
 
-  // NWS summary badge (polls /api/infra/nws-alerts/summary every 60s)
-  const [nwsSummary, setNwsSummary] = useState<{ count: number; severe_count: number; extreme_count: number } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const r = await fetch("/api/infra/nws-alerts/summary");
-        if (r.ok && !cancelled) setNwsSummary(await r.json());
-      } catch { /* silent */ }
-    };
-    poll();
-    const id = setInterval(poll, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, []);
+
 
   // Persistent expansion states (Map Layers panel)
   const [showLayers, setShowLayers] = useState(() => {
@@ -1114,18 +1101,7 @@ export const LayerVisibilityControls: React.FC<
                     >
                       NWS ALERTS
                     </span>
-                    {nwsSummary && nwsSummary.count > 0 && (
-                      <span
-                        className="text-[8px] font-bold px-1 py-0.5 rounded tabular-nums"
-                        style={{
-                          background: nwsSummary.extreme_count > 0 ? "#ef444420" : nwsSummary.severe_count > 0 ? "#f9731620" : "#f59e0b20",
-                          border: `1px solid ${nwsSummary.extreme_count > 0 ? "#ef444455" : nwsSummary.severe_count > 0 ? "#f9731655" : "#f59e0b55"}`,
-                          color: nwsSummary.extreme_count > 0 ? "#ef4444" : nwsSummary.severe_count > 0 ? "#f97316" : "#f59e0b",
-                        }}
-                      >
-                        {nwsSummary.count}{nwsSummary.severe_count + nwsSummary.extreme_count > 0 ? ` (${nwsSummary.severe_count + nwsSummary.extreme_count}!)` : ""}
-                      </span>
-                    )}
+
                   </div>
                   <input
                     type="checkbox"

@@ -35,7 +35,7 @@ import { RFLegend } from "./RFLegend";
 import { SaveLocationForm } from "./SaveLocationForm";
 import { SpeedLegend } from "./SpeedLegend";
 import { StarField } from "./StarField";
-import { NWSAlertsWidget } from "../widgets/NWSAlertsWidget";
+
 
 // DeckGLOverlay is defined inside each map adapter (MapLibreAdapter / MapboxAdapter)
 // so that useControl is always called within the correct react-map-gl endpoint context.
@@ -1186,27 +1186,7 @@ export function TacticalMap({
       <SpeedLegend visible={filters?.showSea ?? true} />
       <RFLegend visible={!!showRepeaters} />
 
-      {/* NWS Alerts HUD — top-right, fires onEvent for AOT-intersecting Severe/Extreme alerts */}
-      {filters?.showNWSAlerts !== false && (
-        <div
-          style={{
-            position: "absolute",
-            top: 70,
-            right: selectedEntity ? 380 : 20,
-            zIndex: 100,
-            pointerEvents: "none",
-            transition: "right 0.3s ease-in-out",
-          }}
-        >
-          <div style={{ pointerEvents: "auto" }}>
-            <NWSAlertsWidget
-              nwsAlerts={nwsAlertsData ?? null}
-              mission={currentMission}
-              onEvent={onEvent}
-            />
-          </div>
-        </div>
-      )}
+
     </>
   );
 }
