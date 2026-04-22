@@ -1,6 +1,7 @@
 import os
 import secrets
 import logging
+from urllib.parse import quote_plus
 
 logger = logging.getLogger("SovereignWatch.Config")
 
@@ -23,7 +24,9 @@ class Settings:
                 "POSTGRES_PASSWORD environment variable is required if DB_DSN is not provided."
             )
 
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:5432/{self.POSTGRES_DB}"
+        user = quote_plus(self.POSTGRES_USER)
+        password = quote_plus(self.POSTGRES_PASSWORD)
+        return f"postgresql://{user}:{password}@{self.POSTGRES_HOST}:5432/{self.POSTGRES_DB}"
 
     # Redis
     REDIS_HOST = os.getenv("REDIS_HOST", "sovereign-redis")
