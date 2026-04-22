@@ -253,7 +253,7 @@ class KiwiClient:
                 logger.info("KiwiClient connected via %s", uri)
                 break
             except Exception as exc:
-                logger.debug("KiwiClient: %s failed: %s", uri, exc)
+                logger.warning("KiwiClient: %s failed: %s", uri, exc)
                 last_exc = exc
 
         if self._ws is None:
@@ -814,7 +814,7 @@ class KiwiClient:
                     logger.info("KiwiClient waterfall connected via %s", uri)
                     break
                 except Exception as exc:
-                    logger.debug("KiwiClient waterfall: %s failed: %s", uri, exc)
+                    logger.warning("KiwiClient waterfall: %s failed: %s", uri, exc)
 
             if not ws:
                 raise RuntimeError("Could not connect to waterfall on any URL format")
