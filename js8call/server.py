@@ -86,7 +86,7 @@ except ImportError as _ie:
 # ---------------------------------------------------------------------------
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
-JS8CALL_HOST = os.getenv("JS8CALL_HOST", "127.0.0.1")
+JS8CALL_HOST = os.getenv("JS8CALL_HOST", "0.0.0.0")
 JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
 JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))

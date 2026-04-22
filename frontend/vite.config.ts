@@ -17,7 +17,7 @@ export default defineConfig({
       interval: 1000, // Poll every 1s (reduces CPU usage)
     },
     hmr: {
-      clientPort: 80, // HMR WebSocket connects through nginx on port 80
+      // clientPort: 80, // Removed to allow auto-detection on HTTPS VPS
     },
     allowedHosts: true, // Allow nginx to proxy requests (host header will be 'frontend')
   },
