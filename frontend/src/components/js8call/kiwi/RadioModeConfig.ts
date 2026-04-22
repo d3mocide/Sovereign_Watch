@@ -57,8 +57,11 @@ export function getWsBaseUrl(): string {
   return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8");
 }
 
-export const WS_BASE_URL = getWsBaseUrl();
-export const WATERFALL_WS_URL = WS_BASE_URL.replace(/\/ws\/js8$/, "/ws/waterfall");
+export const getJs8WsBaseUrl = () => getWsBaseUrl();
+export const getWaterfallWsUrl = (token?: string | null) => {
+  const base = resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8", token);
+  return base.replace(/\/ws\/js8(\?.*)?$/, "/ws/waterfall$1");
+};
 
 /**
  * Returns the total waterfall span in kHz for a given KiwiSDR zoom level (0-14).

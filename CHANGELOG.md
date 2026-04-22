@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+- **Domain Intelligence Context Menu**: Added a new "Domain Intel" section to the map right-click context menu, allowing operators to trigger domain-specialist AI analysis (Air, Sea, Space) for any H3 region. Results are rendered in a dedicated, color-coded analyst panel.
+- **NWS Alert Count Badge**: Integrated a live, self-refreshing (60s) alert count badge into the "NWS ALERTS" toggle in the Layer Visibility Controls. Escalates color (amber to red) based on severe weather volume.
+
+### Changed
+- **TLE Fetch Interval Optimization**: Improved satellite position accuracy by increasing TLE refresh frequency from 24 hours to 6 hours. Added `SPACE_TLE_FETCH_INTERVAL_HOURS` environment variable for operator tuning.
+- **Python 3.12 Compatibility**: Sanitized all `datetime.utcnow()` calls in maritime and orbital pollers to `datetime.now(timezone.utc)` to resolve deprecation warnings and future-proof the ingestion stack.
+- **Ingestion Error Visibility**: Replaced silent exception suppression with structured debug logging across all primary ingestion pollers (ADS-B, GDELT, Infrastructure, Space Pulse), improving diagnostics for Redis and data parsing failures.
+
+### Fixed
+- **False Location Transition Anomalies**: Implemented null-coordinate guards in the clausalizer engine to eliminate spurious `LOCATION_TRANSITION` events for tracks with missing GPS data.
+- **Semantic Cache Resilience**: Added automated retry logic (60s cooldown) to the AI semantic cache service, allowing the LLM deduplication layer to self-heal after transient Redis outages without a backend restart.
+- **PostgreSQL Pool Exhaustion**: Hardened the analysis router by enforcing explicit connection acquisition for all parallelized intelligence fusion requests.
+
 ## [1.0.9] - 2026-04-18
 
 ### Fixed

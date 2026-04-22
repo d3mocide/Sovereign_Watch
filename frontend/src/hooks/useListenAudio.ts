@@ -15,13 +15,14 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getToken } from '../api/auth';
 import { resolveWebSocketUrl } from '../utils/network';
 
-const getAudioWSUrl = () => {
-  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, '/js8/ws/audio');
+const getAudioWSUrl = (token?: string | null) => {
+  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, '/js8/ws/audio', token);
 };
 
-const AUDIO_WS_URL = getAudioWSUrl();
+
 
 const SAMPLE_RATE   = 12000;  // KiwiSDR always outputs 12 kHz
 const FFT_SIZE      = 2048;
@@ -144,7 +145,8 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
     let reconnectTimeout: number | undefined;
 
     const connect = () => {
-      const ws = new WebSocket(AUDIO_WS_URL);
+      const token = getToken();
+    const ws = new WebSocket(getAudioWSUrl(token));
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 

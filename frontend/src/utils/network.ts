@@ -56,20 +56,31 @@ export function resolveHttpUrl(envUrl: string | undefined, requiredPath: string)
   return target.toString();
 }
 
-export function resolveWebSocketUrl(envUrl: string | undefined, requiredPath: string): string {
+function appendToken(urlStr: string, token?: string | null): string {
+  if (!token) return urlStr;
+  try {
+    const url = new URL(urlStr);
+    url.searchParams.set("token", token);
+    return url.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
+export function resolveWebSocketUrl(envUrl: string | undefined, requiredPath: string, token?: string | null): string {
   if (!envUrl) {
-    return `${currentWsOrigin()}${requiredPath}`;
+    return appendToken(`${currentWsOrigin()}${requiredPath}`, token);
   }
 
   let target: URL;
   try {
     target = new URL(envUrl, currentHttpOrigin());
   } catch {
-    return `${currentWsOrigin()}${requiredPath}`;
+    return appendToken(`${currentWsOrigin()}${requiredPath}`, token);
   }
 
   if (shouldPreferSameOrigin(target)) {
-    return `${currentWsOrigin()}${requiredPath}`;
+    return appendToken(`${currentWsOrigin()}${requiredPath}`, token);
   }
 
   if (target.protocol === "http:" || target.protocol === "https:") {
@@ -81,5 +92,5 @@ export function resolveWebSocketUrl(envUrl: string | undefined, requiredPath: st
   }
 
   target.pathname = normalizePathname(target.pathname, requiredPath);
-  return target.toString();
+  return appendToken(target.toString(), token);
 }

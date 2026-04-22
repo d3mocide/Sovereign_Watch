@@ -19,6 +19,7 @@ import {
   Lock,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { getToken } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import {
   sdrWaterfallColor,
@@ -31,7 +32,7 @@ import {
   KiwiMode,
   KIWI_MODES,
   MODE_INFO,
-  WATERFALL_WS_URL,
+  getWaterfallWsUrl,
 } from "./kiwi/RadioModeConfig";
 
 // ── UI Components ───────────────────────────────────────────────────────────
@@ -308,7 +309,7 @@ export default function ListeningPost({
 
       const connect = () => {
         if (!active) return;
-        const ws = new WebSocket(WATERFALL_WS_URL);
+        const ws = new WebSocket(getWaterfallWsUrl(getToken()));
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
 

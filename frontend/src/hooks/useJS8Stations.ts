@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import type { JS8LogEntry, JS8Station, JS8StatusLine } from "../types";
+import { getToken } from "../api/auth";
 import { resolveWebSocketUrl } from "../utils/network";
 
 const asString = (value: unknown, fallback = ""): string =>
@@ -22,11 +23,11 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
-const getJS8WSUrl = () => {
-  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8");
+const getJS8WSUrl = (token?: string | null) => {
+  return resolveWebSocketUrl(import.meta.env.VITE_JS8_WS_URL, "/js8/ws/js8", token);
 };
 
-const WS_URL = getJS8WSUrl();
+
 
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
@@ -100,7 +101,8 @@ export function useJS8Stations(): UseJS8StationsResult {
     function connectInternal() {
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-      const ws = new WebSocket(WS_URL);
+      const token = getToken();
+      const ws = new WebSocket(getJS8WSUrl(token));
       wsRef.current = ws;
 
       ws.onopen = () => {
