@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { WebSDRNode } from '../types';
 import { resolveHttpUrl } from '../utils/network';
+import { getToken } from '../api/auth';
 
 const getNodesUrl = () => {
   return resolveHttpUrl(import.meta.env.VITE_JS8_BASE_URL, '/js8/api/websdr/nodes');
@@ -29,7 +30,12 @@ export function useWebSDRNodes(
       if (radiusKm !== undefined && radiusKm > 0) params.set('radius_km', String(radiusKm));
       if (vhfOnly) params.set('vhf_only', 'true');
 
-      const res = await fetch(`${NODES_URL}?${params}`);
+      const token = getToken();
+      const res = await fetch(`${NODES_URL}?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: WebSDRNode[] = await res.json();
       setNodes(data);

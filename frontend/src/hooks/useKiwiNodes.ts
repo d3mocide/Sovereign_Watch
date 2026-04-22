@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { KiwiNode } from '../types';
 import { resolveHttpUrl } from '../utils/network';
+import { getToken } from '../api/auth';
 
 const getNODES_URL = () => {
   return resolveHttpUrl(import.meta.env.VITE_JS8_BASE_URL, '/js8/api/kiwi/nodes');
@@ -25,7 +26,12 @@ export function useKiwiNodes(freqKhz: number, enabled: boolean, radiusKm?: numbe
       if (radiusKm !== undefined && radiusKm > 0) {
         url += `&radius_km=${radiusKm}`;
       }
-      const res = await fetch(url);
+      const token = getToken();
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: KiwiNode[] = await res.json();
       setNodes(data);
