@@ -46,6 +46,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
               onClose();
             }}
             className="p-1 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            aria-label="Close System Settings"
           >
             <X size={12} />
           </button>
