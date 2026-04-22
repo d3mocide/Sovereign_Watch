@@ -2,9 +2,11 @@
 
 ## [Unreleased]
 
-### Added
-- **Domain Intelligence Context Menu**: Added a new "Domain Intel" section to the map right-click context menu, allowing operators to trigger domain-specialist AI analysis (Air, Sea, Space) for any H3 region. Results are rendered in a dedicated, color-coded analyst panel.
+## [1.0.10] - 2026-04-22
 
+### Added
+- **Unified Map HUD Stacking**: Centralized all map-overlay widgets (NWS Alerts, Space Weather, Risk Analysis) into a single vertical flex container in `App.tsx`. This resolves layout collisions and ensures all HUD elements respect the right sidebar offset.
+- **HUD Width Standardization**: Enforced a standard 380px width cap across all map analyst panels for visual consistency and improved narrative readability.
 
 ### Changed
 - **TLE Fetch Interval Optimization**: Improved satellite position accuracy by increasing TLE refresh frequency from 24 hours to 6 hours. Added `SPACE_TLE_FETCH_INTERVAL_HOURS` environment variable for operator tuning.
@@ -12,6 +14,8 @@
 - **Ingestion Error Visibility**: Replaced silent exception suppression with structured debug logging across all primary ingestion pollers (ADS-B, GDELT, Infrastructure, Space Pulse), improving diagnostics for Redis and data parsing failures.
 
 ### Fixed
+- **JS8Call Production Authentication**: Fixed a regression where JS8Call WebSocket connections failed in production due to missing token propagation.
+- **Redundant NWS Alert HUD**: Removed the redundant alert count badge from the Layer Visibility Controls to reduce UI noise.
 - **False Location Transition Anomalies**: Implemented null-coordinate guards in the clausalizer engine to eliminate spurious `LOCATION_TRANSITION` events for tracks with missing GPS data.
 - **Semantic Cache Resilience**: Added automated retry logic (60s cooldown) to the AI semantic cache service, allowing the LLM deduplication layer to self-heal after transient Redis outages without a backend restart.
 - **PostgreSQL Pool Exhaustion**: Hardened the analysis router by enforcing explicit connection acquisition for all parallelized intelligence fusion requests.
