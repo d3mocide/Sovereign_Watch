@@ -552,7 +552,7 @@ function AuthenticatedApp() {
 
         {/* 3. Regional Risk Analysis */}
         {regionalRiskUi && (
-          <div className="pointer-events-auto w-[280px] border border-cyan-400/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden">
+          <div className="pointer-events-auto w-[380px] border border-cyan-400/30 bg-black/80 backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-cyan-300/90 font-semibold">
                 <Radar size={12} />
@@ -645,7 +645,7 @@ function AuthenticatedApp() {
           };
           const { label, Icon, accent, border, bg, narrativeBorder } = domainMeta[domainAnalysisUi.domain];
           return (
-            <div className={`pointer-events-auto w-[280px] border ${border} ${bg} backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden`}>
+            <div className={`pointer-events-auto w-[380px] border ${border} ${bg} backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden`}>
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
                 <div className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${accent} font-semibold`}>
                   <Icon size={12} />
