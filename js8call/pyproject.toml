@@ -13,6 +13,7 @@ dependencies = [
     "pyjs8call==0.2.3",
     "websockets==16.0",
     "aiohttp==3.13.3",
+    "python-jose[cryptography]==3.5.0",
 ]
 
 [dependency-groups]

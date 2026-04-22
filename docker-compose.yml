@@ -363,6 +363,9 @@ services:
       - JS8CALL_PORT=2442
       - BRIDGE_PORT=8080
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - "JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env — generate with: openssl rand -hex 32}"
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
     networks:
       - sovereign-net-backend
     cap_add: []

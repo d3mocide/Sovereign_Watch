@@ -36,6 +36,7 @@ import logging
 import math
 import os
 import re
+import secrets
 import socket
 import subprocess
 import threading
@@ -44,8 +45,10 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 
 
 logging.basicConfig(
@@ -83,7 +86,7 @@ except ImportError as _ie:
 # ---------------------------------------------------------------------------
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
-JS8CALL_HOST = os.getenv("JS8CALL_HOST", "0.0.0.0")
+JS8CALL_HOST = os.getenv("JS8CALL_HOST", "127.0.0.1")
 JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
 JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))
@@ -96,6 +99,70 @@ KIWI_MODE = os.getenv("KIWI_MODE", "usb")
 # Set KIWI_USE_SUBPROCESS=1 to fall back to the kiwirecorder subprocess pipeline
 KIWI_USE_SUBPROCESS = os.getenv("KIWI_USE_SUBPROCESS", "0") == "1"
 # Note: KIWI_AUTO_SELECT has been removed — connect via the Node Browser in the UI
+
+# ---------------------------------------------------------------------------
+# Authentication — mirrors the backend/api JWT pattern.
+# The bridge accepts tokens issued by the backend API (same secret + algorithm),
+# so users authenticate once and the same JWT works everywhere.
+# ---------------------------------------------------------------------------
+AUTH_ENABLED: bool = os.getenv("AUTH_ENABLED", "true").lower() not in ("false", "0", "no")
+_JWT_SECRET_KEY: str | None = os.getenv("JWT_SECRET_KEY")
+_JWT_SECRET_FALLBACK: str = secrets.token_urlsafe(32)
+_JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+
+_ANON_USER: dict = {"sub": "anon", "role": "admin"}
+
+
+def _jwt_secret() -> str:
+    if _JWT_SECRET_KEY:
+        return _JWT_SECRET_KEY
+    if AUTH_ENABLED:
+        logger.warning(
+            "JWT_SECRET_KEY not set — using an ephemeral random secret. "
+            "All tokens will be invalidated on restart. Set JWT_SECRET_KEY in production!"
+        )
+    return _JWT_SECRET_FALLBACK
+
+
+def _decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, _jwt_secret(), algorithms=[_JWT_ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
+async def _authenticate_websocket(websocket: WebSocket, token: str | None) -> dict | None:
+    """Accept the WebSocket, then validate the token. Closes with 4001 on failure."""
+    await websocket.accept()
+    if not AUTH_ENABLED:
+        return _ANON_USER
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return None
+    try:
+        return _decode_token(token)
+    except HTTPException as exc:
+        await websocket.close(code=4001, reason=exc.detail)
+        return None
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+) -> dict:
+    if not AUTH_ENABLED:
+        return _ANON_USER
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _decode_token(credentials.credentials)
+
 
 # ---------------------------------------------------------------------------
 # Global state
@@ -517,7 +584,7 @@ def maidenhead_to_latlon(grid: str) -> tuple[float, float]:
       Sub:    A-X (latitude × 2.5'/60)
     """
     grid = grid.strip().upper()
-    if len(grid) < 4:
+    if not re.match(r'^[A-R]{2}[0-9]{2}([A-X]{2})?$', grid):
         return 0.0, 0.0
     try:
         lon = (ord(grid[0]) - ord('A')) * 20 - 180
@@ -694,6 +761,11 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
         logger.info("JS8Call UDP API listener active on port %d", JS8CALL_UDP_CLIENT_PORT)
 
     def datagram_received(self, data, addr):
+        # Only accept datagrams from localhost — JS8Call runs on the same host.
+        sender_ip = addr[0] if addr else ""
+        if sender_ip not in ("127.0.0.1", "::1"):
+            logger.warning("UDP: rejected datagram from unexpected source %s", sender_ip)
+            return
         try:
             line = data.decode("utf-8").strip()
             if not line:
@@ -706,8 +778,12 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
                 on_rx_spot(message)
             elif m_type == "STATION.STATUS":
                 on_station_status(message)
-        except Exception:
-            pass
+            elif m_type:
+                logger.debug("UDP: ignoring unknown message type %r from %s", m_type, sender_ip)
+        except json.JSONDecodeError as exc:
+            logger.warning("UDP: malformed JSON from %s: %s", sender_ip, exc)
+        except Exception as exc:
+            logger.error("UDP: unexpected error processing datagram from %s: %s", sender_ip, exc)
 
 
 # ===========================================================================
@@ -718,6 +794,12 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
 async def lifespan(app: FastAPI):
     global _event_loop, _message_queue, js8_client_udp_transport
     global _kiwi_native, _kiwi_directory, _websdr_directory, _pacat_proc
+
+    if AUTH_ENABLED and not _JWT_SECRET_KEY:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be set when AUTH_ENABLED=true. "
+            "Generate one with: openssl rand -hex 32"
+        )
 
     _event_loop = asyncio.get_running_loop()
     _message_queue = asyncio.Queue(maxsize=500)
@@ -834,8 +916,8 @@ ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "ht
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -844,7 +926,7 @@ app.add_middleware(
 # ===========================================================================
 
 @app.websocket("/ws/js8")
-async def ws_js8(websocket: WebSocket) -> None:
+async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) -> None:
     """
     Bidirectional WebSocket endpoint for the React radio terminal UI.
 
@@ -858,7 +940,9 @@ async def ws_js8(websocket: WebSocket) -> None:
       {"type": "STATION.STATUS", ...}
       {"type": "ERROR", "message": "..."}
     """
-    await websocket.accept()
+    user = await _authenticate_websocket(websocket, token)
+    if user is None:
+        return
     _ws_clients.append(websocket)
     remote = websocket.client
     logger.info("WebSocket connected: %s", remote)
@@ -950,6 +1034,9 @@ async def ws_js8(websocket: WebSocket) -> None:
             # ------------------------------------------------------------------
             elif action == "SET_FREQ":
                 freq = int(cmd.get("freq", 14074000))
+                if not (100_000 <= freq <= 500_000_000):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_FREQ: freq must be 100 kHz–500 MHz in Hz"})
+                    continue
                 # Forward dynamically to JS8Call UDP port
                 _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": freq, "PARAMS": {}})
 
@@ -987,6 +1074,18 @@ async def ws_js8(websocket: WebSocket) -> None:
                 freq     = float(cmd.get("freq", 14074))
                 mode     = str(cmd.get("mode", "usb")).lower().strip()
                 password = str(cmd.get("password", ""))
+                if not host:
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: host is required"})
+                    continue
+                if not (1 <= port <= 65535):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: port must be 1–65535"})
+                    continue
+                if not (0.1 <= freq <= 30_000):
+                    await websocket.send_json({"type": "ERROR", "message": "SET_KIWI: freq must be 0.1–30000 kHz"})
+                    continue
+                if mode not in _KIWI_VALID_MODES:
+                    await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI: mode must be one of {sorted(_KIWI_VALID_MODES)}"})
+                    continue
 
                 if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
                     # Legacy subprocess path
@@ -1331,7 +1430,7 @@ async def ws_js8(websocket: WebSocket) -> None:
 # ===========================================================================
 
 @app.websocket("/ws/audio")
-async def ws_audio(websocket: WebSocket) -> None:
+async def ws_audio(websocket: WebSocket, token: str | None = Query(default=None)) -> None:
     """
     Binary WebSocket that streams raw KiwiSDR audio to the browser.
 
@@ -1348,7 +1447,9 @@ async def ws_audio(websocket: WebSocket) -> None:
     (KIWI_USE_SUBPROCESS=0).  The browser connects when entering Listening Post
     mode and disconnects on exit, so bandwidth is only consumed when needed.
     """
-    await websocket.accept()
+    user = await _authenticate_websocket(websocket, token)
+    if user is None:
+        return
     _audio_ws_clients.append(websocket)
     remote = websocket.client
     logger.info("Audio WebSocket connected: %s  (total listeners: %d)", remote, len(_audio_ws_clients))
@@ -1367,14 +1468,16 @@ async def ws_audio(websocket: WebSocket) -> None:
 
 
 @app.websocket("/ws/waterfall")
-async def ws_waterfall(websocket: WebSocket) -> None:
+async def ws_waterfall(websocket: WebSocket, token: str | None = Query(default=None)) -> None:
     """
     Binary WebSocket that streams raw KiwiSDR waterfall rows to the browser.
 
     Outbound (server → frontend):
       Binary frames of waterfall pixel data (1024 bytes per frame).
     """
-    await websocket.accept()
+    user = await _authenticate_websocket(websocket, token)
+    if user is None:
+        return
     _waterfall_ws_clients.append(websocket)
     remote = websocket.client
     logger.info("Waterfall WebSocket connected: %s (total: %d)", remote, len(_waterfall_ws_clients))
@@ -1419,7 +1522,7 @@ def _build_station_list() -> list[dict]:
     return stations
 
 
-@app.get("/api/stations", summary="List heard stations with distance/bearing")
+@app.get("/api/stations", summary="List heard stations with distance/bearing", dependencies=[Depends(get_current_user)])
 async def get_stations() -> dict:
     """
     Returns all stations heard in the current session, enriched with:
@@ -1445,7 +1548,7 @@ async def get_stations() -> dict:
 # REST Endpoint  GET /api/kiwi
 # ===========================================================================
 
-@app.get("/api/kiwi", summary="KiwiSDR pipeline status and current config")
+@app.get("/api/kiwi", summary="KiwiSDR pipeline status and current config", dependencies=[Depends(get_current_user)])
 async def get_kiwi() -> dict:
     return {
         "connected": _kiwi_is_running(),
@@ -1457,7 +1560,7 @@ async def get_kiwi() -> dict:
 # REST Endpoint  GET /api/kiwi/nodes  (Phase 1 — node discovery)
 # ===========================================================================
 
-@app.get("/api/kiwi/nodes", summary="List available KiwiSDR nodes sorted by proximity")
+@app.get("/api/kiwi/nodes", summary="List available KiwiSDR nodes sorted by proximity", dependencies=[Depends(get_current_user)])
 async def get_kiwi_nodes(freq: float = None, limit: int = 10, radius_km: float = None) -> list:
     """
     Returns nearby KiwiSDR nodes from the cached public directory, sorted by
@@ -1481,7 +1584,7 @@ async def get_kiwi_nodes(freq: float = None, limit: int = 10, radius_km: float =
 # REST Endpoint  GET /api/websdr/nodes  — WebSDR node discovery
 # ===========================================================================
 
-@app.get("/api/websdr/nodes", summary="List available WebSDR nodes sorted by proximity")
+@app.get("/api/websdr/nodes", summary="List available WebSDR nodes sorted by proximity", dependencies=[Depends(get_current_user)])
 async def get_websdr_nodes(
     freq: float = None,
     limit: int = 20,
@@ -1521,27 +1624,10 @@ async def get_websdr_nodes(
 
 @app.get("/health")
 async def health() -> dict:
-    kiwi_cfg = (
-        _kiwi_native.config
-        if (not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI and _kiwi_native)
-        else _kiwi_config
-    )
     return {
         "status": "ok",
         "js8call_connected": js8_client_udp_transport is not None,
         "kiwi_connected": _kiwi_is_running(),
-        "kiwi_config": kiwi_cfg,
-        "kiwi_mode": "native" if (not KIWI_USE_SUBPROCESS and _HAS_NATIVE_KIWI) else "subprocess",
-        "active_ws_clients": len(_ws_clients),
-        "heard_stations": len(_station_registry),
-        "bridge_port": BRIDGE_PORT,
-        "js8call_address": f"{JS8CALL_HOST}:{JS8CALL_UDP_CLIENT_PORT}",
-        # Phase 3 — failover stats
-        "failover_count": _failover_count,
-        "last_failover_at": _last_failover_at,
-        "candidate_nodes_available": _kiwi_directory.node_count if _kiwi_directory else 0,
-        "websdr_nodes_cached": _websdr_directory.node_count if _websdr_directory else 0,
-        "websdr_vhf_nodes": _websdr_directory.vhf_node_count if _websdr_directory else 0,
     }
 
 
@@ -1552,7 +1638,7 @@ async def health() -> dict:
 if __name__ == "__main__":
     uvicorn.run(
         "server:app",
-        host="0.0.0.0",
+        host=JS8CALL_HOST,
         port=BRIDGE_PORT,
         log_level="info",
         # reload=False in container – hot reload not useful in production
