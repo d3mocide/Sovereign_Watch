@@ -71,10 +71,11 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
 
         {/* Name Input */}
         <div>
-          <label className="block text-[10px] text-white/60 mb-1.5 uppercase tracking-wide">
+          <label htmlFor="location-name" className="block text-[10px] text-white/60 mb-1.5 uppercase tracking-wide">
             Location Name
           </label>
           <input
+            id="location-name"
             type="text"
             value={name}
             onChange={(e) => {
@@ -89,11 +90,12 @@ export const SaveLocationForm: React.FC<SaveLocationFormProps> = ({
 
         {/* Radius Input */}
         <div>
-          <label className="block text-[10px] text-white/60 mb-1.5 uppercase tracking-wide">
+          <label htmlFor="location-radius" className="block text-[10px] text-white/60 mb-1.5 uppercase tracking-wide">
             Coverage Radius (nm)
           </label>
           <div className="relative group">
             <input
+              id="location-radius"
               type="number"
               value={radius}
               onChange={(e) => {
