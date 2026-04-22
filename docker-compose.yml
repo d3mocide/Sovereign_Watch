@@ -258,6 +258,7 @@ services:
   sovereign-timescaledb:
     image: timescale/timescaledb-ha:pg16
     container_name: sovereign-timescaledb
+    shm_size: 1g
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
