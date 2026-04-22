@@ -174,8 +174,8 @@ class SpaceWeatherSource(BaseSource):
                             json.dumps({"ts": datetime.now(UTC).timestamp(), "msg": str(exc)}),
                             ex=86400,
                         )
-                    except Exception:
-                        pass
+                    except Exception as re:
+                        logger.debug("Redis error-state write failed: %s", re)
                 await asyncio.sleep(60)
 
     async def _fetch_json(self, url: str):

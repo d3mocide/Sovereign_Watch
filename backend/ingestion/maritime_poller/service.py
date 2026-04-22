@@ -4,7 +4,7 @@ import logging
 import os
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 
 import redis.asyncio as redis
@@ -448,7 +448,7 @@ class MaritimePollerService:
         if "FixType" in msg:
             cache["fix_type"] = msg["FixType"]
 
-        cache["last_seen"] = datetime.utcnow()
+        cache["last_seen"] = datetime.now(timezone.utc)
         name = cache.get("name", "Unknown")
         ship_type = cache.get("type", 0)
         logger.debug(f"Static data cached for MMSI {mmsi}: {name} type={ship_type}")
@@ -460,9 +460,9 @@ class MaritimePollerService:
             meta = ais_message["MetaData"]
             mmsi = meta["MMSI"]
 
-            now = datetime.utcnow().isoformat() + "Z"
-            stale_time = datetime.utcnow() + timedelta(minutes=5)
-            stale = stale_time.isoformat() + "Z"
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            stale_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+            stale = stale_time.isoformat().replace("+00:00", "Z")
 
             cached = self.vessel_static_cache.get(mmsi, {})
             name = cached.get("name") or meta.get("ShipName") or str(mmsi)
@@ -534,9 +534,9 @@ class MaritimePollerService:
             meta = ais_message["MetaData"]
             mmsi = meta["MMSI"]
 
-            now = datetime.utcnow().isoformat() + "Z"
-            stale_time = datetime.utcnow() + timedelta(minutes=5)
-            stale = stale_time.isoformat() + "Z"
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            stale_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+            stale = stale_time.isoformat().replace("+00:00", "Z")
 
             cached = self.vessel_static_cache.get(mmsi, {})
             name = cached.get("name") or meta.get("ShipName") or str(mmsi)
@@ -699,7 +699,7 @@ class MaritimePollerService:
                             self.ws = None
 
                 # 1. Rate-limit protection: enforce minimum interval between reconnects
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 if self.last_reconnect_time:
                     elapsed = (now - self.last_reconnect_time).total_seconds()
                     if elapsed < MIN_RECONNECT_INTERVAL_SECONDS:
@@ -727,14 +727,14 @@ class MaritimePollerService:
                             and len(self._sources) > 1):
                         self._select_next_source()
 
-                self.last_reconnect_time = datetime.utcnow()
+                self.last_reconnect_time = datetime.now(timezone.utc)
 
                 # 3. (Re)connect to the active source
                 if not await self._connect_active_source():
                     self.reconnect_attempts += 1
                     continue
 
-                self.connection_start_time = datetime.utcnow()
+                self.connection_start_time = datetime.now(timezone.utc)
                 self.last_data_received_at = time.time()
                 self.reconnect_event.clear()
 
@@ -769,7 +769,7 @@ class MaritimePollerService:
 
                             # Connection is healthy — reset backoff once stable
                             if self.reconnect_attempts > 0 and self.connection_start_time:
-                                connected_for = (datetime.utcnow() - self.connection_start_time).total_seconds()
+                                connected_for = (datetime.now(timezone.utc) - self.connection_start_time).total_seconds()
                                 if connected_for >= CONNECTION_STABILITY_THRESHOLD_SECONDS:
                                     logger.info(
                                         "✅ %s stable for %.0fs — resetting backoff",
@@ -848,7 +848,7 @@ class MaritimePollerService:
         """Periodically clean up stale vessel static data."""
         while self.running:
             await asyncio.sleep(600)  # Every 10 mins
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             stale_mmsis = [
                 mmsi for mmsi, data in self.vessel_static_cache.items()
                 if (now - data["last_seen"]).total_seconds() > 7200  # 2 hours

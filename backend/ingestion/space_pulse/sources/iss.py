@@ -59,8 +59,8 @@ class ISSSource(BaseSource):
                         json.dumps({"ts": time.time(), "msg": str(exc)}),
                         ex=86400,
                     )
-                except Exception:
-                    pass
+                except Exception as re:
+                    logger.debug("Redis error-state write failed: %s", re)
 
             await asyncio.sleep(self.poll_interval_s)
 

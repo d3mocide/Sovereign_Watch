@@ -69,8 +69,8 @@ class StateChangeEvaluator:
         # Extract new state fields
         new_type = new_state.get("type", "")
         new_point = new_state.get("point", {})
-        new_lat = safe_float(new_point.get("lat"))
-        new_lon = safe_float(new_point.get("lon"))
+        new_lat = safe_float(new_point.get("lat"), default=None)
+        new_lon = safe_float(new_point.get("lon"), default=None)
         new_detail = new_state.get("detail", {})
         new_track = new_detail.get("track", {})
         new_speed = safe_float(new_track.get("speed"), default=0.0)
@@ -91,8 +91,8 @@ class StateChangeEvaluator:
                 )
             )
 
-        # 2. H3 Geofence Boundary Cross
-        if self._detect_h3_boundary_cross(
+        # 2. H3 Geofence Boundary Cross (skip if coordinates are unavailable)
+        if new_lat is not None and new_lon is not None and self._detect_h3_boundary_cross(
             prev_clause.lat, prev_clause.lon, new_lat, new_lon
         ):
             events.append(
