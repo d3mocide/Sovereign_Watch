@@ -314,17 +314,21 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
                               <button
                                 onClick={() => isOperator && sendAction({ action: 'DISCONNECT_KIWI' })}
                                 disabled={!isOperator}
+                                aria-label={isOperator ? `Disconnect from ${node.host}` : `Locked: Disconnect from ${node.host}`}
+                                title={isOperator ? 'Disconnect' : 'Locked'}
                                 className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors pointer-events-auto focus-visible:ring-1 focus-visible:ring-red-400 outline-none disabled:opacity-20 disabled:cursor-not-allowed"
                               >
-                                {kiwiConnecting ? 'Busy...' : isOperator ? 'Disconnect' : <Lock size={10} />}
+                                {kiwiConnecting ? 'Busy...' : isOperator ? 'Disconnect' : <Lock size={10} aria-hidden="true" />}
                               </button>
                             ) : (
                               <button
                                 onClick={() => isOperator && sendAction({ action: 'SET_KIWI', host: node.host, port: node.port, freq: sdrFreq, mode: 'usb' })}
                                 disabled={!isOperator || kiwiConnecting || (node.users && (node.sq || node.num_ch) && node.users >= (node.sq || node.num_ch)) === true}
+                                aria-label={isOperator ? `Connect to ${node.host}` : `Locked: Connect to ${node.host}`}
+                                title={isOperator ? 'Connect' : 'Locked'}
                                 className="px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors disabled:opacity-20 disabled:cursor-not-allowed pointer-events-auto focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
                               >
-                                {isOperator ? 'Connect' : <Lock size={10} />}
+                                {isOperator ? 'Connect' : <Lock size={10} aria-hidden="true" />}
                               </button>
                             )}
                           </div>

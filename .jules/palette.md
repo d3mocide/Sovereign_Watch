@@ -93,3 +93,6 @@
 ## 2024-05-18 - Missing ARIA Labels on Icon-Only Close Buttons
 **Learning:** Found that custom `Close` buttons (like `<X />` icons) in application popovers or overlay widgets (like System Health and System Settings) frequently omit explicit `aria-label` and `title` attributes if they were implemented without using a standard accessible `Dialog` component.
 **Action:** When auditing custom overlays and widgets, explicitly check the structural controls (like 'close', 'minimize', or 'refresh' icon buttons) for `aria-label` attributes to ensure they are accessible to screen readers.
+## 2026-04-25 - Dynamic ARIA Labels for State-Dependent Actions
+**Learning:** Found that Connect/Disconnect action buttons in JS8Widget.tsx lacked `aria-label` attributes and rendered a lock icon when disabled due to authorization limits. Without dynamic labels, screen readers miss both the intended action and the reason for its unavailability.
+**Action:** When implementing buttons with complex state (e.g., authorization-locked vs active), always dynamically construct the `aria-label` to include both the specific target (e.g., `node.host`) and the state context (e.g., `Locked: Connect to...`) so assistive technologies can convey the full meaning without relying on visual icons.
