@@ -93,3 +93,6 @@
 ## 2024-05-18 - Missing ARIA Labels on Icon-Only Close Buttons
 **Learning:** Found that custom `Close` buttons (like `<X />` icons) in application popovers or overlay widgets (like System Health and System Settings) frequently omit explicit `aria-label` and `title` attributes if they were implemented without using a standard accessible `Dialog` component.
 **Action:** When auditing custom overlays and widgets, explicitly check the structural controls (like 'close', 'minimize', or 'refresh' icon buttons) for `aria-label` attributes to ensure they are accessible to screen readers.
+## 2025-04-24 - Interactive Element Keyboard Accessibility
+**Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
+**Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.

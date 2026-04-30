@@ -80,7 +80,7 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
               logout();
               onClose();
             }}
-            className="flex items-center gap-3 w-full px-3 py-2.5 mt-1 rounded-md text-white/60 hover:text-red-400 hover:bg-red-400/10 transition-all group"
+            className="flex items-center gap-3 w-full px-3 py-2.5 mt-1 rounded-md text-white/60 hover:text-red-400 hover:bg-red-400/10 transition-all group focus-visible:ring-1 focus-visible:ring-red-400 outline-none"
           >
             <LogOut size={16} className="group-hover:translate-x-0.5 transition-transform" />
             <span className="text-[11px] font-bold tracking-widest uppercase">
