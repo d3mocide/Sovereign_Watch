@@ -169,7 +169,7 @@ async def _fetch_feeds() -> list[dict]:
                     try:
                         await db.redis_client.set(
                             "poller:news:last_error",
-                            json.dumps({"ts": time.time(), "msg": f"{source}: {str(e)}"}),
+                            json.dumps({"ts": time.time(), "msg": f"{source}: Internal fetch error"}),
                             ex=3600
                         )
                     except Exception:
