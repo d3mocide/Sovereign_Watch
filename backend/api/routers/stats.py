@@ -261,7 +261,7 @@ async def get_sensor_intelligence():
         }
     except Exception as e:
         logger.error(f"Sensor analytics error: {e}")
-        return {"status": "error", "msg": str(e)}
+        return {"status": "error", "msg": "Internal server error"}
 
 
 @router.get("/api/stats/fusion")
@@ -364,7 +364,7 @@ async def get_fusion_audit():
         }
     except Exception as e:
         logger.error(f"Fusion audit error: {e}")
-        return {"status": "error", "msg": str(e)}
+        return {"status": "error", "msg": "Internal server error"}
 
 
 @router.get("/api/stats/protocol-intelligence")
@@ -438,7 +438,7 @@ async def get_protocol_intelligence():
         return {"status": "ok", "persistence": persistence, "watchlist": watchlist}
     except Exception as e:
         logger.error(f"Protocol intelligence error: {e}")
-        return {"status": "error", "msg": str(e)}
+        return {"status": "error", "msg": "Internal server error"}
 
 
 @router.get("/api/stats/throughput")

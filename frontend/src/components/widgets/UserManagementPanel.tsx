@@ -123,7 +123,7 @@ export function UserManagementPanel() {
         </div>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="group flex items-center gap-1.5 bg-hud-green/10 hover:bg-hud-green/20 border border-hud-green/30 text-hud-green text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-all active:scale-95 drop-shadow-[0_0_5px_rgba(0,255,65,0.3)] hover:drop-shadow-[0_0_10px_rgba(0,255,65,0.5)]"
+          className="group flex items-center gap-1.5 bg-hud-green/10 hover:bg-hud-green/20 border border-hud-green/30 text-hud-green text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-all active:scale-95 drop-shadow-[0_0_5px_rgba(0,255,65,0.3)] hover:drop-shadow-[0_0_10px_rgba(0,255,65,0.5)] focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
         >
           <Plus size={12} className="group-hover:rotate-90 transition-transform duration-300" />
           {showCreate ? 'ABORT' : 'ADD NODE'}
@@ -194,14 +194,14 @@ export function UserManagementPanel() {
             <button
               type="submit"
               disabled={creating}
-              className="flex-1 bg-hud-green/10 hover:bg-hud-green/20 border border-hud-green/20 disabled:opacity-50 text-hud-green text-[9px] font-bold uppercase tracking-widest py-2 rounded transition-all active:scale-[0.98] drop-shadow-[0_0_5px_rgba(0,255,65,0.2)] hover:drop-shadow-[0_0_8px_rgba(0,255,65,0.4)]"
+              className="flex-1 bg-hud-green/10 hover:bg-hud-green/20 border border-hud-green/20 disabled:opacity-50 text-hud-green text-[9px] font-bold uppercase tracking-widest py-2 rounded transition-all active:scale-[0.98] drop-shadow-[0_0_5px_rgba(0,255,65,0.2)] hover:drop-shadow-[0_0_8px_rgba(0,255,65,0.4)] focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             >
               {creating ? 'COMMITTING...' : 'COMMIT CHANGES'}
             </button>
             <button
               type="button"
               onClick={() => { setShowCreate(false); setCreateError(null); }}
-              className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 text-[9px] font-bold uppercase tracking-widest py-2 rounded transition-all"
+              className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 text-[9px] font-bold uppercase tracking-widest py-2 rounded transition-all focus-visible:ring-1 focus-visible:ring-white/50 outline-none"
             >
               ABORT
             </button>
