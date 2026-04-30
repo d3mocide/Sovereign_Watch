@@ -1259,7 +1259,7 @@ async def get_regional_risk_heatmap(
         logger.error(f"Error generating heatmap: {e}")
         return {
             "center_region": h3_region,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
