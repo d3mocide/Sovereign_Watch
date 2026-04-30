@@ -227,24 +227,26 @@ export default function KiwiNodeBrowser({
           <button
             onClick={() => setViewMode("list")}
             title="List view"
+            aria-label="List view"
             className={`p-1.5 rounded transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
               viewMode === "list"
                 ? "text-indigo-400 bg-indigo-500/15"
                 : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
             }`}
           >
-            <List className="w-3.5 h-3.5" />
+            <List className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
           <button
             onClick={() => setViewMode("map")}
             title="Map view"
+            aria-label="Map view"
             className={`p-1.5 rounded transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none ${
               viewMode === "map"
                 ? "text-indigo-400 bg-indigo-500/15"
                 : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
             }`}
           >
-            <MapIcon className="w-3.5 h-3.5" />
+            <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
 
           <div className="w-px h-4 bg-slate-800 mx-0.5" />
@@ -253,17 +255,21 @@ export default function KiwiNodeBrowser({
             onClick={() => refetch()}
             disabled={loading}
             title="Refresh node list"
+            aria-label="Refresh node list"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+              aria-hidden="true"
             />
           </button>
           <button
             onClick={onClose}
+            title="Close"
+            aria-label="Close"
             className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -608,10 +614,11 @@ export default function KiwiNodeBrowser({
           <div className="px-4 pb-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
+                <label htmlFor="manual-host" className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
                   Host / IP
                 </label>
                 <input
+                  id="manual-host"
                   type="text"
                   value={manualConfig.host}
                   onChange={(e) =>
@@ -622,10 +629,11 @@ export default function KiwiNodeBrowser({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
+                <label htmlFor="manual-port" className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
                   Port
                 </label>
                 <input
+                  id="manual-port"
                   type="number"
                   value={manualConfig.port}
                   onChange={(e) =>
