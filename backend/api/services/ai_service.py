@@ -178,7 +178,7 @@ class AIService:
             if _is_model_overloaded_error(e):
                 yield "Error: AI model temporarily overloaded. Please try again shortly."
                 return
-            yield f"Error: {str(e)}"
+            yield "Error: Internal AI processing error"
 
     async def generate_static(self, system_prompt: str, user_prompt: str) -> str:
         """Get a full static completion from the active model."""

@@ -62,3 +62,7 @@
 **Vulnerability:** Constructing `DB_DSN` dynamically from unescaped environment variables (like `POSTGRES_USER` or `POSTGRES_PASSWORD`) can lead to URI parsing errors or connection string injection if credentials contain URI-reserved characters (like `@`, `:`, `#`, or `?`).
 **Learning:** Python `urllib.parse.quote_plus` should always be used to encode credential fragments safely before interpolating them into a standard PostgreSQL or other DSN string.
 **Prevention:** Always use URL-encoding when building DSNs dynamically from configuration or environment variables.
+## 2026-05-24 - Fix Information Disclosure in API Error Response
+**Vulnerability:** Raw exception strings (e.g., `exc`) were interpolated directly into the `HTTPException` detail response sent to clients upon failure.
+**Learning:** Returning unhandled or low-level internal error details to users can leak stack traces, implementation details, or sensitive system state, violating the principle of failing securely.
+**Prevention:** Catch exceptions, log the detailed error securely on the server (using `logger.warning` or `logger.error`), and return only a sanitized, generic error message (like 'Malformed TLE' or 'Internal server error') in the HTTP response.
