@@ -148,7 +148,7 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
             onClick={() => setIsPaused(!isPaused)}
             className="p-1.5 hover:bg-white/10 rounded text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
             title={isPaused ? "Resume Stream" : "Pause Stream"}
-            aria-label={isPaused ? "Resume Stream" : "Pause Stream"}
+            aria-label="Toggle Stream Playback"
             aria-pressed={isPaused}
           >
             {isPaused ? <Play size={14} className="text-amber-500" /> : <Pause size={14} />}
