@@ -192,8 +192,9 @@ export function IntelSidebar({
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchActors(true)}
-              className="p-1 text-white/20 hover:text-hud-green hover:bg-white/5 rounded transition-all"
+              className="p-1 text-white/20 hover:text-hud-green hover:bg-white/5 rounded transition-all focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
               title="Refresh actor data"
+              aria-label="Refresh actor data"
             >
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>

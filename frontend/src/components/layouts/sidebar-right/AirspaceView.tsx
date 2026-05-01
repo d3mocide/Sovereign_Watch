@@ -102,7 +102,8 @@ export const AirspaceView: React.FC<BaseViewProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group shrink-0 outline-none"
+            aria-label="Close"
+            className="p-1.5 hover:bg-white/10 rounded-sm text-white/30 hover:text-white transition-all group shrink-0 outline-none focus-visible:ring-1 focus-visible:ring-sky-400"
           >
             <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
