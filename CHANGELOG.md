@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-05-01
+
+### Changed
+- **Accessibility Sweep Across Operator Controls**: Added and standardized accessibility metadata across key control surfaces, including clearer labeling for icon-only actions, keyboard focus-visible styling on account/admin actions, and improved semantics in JS8 control widgets and map/sidebar action panels.
+
+### Fixed
+- **Toggle ARIA Anti-Pattern**: Updated toggle controls to use stable `aria-label` values with `aria-pressed`/`aria-expanded` state attributes, avoiding conflicting dynamic labels while retaining dynamic hover titles for sighted users.
+
+### Security
+- **API Error Information Disclosure**: Replaced client-facing dynamic exception strings with generic error responses across AI/news/stats service paths while preserving full server-side error logging for diagnostics.
+
 ## [1.0.10] - 2026-04-22
 
 ### Added

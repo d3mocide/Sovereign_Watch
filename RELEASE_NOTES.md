@@ -1,19 +1,17 @@
-# Release - v1.0.10 - Sovereign HUD Unification
+# Release - v1.0.11 - Accessibility and Error Hardening
 
 ## Summary
-This release focuses on UI/UX stability and critical production connectivity fixes. We have unified the tactical and orbital map HUDs into a single, vertically stacked container that eliminates panel overlaps and maintains perfect alignment with the right sidebar. Additionally, we have resolved a critical authentication regression in the JS8Call radio service and improved the accuracy of satellite telemetry.
+This release strengthens operator usability and API security posture. It delivers a focused accessibility pass across high-use controls and closes an information disclosure path in backend error responses by removing client-visible internal exception details while preserving server-side diagnostics.
 
 ## Key Features
-- **Unified HUD Stacking**: All map-overlay widgets (NWS Alerts, Space Weather, Risk Analysis) now share a centralized vertical stack. Panels automatically reflow based on visibility and dynamically offset when the right sidebar is toggled.
-- **JS8Call Auth Stabilization**: Restored production WebSocket connectivity for the JS8Call radio terminal by ensuring proper JWT token propagation.
-- **Improved TLE Accuracy**: Increased satellite TLE refresh frequency from 24h to 6h to provide higher-fidelity orbital tracking.
-- **HUD Layout Polish**: Standardized analyst panel width to 380px for better readability and removed redundant alert indicators to reduce HUD clutter.
+- **Accessibility Sweep**: Improved icon-only control labels, keyboard focus-visible behavior, and control semantics across JS8 and sidebar operator panels.
+- **ARIA Toggle Compliance**: Updated toggle patterns to keep stable accessible names while relying on explicit state attributes such as `aria-pressed` and `aria-expanded`.
+- **API Error Hardening**: Replaced dynamic client error text with generic safe responses across AI/news/stats paths to reduce information leakage.
 
 ## Technical Details
-- **Frontend Refactor**: Moved map-overlay logic from `TacticalMap.tsx` and `OrbitalMap.tsx` to a centralized `mapHudStack` in `App.tsx`.
-- **Python 3.12 Compliance**: Sanitized `datetime.utcnow()` calls across the ingestion stack to resolve deprecation warnings.
-- **Resilient AI Caching**: Implemented automated retry logic for the AI semantic cache to handle transient Redis connectivity issues.
-- **SQL Optimization**: Hardened the analysis router with explicit connection pooling for parallel fusion requests.
+- Frontend touched surfaces include accessibility refinements in JS8, layer controls, user controls, and sidebar actions.
+- Backend routers and AI service paths now avoid returning internal exception details to clients while preserving operational logs.
+- Verification gate for this release passed with frontend lint/typecheck/test, backend lint/tests, and JS8 lint/tests.
 
 ## Upgrade Instructions
 To apply these updates, pull the latest changes and rebuild the containers:
@@ -23,7 +21,7 @@ git pull origin dev
 make dev  # or make prod
 ```
 
-If running in production, ensure you rebuild the frontend specifically to bake in the new HUD layout:
+If running in production, rebuild and restart to ensure the latest frontend and backend changes are active:
 ```bash
 docker compose build sovereign-frontend
 docker compose up -d
