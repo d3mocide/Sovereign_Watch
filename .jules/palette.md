@@ -105,3 +105,6 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+## 2024-05-18 - Accessible Map Toggle Buttons
+**Learning:** Found that the `MapControls` toggle buttons (2D, 3D, GLOBE, Auto-Spin) lacked `aria-pressed` and `aria-label` attributes, relying purely on visual cues or `title` tooltips. Toggle buttons represent a state (pressed/unpressed), which must be communicated to screen readers via `aria-pressed`. Additionally, the text inside the buttons (like "2D") might be too brief, so `aria-label` provides a fully descriptive name.
+**Action:** When implementing or updating toggle buttons (especially icon-only or short-text buttons), always add `aria-pressed={state}` to convey the active state, and provide a descriptive `aria-label` so screen reader users understand the button's purpose and state.
