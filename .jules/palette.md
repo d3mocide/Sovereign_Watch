@@ -105,3 +105,6 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+## 2026-05-05 - Prevent disabled attribute from blocking tooltips
+**Learning:** Native `disabled` attributes on buttons often swallow pointer events, preventing `title` tooltips from displaying in many browsers. This means users receive no hover feedback explaining *why* a button is locked or disabled.
+**Action:** Use `aria-disabled="true"` combined with visual styling (`cursor-not-allowed`, opacity) and explicit event handler guards (e.g., `if (isDisabled) return;`) instead of the native `disabled` attribute to ensure tooltips and hover states remain accessible.
