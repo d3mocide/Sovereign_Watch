@@ -105,3 +105,7 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+
+## 2026-05-06 - Adding aria-pressed and aria-hidden attributes
+**Learning:** Found that view toggle buttons (2D/3D/Globe) in `MapControls.tsx` were missing `aria-pressed` attributes, leaving screen reader users unaware of the active view state. Additionally, decorative icons within these buttons lacked `aria-hidden="true"`.
+**Action:** When creating or maintaining toggle buttons, always add `aria-pressed={isActive}` to convey state. Also, add `aria-hidden="true"` to any decorative icons within buttons that have visible text or an `aria-label` to prevent redundant screen reader announcements.

@@ -140,7 +140,7 @@ export function MapControls({
               title="Rotate Left"
               aria-label="Rotate Left"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} aria-hidden="true" />
             </button>
             <button
               onClick={onResetNorth}
@@ -156,7 +156,7 @@ export function MapControls({
               title="Rotate Right"
               aria-label="Rotate Right"
             >
-              <RotateCcw size={16} className="scale-x-[-1]" />
+              <RotateCcw size={16} className="scale-x-[-1]" aria-hidden="true" />
             </button>
           </div>
 
@@ -168,7 +168,7 @@ export function MapControls({
               title="Tilt Down"
               aria-label="Tilt Down"
             >
-              <ChevronUp size={16} />
+              <ChevronUp size={16} aria-hidden="true" />
             </button>
             <button
               onClick={() => onAdjustPitch!(-15)}
@@ -176,7 +176,7 @@ export function MapControls({
               title="Tilt Up"
               aria-label="Tilt Up"
             >
-              <ChevronDown size={16} />
+              <ChevronDown size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -188,10 +188,10 @@ export function MapControls({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           {!globeMode && (
             <>
-              <button onClick={onSet2D} className={modeBtn(!enable3d)}>
+              <button onClick={onSet2D} className={modeBtn(!enable3d)} aria-pressed={!enable3d}>
                 2D
               </button>
-              <button onClick={onSet3D} className={modeBtn(enable3d)}>
+              <button onClick={onSet3D} className={modeBtn(enable3d)} aria-pressed={enable3d}>
                 3D
               </button>
               {divider}
@@ -202,8 +202,9 @@ export function MapControls({
             onClick={onToggleGlobe}
             className={globeBtn(globeMode)}
             title="Toggle Globe View"
+            aria-pressed={globeMode}
           >
-            <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
+            <Globe size={12} className={globeMode ? "animate-pulse" : ""} aria-hidden="true" />
             GLOBE
           </button>
 
@@ -215,10 +216,13 @@ export function MapControls({
                 onClick={onToggleSpin}
                 className={globeBtn(!!spin)}
                 title="Toggle Auto-Spin"
+                aria-label="Toggle Auto-Spin"
+                aria-pressed={!!spin}
               >
                 <RotateCcw
                   size={12}
                   className={spin ? "animate-spin-slow" : ""}
+                  aria-hidden="true"
                 />
               </button>
               {!(globeMode && styleOptions && styleOptions.length > 0) &&
@@ -236,6 +240,7 @@ export function MapControls({
                   onClick={() => onSetStyleMode(opt.key)}
                   className={styleBtn(mapStyleMode === opt.key)}
                   title={opt.label}
+                  aria-pressed={mapStyleMode === opt.key}
                 >
                   {opt.label}
                 </button>
@@ -252,7 +257,7 @@ export function MapControls({
             title="Zoom Out"
             aria-label="Zoom Out"
           >
-            <Minus size={14} strokeWidth={3} />
+            <Minus size={14} strokeWidth={3} aria-hidden="true" />
           </button>
           <button
             onClick={onZoomIn}
@@ -260,7 +265,7 @@ export function MapControls({
             title="Zoom In"
             aria-label="Zoom In"
           >
-            <Plus size={14} strokeWidth={3} />
+            <Plus size={14} strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
       </div>
