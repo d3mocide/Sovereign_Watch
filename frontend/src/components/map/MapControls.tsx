@@ -188,10 +188,20 @@ export function MapControls({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           {!globeMode && (
             <>
-              <button onClick={onSet2D} className={modeBtn(!enable3d)} aria-pressed={!enable3d}>
+              <button
+                onClick={onSet2D}
+                className={modeBtn(!enable3d)}
+                aria-pressed={!enable3d}
+                aria-label="2D View"
+              >
                 2D
               </button>
-              <button onClick={onSet3D} className={modeBtn(enable3d)} aria-pressed={enable3d}>
+              <button
+                onClick={onSet3D}
+                className={modeBtn(enable3d)}
+                aria-pressed={enable3d}
+                aria-label="3D View"
+              >
                 3D
               </button>
               {divider}
@@ -203,6 +213,7 @@ export function MapControls({
             className={globeBtn(globeMode)}
             title="Toggle Globe View"
             aria-pressed={globeMode}
+            aria-label="Toggle Globe View"
           >
             <Globe size={12} className={globeMode ? "animate-pulse" : ""} aria-hidden="true" />
             GLOBE
@@ -216,8 +227,8 @@ export function MapControls({
                 onClick={onToggleSpin}
                 className={globeBtn(!!spin)}
                 title="Toggle Auto-Spin"
-                aria-label="Toggle Auto-Spin"
                 aria-pressed={!!spin}
+                aria-label="Toggle Auto-Spin"
               >
                 <RotateCcw
                   size={12}
