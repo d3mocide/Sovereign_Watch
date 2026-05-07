@@ -49,6 +49,7 @@ export const AnalysisWidget: React.FC<AnalysisWidgetProps> = ({
       onClick={onOpenPanel}
       className={`flex-1 flex items-center justify-between px-3 py-2 border ${accentBorder} ${accentBg} hover:bg-white/10 rounded-sm group transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`}
       title="Open AI Analyst Panel"
+      aria-label="Open AI Analyst Panel"
     >
       <div className="flex items-center gap-2">
         <BrainCircuit size={13} className={accentColor} />
