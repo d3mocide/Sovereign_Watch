@@ -140,7 +140,7 @@ export function MapControls({
               title="Rotate Left"
               aria-label="Rotate Left"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} aria-hidden="true" />
             </button>
             <button
               onClick={onResetNorth}
@@ -156,7 +156,7 @@ export function MapControls({
               title="Rotate Right"
               aria-label="Rotate Right"
             >
-              <RotateCcw size={16} className="scale-x-[-1]" />
+              <RotateCcw size={16} className="scale-x-[-1]" aria-hidden="true" />
             </button>
           </div>
 
@@ -168,7 +168,7 @@ export function MapControls({
               title="Tilt Down"
               aria-label="Tilt Down"
             >
-              <ChevronUp size={16} />
+              <ChevronUp size={16} aria-hidden="true" />
             </button>
             <button
               onClick={() => onAdjustPitch!(-15)}
@@ -176,7 +176,7 @@ export function MapControls({
               title="Tilt Up"
               aria-label="Tilt Up"
             >
-              <ChevronDown size={16} />
+              <ChevronDown size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -215,7 +215,7 @@ export function MapControls({
             aria-pressed={globeMode}
             aria-label="Toggle Globe View"
           >
-            <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
+            <Globe size={12} className={globeMode ? "animate-pulse" : ""} aria-hidden="true" />
             GLOBE
           </button>
 
@@ -233,6 +233,7 @@ export function MapControls({
                 <RotateCcw
                   size={12}
                   className={spin ? "animate-spin-slow" : ""}
+                  aria-hidden="true"
                 />
               </button>
               {!(globeMode && styleOptions && styleOptions.length > 0) &&
@@ -250,6 +251,7 @@ export function MapControls({
                   onClick={() => onSetStyleMode(opt.key)}
                   className={styleBtn(mapStyleMode === opt.key)}
                   title={opt.label}
+                  aria-pressed={mapStyleMode === opt.key}
                 >
                   {opt.label}
                 </button>
@@ -266,7 +268,7 @@ export function MapControls({
             title="Zoom Out"
             aria-label="Zoom Out"
           >
-            <Minus size={14} strokeWidth={3} />
+            <Minus size={14} strokeWidth={3} aria-hidden="true" />
           </button>
           <button
             onClick={onZoomIn}
@@ -274,7 +276,7 @@ export function MapControls({
             title="Zoom In"
             aria-label="Zoom In"
           >
-            <Plus size={14} strokeWidth={3} />
+            <Plus size={14} strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
       </div>
