@@ -105,3 +105,6 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+## 2024-05-18 - Accordion Header Accessibility
+**Learning:** Found an accordion header using a basic `div` with an `onClick` handler but lacking keyboard interaction and state announcement. Converting it to a real `<button>` risked layout breakages from browser defaults.
+**Action:** Used `role="button"`, `tabIndex={0}`, `aria-expanded`, an explicit `onKeyDown` handler (Space + Enter), and `focus-visible` ring classes to safely enhance the `div` into an accessible interactive element without disrupting styles.
