@@ -10,9 +10,9 @@ Merged the latest `dev` branch into the PR branch, accepted the upstream removal
 - Accepted the incoming `frontend/src/components/widgets/AnalysisWidget.tsx` accessibility label addition from `dev`.
 
 ## Verification
-- `cd frontend && corepack pnpm@9.15.9 run lint`
-- `cd frontend && corepack pnpm@9.15.9 run typecheck`
-- `cd frontend && corepack pnpm@9.15.9 run test`
+- Frontend lint: pass
+- Frontend typecheck: pass
+- Frontend tests: pass
 
 ## Benefits
 - Restores mergeability of the stacked PR against `dev`.
