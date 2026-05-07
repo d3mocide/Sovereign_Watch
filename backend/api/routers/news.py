@@ -1,9 +1,9 @@
+import socket
 import json
 import logging
 import os
 import asyncio
 import ipaddress
-import socket
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -144,8 +144,10 @@ async def _fetch_feeds() -> list[dict]:
     urls = [u.strip() for u in raw_urls.split(",") if u.strip()]
 
     all_items: list[dict] = []
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-        for url in urls:
+    for url in urls:
+        async with httpx.AsyncClient(
+            transport=SafeTransport(), timeout=10.0, follow_redirects=True
+        ) as client:
             source = _source_name(url)
             try:
                 resp = await client.get(
@@ -169,8 +171,13 @@ async def _fetch_feeds() -> list[dict]:
                     try:
                         await db.redis_client.set(
                             "poller:news:last_error",
-                            json.dumps({"ts": time.time(), "msg": f"{source}: Internal fetch error"}),
-                            ex=3600
+                            json.dumps(
+                                {
+                                    "ts": time.time(),
+                                    "msg": f"{source}: Internal fetch error",
+                                }
+                            ),
+                            ex=3600,
                         )
                     except Exception:
                         pass
@@ -179,10 +186,12 @@ async def _fetch_feeds() -> list[dict]:
     if all_items:
         if db.redis_client:
             try:
-                await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
+                await db.redis_client.set(
+                    "news:last_fetch", str(time.time()), ex=CACHE_TTL * 2
+                )
             except Exception:
                 pass
-    
+
     all_items.sort(key=lambda x: x["_ts"], reverse=True)
 
     # Strip internal timestamp before returning
@@ -202,8 +211,10 @@ async def get_news_feed(limit: int = Query(default=40, le=100)):
     if db.redis_client:
         try:
             # Set/Update heartbeat on every access to show aggregator is alive
-            await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
-            
+            await db.redis_client.set(
+                "news:last_fetch", str(time.time()), ex=CACHE_TTL * 2
+            )
+
             cached = await db.redis_client.get(CACHE_KEY)
             if cached:
                 items = json.loads(cached)
@@ -283,20 +294,45 @@ def _extract_title(html: str) -> str:
     return _normalize_space(unescape(re.sub(r"<[^>]+>", " ", m.group(1))))
 
 
-async def _is_safe_host(host: str) -> bool:
-    """Verify that a host resolves to a public, safe IP address to prevent SSRF."""
-    try:
-        loop = asyncio.get_running_loop()
-        addrs = await loop.getaddrinfo(host, None)
-        for addr in addrs:
-            ip = addr[4][0]
-            ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified:
-                return False
-        return True
-    except socket.gaierror:
-        # If it doesn't resolve, treat it as unsafe to connect to
-        return False
+class SafeTransport(httpx.AsyncHTTPTransport):
+    """
+    A custom HTTPX transport that resolves and validates hostnames before dispatching
+    requests to protect against Server-Side Request Forgery (SSRF) and DNS rebinding
+    (Time-of-Check to Time-of-Use / TOCTOU) attacks.
+    """
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        original_host = request.url.host
+        original_url = request.url
+
+        try:
+            loop = asyncio.get_running_loop()
+            addrs = await loop.getaddrinfo(original_host, None)
+
+            safe_ip = None
+            for addr in addrs:
+                ip = addr[4][0]
+                ip_obj = ipaddress.ip_address(ip)
+                if not (
+                    ip_obj.is_private
+                    or ip_obj.is_loopback
+                    or ip_obj.is_multicast
+                    or ip_obj.is_unspecified
+                ):
+                    safe_ip = ip
+                    break
+
+            if not safe_ip:
+                raise httpx.RequestError(
+                    f"Host {original_host} resolved to an unsafe IP.", request=request
+                )
+
+            request.extensions["sni_hostname"] = original_host
+            request.url = request.url.copy_with(host=safe_ip)
+
+            return await super().handle_async_request(request)
+        finally:
+            request.url = original_url
 
 
 @router.get("/api/news/article")
@@ -309,14 +345,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Invalid article URL")
 
-    host = parsed.hostname or ""
-    is_safe = await _is_safe_host(host)
-    if not is_safe:
-        raise HTTPException(status_code=400, detail="Local/Private URLs are not allowed")
-
     try:
         async with httpx.AsyncClient(
-            timeout=ARTICLE_TIMEOUT, follow_redirects=True
+            transport=SafeTransport(), timeout=ARTICLE_TIMEOUT, follow_redirects=True
         ) as client:
             resp = await client.get(
                 url,
@@ -325,6 +356,16 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
                     "Accept": "text/html,application/xhtml+xml",
                 },
             )
+    except httpx.RequestError as e:
+        logger.warning(f"Unsafe or unresolvable URL {url}: {e}")
+        raise HTTPException(
+            status_code=400, detail="Local/Private URLs are not allowed"
+        )
+    except socket.gaierror as e:
+        logger.warning(f"Unresolvable URL {url}: {e}")
+        raise HTTPException(
+            status_code=400, detail="Local/Private URLs are not allowed"
+        )
     except Exception as e:
         logger.warning(f"Article fetch failed for {url}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch article content")
