@@ -105,3 +105,11 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+
+## 2026-05-11 - Added ARIA labels and focus styles to AI Analyst Panel controls
+**Learning:** Icon-only action buttons in dense widgets like the AI Analyst Panel (e.g., Settings, Close) often lack s and distinct keyboard focus rings (). Without these, screen readers can't identify the buttons' purpose and keyboard users can't see which element is focused. Additionally, toggle buttons (like Settings) need  to communicate their state.
+**Action:** Always ensure custom icon-only buttons in widgets include , visible keyboard focus states matching the panel's theme color, and stateful ARIA attributes like  when they control nested content.
+
+## 2025-05-11 - Added ARIA labels and focus styles to AI Analyst Panel controls
+**Learning:** Icon-only action buttons in dense widgets like the AI Analyst Panel (e.g., Settings, Close) often lack `aria-label`s and distinct keyboard focus rings (`focus-visible:ring-1 focus-visible:ring-violet-400 outline-none`). Without these, screen readers can't identify the buttons' purpose and keyboard users can't see which element is focused. Additionally, toggle buttons (like Settings) need `aria-expanded` to communicate their state.
+**Action:** Always ensure custom icon-only buttons in widgets include `aria-label`, visible keyboard focus states matching the panel's theme color, and stateful ARIA attributes like `aria-expanded` when they control nested content.

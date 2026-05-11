@@ -229,16 +229,19 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`p-1.5 rounded-sm transition-all ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
+                className={`p-1.5 rounded-sm transition-all focus-visible:ring-1 focus-visible:ring-violet-400 outline-none ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
                 title="AI Engine Settings"
+                aria-label="AI Engine Settings"
+                aria-expanded={isSettingsOpen}
               >
                 <Settings size={13} />
               </button>
             )}
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-red-500/10 rounded-sm text-white/30 hover:text-red-400 transition-all group"
+              className="p-1.5 hover:bg-red-500/10 rounded-sm text-white/30 hover:text-red-400 transition-all group focus-visible:ring-1 focus-visible:ring-violet-400 outline-none"
               title="Close Panel"
+              aria-label="Close Panel"
             >
               <X size={14} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
