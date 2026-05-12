@@ -105,3 +105,7 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+
+## 2024-05-18 - Missing Focus States and ARIA Expansion Logic on NWS Alerts Dropdown
+**Learning:** The NWS Alerts Widget had a custom dropdown button that toggled the display of weather alerts. While it functioned correctly with mouse clicks, it missed two crucial accessibility features: `aria-expanded` was not bound to the `expanded` state, meaning screen readers couldn't announce its toggle state, and it lacked the standard `focus-visible` ring utility classes, rendering it invisible to keyboard navigators when tabbed to.
+**Action:** Always ensure custom dropdown or toggle buttons have `aria-expanded` and `aria-controls` explicitly set, and include keyboard focus indicators (`focus-visible:ring-1 focus-visible:ring-[color] outline-none`) that match the surrounding UI components.
