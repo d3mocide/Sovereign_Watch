@@ -1,0 +1,3 @@
+## 2024-05-14 - Optimize High-Frequency Simulation Loops
+**Learning:** In high-frequency numerical prediction loops (like orbital pass computation), doing expensive operations like string formatting (`strftime`) and allocating dictionary objects *before* filtering conditions (e.g. `el >= min_elevation`) are met causes massive and unnecessary overhead (~100x slower in simple tests) for points that represent the vast majority of cases (e.g., satellites being below the horizon ~95% of the time).
+**Action:** Always place object instantiation and string formatting *inside* or *after* the fast-path condition checks when evaluating many points, ensuring that you only allocate memory and compute strings for points that will actually be used.

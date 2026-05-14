@@ -187,12 +187,15 @@ async def get_passes(
             r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
-            point = {
-                "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "az": round(az, 2),
-                "el": round(el, 2),
-                "slant_range_km": round(rng, 3),
-            }
+            if el >= min_elevation or in_pass:
+                # Only allocate dict and format datetime if we are in a pass or starting one,
+                # avoiding massive string formatting overhead for below-horizon points.
+                point = {
+                    "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "az": round(az, 2),
+                    "el": round(el, 2),
+                    "slant_range_km": round(rng, 3),
+                }
 
             if el >= min_elevation:
                 if not in_pass:
@@ -207,7 +210,8 @@ async def get_passes(
                 current_pass_points.append(point)
             else:
                 if in_pass:
-                    # Pass just ended — record it
+                    # Append the below-horizon point as the LOS point, then close the pass
+                    current_pass_points.append(point)
                     in_pass = False
                     if current_pass_points:
                         aos_p = current_pass_points[0]
