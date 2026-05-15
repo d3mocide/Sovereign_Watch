@@ -600,18 +600,20 @@ export default function KiwiNodeBrowser({
       <div className="border-t border-slate-800">
         <button
           onClick={() => setShowManual(!showManual)}
-          className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-800/40 transition-colors text-[10px] font-bold text-slate-500 uppercase tracking-widest"
+          aria-expanded={showManual}
+          aria-controls="manual-entry-content"
+          className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-800/40 transition-colors text-[10px] font-bold text-slate-500 uppercase tracking-widest focus-visible:ring-1 focus-visible:ring-indigo-400 outline-none"
         >
           {showManual ? (
-            <ChevronDown className="w-3 h-3" />
+            <ChevronDown className="w-3 h-3" aria-hidden="true" />
           ) : (
-            <ChevronRight className="w-3 h-3" />
+            <ChevronRight className="w-3 h-3" aria-hidden="true" />
           )}
           Manual Entry — Private / Unlisted Nodes
         </button>
 
         {showManual && (
-          <div className="px-4 pb-4 space-y-3">
+          <div id="manual-entry-content" className="px-4 pb-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label htmlFor="manual-host" className="text-[9px] uppercase tracking-tighter text-slate-600 font-bold ml-1">
