@@ -105,3 +105,7 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+
+## 2024-05-20 - Ensure Accordion Components Include ARIA Attributes
+**Learning:** Found an accordion header (`CollapsibleSection` in `ListeningPost.tsx`) lacking the `aria-expanded` state attribute and `aria-controls` link to its expandable content. Without these, screen reader users cannot tell whether the section is open or closed, nor programmatically follow the link to the content.
+**Action:** When creating or modifying collapsible widgets, always ensure the toggle button receives `aria-expanded={isOpen}` and `aria-controls={contentId}`, with the expanded content container holding the matching `id={contentId}`.

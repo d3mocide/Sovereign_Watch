@@ -52,11 +52,15 @@ function CollapsibleSection({
   isOpen,
   onToggle,
 }: CollapsibleSectionProps) {
+  const contentId = `section-${title.replace(/\s+/g, '-').toLowerCase()}`;
+
   return (
     <div className="border-b border-[#1a2b36] last:border-0">
       <button
         onClick={onToggle}
-        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors group"
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors group focus-visible:ring-1 focus-visible:ring-cyan-500 outline-none"
       >
         <div className="flex items-center gap-2">
           {Icon && (
@@ -73,7 +77,7 @@ function CollapsibleSection({
         )}
       </button>
       {isOpen && (
-        <div className="px-5 pb-5 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
+        <div id={contentId} className="px-5 pb-5 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
           {children}
         </div>
       )}
