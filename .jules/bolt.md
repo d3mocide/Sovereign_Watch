@@ -1,0 +1,3 @@
+## 2026-05-17 - Defer expensive string formatting and dictionary allocation in hot loops
+**Learning:** In high-frequency loops (like propagating orbital satellite passes at 10s intervals), blindly formatting strings (e.g., `t.strftime`) and allocating new dictionaries on every step wastes significant CPU and memory. In this case, most satellites are below the horizon, so creating the point dictionary immediately for all steps was inefficient.
+**Action:** When iterating over many data points where a filtering condition exists (like elevation > minimum), defer string formatting and object allocation until *after* the condition is met to skip unnecessary work.

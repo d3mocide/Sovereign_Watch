@@ -187,14 +187,16 @@ async def get_passes(
             r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
-            point = {
-                "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "az": round(az, 2),
-                "el": round(el, 2),
-                "slant_range_km": round(rng, 3),
-            }
-
             if el >= min_elevation:
+                # OPTIMIZATION: Defer expensive strftime and object allocation
+                # until we know the point is above the minimum elevation threshold.
+                point = {
+                    "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "az": round(az, 2),
+                    "el": round(el, 2),
+                    "slant_range_km": round(rng, 3),
+                }
+
                 if not in_pass:
                     in_pass = True
                     current_pass_points = []
