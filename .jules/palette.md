@@ -105,3 +105,7 @@
 ## 2025-04-24 - Interactive Element Keyboard Accessibility
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
+
+## 2026-05-17 - Accessible Disabled Buttons
+**Learning:** Using the native HTML `disabled` attribute on buttons (e.g. 'Add to Watchlist') often causes them to be removed from the tab order and swallow pointer events in certain browsers. This prevents keyboard users from focusing them and prevents visual users from seeing dynamic tooltips explaining *why* the button is disabled.
+**Action:** For complex UI actions where the user needs to know why an action is unavailable, use `aria-disabled="true"` combined with visual styling (e.g. Tailwind's `aria-disabled:opacity-30`) and ensure dynamic `title` and `aria-label` attributes explain the missing requirements.

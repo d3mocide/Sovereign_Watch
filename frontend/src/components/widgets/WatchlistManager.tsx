@@ -64,10 +64,13 @@ export const WatchlistManager: React.FC<WatchlistManagerProps> = ({
             className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white placeholder-white/20 focus:outline-none focus:border-hud-green/50 focus:ring-1 focus:ring-hud-green/50 uppercase"
           />
           <button
-            onClick={addEntry}
-            disabled={newIcao24.length !== 6 || addLoading}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 disabled:opacity-30 disabled:hover:bg-hud-green/10 transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
-            title="Add to watchlist (permanent)"
+            onClick={() => {
+              if (newIcao24.length === 6 && !addLoading) addEntry();
+            }}
+            aria-disabled={newIcao24.length !== 6 || addLoading}
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-hud-green/10 border border-hud-green/30 text-hud-green hover:bg-hud-green/20 aria-disabled:opacity-30 aria-disabled:hover:bg-hud-green/10 aria-disabled:cursor-not-allowed transition-colors focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
+            title={addLoading ? "Adding to watchlist..." : newIcao24.length !== 6 ? "Requires 6-character hex code" : "Add to watchlist (permanent)"}
+            aria-label={addLoading ? "Adding to watchlist" : newIcao24.length !== 6 ? "Requires 6-character hex code to add" : "Add to watchlist"}
           >
             {addLoading ? (
               <Loader2 size={11} className="animate-spin" />
