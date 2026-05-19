@@ -18,7 +18,7 @@ import {
   Zap,
   Lock,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useId, useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -52,28 +52,31 @@ function CollapsibleSection({
   isOpen,
   onToggle,
 }: CollapsibleSectionProps) {
+  const contentId = useId();
   return (
     <div className="border-b border-[#1a2b36] last:border-0">
       <button
         onClick={onToggle}
-        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors group"
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors group focus-visible:ring-1 focus-visible:ring-cyan-500 outline-none"
       >
         <div className="flex items-center gap-2">
           {Icon && (
-            <Icon className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 transition-colors" />
+            <Icon className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 transition-colors" aria-hidden="true" />
           )}
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest group-hover:text-slate-200">
             {title}
           </span>
         </div>
         {isOpen ? (
-          <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronDown className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronRight className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
         )}
       </button>
       {isOpen && (
-        <div className="px-5 pb-5 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
+        <div id={contentId} className="px-5 pb-5 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
           {children}
         </div>
       )}
