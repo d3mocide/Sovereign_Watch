@@ -188,8 +188,6 @@ async def get_passes(
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
             if el >= min_elevation:
-                # OPTIMIZATION: Defer expensive strftime and dict allocation
-                # until after visibility check passes
                 point = {
                     "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "az": round(az, 2),
