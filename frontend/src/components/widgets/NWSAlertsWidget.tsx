@@ -158,7 +158,10 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
       {/* ── Header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className={`flex items-center justify-between p-2.5 backdrop-blur-md text-left w-full border ${
+        aria-expanded={expanded}
+        aria-controls="nws-alerts-content"
+        aria-label="Toggle NWS Alerts"
+        className={`flex items-center justify-between p-2.5 backdrop-blur-md text-left w-full border focus-visible:ring-1 focus-visible:ring-amber-400 outline-none ${
           expanded ? "rounded-t-sm border-b-0" : "rounded-sm"
         }`}
         style={{
@@ -210,6 +213,7 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
       {/* ── Body ── */}
       {expanded && (
         <div
+          id="nws-alerts-content"
           className="border border-t-0 bg-black/50 backdrop-blur-md rounded-b-sm"
           style={{ borderColor: `${headerColor}25` }}
         >

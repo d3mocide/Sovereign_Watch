@@ -18,7 +18,7 @@ import {
   Zap,
   Lock,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useId, useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -64,16 +64,16 @@ function CollapsibleSection({
       >
         <div className="flex items-center gap-2">
           {Icon && (
-            <Icon className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 transition-colors" />
+            <Icon className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 transition-colors" aria-hidden="true" />
           )}
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest group-hover:text-slate-200">
             {title}
           </span>
         </div>
         {isOpen ? (
-          <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronDown className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+          <ChevronRight className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
         )}
       </button>
       {isOpen && (

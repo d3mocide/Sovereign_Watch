@@ -135,6 +135,7 @@ export function MapControls({
           {/* Bearing */}
           <div className={panel}>
             <button
+              type="button"
               onClick={() => onAdjustBearing!(-45)}
               className={camBtn}
               title="Rotate Left"
@@ -143,6 +144,7 @@ export function MapControls({
               <RotateCcw size={16} />
             </button>
             <button
+              type="button"
               onClick={onResetNorth}
               className={`${camBtn} hover:text-hud-green hover:border-hud-green/30 font-mono font-bold text-sm`}
               title="Reset to North"
@@ -151,6 +153,7 @@ export function MapControls({
               N
             </button>
             <button
+              type="button"
               onClick={() => onAdjustBearing!(45)}
               className={camBtn}
               title="Rotate Right"
@@ -163,6 +166,7 @@ export function MapControls({
           {/* Pitch */}
           <div className={panel}>
             <button
+              type="button"
               onClick={() => onAdjustPitch!(15)}
               className={camBtn}
               title="Tilt Down"
@@ -171,6 +175,7 @@ export function MapControls({
               <ChevronUp size={16} />
             </button>
             <button
+              type="button"
               onClick={() => onAdjustPitch!(-15)}
               className={camBtn}
               title="Tilt Up"
@@ -188,10 +193,22 @@ export function MapControls({
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           {!globeMode && (
             <>
-              <button onClick={onSet2D} className={modeBtn(!enable3d)}>
+              <button
+                type="button"
+                onClick={onSet2D}
+                className={modeBtn(!enable3d)}
+                aria-pressed={!enable3d}
+                aria-label="2D View"
+              >
                 2D
               </button>
-              <button onClick={onSet3D} className={modeBtn(enable3d)}>
+              <button
+                type="button"
+                onClick={onSet3D}
+                className={modeBtn(enable3d)}
+                aria-pressed={enable3d}
+                aria-label="3D View"
+              >
                 3D
               </button>
               {divider}
@@ -199,9 +216,12 @@ export function MapControls({
           )}
 
           <button
+            type="button"
             onClick={onToggleGlobe}
             className={globeBtn(globeMode)}
             title="Toggle Globe View"
+            aria-label="Toggle Globe View"
+            aria-pressed={globeMode}
           >
             <Globe size={12} className={globeMode ? "animate-pulse" : ""} />
             GLOBE
@@ -212,9 +232,12 @@ export function MapControls({
             <>
               {divider}
               <button
+                type="button"
                 onClick={onToggleSpin}
                 className={globeBtn(!!spin)}
                 title="Toggle Auto-Spin"
+                aria-label="Toggle Auto-Spin"
+                aria-pressed={!!spin}
               >
                 <RotateCcw
                   size={12}
@@ -232,10 +255,13 @@ export function MapControls({
               {divider}
               {styleOptions.map((opt) => (
                 <button
+                  type="button"
                   key={opt.key}
                   onClick={() => onSetStyleMode(opt.key)}
                   className={styleBtn(mapStyleMode === opt.key)}
                   title={opt.label}
+                  aria-label={opt.label}
+                  aria-pressed={mapStyleMode === opt.key}
                 >
                   {opt.label}
                 </button>
@@ -247,6 +273,7 @@ export function MapControls({
         {/* Zoom */}
         <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 h-fit">
           <button
+            type="button"
             onClick={onZoomOut}
             className={zoomBtn}
             title="Zoom Out"
@@ -255,6 +282,7 @@ export function MapControls({
             <Minus size={14} strokeWidth={3} />
           </button>
           <button
+            type="button"
             onClick={onZoomIn}
             className={zoomBtn}
             title="Zoom In"

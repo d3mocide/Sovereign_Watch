@@ -182,7 +182,7 @@ async def _fetch_feeds() -> list[dict]:
                 await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
             except Exception:
                 pass
-    
+
     all_items.sort(key=lambda x: x["_ts"], reverse=True)
 
     # Strip internal timestamp before returning
@@ -203,7 +203,7 @@ async def get_news_feed(limit: int = Query(default=40, le=100)):
         try:
             # Set/Update heartbeat on every access to show aggregator is alive
             await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
-            
+
             cached = await db.redis_client.get(CACHE_KEY)
             if cached:
                 items = json.loads(cached)
