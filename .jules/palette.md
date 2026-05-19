@@ -106,6 +106,10 @@
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
 
+## 2026-05-20 - Ensure Accordion Components Include ARIA Attributes
+**Learning:** Found an accordion header (`CollapsibleSection` in `ListeningPost.tsx`) lacking the `aria-expanded` state attribute and `aria-controls` link to its expandable content. Without these, screen reader users cannot tell whether the section is open or closed, nor programmatically follow the link to the content.
+**Action:** When creating or modifying collapsible widgets, always ensure the toggle button receives `aria-expanded={isOpen}` and `aria-controls={contentId}`, with the expanded content container holding the matching `id={contentId}`.
+
 ## 2026-05-15 - Added Missing ARIA Labels to Collapsible Sections
 **Learning:** In complex widget panels (like JS8Call `ListeningPost` and `KiwiNodeBrowser`), collapsible sections triggered by icon buttons or entire rows often lack proper ARIA semantics for expand/collapse states (`aria-expanded`, `aria-controls`), which leaves screen reader users unaware of whether the section is open or what content it toggles. Furthermore, non-semantic icons inside these buttons (like Chevrons) are sometimes not hidden from screen readers.
 **Action:** When implementing or fixing custom collapsible components, always pair the toggle button with `aria-expanded={isOpen}`, link it to the content container via `aria-controls="content-id"`, and ensure keyboard visibility with `focus-visible:ring-*`. Also, mark purely visual indicator icons with `aria-hidden="true"`.

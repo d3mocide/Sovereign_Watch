@@ -52,7 +52,8 @@ function CollapsibleSection({
   isOpen,
   onToggle,
 }: CollapsibleSectionProps) {
-  const contentId = useId();
+  const contentId = `section-${title.replace(/\s+/g, '-').toLowerCase()}`;
+
   return (
     <div className="border-b border-[#1a2b36] last:border-0">
       <button
