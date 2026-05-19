@@ -172,9 +172,9 @@ export function IntelSidebar({
   const formatTime = (d: Date) => d.toISOString().split("T")[1].split(".")[0];
 
   const handleSitrep = useCallback(() => {
-    if (!onGenerateSitrep || !actors.length) return;
+    if (!onGenerateSitrep || !actors.length || !isOperator) return;
     onGenerateSitrep(buildSitrepContext(actors, timeWindow));
-  }, [onGenerateSitrep, actors, timeWindow]);
+  }, [onGenerateSitrep, actors, timeWindow, isOperator]);
 
   return (
     <div className="flex h-[98%] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none">
@@ -413,7 +413,9 @@ export function IntelSidebar({
         {onGenerateSitrep && (
           <button
             onClick={handleSitrep}
-            disabled={!actors.length || !isOperator}
+            aria-disabled={!actors.length || !isOperator}
+            aria-label={!isOperator ? "SITREP Locked: Operator access required" : !actors.length ? "Generate AI Sitrep: No data available" : "Generate AI Sitrep"}
+            title={!isOperator ? "SITREP Locked: Operator access required" : !actors.length ? "Generate AI Sitrep: No data available" : "Generate AI Sitrep"}
             className={`w-full group relative flex items-center justify-center gap-3 px-4 py-2 rounded-sm text-[10px] font-black tracking-[.4em] transition-all overflow-hidden ${
               actors.length && isOperator
                 ? "bg-hud-green/10 border border-hud-green/40 text-hud-green hover:bg-hud-green/20 hover:shadow-[0_0_20px_rgba(0,255,65,0.2)]"
