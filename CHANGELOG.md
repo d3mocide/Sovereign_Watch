@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Security
+- **SSRF DNS-Rebinding Hardening in News Feed**: Tightened the `/api/news/article` SSRF guard to resolve the user-supplied hostname via DNS and validate all resolved IP addresses against private, loopback, link-local, and multicast ranges before dispatching the fetch request — closing the DNS rebinding gap where attacker-controlled public domains could resolve to internal infrastructure IPs.
+
+### Performance
+- **Orbital Pass Prediction Loop Optimization**: Deferred `strftime` calls and point-dict allocation inside the SGP4 pass predictor to occur only when a satellite clears the minimum elevation threshold, eliminating up to 8,640 redundant string-formatting and dictionary-allocation operations per satellite per prediction window.
+
+### Changed
+- **Release-Gate Python Packaging Compatibility**: Added explicit PEP 517 `build-system` and setuptools module discovery metadata for `backend/api`, `backend/ingestion/aviation_poller`, `backend/ingestion/gdelt_pulse`, and `js8call` so local CI dry-run editable installs no longer fail with setuptools flat-layout auto-discovery errors.
+- **Space Pulse Dependency Alignment**: Updated `asyncpg` in `backend/ingestion/space_pulse` from `0.30.0` to `0.31.0` to improve Python 3.12 compatibility in local CI install paths.
+
+### Fixed
+- **Frontend Lint Gate Regression**: Removed an unused `useId` import in `ListeningPost.tsx` that was causing the frontend release-gate lint step to fail with `--max-warnings 0`.
+- **MapControls Toggle Button Accessibility**: Added `aria-pressed`, `aria-label`, and `aria-hidden` to all map layer toggle buttons so icon-only controls announce both identity and current state to screen readers, with `focus-visible` ring styling for keyboard navigation.
+- **NWSAlertsWidget Dropdown Accessibility**: Bound `aria-expanded` to the alerts dropdown toggle state and added `focus-visible` ring classes so keyboard users can see focus and screen readers announce open/closed state.
+- **Collapsible Component ARIA Semantics**: Added `aria-expanded`, `aria-controls`, and `onKeyDown` (`Space`/`Enter`) support to collapsible section headers across the UI — including `CollapsibleSection` in `ListeningPost` — so accordion controls are fully keyboard-accessible and screen-reader-navigable.
+- **Interactive Element Keyboard Interaction**: Added `aria-expanded` state attributes and keyboard handlers to remaining interactive toggle elements that relied solely on mouse events.
+- **SITREP Button Locked State Feedback**: Updated the authorization-locked SITREP button to surface a dynamic `aria-label` and visual lock indicator so screen reader users receive explicit feedback about why the action is unavailable rather than encountering a silent disabled state.
+- **Watchlist Button Accessible Disabled State**: Replaced the native `disabled` attribute on the "Add to Watchlist" button with `aria-disabled="true"` combined with visual `cursor-not-allowed` styling, preserving tooltip visibility and tab focus while blocking interaction.
+- **AnalysisWidget Missing ARIA Label**: Added `aria-label` to the icon-only analysis action button in `AnalysisWidget` so its function is identifiable to assistive technologies.
+
 ## [1.0.11] - 2026-05-01
 
 ### Changed

@@ -18,7 +18,7 @@ import {
   Zap,
   Lock,
 } from "lucide-react";
-import React, { useId, useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import {

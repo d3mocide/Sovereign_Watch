@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sovereign-watch-aviation-poller"
 version = "0.1.0"
@@ -20,4 +24,20 @@ dev = [
     "pytest-asyncio==1.3.0",
     # [aioredis] extra was dropped in fakeredis 2.x; async support is built-in
     "fakeredis==2.34.1",
+]
+
+[tool.setuptools]
+py-modules = [
+    "arbitration",
+    "classification",
+    "h3_sharding",
+    "holding_pattern",
+    "jamming",
+    "main",
+    "multi_source_poller",
+    "openaip_source",
+    "opensky_client",
+    "opensky_watchlist",
+    "service",
+    "utils",
 ]
