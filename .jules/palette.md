@@ -90,7 +90,7 @@
 **Learning:** Found instances where `<label>` elements were missing the `htmlFor` attribute and their corresponding `<input>` elements were missing `id` attributes. This breaks the semantic association required by screen readers and removes the click-to-focus functionality.
 **Action:** When creating or modifying forms, always ensure that every `<label>` has an `htmlFor` attribute that exactly matches the `id` of its corresponding input field.
 
-## 2024-05-18 - Missing ARIA Labels on Icon-Only Close Buttons
+## 2026-05-18 - Missing ARIA Labels on Icon-Only Close Buttons
 **Learning:** Found that custom `Close` buttons (like `<X />` icons) in application popovers or overlay widgets (like System Health and System Settings) frequently omit explicit `aria-label` and `title` attributes if they were implemented without using a standard accessible `Dialog` component.
 **Action:** When auditing custom overlays and widgets, explicitly check the structural controls (like 'close', 'minimize', or 'refresh' icon buttons) for `aria-label` attributes to ensure they are accessible to screen readers.
 
@@ -106,6 +106,14 @@
 **Learning:** Found multiple interactive `<button>` elements in user-facing components (`UserManagementPanel`, `UserMenuWidget`) that lacked keyboard focus indicators. This makes navigation via keyboard difficult for users relying on alternative inputs.
 **Action:** When creating or maintaining new buttons, always append `focus-visible:ring-1 focus-visible:ring-[color] outline-none` to ensure standard keyboard accessibility across the UI.
 
-## 2024-05-18 - Missing Focus States and ARIA Expansion Logic on NWS Alerts Dropdown
+## 2026-05-18 - Missing Focus States and ARIA Expansion Logic on NWS Alerts Dropdown
 **Learning:** The NWS Alerts Widget had a custom dropdown button that toggled the display of weather alerts. While it functioned correctly with mouse clicks, it missed two crucial accessibility features: `aria-expanded` was not bound to the `expanded` state, meaning screen readers couldn't announce its toggle state, and it lacked the standard `focus-visible` ring utility classes, rendering it invisible to keyboard navigators when tabbed to.
 **Action:** Always ensure custom dropdown or toggle buttons have `aria-expanded` and `aria-controls` explicitly set, and include keyboard focus indicators (`focus-visible:ring-1 focus-visible:ring-[color] outline-none`) that match the surrounding UI components.
+
+## 2026-05-18 - Accordion Header Accessibility
+**Learning:** Found an accordion header using a basic `div` with an `onClick` handler but lacking keyboard interaction and state announcement. Converting it to a real `<button>` risked layout breakages from browser defaults.
+**Action:** Used `role="button"`, `tabIndex={0}`, `aria-expanded`, an explicit `onKeyDown` handler (Space + Enter), and `focus-visible` ring classes to safely enhance the `div` into an accessible interactive element without disrupting styles.
+
+## 2026-05-05 - Prevent disabled attribute from blocking tooltips
+**Learning:** Native `disabled` attributes on buttons often swallow pointer events, preventing `title` tooltips from displaying in many browsers. This means users receive no hover feedback explaining *why* a button is locked or disabled.
+**Action:** Use `aria-disabled="true"` combined with visual styling (`cursor-not-allowed`, opacity) and explicit event handler guards (e.g., `if (isDisabled) return;`) instead of the native `disabled` attribute to ensure tooltips and hover states remain accessible.

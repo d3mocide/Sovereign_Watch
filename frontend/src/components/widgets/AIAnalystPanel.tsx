@@ -229,6 +229,7 @@ export const AIAnalystPanel: React.FC<AIAnalystPanelProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                aria-expanded={isSettingsOpen}
                 className={`p-1.5 rounded-sm transition-all ${isSettingsOpen ? 'bg-white/20 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'hover:bg-white/10 text-white/40 hover:text-white/80'}`}
                 title="AI Engine Settings"
               >
