@@ -113,8 +113,17 @@ export const JS8Widget: React.FC<JS8WidgetProps> = ({
     <div className="font-mono overflow-visible widget-panel">
       {/* Header */}
       <div 
-        className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/10 cursor-pointer transition-colors group"
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/10 cursor-pointer transition-colors group focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
         onClick={() => setCollapsed((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setCollapsed((v) => !v);
+          }
+        }}
       >
         <div className="flex items-center gap-2 transition-opacity">
           <Radio size={14} className={connected ? 'text-purple-400' : 'text-slate-600'} />
