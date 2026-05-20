@@ -1,16 +1,17 @@
 """
-Orbital source — TLE fetch and SGP4 propagation.
+Orbital source — CelesTrak OMM fetch and SGP4 propagation.
 
-Fetches TLE data from Celestrak for curated satellite groups, propagates
-positions every 5 seconds using sgp4, and publishes TAK-format events to
-the orbital_raw Kafka topic.
+Fetches orbital element data from CelesTrak for curated satellite groups,
+propagates positions every 5 seconds using sgp4, and publishes TAK-format
+events to the orbital_raw Kafka topic.
 
 Two internal loops run concurrently inside run():
-  tle_update_loop   — refreshes TLE data from Celestrak (every 6 hours)
-  propagation_loop  — propagates positions and publishes to Kafka (every 5 s)
+    tle_update_loop   — refreshes orbital data from CelesTrak (every 6 hours)
+    propagation_loop  — propagates positions and publishes to Kafka (every 5 s)
 """
 
 import asyncio
+import io
 import json
 import logging
 import math
@@ -19,7 +20,8 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
-from sgp4.api import Satrec, SatrecArray, jday
+from sgp4 import omm
+from sgp4.api import Satrec, SatrecArray, WGS72, jday
 from sources.base import BaseSource
 from utils import compute_course, ecef_to_lla_vectorized, teme_to_ecef_vectorized
 
@@ -142,18 +144,18 @@ class OrbitalSource(BaseSource):
             try:
                 data_text = await asyncio.to_thread(_read_file_sync, cache_path)
             except Exception as exc:
-                logger.warning("Orbital TLE cache read failed for %s: %s", param_val, exc)
+                logger.warning("Orbital cache read failed for %s: %s", param_val, exc)
                 continue
 
             if not data_text.strip():
                 continue
 
-            parsed = await asyncio.to_thread(self._parse_tle_data, data_text, param_val)
+            parsed = await asyncio.to_thread(self._parse_omm_csv_data, data_text, param_val)
             sat_dict.update(parsed)
 
         loaded_count = self._hydrate_sat_arrays(sat_dict)
         if loaded_count > 0:
-            logger.info("Orbital TLE: primed %d satellites from local cache.", loaded_count)
+            logger.info("Orbital OMM: primed %d satellites from local cache.", loaded_count)
         return loaded_count
 
     async def _get_last_fetch_timestamp(self) -> float | None:
@@ -167,7 +169,7 @@ class OrbitalSource(BaseSource):
         try:
             return float(raw_value)
         except (TypeError, ValueError):
-            logger.warning("Orbital TLE: invalid last-fetch timestamp in Redis")
+            logger.warning("Orbital OMM: invalid last-fetch timestamp in Redis")
             return None
 
     def _seconds_until_next_fetch_window(self, now_dt: datetime, last_fetch_ts: float | None) -> tuple[float, str] | None:
@@ -197,23 +199,24 @@ class OrbitalSource(BaseSource):
         return interval_s - elapsed, "interval cooldown active"
 
     async def run(self):
-        """Run TLE update and propagation loops concurrently."""
+        """Run orbital update and propagation loops concurrently."""
         await asyncio.gather(self.tle_update_loop(), self.propagation_loop())
 
     def _get_cache_path(self, endpoint, param_name, param_val):
         safe_endpoint = endpoint.replace("/", "_")
-        return os.path.join(CACHE_DIR, f"{safe_endpoint}_{param_name}_{param_val}.txt")
+        return os.path.join(CACHE_DIR, f"{safe_endpoint}_{param_name}_{param_val}.omm.csv")
 
-    def _parse_tle_data(self, data_text, param_val):
+    def _parse_omm_csv_data(self, data_text, param_val):
         parsed = {}
-        lines = [ln.strip() for ln in data_text.splitlines() if ln.strip()]
-        for i in range(0, len(lines) - 2, 3):
-            name, l1, l2 = lines[i], lines[i + 1], lines[i + 2]
+        reader = io.StringIO(data_text)
+        for fields in omm.parse_csv(reader):
             try:
-                sat = Satrec.twoline2rv(l1, l2)
+                sat = Satrec()
+                omm.initialize(sat, fields, WGS72)
                 norad_id = sat.satnum
                 inc_deg = math.degrees(sat.inclo)
                 period_min = (2 * math.pi / sat.no_kozai) if sat.no_kozai > 0 else 0
+                name = fields.get("OBJECT_NAME") or f"SAT-{norad_id}"
                 parsed[norad_id] = {
                     "satrec": sat,
                     "meta": {
@@ -224,12 +227,16 @@ class OrbitalSource(BaseSource):
                         "period_min": period_min,
                         "inclination_deg": inc_deg,
                         "eccentricity": sat.ecco,
-                        "tle_line1": l1,
-                        "tle_line2": l2,
+                        "object_id": fields.get("OBJECT_ID"),
+                        "epoch": fields.get("EPOCH"),
                     },
                 }
             except Exception as exc:
-                logger.warning("Failed to parse TLE for %s: %s", name, exc)
+                logger.warning(
+                    "Failed to parse OMM CSV for %s: %s",
+                    fields.get("OBJECT_NAME", param_val),
+                    exc,
+                )
         return parsed
 
     async def fetch_tle_data(self):
@@ -248,12 +255,12 @@ class OrbitalSource(BaseSource):
                 data_text = await asyncio.to_thread(_read_file_sync, cache_path)
                 logger.info("Cache hit: %s", param_val)
             else:
-                url = f"https://celestrak.org/NORAD/elements/{endpoint}?{param_name}={param_val}&FORMAT=TLE"
+                url = f"https://celestrak.org/NORAD/elements/{endpoint}?{param_name}={param_val}&FORMAT=CSV"
                 try:
                     resp = await self.fetch_with_retry(url)
                     if resp and resp.status_code == 200:
                         body = resp.text
-                        # Celestrak returns a 200 OK with a text message if you poll too fast
+                        # CelesTrak returns a 200 OK with a text message if you poll too fast.
                         if "GP data has not updated" in body:
                             logger.info("Celestrak Cooldown: Data has not updated for %s. Using existing cache.", param_val)
                             continue
@@ -262,7 +269,7 @@ class OrbitalSource(BaseSource):
                         await asyncio.to_thread(
                             _write_file_sync, cache_path, data_text
                         )
-                        logger.info("Fetched TLE: %s", param_val)
+                        logger.info("Fetched OMM CSV: %s", param_val)
                     elif resp and resp.status_code in (403, 404):
                         logger.warning(
                             "HTTP %d for %s. Skipping (Target potentially blocked or moved).", resp.status_code, url
@@ -283,7 +290,7 @@ class OrbitalSource(BaseSource):
 
             if data_text:
                 parsed = await asyncio.to_thread(
-                    self._parse_tle_data, data_text, param_val
+                    self._parse_omm_csv_data, data_text, param_val
                 )
                 sat_dict.update(parsed)
 
@@ -296,7 +303,7 @@ class OrbitalSource(BaseSource):
                 cached_count = await self._load_cached_tle_data()
                 if cached_count == 0:
                     logger.info(
-                        "Orbital TLE: no cached state available; fetching immediately to seed live propagation.")
+                        "Orbital OMM: no cached state available; fetching immediately to seed live propagation.")
                     try:
                         await self.fetch_tle_data()
                         await self.redis_client.set(
@@ -304,7 +311,7 @@ class OrbitalSource(BaseSource):
                             ex=self.fetch_interval_hours * 3600 * 4,
                         )
                     except Exception as exc:
-                        logger.error("Initial TLE seed fetch error: %s", repr(exc))
+                        logger.error("Initial orbital seed fetch error: %s", repr(exc))
                 else:
                     newest_mtime = 0
                     for endpoint, param_val in self.groups:
@@ -326,7 +333,7 @@ class OrbitalSource(BaseSource):
             if wait_result is not None:
                 wait_sec, reason = wait_result
                 logger.info(
-                    "Orbital TLE: %s. Next fetch in %.1fh.",
+                    "Orbital OMM: %s. Next fetch in %.1fh.",
                     reason,
                     wait_sec / 3600,
                 )
@@ -340,7 +347,7 @@ class OrbitalSource(BaseSource):
                     ex=self.fetch_interval_hours * 3600 * 4,
                 )
             except Exception as exc:
-                logger.error("TLE update error: %s", repr(exc))
+                logger.error("Orbital update error: %s", repr(exc))
                 try:
                     await self.redis_client.set(
                         "poller:orbital:last_error",
@@ -440,7 +447,7 @@ class OrbitalSource(BaseSource):
                             "period_min": meta.get("period_min"),
                             "inclination_deg": meta.get("inclination_deg"),
                             "eccentricity": meta.get("eccentricity"),
-                            # TLE lines removed from periodic updates to save bandwidth
+                            # Raw OMM fields are omitted from periodic updates to save bandwidth.
                         },
                     }
 

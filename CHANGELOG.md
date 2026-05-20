@@ -9,6 +9,7 @@
 - **Orbital Pass Prediction Loop Optimization**: Deferred `strftime` calls and point-dict allocation inside the SGP4 pass predictor to occur only when a satellite clears the minimum elevation threshold, eliminating up to 8,640 redundant string-formatting and dictionary-allocation operations per satellite per prediction window.
 
 ### Changed
+- **CelesTrak Orbital Feed Migration**: Moved `space_pulse` orbital ingestion from legacy `FORMAT=TLE` GP text responses to CelesTrak OMM CSV feeds, using `sgp4.omm.initialize()` to build `Satrec` objects directly from modern mean-element payloads while preserving existing SGP4 propagation behavior.
 - **Release-Gate Python Packaging Compatibility**: Added explicit PEP 517 `build-system` and setuptools module discovery metadata for `backend/api`, `backend/ingestion/aviation_poller`, `backend/ingestion/gdelt_pulse`, and `js8call` so local CI dry-run editable installs no longer fail with setuptools flat-layout auto-discovery errors.
 - **Space Pulse Dependency Alignment**: Updated `asyncpg` in `backend/ingestion/space_pulse` from `0.30.0` to `0.31.0` to improve Python 3.12 compatibility in local CI install paths.
 
