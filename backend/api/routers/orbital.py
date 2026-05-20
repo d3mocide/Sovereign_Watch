@@ -162,6 +162,11 @@ async def get_passes(
     end = now + timedelta(hours=hours)
     step_seconds = 10
 
+    # ⚡ Bolt: Precompute loop parameters to avoid repeated jday/datetime allocations
+    start_jd, start_fr = _jday_from_datetime(now)
+    step_days = step_seconds / 86400.0
+    total_steps = int((end - now).total_seconds() / step_seconds) + 1
+
     passes = []
 
     for sat in satellites:
@@ -176,16 +181,17 @@ async def get_passes(
         tca_el = -999.0
         tca_point: Optional[dict] = None
 
-        t = now
-        while t <= end:
-            jd, fr = _jday_from_datetime(t)
+        for i in range(total_steps):
+            jd = start_jd
+            fr = start_fr + i * step_days
             e, r, _ = satrec.sgp4(jd, fr)
             if e != 0:
-                t += timedelta(seconds=step_seconds)
                 continue
 
             r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
+
+            t = now + timedelta(seconds=i * step_seconds)
 
             if el >= min_elevation:
                 point = {
@@ -240,8 +246,6 @@ async def get_passes(
                     current_pass_points = []
                     tca_el = -999.0
                     tca_point = None
-
-            t += timedelta(seconds=step_seconds)
 
         # Handle pass still in progress at end of window
         if in_pass and current_pass_points:
