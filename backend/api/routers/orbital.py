@@ -176,18 +176,27 @@ async def get_passes(
         tca_el = -999.0
         tca_point: Optional[dict] = None
 
-        t = now
-        while t <= end:
-            jd, fr = _jday_from_datetime(t)
+        # ⚡ Bolt Optimization: SGP4 math loop
+        # Calculate julian date steps mathematically instead of via datetime
+        # strings to avoid expensive parsing overhead.
+        start_jd, start_fr = _jday_from_datetime(now)
+        total_seconds = int((end - now).total_seconds())
+        steps = total_seconds // step_seconds
+        step_days = step_seconds / 86400.0
+
+        for i in range(steps + 1):
+            jd = start_jd
+            fr = start_fr + i * step_days
+
             e, r, _ = satrec.sgp4(jd, fr)
             if e != 0:
-                t += timedelta(seconds=step_seconds)
                 continue
 
             r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
             if el >= min_elevation:
+                t = now + timedelta(seconds=i * step_seconds)
                 point = {
                     "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "az": round(az, 2),
@@ -240,8 +249,6 @@ async def get_passes(
                     current_pass_points = []
                     tca_el = -999.0
                     tca_point = None
-
-            t += timedelta(seconds=step_seconds)
 
         # Handle pass still in progress at end of window
         if in_pass and current_pass_points:
@@ -386,9 +393,18 @@ async def get_groundtrack(
     end = now + timedelta(minutes=minutes)
 
     points = []
-    t = now
-    while t <= end:
-        jd, fr = _jday_from_datetime(t)
+    # ⚡ Bolt Optimization: SGP4 math loop
+    # Calculate julian date steps mathematically instead of via datetime
+    # strings to avoid expensive parsing overhead.
+    start_jd, start_fr = _jday_from_datetime(now)
+    total_seconds = int((end - now).total_seconds())
+    steps = total_seconds // step_seconds
+    step_days = step_seconds / 86400.0
+
+    for i in range(steps + 1):
+        jd = start_jd
+        fr = start_fr + i * step_days
+
         e, r, _ = satrec.sgp4(jd, fr)
         if e == 0:
             r_ecef = teme_to_ecef(r, jd, fr)
@@ -396,6 +412,7 @@ async def get_groundtrack(
             lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
                 np.array(r_ecef).reshape(1, 3)
             )
+            t = now + timedelta(seconds=i * step_seconds)
             points.append(
                 {
                     "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -404,6 +421,5 @@ async def get_groundtrack(
                     "alt_km": round(float(alt_arr[0]), 3),
                 }
             )
-        t += timedelta(seconds=step_seconds)
 
     return points
