@@ -129,3 +129,7 @@
 ## 2026-05-05 - Prevent disabled attribute from blocking tooltips
 **Learning:** Native `disabled` attributes on buttons often swallow pointer events, preventing `title` tooltips from displaying in many browsers. This means users receive no hover feedback explaining *why* a button is locked or disabled.
 **Action:** Use `aria-disabled="true"` combined with visual styling (`cursor-not-allowed`, opacity) and explicit event handler guards (e.g., `if (isDisabled) return;`) instead of the native `disabled` attribute to ensure tooltips and hover states remain accessible.
+
+## 2026-05-24 - Dynamic ARIA Labels for State-Dependent Actions
+**Learning:** Found that Connect action buttons in KiwiNodeBrowser.tsx lacked dynamic `aria-label` attributes. Without dynamic labels, screen readers miss the intended target action context (e.g. which node host to connect to).
+**Action:** When implementing buttons that act on specific items within a mapped list, always dynamically construct the `aria-label` to include the specific target (e.g., `Connect to ${node.host}`) so assistive technologies can convey the full meaning without relying on adjacent visual context.
