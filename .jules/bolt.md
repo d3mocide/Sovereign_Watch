@@ -5,3 +5,7 @@
 ## 2024-05-15 - Defer Expensive Operations in High-Frequency Loops
 **Learning:** In high-frequency orbital prediction loops (like `backend/api/routers/orbital.py`), calling `strftime` and allocating dictionaries for every sampled orbital point—even when the satellite is not visible—creates a massive performance bottleneck due to unnecessary string formatting and memory allocation overhead.
 **Action:** Always defer expensive operations like `strftime` and object allocation until *after* filtering conditions (e.g., `el >= min_elevation`) have been met.
+
+## 2026-05-24 - Precalculate Fractional Dates for SGP4
+**Learning:** High-frequency time-stepping loops (like predicting 24-hour satellite passes at 10s intervals) suffer immense overhead from continually instantiating `datetime` objects and converting them to Julian dates.
+**Action:** Precompute the starting Julian date and step fraction, iterating via a simple counter (`fr = start_fr + i * step_days`), to drastically improve loop performance and defer formatting.
