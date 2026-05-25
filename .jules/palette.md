@@ -129,3 +129,7 @@
 ## 2026-05-05 - Prevent disabled attribute from blocking tooltips
 **Learning:** Native `disabled` attributes on buttons often swallow pointer events, preventing `title` tooltips from displaying in many browsers. This means users receive no hover feedback explaining *why* a button is locked or disabled.
 **Action:** Use `aria-disabled="true"` combined with visual styling (`cursor-not-allowed`, opacity) and explicit event handler guards (e.g., `if (isDisabled) return;`) instead of the native `disabled` attribute to ensure tooltips and hover states remain accessible.
+
+## 2026-05-25 - Accessible Static ARIA Labels on Toggle Buttons
+**Learning:** For accessibility on icon-only toggle buttons, use `aria-pressed` or `aria-expanded` to indicate state alongside a static `aria-label` (e.g., 'Toggle playback'). Dynamically changing the `aria-label` when these state attributes are present is an anti-pattern as screen readers already announce the state. Only use dynamic `aria-label`s when state attributes like `aria-pressed` are not applicable.
+**Action:** Replaced dynamic `aria-label`s with static ones on the Play/Pause and Mute/Unmute toggle buttons, combining them with `aria-pressed` for proper screen reader announcement.
