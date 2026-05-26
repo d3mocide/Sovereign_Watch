@@ -73,7 +73,9 @@ export const TimeControls: React.FC<TimeControlsProps> = ({
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={onTogglePlay}
-                            aria-label={isPlaying ? "Pause playback" : "Play playback"}
+                            aria-label="Toggle playback"
+                            aria-pressed={isPlaying}
+                            title={isPlaying ? "Pause playback" : "Play playback"}
                             className="w-8 h-8 flex items-center justify-center rounded-full bg-hud-green/10 hover:bg-hud-green/30 text-hud-green border border-hud-green/50 transition-all active:scale-95 shadow-[0_0_10px_rgba(0,255,65,0.2)] hover:shadow-[0_0_15px_rgba(0,255,65,0.4)] focus-visible:ring-1 focus-visible:ring-hud-green outline-none"
                         >
                             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}

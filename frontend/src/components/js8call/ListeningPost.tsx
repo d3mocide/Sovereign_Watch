@@ -561,7 +561,8 @@ export default function ListeningPost({
             <div className="flex items-center gap-4 mb-2">
               <button
                 onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)}
-                aria-label={volume === 0 ? "Unmute volume" : "Mute volume"}
+                aria-label="Toggle volume mute"
+                aria-pressed={volume === 0}
                 title={volume === 0 ? "Unmute volume" : "Mute volume"}
                 className="p-1 rounded transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-500 outline-none"
               >
