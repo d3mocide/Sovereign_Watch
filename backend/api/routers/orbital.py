@@ -176,20 +176,28 @@ async def get_passes(
         tca_el = -999.0
         tca_point: Optional[dict] = None
 
-        t = now
-        while t <= end:
-            jd, fr = _jday_from_datetime(t)
+        # Performance optimization: precompute the starting Julian date and step increment
+        # instead of instantiating datetime and timedelta objects on every iteration.
+        start_jd, start_fr = _jday_from_datetime(now)
+        total_seconds = int((end - now).total_seconds())
+        steps = total_seconds // step_seconds
+        step_days = step_seconds / 86400.0
+
+        for i in range(steps + 1):
+            jd = start_jd
+            fr = start_fr + i * step_days
             e, r, _ = satrec.sgp4(jd, fr)
             if e != 0:
-                t += timedelta(seconds=step_seconds)
                 continue
 
             r_ecef = teme_to_ecef(r, jd, fr)
             az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
 
             if el >= min_elevation:
+                # Performance optimization: defer expensive string formatting (strftime)
+                # and datetime allocation until the pass is complete.
                 point = {
-                    "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "offset_s": i * step_seconds,
                     "az": round(az, 2),
                     "el": round(el, 2),
                     "slant_range_km": round(rng, 3),
@@ -214,59 +222,90 @@ async def get_passes(
                         los_p = current_pass_points[-1]
 
                         # Compute duration
-                        aos_dt = datetime.strptime(
-                            aos_p["t"], "%Y-%m-%dT%H:%M:%SZ"
-                        ).replace(tzinfo=timezone.utc)
-                        los_dt = datetime.strptime(
-                            los_p["t"], "%Y-%m-%dT%H:%M:%SZ"
-                        ).replace(tzinfo=timezone.utc)
-                        duration = int((los_dt - aos_dt).total_seconds())
+                        duration = los_p["offset_s"] - aos_p["offset_s"]
+
+                        formatted_points = []
+                        for pt in current_pass_points:
+                            t_pt = now + timedelta(seconds=pt["offset_s"])
+                            formatted_points.append(
+                                {
+                                    "t": t_pt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                    "az": pt["az"],
+                                    "el": pt["el"],
+                                    "slant_range_km": pt["slant_range_km"],
+                                }
+                            )
+
+                        tca_t = (
+                            now + timedelta(seconds=tca_point["offset_s"])
+                            if tca_point
+                            else now + timedelta(seconds=aos_p["offset_s"])
+                        )
 
                         passes.append(
                             {
                                 "norad_id": sat["norad_id"],
                                 "name": sat["name"] or sat["norad_id"],
                                 "category": sat["category"],
-                                "aos": aos_p["t"],
-                                "tca": tca_point["t"] if tca_point else aos_p["t"],
-                                "los": los_p["t"],
+                                "aos": (
+                                    now + timedelta(seconds=aos_p["offset_s"])
+                                ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "tca": tca_t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "los": (
+                                    now + timedelta(seconds=los_p["offset_s"])
+                                ).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                 "max_elevation": round(tca_el, 2),
                                 "aos_azimuth": aos_p["az"],
                                 "los_azimuth": los_p["az"],
                                 "duration_seconds": duration,
-                                "points": current_pass_points,
+                                "points": formatted_points,
                             }
                         )
                     current_pass_points = []
                     tca_el = -999.0
                     tca_point = None
 
-            t += timedelta(seconds=step_seconds)
-
         # Handle pass still in progress at end of window
         if in_pass and current_pass_points:
             aos_p = current_pass_points[0]
             los_p = current_pass_points[-1]
-            aos_dt = datetime.strptime(aos_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
+            duration = los_p["offset_s"] - aos_p["offset_s"]
+
+            formatted_points = []
+            for pt in current_pass_points:
+                t_pt = now + timedelta(seconds=pt["offset_s"])
+                formatted_points.append(
+                    {
+                        "t": t_pt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "az": pt["az"],
+                        "el": pt["el"],
+                        "slant_range_km": pt["slant_range_km"],
+                    }
+                )
+
+            tca_t = (
+                now + timedelta(seconds=tca_point["offset_s"])
+                if tca_point
+                else now + timedelta(seconds=aos_p["offset_s"])
             )
-            los_dt = datetime.strptime(los_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
-            )
-            duration = int((los_dt - aos_dt).total_seconds())
+
             passes.append(
                 {
                     "norad_id": sat["norad_id"],
                     "name": sat["name"] or sat["norad_id"],
                     "category": sat["category"],
-                    "aos": aos_p["t"],
-                    "tca": tca_point["t"] if tca_point else aos_p["t"],
-                    "los": los_p["t"],
+                    "aos": (now + timedelta(seconds=aos_p["offset_s"])).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                    "tca": tca_t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "los": (now + timedelta(seconds=los_p["offset_s"])).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
                     "max_elevation": round(tca_el, 2),
                     "aos_azimuth": aos_p["az"],
                     "los_azimuth": los_p["az"],
                     "duration_seconds": duration,
-                    "points": current_pass_points,
+                    "points": formatted_points,
                 }
             )
 
