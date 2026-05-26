@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-26
+
 ### Security
 - **SSRF DNS-Rebinding Hardening in News Feed**: Tightened the `/api/news/article` SSRF guard to resolve the user-supplied hostname via DNS and validate all resolved IP addresses against private, loopback, link-local, and multicast ranges before dispatching the fetch request — closing the DNS rebinding gap where attacker-controlled public domains could resolve to internal infrastructure IPs.
 
