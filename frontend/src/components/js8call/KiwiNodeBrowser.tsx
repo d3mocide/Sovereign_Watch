@@ -423,6 +423,8 @@ export default function KiwiNodeBrowser({
                     onClose();
                   }}
                   disabled={!bridgeConnected || kiwiConnecting || isActive}
+                  aria-label={isActive ? `Connected to ${node.host}` : `Connect to ${node.host}`}
+                  title={isActive ? `Connected to ${node.host}` : `Connect to ${node.host}`}
                   className={`
                   px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0
                   ${
@@ -584,6 +586,8 @@ export default function KiwiNodeBrowser({
                         (activeConfig?.host === selectedNode.host &&
                           activeConfig?.port === selectedNode.port)
                       }
+                      aria-label={`Connect to ${selectedNode.host}`}
+                      title={`Connect to ${selectedNode.host}`}
                       className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/25 transition-colors"
                     >
                       Connect
