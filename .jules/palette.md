@@ -137,3 +137,6 @@
 ## 2026-05-25 - Accessible Static ARIA Labels on Toggle Buttons
 **Learning:** For accessibility on icon-only toggle buttons, use `aria-pressed` or `aria-expanded` to indicate state alongside a static `aria-label` (e.g., 'Toggle playback'). Dynamically changing the `aria-label` when these state attributes are present is an anti-pattern as screen readers already announce the state. Only use dynamic `aria-label`s when state attributes like `aria-pressed` are not applicable.
 **Action:** Replaced dynamic `aria-label`s with static ones on the Play/Pause and Mute/Unmute toggle buttons, combining them with `aria-pressed` for proper screen reader announcement.
+## 2025-05-18 - Explicit ARIA form control associations
+**Learning:** Implicit label wrapping (e.g., `<label><input /></label>`) is sometimes insufficient for certain screen readers in complex widget structures. Explicitly mapping `htmlFor` on the label to an `id` on the input improves robustness and accessibility.
+**Action:** Always add explicit `htmlFor` and `id` pairs to custom form controls (like toggles or checkboxes), even when they are structurally nested within the `<label>` tag.
