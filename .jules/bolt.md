@@ -9,3 +9,7 @@
 ## 2024-05-25 - Avoid `datetime` loop logic and recalculating Julian dates in SGP4 pass prediction
 **Learning:** In high-frequency orbital prediction loops, `datetime` loop logic (i.e. `t = now`, `t += timedelta(...)`) and recalculating Julian dates using `jday_from_datetime(t)` every step introduces significant allocation and CPU overhead.
 **Action:** When stepping uniformly through time for SGP4, compute the initial Julian date (`jd_start, fr_start`) once before the loop. Use a standard integer `for` loop `for i in range(num_steps + 1):` and calculate the step in fractional days `fr = fr_start + i * step_days` mathematically. Defer `datetime` instantiation to when it's strictly needed for payload formatting.
+
+## 2024-05-27 - Remove testing artifacts before submit
+**Learning:** Adding multiple temporary scratchpad files (e.g. `test_opt.py`, `test_perf.py`) to the repository root and forgetting to remove them causes PRs to be flagged for codebase pollution.
+**Action:** Always clean up the working directory (`rm`) of any temporary files or one-off tests before finalizing a branch.
