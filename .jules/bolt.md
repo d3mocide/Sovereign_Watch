@@ -9,3 +9,7 @@
 ## 2024-05-25 - Avoid `datetime` loop logic and recalculating Julian dates in SGP4 pass prediction
 **Learning:** In high-frequency orbital prediction loops, `datetime` loop logic (i.e. `t = now`, `t += timedelta(...)`) and recalculating Julian dates using `jday_from_datetime(t)` every step introduces significant allocation and CPU overhead.
 **Action:** When stepping uniformly through time for SGP4, compute the initial Julian date (`jd_start, fr_start`) once before the loop. Use a standard integer `for` loop `for i in range(num_steps + 1):` and calculate the step in fractional days `fr = fr_start + i * step_days` mathematically. Defer `datetime` instantiation to when it's strictly needed for payload formatting.
+
+## 2025-03-05 - Mathematical pass duration calculation
+**Learning:** In performance-critical paths like orbital pass prediction where data points are collected at fixed intervals (`step_seconds`), calculating total duration via native arithmetic (`(len(points) - 1) * step_seconds`) is faster and cleaner than storing formatted strings and subsequently re-parsing them using `datetime.strptime`. While this specific code block executes only at the end of a pass (a few times per satellite), the concept eliminates costly object creation and parsing overhead.
+**Action:** When working with structured telemetry or simulation outputs, utilize implicit array metadata (like point counts or loop indices combined with step intervals) for duration calculations instead of relying on explicit string-based timestamps.
