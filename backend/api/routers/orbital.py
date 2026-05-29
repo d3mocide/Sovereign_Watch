@@ -216,13 +216,7 @@ async def get_passes(
                         los_p = current_pass_points[-1]
 
                         # Compute duration
-                        aos_dt = datetime.strptime(
-                            aos_p["t"], "%Y-%m-%dT%H:%M:%SZ"
-                        ).replace(tzinfo=timezone.utc)
-                        los_dt = datetime.strptime(
-                            los_p["t"], "%Y-%m-%dT%H:%M:%SZ"
-                        ).replace(tzinfo=timezone.utc)
-                        duration = int((los_dt - aos_dt).total_seconds())
+                        duration = (len(current_pass_points) - 1) * step_seconds
 
                         passes.append(
                             {
@@ -247,13 +241,7 @@ async def get_passes(
         if in_pass and current_pass_points:
             aos_p = current_pass_points[0]
             los_p = current_pass_points[-1]
-            aos_dt = datetime.strptime(aos_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
-            )
-            los_dt = datetime.strptime(los_p["t"], "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
-            )
-            duration = int((los_dt - aos_dt).total_seconds())
+            duration = (len(current_pass_points) - 1) * step_seconds
             passes.append(
                 {
                     "norad_id": sat["norad_id"],
