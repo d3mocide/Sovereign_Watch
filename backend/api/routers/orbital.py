@@ -215,8 +215,7 @@ async def get_passes(
                         aos_p = current_pass_points[0]
                         los_p = current_pass_points[-1]
 
-                        # Compute duration: points are generated at fixed step_seconds intervals
-                        # avoiding expensive datetime.strptime calls in the tight prediction loop
+                        # Compute duration
                         duration = (len(current_pass_points) - 1) * step_seconds
 
                         passes.append(
