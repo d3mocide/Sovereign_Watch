@@ -64,7 +64,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
             <span className="text-[9px] font-bold text-white/40 tracking-widest px-1 mb-0.5">
               VISUALIZERS
             </span>
-            <label
+            <label htmlFor="filter-showh3coverage"
               className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showH3Coverage === true ? "border-hud-green/20 bg-hud-green/5" : "border-white/5 bg-white/5 hover:bg-white/10"}`}
             >
               <div className="flex items-center gap-1.5">
@@ -75,7 +75,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
                   H3 POLLER MESH (DEBUG)
                 </span>
               </div>
-              <input
+              <input id="filter-showh3coverage"
                 type="checkbox"
                 className="sr-only"
                 checked={filters.showH3Coverage === true}

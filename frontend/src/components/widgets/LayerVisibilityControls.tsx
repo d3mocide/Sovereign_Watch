@@ -396,7 +396,7 @@ export const LayerVisibilityControls: React.FC<
               <div className="flex flex-col gap-1 px-0 mt-1">
                 <div className="flex flex-row gap-1">
                   {/* Ham / GMRS */}
-                  <label
+                  <label htmlFor="filter-showham"
                     className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${
                       filters.rfEmcommOnly
                         ? "opacity-20 pointer-events-none grayscale"
@@ -412,7 +412,7 @@ export const LayerVisibilityControls: React.FC<
                     >
                       HAM
                     </span>
-                    <input
+                    <input id="filter-showham"
                       type="checkbox"
                       className="sr-only"
                       checked={filters.showHam !== false}
@@ -430,7 +430,7 @@ export const LayerVisibilityControls: React.FC<
                   </label>
 
                   {/* NOAA NWR */}
-                  <label
+                  <label htmlFor="filter-shownoaa"
                     className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${
                       filters.rfEmcommOnly
                         ? "opacity-20 pointer-events-none grayscale"
@@ -446,7 +446,7 @@ export const LayerVisibilityControls: React.FC<
                     >
                       NOAA
                     </span>
-                    <input
+                    <input id="filter-shownoaa"
                       type="checkbox"
                       className="sr-only"
                       checked={filters.showNoaa !== false}
@@ -466,7 +466,7 @@ export const LayerVisibilityControls: React.FC<
                   {/* Public Safety + EMCOMM (RadioRef-gated) */}
                   {radiorefEnabled !== false && (
                     <>
-                      <label
+                      <label htmlFor="filter-showpublicsafety"
                         className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${
                           filters.rfEmcommOnly
                             ? "opacity-20 pointer-events-none grayscale"
@@ -482,7 +482,7 @@ export const LayerVisibilityControls: React.FC<
                         >
                           PSB
                         </span>
-                        <input
+                        <input id="filter-showpublicsafety"
                           type="checkbox"
                           className="sr-only"
                           checked={filters.showPublicSafety !== false}
@@ -502,7 +502,7 @@ export const LayerVisibilityControls: React.FC<
                         </div>
                       </label>
                       {/* EMCOMM Only */}
-                      <label
+                      <label htmlFor="filter-rfemcommonly"
                         className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.rfEmcommOnly ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
                       >
                         <span
@@ -510,7 +510,7 @@ export const LayerVisibilityControls: React.FC<
                         >
                           EMCOMM
                         </span>
-                        <input
+                        <input id="filter-rfemcommonly"
                           type="checkbox"
                           className="sr-only"
                           checked={!!filters.rfEmcommOnly}
@@ -631,7 +631,7 @@ export const LayerVisibilityControls: React.FC<
             {infraExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
                 {/* Undersea Cables */}
-                <label
+                <label htmlFor="filter-showcables"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showCables !== false ? "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -649,7 +649,7 @@ export const LayerVisibilityControls: React.FC<
                       UNDERSEA CABLES
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showcables"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showCables !== false}
@@ -699,7 +699,7 @@ export const LayerVisibilityControls: React.FC<
                 )}
 
                 {/* Landing Stations */}
-                <label
+                <label htmlFor="filter-showlandingstations"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showLandingStations !== false ? "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -717,7 +717,7 @@ export const LayerVisibilityControls: React.FC<
                       LANDING STATIONS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showlandingstations"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showLandingStations !== false}
@@ -738,7 +738,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* Internet Outages */}
-                <label
+                <label htmlFor="filter-showoutages"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showOutages === true ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -756,7 +756,7 @@ export const LayerVisibilityControls: React.FC<
                       INTERNET OUTAGES
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showoutages"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showOutages === true}
@@ -775,7 +775,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* FCC Towers */}
-                <label
+                <label htmlFor="filter-showtowers"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showTowers ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -791,7 +791,7 @@ export const LayerVisibilityControls: React.FC<
                       FCC TOWERS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showtowers"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showTowers}
@@ -809,7 +809,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* Internet Exchanges (IXPs) */}
-                <label
+                <label htmlFor="filter-showixps"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showIXPs ? "border-cyan-400/50 bg-cyan-400/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -823,7 +823,7 @@ export const LayerVisibilityControls: React.FC<
                       INTERNET EXCHANGES
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showixps"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showIXPs}
@@ -842,7 +842,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* Data Centers / Facilities */}
-                <label
+                <label htmlFor="filter-showfacilities"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showFacilities ? "border-purple-500/50 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -856,7 +856,7 @@ export const LayerVisibilityControls: React.FC<
                       DATA CENTERS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showfacilities"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showFacilities}
@@ -875,7 +875,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* ISS Tracker */}
-                <label
+                <label htmlFor="filter-showiss"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showISS !== false ? "border-yellow-400/50 bg-yellow-400/10 shadow-[0_0_8px_rgba(250,204,21,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -889,7 +889,7 @@ export const LayerVisibilityControls: React.FC<
                       ISS TRACKER
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showiss"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showISS !== false}
@@ -908,7 +908,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* DNS Root Servers */}
-                <label
+                <label htmlFor="filter-showdnsroot"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showDnsRoot ? "border-green-400/50 bg-green-400/10 shadow-[0_0_8px_rgba(74,222,128,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -922,7 +922,7 @@ export const LayerVisibilityControls: React.FC<
                       DNS ROOT SERVERS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showdnsroot"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showDnsRoot}
@@ -1016,7 +1016,7 @@ export const LayerVisibilityControls: React.FC<
             {environmentalExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
                 {/* Aurora Forecast */}
-                <label
+                <label htmlFor="filter-showaurora"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showAurora ? "border-purple-500/50 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1032,7 +1032,7 @@ export const LayerVisibilityControls: React.FC<
                       AURORA FORECAST
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showaurora"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showAurora || false}
@@ -1050,7 +1050,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* Ocean Buoys */}
-                <label
+                <label htmlFor="filter-showbuoys"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showBuoys ? "border-blue-500/50 bg-blue-500/10 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1066,7 +1066,7 @@ export const LayerVisibilityControls: React.FC<
                       OCEAN BUOYS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showbuoys"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showBuoys}
@@ -1084,7 +1084,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* NWS Alerts */}
-                <label
+                <label htmlFor="filter-shownwsalerts"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showNWSAlerts ? "border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1103,7 +1103,7 @@ export const LayerVisibilityControls: React.FC<
                     </span>
 
                   </div>
-                  <input
+                  <input id="filter-shownwsalerts"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showNWSAlerts}
@@ -1121,7 +1121,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* NASA FIRMS (Thermal) */}
-                <label
+                <label htmlFor="filter-showfirms"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showFIRMS ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1138,7 +1138,7 @@ export const LayerVisibilityControls: React.FC<
                     </span>
                   </div>
 
-                  <input
+                  <input id="filter-showfirms"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showFIRMS}
@@ -1156,7 +1156,7 @@ export const LayerVisibilityControls: React.FC<
                 </label>
 
                 {/* Dark Vessel Detection */}
-                <label
+                <label htmlFor="filter-showdarkvessels"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showDarkVessels ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1174,7 +1174,7 @@ export const LayerVisibilityControls: React.FC<
                       DARK VESSELS (AIS-GAP)
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showdarkvessels"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showDarkVessels}
@@ -1264,7 +1264,7 @@ export const LayerVisibilityControls: React.FC<
 
             {analysisExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
-                <label
+                <label htmlFor="filter-showh3risk"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showH3Risk ? "border-red-500/50 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1280,7 +1280,7 @@ export const LayerVisibilityControls: React.FC<
                       RISK GRID
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showh3risk"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showH3Risk}
@@ -1297,7 +1297,7 @@ export const LayerVisibilityControls: React.FC<
                   </div>
                 </label>
 
-                <label
+                <label htmlFor="filter-showclusters"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showClusters ? "border-cyan-500/50 bg-cyan-500/10 shadow-[0_0_8px_rgba(6,182,212,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1313,7 +1313,7 @@ export const LayerVisibilityControls: React.FC<
                       TRAJECTORY CLUSTERS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showclusters"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showClusters}
@@ -1348,7 +1348,7 @@ export const LayerVisibilityControls: React.FC<
                 )}
 
                 {/* Clausal Chains narrative layer */}
-                <label
+                <label htmlFor="filter-showclausalchains"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showClausalChains ? "border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_8px_rgba(99,102,241,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1362,7 +1362,7 @@ export const LayerVisibilityControls: React.FC<
                       CLAUSAL CHAINS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showclausalchains"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showClausalChains}
@@ -1469,7 +1469,7 @@ export const LayerVisibilityControls: React.FC<
 
             {hazardsExpanded && (
               <div className="flex flex-col gap-1 px-0 opacity-90 mt-1">
-                <label
+                <label htmlFor="filter-showjamming"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showJamming ? "border-rose-500/50 bg-rose-500/10 shadow-[0_0_8px_rgba(244,63,94,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1485,7 +1485,7 @@ export const LayerVisibilityControls: React.FC<
                       GPS INTEGRITY ZONES
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showjamming"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showJamming || false}
@@ -1502,7 +1502,7 @@ export const LayerVisibilityControls: React.FC<
                   </div>
                 </label>
 
-                <label
+                <label htmlFor="filter-showholdingpatterns"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showHoldingPatterns !== false ? "border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1520,7 +1520,7 @@ export const LayerVisibilityControls: React.FC<
                       HOLDING PATTERNS
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showholdingpatterns"
                     type="checkbox"
                     className="sr-only"
                     checked={filters.showHoldingPatterns !== false}
@@ -1540,7 +1540,7 @@ export const LayerVisibilityControls: React.FC<
                   </div>
                 </label>
 
-                <label
+                <label htmlFor="filter-showairspacezones"
                   className={`group flex cursor-pointer items-center justify-between rounded border p-1 transition-all ${filters.showAirspaceZones ? "border-orange-500/50 bg-orange-500/10 shadow-[0_0_8px_rgba(249,115,22,0.2)]" : "border-white/5 bg-white/5"}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -1558,7 +1558,7 @@ export const LayerVisibilityControls: React.FC<
                       AIRSPACE ZONES
                     </span>
                   </div>
-                  <input
+                  <input id="filter-showairspacezones"
                     type="checkbox"
                     className="sr-only"
                     checked={!!filters.showAirspaceZones}
