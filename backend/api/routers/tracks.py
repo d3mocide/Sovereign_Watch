@@ -115,24 +115,31 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         step_seconds = max(10, total_seconds // limit)
         end_dt = datetime.now(timezone.utc)
 
+        # Precompute initial Julian day and step sizes to avoid loop overhead
+        jd_end, fr_end = _jday(end_dt)
+        step_days = step_seconds / 86400.0
+        one_sec_days = 1.0 / 86400.0
+
         results = []
-        t = end_dt
-        while t >= end_dt - timedelta(hours=hours) and len(results) < limit:
-            jd, fr = _jday(t)
-            e, r, v = satrec.sgp4(jd, fr)
+        for i in range(limit):
+            elapsed_seconds = i * step_seconds
+            if elapsed_seconds > total_seconds:
+                break
+
+            fr = fr_end - i * step_days
+            e, r, v = satrec.sgp4(jd_end, fr)
             if e == 0:
-                r_ecef = teme_to_ecef(r, jd, fr)
+                r_ecef = teme_to_ecef(r, jd_end, fr)
                 lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
                     np.array(r_ecef).reshape(1, 3)
                 )
 
                 # Heading: bearing from 1 second ago to now
-                t_prev = t - timedelta(seconds=1)
-                jd2, fr2 = _jday(t_prev)
-                e2, r2, _ = satrec.sgp4(jd2, fr2)
+                fr2 = fr - one_sec_days
+                e2, r2, _ = satrec.sgp4(jd_end, fr2)
                 heading = 0.0
                 if e2 == 0:
-                    r2_ecef = teme_to_ecef(r2, jd2, fr2)
+                    r2_ecef = teme_to_ecef(r2, jd_end, fr2)
                     la2, lo2, _ = ecef_to_lla_vectorized(
                         np.array(r2_ecef).reshape(1, 3)
                     )
@@ -148,6 +155,7 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
                         % 360.0
                     )
 
+                t = end_dt - timedelta(seconds=elapsed_seconds)
                 results.append(
                     {
                         "time": t,
@@ -161,7 +169,6 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
                         "meta": None,
                     }
                 )
-            t -= timedelta(seconds=step_seconds)
 
         return results  # already ordered DESC (newest first)
 
