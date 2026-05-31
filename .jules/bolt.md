@@ -13,3 +13,6 @@
 ## 2024-05-27 - Remove testing artifacts before submit
 **Learning:** Adding multiple temporary scratchpad files (e.g. `test_opt.py`, `test_perf.py`) to the repository root and forgetting to remove them causes PRs to be flagged for codebase pollution.
 **Action:** Always clean up the working directory (`rm`) of any temporary files or one-off tests before finalizing a branch.
+## 2023-11-20 - datetime.fromisoformat performance
+**Learning:** In Python, `datetime.fromisoformat()` is up to 50x faster than `datetime.strptime()` for parsing standard ISO 8601 strings (like YYYY-MM-DD), because it is implemented in C and avoids the overhead of compiling formatting directives and regex. This is especially impactful in high-volume data ingestion like FIRMS.
+**Action:** Always prefer `datetime.fromisoformat()` when parsing ISO 8601 strings, especially in loops or data pipelines.
