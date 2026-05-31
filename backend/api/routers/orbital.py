@@ -215,8 +215,8 @@ async def get_passes(
                         aos_p = current_pass_points[0]
                         los_p = current_pass_points[-1]
 
-                        # Compute duration
-                        duration = (len(current_pass_points) - 1) * step_seconds
+                        # Compute duration directly from point count instead of parsing strings
+                        duration = int((len(current_pass_points) - 1) * step_seconds)
 
                         passes.append(
                             {
@@ -241,7 +241,10 @@ async def get_passes(
         if in_pass and current_pass_points:
             aos_p = current_pass_points[0]
             los_p = current_pass_points[-1]
-            duration = (len(current_pass_points) - 1) * step_seconds
+
+            # Compute duration directly from point count instead of parsing strings
+            duration = int((len(current_pass_points) - 1) * step_seconds)
+
             passes.append(
                 {
                     "norad_id": sat["norad_id"],
