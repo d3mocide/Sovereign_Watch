@@ -344,6 +344,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
             {hasRole("admin") && (
               <div className="flex gap-1.5">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open("/linkage", "_blank");
@@ -354,6 +355,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
                   LINKAGE
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open("/stats", "_blank");

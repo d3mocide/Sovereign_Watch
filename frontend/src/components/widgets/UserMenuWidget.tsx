@@ -76,6 +76,8 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
 
           {/* Logout Action */}
           <button
+            type="button"
+            aria-label="Logout"
             onClick={() => {
               logout();
               onClose();

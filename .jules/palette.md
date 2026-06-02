@@ -140,3 +140,6 @@
 ## 2025-05-18 - Explicit ARIA form control associations
 **Learning:** Implicit label wrapping (e.g., `<label><input /></label>`) is sometimes insufficient for certain screen readers in complex widget structures. Explicitly mapping `htmlFor` on the label to an `id` on the input improves robustness and accessibility.
 **Action:** Always add explicit `htmlFor` and `id` pairs to custom form controls (like toggles or checkboxes), even when they are structurally nested within the `<label>` tag.
+## 2024-05-31 - Missing type attribute on buttons causing accidental form submissions
+**Learning:** Found multiple `<button>` elements in UI panels lacking a `type` attribute. When buttons without `type="button"` are placed near or inside `<form>` elements (even unintentionally due to component composition), they default to `type="submit"`, leading to unexpected page reloads or form submissions.
+**Action:** Always explicitly define `type="button"` on standalone interactive buttons to prevent unintended side effects during component reuse.

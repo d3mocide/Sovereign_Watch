@@ -17,3 +17,7 @@
 ## 2025-02-21 - Vectorize NumPy operations by collecting inputs before loop
 **Learning:** In high-frequency loops, applying a vectorized function to individual reshaped elements (e.g., `ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))`) loses all vectorization benefits and incurs heavy allocation overhead. Grouping the data into an array beforehand provides a massive performance boost (e.g., a ~5x speedup in `backend/api/routers/orbital.py`).
 **Action:** When working with vectorized functions (like in NumPy), always collect individual outputs into a list, convert them into a single batched `(N, M)` array, and call the vectorized function once. Do not loop over individual calls to the vectorized function.
+
+## 2026-05-30 - Python datetime parsing performance
+**Learning:** Replacing `datetime.strptime(date, "%Y-%m-%d")` with `datetime.fromisoformat(date)` is a ~40x speedup micro-optimization. However, it requires the ISO 8601 extended format with hyphens (e.g. "YYYY-MM-DD") in older Python versions (< 3.11). Trying to use it on the basic format ("YYYYMMDD") without hyphens will raise a ValueError and introduce critical regressions.
+**Action:** Always strictly verify the format of date strings. Only use `datetime.fromisoformat` for the extended format with hyphens ("YYYY-MM-DD") unless ensuring Python 3.11+ is used. Avoid `fromisoformat` for basic formats to prevent code review rejections and backward compatibility regressions.
