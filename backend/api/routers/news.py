@@ -144,7 +144,7 @@ async def _fetch_feeds() -> list[dict]:
     urls = [u.strip() for u in raw_urls.split(",") if u.strip()]
 
     all_items: list[dict] = []
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(transport=SSRFSafeTransport(), timeout=10.0, follow_redirects=True) as client:
         for url in urls:
             source = _source_name(url)
             try:
@@ -283,20 +283,39 @@ def _extract_title(html: str) -> str:
     return _normalize_space(unescape(re.sub(r"<[^>]+>", " ", m.group(1))))
 
 
-async def _is_safe_host(host: str) -> bool:
-    """Verify that a host resolves to a public, safe IP address to prevent SSRF."""
-    try:
+class SSRFSafeTransport(httpx.AsyncHTTPTransport):
+    """
+    Custom transport to securely resolve IP addresses and prevent SSRF/DNS Rebinding.
+    It replaces the host with the resolved IP while keeping the original host in the SNI,
+    thus ensuring the IP validated is exactly the one connected to.
+    """
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        original_host = request.url.host
         loop = asyncio.get_running_loop()
-        addrs = await loop.getaddrinfo(host, None)
+        try:
+            addrs = await loop.getaddrinfo(original_host, None)
+        except socket.gaierror:
+            raise httpx.ConnectError(f"Failed to resolve {original_host}")
+
+        safe_ip = None
         for addr in addrs:
             ip = addr[4][0]
             ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified:
-                return False
-        return True
-    except socket.gaierror:
-        # If it doesn't resolve, treat it as unsafe to connect to
-        return False
+            if not (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified):
+                safe_ip = ip
+                break
+
+        if not safe_ip:
+            raise httpx.ConnectError("Local/Private URLs are not allowed")
+
+        original_url = request.url
+        request.extensions["sni_hostname"] = original_host
+        request.url = request.url.copy_with(host=safe_ip)
+
+        try:
+            return await super().handle_async_request(request)
+        finally:
+            request.url = original_url
 
 
 @router.get("/api/news/article")
@@ -309,14 +328,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Invalid article URL")
 
-    host = parsed.hostname or ""
-    is_safe = await _is_safe_host(host)
-    if not is_safe:
-        raise HTTPException(status_code=400, detail="Local/Private URLs are not allowed")
-
     try:
         async with httpx.AsyncClient(
-            timeout=ARTICLE_TIMEOUT, follow_redirects=True
+            transport=SSRFSafeTransport(), timeout=ARTICLE_TIMEOUT, follow_redirects=True
         ) as client:
             resp = await client.get(
                 url,
@@ -325,6 +339,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
                     "Accept": "text/html,application/xhtml+xml",
                 },
             )
+    except httpx.ConnectError as e:
+        logger.warning(f"Article connection failed for {url}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.warning(f"Article fetch failed for {url}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch article content")
