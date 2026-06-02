@@ -380,23 +380,32 @@ async def get_groundtrack(
     step_days = step_seconds / 86400.0
     num_steps = int(minutes * 60 / step_seconds)
 
+    # Collect all ECEF coordinates first to vectorize the LLA conversion
+    valid_indices = []
+    r_ecefs = []
+
     for i in range(num_steps + 1):
         fr = fr_start + i * step_days
         e, r, _ = satrec.sgp4(jd_start, fr)
         if e == 0:
-            r_ecef = teme_to_ecef(r, jd_start, fr)
-            # ecef_to_lla_vectorized needs (N, 3)
-            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
-                np.array(r_ecef).reshape(1, 3)
-            )
-            t = now + timedelta(seconds=i * step_seconds)
-            points.append(
-                {
-                    "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "lat": round(float(lat_arr[0]), 5),
-                    "lon": round(float(lon_arr[0]), 5),
-                    "alt_km": round(float(alt_arr[0]), 3),
-                }
-            )
+            r_ecefs.append(teme_to_ecef(r, jd_start, fr))
+            valid_indices.append(i)
+
+    if not r_ecefs:
+        return []
+
+    # Batch process all coordinates at once
+    lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecefs))
+
+    for idx, i in enumerate(valid_indices):
+        t = now + timedelta(seconds=i * step_seconds)
+        points.append(
+            {
+                "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "lat": round(float(lat_arr[idx]), 5),
+                "lon": round(float(lon_arr[idx]), 5),
+                "alt_km": round(float(alt_arr[idx]), 3),
+            }
+        )
 
     return points
