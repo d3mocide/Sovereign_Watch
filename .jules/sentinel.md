@@ -66,3 +66,8 @@
 **Vulnerability:** Raw exception strings (e.g., `exc`) were interpolated directly into the `HTTPException` detail response sent to clients upon failure.
 **Learning:** Returning unhandled or low-level internal error details to users can leak stack traces, implementation details, or sensitive system state, violating the principle of failing securely.
 **Prevention:** Catch exceptions, log the detailed error securely on the server (using `logger.warning` or `logger.error`), and return only a sanitized, generic error message (like 'Malformed TLE' or 'Internal server error') in the HTTP response.
+
+## 2024-06-02 - SSRF / DNS Rebinding via `httpx` and `urlparse` TOCTOU
+**Vulnerability:** A Time-Of-Check to Time-Of-Use (TOCTOU) DNS Rebinding vulnerability existed in `backend/api/routers/news.py`'s `/api/news/article` endpoint. The code extracted a host via `urlparse`, verified the host's IP was not private/loopback using `_is_safe_host()`, and then passed the original URL to `httpx.AsyncClient().get()`.
+**Learning:** Checking a hostname's resolution prior to passing it to an HTTP client is insufficient because the HTTP client performs a second, independent DNS resolution. A malicious DNS server can exploit this gap by returning a safe public IP during the check and a private IP (e.g., `127.0.0.1` or `169.254.169.254`) during the fetch.
+**Prevention:** Never rely on pre-flight DNS checks. Instead, write a custom `httpx.AsyncHTTPTransport` wrapper that performs a single DNS lookup, replaces the destination host with the verified safe IP address (`request.url.copy_with(host=safe_ip)`), and injects the original hostname into `request.extensions["sni_hostname"]` to preserve TLS verification.
