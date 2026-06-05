@@ -25,12 +25,32 @@ GDELT_LINKAGE_REASON = "explicit_geopolitical_linkage"
 _GDELT_CHOKEPOINT_RADIUS_KM = 150.0
 _SEA_CABLE_PROXIMITY_KM = 250.0
 _STRATEGIC_CHOKEPOINTS = [
-    {"name": "Strait of Hormuz", "lat": 26.5, "lon": 56.3, "theaters": {"CENTCOM", "INDOPACOM"}},
+    {
+        "name": "Strait of Hormuz",
+        "lat": 26.5,
+        "lon": 56.3,
+        "theaters": {"CENTCOM", "INDOPACOM"},
+    },
     {"name": "Strait of Malacca", "lat": 1.25, "lon": 103.8, "theaters": {"INDOPACOM"}},
-    {"name": "Suez Canal", "lat": 30.7, "lon": 32.3, "theaters": {"CENTCOM", "AFRICOM", "EUCOM"}},
+    {
+        "name": "Suez Canal",
+        "lat": 30.7,
+        "lon": 32.3,
+        "theaters": {"CENTCOM", "AFRICOM", "EUCOM"},
+    },
     {"name": "Gibraltar", "lat": 36.0, "lon": -5.35, "theaters": {"EUCOM", "AFRICOM"}},
-    {"name": "Bosphorus/Dardanelles", "lat": 41.0, "lon": 29.0, "theaters": {"EUCOM", "CENTCOM"}},
-    {"name": "Bab-el-Mandeb", "lat": 12.6, "lon": 43.3, "theaters": {"CENTCOM", "AFRICOM"}},
+    {
+        "name": "Bosphorus/Dardanelles",
+        "lat": 41.0,
+        "lon": 29.0,
+        "theaters": {"EUCOM", "CENTCOM"},
+    },
+    {
+        "name": "Bab-el-Mandeb",
+        "lat": 12.6,
+        "lon": 43.3,
+        "theaters": {"CENTCOM", "AFRICOM"},
+    },
     {"name": "Luzon Strait", "lat": 20.5, "lon": 121.5, "theaters": {"INDOPACOM"}},
     {"name": "Taiwan Strait", "lat": 24.5, "lon": 119.5, "theaters": {"INDOPACOM"}},
     {"name": "English Channel", "lat": 50.9, "lon": 1.4, "theaters": {"EUCOM"}},
@@ -39,7 +59,12 @@ _STRATEGIC_CHOKEPOINTS = [
     {"name": "Danish Straits", "lat": 55.5, "lon": 10.5, "theaters": {"EUCOM"}},
     {"name": "Sunda Strait", "lat": -6.0, "lon": 105.8, "theaters": {"INDOPACOM"}},
     {"name": "Lombok Strait", "lat": -8.8, "lon": 115.7, "theaters": {"INDOPACOM"}},
-    {"name": "Panama Canal", "lat": 9.0, "lon": -79.6, "theaters": {"SOUTHCOM", "NORTHCOM"}},
+    {
+        "name": "Panama Canal",
+        "lat": 9.0,
+        "lon": -79.6,
+        "theaters": {"SOUTHCOM", "NORTHCOM"},
+    },
 ]
 
 
@@ -170,14 +195,14 @@ def detect_mission_country(lat: float, lon: float) -> Optional[str]:
         if best_distance_km is None or distance_km < best_distance_km:
             best_code = code
             best_distance_km = distance_km
-            
+
     # Resolve North American spherical distance distortion (e.g. Portland mapping to Canada)
     if best_code in ("USA", "CAN"):
         if 24.0 <= lat <= 49.0 and -125.0 <= lon <= -66.0:
             return "USA"
         if 49.0 < lat <= 83.0 and -141.0 <= lon <= -52.0:
             return "CAN"
-            
+
     return best_code
 
 
@@ -209,7 +234,10 @@ def _state_actor_neighbor_depth(
     actor_country_codes: Set[str],
     primary_mission_country_code: Optional[str],
 ) -> Optional[int]:
-    if primary_mission_country_code and primary_mission_country_code in actor_country_codes:
+    if (
+        primary_mission_country_code
+        and primary_mission_country_code in actor_country_codes
+    ):
         return 0
     if actor_country_codes:
         return 1
@@ -258,7 +286,9 @@ def _score_linked_event(
         evidence["matched_aot"] = True
     elif linkage_tier == "state_actor":
         matched_country_codes = sorted(mission_country_codes & actor_country_codes)
-        neighbor_depth = _state_actor_neighbor_depth(actor_country_codes, primary_mission_country_code)
+        neighbor_depth = _state_actor_neighbor_depth(
+            actor_country_codes, primary_mission_country_code
+        )
         score = 0.85 if neighbor_depth == 0 else 0.65
         evidence["matched_country_codes"] = matched_country_codes
         if neighbor_depth is not None:
@@ -275,11 +305,15 @@ def _score_linked_event(
         score = 0.65
     else:
         score = 0.55
-        mission_theaters = _mission_theaters_for_country_code(primary_mission_country_code)
+        mission_theaters = _mission_theaters_for_country_code(
+            primary_mission_country_code
+        )
         chokepoint_name = event.get("linkage_chokepoint")
         if chokepoint_name:
             evidence["matched_chokepoint"] = chokepoint_name
-        chokepoint_theaters = sorted(set(event.get("linkage_chokepoint_theaters") or []))
+        chokepoint_theaters = sorted(
+            set(event.get("linkage_chokepoint_theaters") or [])
+        )
         if chokepoint_theaters:
             evidence["chokepoint_theaters"] = chokepoint_theaters
         matched_theaters = sorted(mission_theaters & set(chokepoint_theaters))
@@ -304,7 +338,10 @@ def match_chokepoint(event: Dict) -> Optional[Dict]:
     if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
         return None
     for chokepoint in _STRATEGIC_CHOKEPOINTS:
-        if haversine_km(float(lat), float(lon), chokepoint["lat"], chokepoint["lon"]) <= _GDELT_CHOKEPOINT_RADIUS_KM:
+        if (
+            haversine_km(float(lat), float(lon), chokepoint["lat"], chokepoint["lon"])
+            <= _GDELT_CHOKEPOINT_RADIUS_KM
+        ):
             return chokepoint
     return None
 
@@ -351,7 +388,9 @@ def classify_gdelt_linkage(
                 if chokepoint:
                     linkage_tier = "chokepoint"
                     event["linkage_chokepoint"] = str(chokepoint["name"])
-                    event["linkage_chokepoint_theaters"] = sorted(chokepoint.get("theaters", set()))
+                    event["linkage_chokepoint_theaters"] = sorted(
+                        chokepoint.get("theaters", set())
+                    )
                 elif primary_mission_country_code:
                     matches = evaluate_experimental_country_matches(
                         actor_country_codes,
@@ -413,12 +452,20 @@ def derive_cable_relevant_countries_from_index(
     region_lon: float,
 ) -> Set[str]:
     relevant_country_keys: Set[str] = set()
-    cable_entries = cable_index.get("cables", {}) if isinstance(cable_index, dict) else {}
-    country_entries = cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+    cable_entries = (
+        cable_index.get("cables", {}) if isinstance(cable_index, dict) else {}
+    )
+    country_entries = (
+        cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+    )
 
     for cable_feature in cables_data.get("features", []):
         cable_props = cable_feature.get("properties", {})
-        cable_id = cable_props.get("id") or cable_props.get("feature_id") or cable_props.get("name")
+        cable_id = (
+            cable_props.get("id")
+            or cable_props.get("feature_id")
+            or cable_props.get("name")
+        )
         if not cable_id:
             continue
         min_distance_km: Optional[float] = None
@@ -427,8 +474,14 @@ def derive_cable_relevant_countries_from_index(
                 if len(point) < 2:
                     continue
                 point_lon, point_lat = point[0], point[1]
-                point_distance = haversine_km(region_lat, region_lon, point_lat, point_lon)
-                min_distance_km = point_distance if min_distance_km is None else min(min_distance_km, point_distance)
+                point_distance = haversine_km(
+                    region_lat, region_lon, point_lat, point_lon
+                )
+                min_distance_km = (
+                    point_distance
+                    if min_distance_km is None
+                    else min(min_distance_km, point_distance)
+                )
 
         if min_distance_km is None or min_distance_km > _SEA_CABLE_PROXIMITY_KM:
             continue
@@ -443,7 +496,12 @@ def derive_cable_relevant_countries_from_index(
             station_lon = station.get("lon")
             if station_lat is None or station_lon is None:
                 continue
-            if haversine_km(region_lat, region_lon, float(station_lat), float(station_lon)) <= _SEA_CABLE_PROXIMITY_KM:
+            if (
+                haversine_km(
+                    region_lat, region_lon, float(station_lat), float(station_lon)
+                )
+                <= _SEA_CABLE_PROXIMITY_KM
+            ):
                 relevant_country_keys.add(country_key)
                 break
 
@@ -482,7 +540,9 @@ async def fetch_linked_gdelt_events(
     if aot_context is None:
         return GdeltLinkageResult([], empty_counts, set(), set())
 
-    mission_country_code = detect_mission_country(aot_context.region_lat, aot_context.region_lon)
+    mission_country_code = detect_mission_country(
+        aot_context.region_lat, aot_context.region_lon
+    )
     mission_country_codes = build_mission_country_set(mission_country_code)
 
     candidate_country_codes = set(mission_country_codes)
@@ -548,7 +608,10 @@ async def fetch_linked_gdelt_events(
     )
 
     chokepoint_clause_parts: List[str] = []
-    chokepoint_query_params: List[object] = [lookback_hours, *aot_context.aot_sql_params]
+    chokepoint_query_params: List[object] = [
+        lookback_hours,
+        *aot_context.aot_sql_params,
+    ]
     param_index = 2 + len(aot_context.aot_sql_params)
     for chokepoint in _STRATEGIC_CHOKEPOINTS:
         chokepoint_clause_parts.append(
@@ -587,7 +650,7 @@ async def fetch_linked_gdelt_events(
             WHERE time > now() - ($1 * interval '1 hour')
               AND quad_class >= 3
               AND {aot_context.aot_filter_not_sql}
-              AND ({' OR '.join(chokepoint_clause_parts)})
+              AND ({" OR ".join(chokepoint_clause_parts)})
             ORDER BY time DESC
         """
         chokepoint_rows = await conn.fetch(chokepoint_query, *chokepoint_query_params)

@@ -33,6 +33,7 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Roles in ascending order of privilege
 ROLES = ("viewer", "operator", "admin")
 
+
 def hash_password(plain: str) -> str:
     return _pwd_context.hash(plain)
 

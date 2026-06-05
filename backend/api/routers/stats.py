@@ -338,7 +338,9 @@ async def get_fusion_audit():
 
         storage_bytes = int(storage_bytes or 0)
         row_count = int(velocity_row["row_count"] or 0) if velocity_row else 0
-        avg_row_bytes = float(velocity_row["avg_row_bytes"] or 0) if velocity_row else 0.0
+        avg_row_bytes = (
+            float(velocity_row["avg_row_bytes"] or 0) if velocity_row else 0.0
+        )
         estimated_velocity_mb_hr = 0.0
         if row_count > 0 and avg_row_bytes > 0:
             estimated_velocity_mb_hr = (
@@ -575,7 +577,9 @@ async def get_mission_activity_stats(hours: int = 24):
         for r in records:
             b_str = r["bucket"].isoformat()
             t_type = r["type"] or "unknown"
-            timeline.setdefault(b_str, {})[t_type] = timeline.get(b_str, {}).get(t_type, 0) + r["count"]
+            timeline.setdefault(b_str, {})[t_type] = (
+                timeline.get(b_str, {}).get(t_type, 0) + r["count"]
+            )
 
         result = sorted(
             [{"time": b, "counts": c} for b, c in timeline.items()],
@@ -607,15 +611,51 @@ async def get_mission_tak_breakdown(hours: int = 24):
     mission = await _get_active_mission()
 
     COT_MAP = {
-        "a-f-A-C-F": {"label": "Civilian Fixed Wing",  "category": "Aviation",     "color": "#7dd3fc"},
-        "a-f-A-M-F": {"label": "Military Fixed Wing",  "category": "Aviation",     "color": "#fb923c"},
-        "a-f-A-C-H": {"label": "Civilian Helicopter",  "category": "Aviation",     "color": "#4ade80"},
-        "a-f-A-M-H": {"label": "Military Helicopter",  "category": "Aviation",     "color": "#facc15"},
-        "a-f-A-C-Q": {"label": "Civilian Drone/UAV",   "category": "Aviation",     "color": "#f8fafc"},
-        "a-f-A-M-Q": {"label": "Military Drone/UAV",   "category": "Aviation",     "color": "#e2e8f0"},
-        "a-f-S-C-M": {"label": "Maritime Surface",     "category": "Maritime",     "color": "#3b82f6"},
-        "a-f-G-E-V-C": {"label": "Ground Vehicle",     "category": "Terrestrial",  "color": "#f472b6"},
-        "a-f-O-X-S": {"label": "Orbital Satellite",    "category": "Space",        "color": "#c084fc"},
+        "a-f-A-C-F": {
+            "label": "Civilian Fixed Wing",
+            "category": "Aviation",
+            "color": "#7dd3fc",
+        },
+        "a-f-A-M-F": {
+            "label": "Military Fixed Wing",
+            "category": "Aviation",
+            "color": "#fb923c",
+        },
+        "a-f-A-C-H": {
+            "label": "Civilian Helicopter",
+            "category": "Aviation",
+            "color": "#4ade80",
+        },
+        "a-f-A-M-H": {
+            "label": "Military Helicopter",
+            "category": "Aviation",
+            "color": "#facc15",
+        },
+        "a-f-A-C-Q": {
+            "label": "Civilian Drone/UAV",
+            "category": "Aviation",
+            "color": "#f8fafc",
+        },
+        "a-f-A-M-Q": {
+            "label": "Military Drone/UAV",
+            "category": "Aviation",
+            "color": "#e2e8f0",
+        },
+        "a-f-S-C-M": {
+            "label": "Maritime Surface",
+            "category": "Maritime",
+            "color": "#3b82f6",
+        },
+        "a-f-G-E-V-C": {
+            "label": "Ground Vehicle",
+            "category": "Terrestrial",
+            "color": "#f472b6",
+        },
+        "a-f-O-X-S": {
+            "label": "Orbital Satellite",
+            "category": "Space",
+            "color": "#c084fc",
+        },
     }
 
     if mission:
@@ -651,22 +691,34 @@ async def get_mission_tak_breakdown(hours: int = 24):
 
         total_pings = sum(r["count"] for r in records)
         unknown_pings = sum(
-            r["count"] for r in records
+            r["count"]
+            for r in records
             if r["type"] is None or r["type"].lower() == "unknown"
         )
-        noise_pct = round((unknown_pings / total_pings * 100), 2) if total_pings > 0 else 0.0
+        noise_pct = (
+            round((unknown_pings / total_pings * 100), 2) if total_pings > 0 else 0.0
+        )
 
         breakdown = []
         for r in records:
             t = r["type"]
-            info = COT_MAP.get(t, {"label": f"Unknown ({t})", "category": "Unclassified", "color": "#4b5563"})
-            breakdown.append({
-                "type": t,
-                "label": info["label"],
-                "category": info["category"],
-                "color": info["color"],
-                "count": r["count"],
-            })
+            info = COT_MAP.get(
+                t,
+                {
+                    "label": f"Unknown ({t})",
+                    "category": "Unclassified",
+                    "color": "#4b5563",
+                },
+            )
+            breakdown.append(
+                {
+                    "type": t,
+                    "label": info["label"],
+                    "category": info["category"],
+                    "color": info["color"],
+                    "count": r["count"],
+                }
+            )
 
         return {
             "status": "ok",

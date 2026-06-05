@@ -56,7 +56,10 @@ async def test_gdelt_events_mission_mode_returns_linkage_metadata(mock_fetch_lin
             "in_aot": 0,
             "state_actor": 0,
             "cable_infra": 0,
-            "chokepoint": 1, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+            "chokepoint": 1,
+            "alliance_support": 0,
+            "basing_support": 0,
+            "second_order_neighbor": 0,
         },
         mission_country_codes={"OMN"},
         cable_country_codes={"ARE"},
@@ -66,14 +69,20 @@ async def test_gdelt_events_mission_mode_returns_linkage_metadata(mock_fetch_lin
     mock_conn.fetch = AsyncMock(side_effect=_unexpected_fetch)
 
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
-        result = await gdelt_router.get_gdelt_events(limit=10, hours=24, h3_region="8728f2ba8ffffff", refresh=True)
+        result = await gdelt_router.get_gdelt_events(
+            limit=10, hours=24, h3_region="8728f2ba8ffffff", refresh=True
+        )
 
     assert result["source_scope"]["linkage_reason"] == "explicit_geopolitical_linkage"
     assert result["source_scope"]["scope"] == "impact_linked_external"
     assert result["features"][0]["properties"]["linkage_tier"] == "chokepoint"
     assert result["features"][0]["properties"]["linkage_score"] == 0.65
-    assert result["features"][0]["properties"]["linkage_evidence"] == {"matched_chokepoint": "Strait of Hormuz"}
-    assert result["features"][0]["properties"]["linkage_chokepoint"] == "Strait of Hormuz"
+    assert result["features"][0]["properties"]["linkage_evidence"] == {
+        "matched_chokepoint": "Strait of Hormuz"
+    }
+    assert (
+        result["features"][0]["properties"]["linkage_chokepoint"] == "Strait of Hormuz"
+    )
 
 
 @patch.object(gdelt_router.db, "redis_client", None)
@@ -103,7 +112,10 @@ async def test_gdelt_actors_mission_mode_aggregates_linked_events(mock_fetch_lin
             "in_aot": 1,
             "state_actor": 1,
             "cable_infra": 0,
-            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+            "chokepoint": 0,
+            "alliance_support": 0,
+            "basing_support": 0,
+            "second_order_neighbor": 0,
         },
         mission_country_codes={"UKR", "RUS", "BLR"},
         cable_country_codes=set(),
@@ -113,7 +125,9 @@ async def test_gdelt_actors_mission_mode_aggregates_linked_events(mock_fetch_lin
     mock_conn.fetch = AsyncMock(side_effect=_unexpected_fetch)
 
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
-        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, h3_region="8728f2ba8ffffff", refresh=True)
+        result = await gdelt_router.get_gdelt_actors(
+            limit=10, hours=24, h3_region="8728f2ba8ffffff", refresh=True
+        )
 
     assert len(result) == 1
     assert result[0]["actor"] == "UKR"
@@ -133,7 +147,10 @@ async def test_gdelt_events_radius_mode_uses_shared_linkage_fetch(mock_fetch_lin
             "in_aot": 0,
             "state_actor": 0,
             "cable_infra": 0,
-            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+            "chokepoint": 0,
+            "alliance_support": 0,
+            "basing_support": 0,
+            "second_order_neighbor": 0,
         },
         mission_country_codes=set(),
         cable_country_codes=set(),
@@ -161,7 +178,9 @@ async def test_gdelt_events_radius_mode_uses_shared_linkage_fetch(mock_fetch_lin
 
 def test_gdelt_events_reject_partial_radius_parameters():
     with pytest.raises(gdelt_router.HTTPException) as exc_info:
-        gdelt_router._resolve_mission_mode(h3_region=None, lat=25.2, lon=55.3, radius_nm=None)
+        gdelt_router._resolve_mission_mode(
+            h3_region=None, lat=25.2, lon=55.3, radius_nm=None
+        )
 
     assert exc_info.value.status_code == 400
     assert "required together" in str(exc_info.value.detail)
@@ -175,21 +194,55 @@ async def test_gdelt_linkage_audit_returns_side_by_side_payload(mock_review):
         "reference_version": "2026-04-11-v1",
         "mission_country_code": "UKR",
         "live": {
-            "counts": {"in_aot": 1, "state_actor": 1, "cable_infra": 0, "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0},
-            "sample": [{"event_id_cnty": "live-1", "linkage_tier": "state_actor", "linkage_score": 0.8}],
+            "counts": {
+                "in_aot": 1,
+                "state_actor": 1,
+                "cable_infra": 0,
+                "chokepoint": 0,
+                "alliance_support": 0,
+                "basing_support": 0,
+                "second_order_neighbor": 0,
+            },
+            "sample": [
+                {
+                    "event_id_cnty": "live-1",
+                    "linkage_tier": "state_actor",
+                    "linkage_score": 0.8,
+                }
+            ],
         },
         "experimental": {
-            "counts": {"second_order_only": 1, "alliance_support": 0, "basing_support": 0},
-            "sample": [{"event_id_cnty": "exp-1", "experimental_reasons": ["second_order_neighbor"], "live_admitted": False}],
-            "country_sets": {"second_order_only": ["DEU"], "alliance_support": [], "basing_support": []},
+            "counts": {
+                "second_order_only": 1,
+                "alliance_support": 0,
+                "basing_support": 0,
+            },
+            "sample": [
+                {
+                    "event_id_cnty": "exp-1",
+                    "experimental_reasons": ["second_order_neighbor"],
+                    "live_admitted": False,
+                }
+            ],
+            "country_sets": {
+                "second_order_only": ["DEU"],
+                "alliance_support": [],
+                "basing_support": [],
+            },
         },
-        "comparison": {"overlap_count": 0, "live_only_count": 2, "experimental_only_count": 1},
+        "comparison": {
+            "overlap_count": 0,
+            "live_only_count": 2,
+            "experimental_only_count": 1,
+        },
     }
 
     mock_conn = MagicMock()
 
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
-        result = await gdelt_router.get_gdelt_linkage_audit(limit=10, hours=24, h3_region="8728f2ba8ffffff")
+        result = await gdelt_router.get_gdelt_linkage_audit(
+            limit=10, hours=24, h3_region="8728f2ba8ffffff"
+        )
 
     assert result["mission_country_code"] == "UKR"
     assert result["live"]["counts"]["state_actor"] == 1
@@ -202,7 +255,10 @@ async def test_gdelt_linkage_audit_returns_side_by_side_payload(mock_review):
 # Threat threshold calibration tests (covers recalibrated gates and shortcuts)
 # ---------------------------------------------------------------------------
 
-def _make_db_row(actor: str, avg_goldstein: float, material_conflict: int, event_count: int) -> dict:
+
+def _make_db_row(
+    actor: str, avg_goldstein: float, material_conflict: int, event_count: int
+) -> dict:
     """Minimal asyncpg-compatible row dict for threshold testing."""
     return {
         "actor": actor,
@@ -275,7 +331,9 @@ async def test_material_shortcut_promotes_to_critical():
     """More than 150 material events promote any level → CRITICAL."""
     # avg_g=-2.5, material_ratio=151/500=0.302 → score=-3.255 → ELEVATED baseline
     # shortcut: 151 > 150 → CRITICAL
-    row = _make_db_row("TST", avg_goldstein=-2.5, material_conflict=151, event_count=500)
+    row = _make_db_row(
+        "TST", avg_goldstein=-2.5, material_conflict=151, event_count=500
+    )
     mock_conn = MagicMock()
     mock_conn.fetch = AsyncMock(return_value=[row])
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):

@@ -141,8 +141,11 @@ async def test_stations_returns_empty_payload_when_upstream_network_fails() -> N
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        with patch("core.database.db.redis_client", mock_redis), patch(
-            "routers.satnogs.httpx.AsyncClient", return_value=_FailingAsyncClient()
+        with (
+            patch("core.database.db.redis_client", mock_redis),
+            patch(
+                "routers.satnogs.httpx.AsyncClient", return_value=_FailingAsyncClient()
+            ),
         ):
             response = await client.get("/api/satnogs/stations?include_meta=true")
 
@@ -165,8 +168,9 @@ async def test_stations_retries_once_after_timeout_and_succeeds() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        with patch("core.database.db.redis_client", mock_redis), patch(
-            "routers.satnogs.httpx.AsyncClient", return_value=retrying_client
+        with (
+            patch("core.database.db.redis_client", mock_redis),
+            patch("routers.satnogs.httpx.AsyncClient", return_value=retrying_client),
         ):
             response = await client.get("/api/satnogs/stations?include_meta=true")
 
@@ -187,8 +191,11 @@ async def test_stations_returns_timeout_metadata_when_retries_exhausted() -> Non
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        with patch("core.database.db.redis_client", mock_redis), patch(
-            "routers.satnogs.httpx.AsyncClient", return_value=_TimeoutAsyncClient()
+        with (
+            patch("core.database.db.redis_client", mock_redis),
+            patch(
+                "routers.satnogs.httpx.AsyncClient", return_value=_TimeoutAsyncClient()
+            ),
         ):
             response = await client.get("/api/satnogs/stations?include_meta=true")
 

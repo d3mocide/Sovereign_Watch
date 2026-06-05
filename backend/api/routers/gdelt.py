@@ -75,9 +75,16 @@ def _resolve_mission_mode(
 
     has_radius_args = any(value is not None for value in (lat, lon, radius_nm))
     if h3_region and has_radius_args:
-        raise HTTPException(status_code=400, detail="Provide either h3_region or lat/lon/radius_nm, not both")
-    if has_radius_args and not all(value is not None for value in (lat, lon, radius_nm)):
-        raise HTTPException(status_code=400, detail="lat, lon, and radius_nm are required together")
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either h3_region or lat/lon/radius_nm, not both",
+        )
+    if has_radius_args and not all(
+        value is not None for value in (lat, lon, radius_nm)
+    ):
+        raise HTTPException(
+            status_code=400, detail="lat, lon, and radius_nm are required together"
+        )
     if h3_region:
         return {"h3_region": h3_region}
     if has_radius_args:
@@ -87,18 +94,40 @@ def _resolve_mission_mode(
 
 @router.get("/api/gdelt/linkage-audit")
 async def get_gdelt_linkage_audit(
-    limit: int = Query(default=25, le=100, description="Max live and experimental samples to return"),
-    hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours"),
-    h3_region: str | None = Query(default=None, description="Mission H3 cell for side-by-side linkage review"),
-    lat: float | None = Query(default=None, description="Optional center latitude for radius mission review"),
-    lon: float | None = Query(default=None, description="Optional center longitude for radius mission review"),
-    radius_nm: float | None = Query(default=None, gt=0, description="Optional radius in nautical miles for mission review"),
+    limit: int = Query(
+        default=25, le=100, description="Max live and experimental samples to return"
+    ),
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Lookback window in hours"
+    ),
+    h3_region: str | None = Query(
+        default=None, description="Mission H3 cell for side-by-side linkage review"
+    ),
+    lat: float | None = Query(
+        default=None, description="Optional center latitude for radius mission review"
+    ),
+    lon: float | None = Query(
+        default=None, description="Optional center longitude for radius mission review"
+    ),
+    radius_nm: float | None = Query(
+        default=None,
+        gt=0,
+        description="Optional radius in nautical miles for mission review",
+    ),
 ):
-    mission_mode = _resolve_mission_mode(h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm)
+    mission_mode = _resolve_mission_mode(
+        h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm
+    )
     if mission_mode is None:
-        raise HTTPException(status_code=400, detail="Mission mode is required for linkage review")
+        raise HTTPException(
+            status_code=400, detail="Mission mode is required for linkage review"
+        )
     if not db.pool:
-        return {"live": {"counts": {}, "sample": []}, "experimental": {"counts": {}, "sample": []}, "comparison": {}}
+        return {
+            "live": {"counts": {}, "sample": []},
+            "experimental": {"counts": {}, "sample": []},
+            "comparison": {},
+        }
 
     async with db.pool.acquire() as conn:
         return await fetch_linkage_audit(
@@ -113,18 +142,34 @@ async def get_gdelt_linkage_audit(
 @router.get("/api/gdelt/events")
 async def get_gdelt_events(
     limit: int = Query(default=250, le=1000, description="Max records to return"),
-    hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours"),
-    h3_region: str | None = Query(default=None, description="Optional mission H3 cell for linked-only filtering"),
-    lat: float | None = Query(default=None, description="Optional center latitude for radius mission filtering"),
-    lon: float | None = Query(default=None, description="Optional center longitude for radius mission filtering"),
-    radius_nm: float | None = Query(default=None, gt=0, description="Optional radius in nautical miles for mission filtering"),
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Lookback window in hours"
+    ),
+    h3_region: str | None = Query(
+        default=None, description="Optional mission H3 cell for linked-only filtering"
+    ),
+    lat: float | None = Query(
+        default=None,
+        description="Optional center latitude for radius mission filtering",
+    ),
+    lon: float | None = Query(
+        default=None,
+        description="Optional center longitude for radius mission filtering",
+    ),
+    radius_nm: float | None = Query(
+        default=None,
+        gt=0,
+        description="Optional radius in nautical miles for mission filtering",
+    ),
     refresh: bool = Query(default=False, description="Bypass cache"),
 ):
     """
     Returns the latest geolocated OSINT events from the local GDELT hypertable.
     Mapped to GeoJSON for direct map rendering.
     """
-    mission_mode = _resolve_mission_mode(h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm)
+    mission_mode = _resolve_mission_mode(
+        h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm
+    )
 
     if mission_mode is None and not refresh and db.redis_client:
         try:
@@ -151,7 +196,8 @@ async def get_gdelt_events(
                 source_scope = {
                     "scope": (
                         "impact_linked_external"
-                        if sum(linkage_result.linkage_counts.values()) > linkage_result.linkage_counts["in_aot"]
+                        if sum(linkage_result.linkage_counts.values())
+                        > linkage_result.linkage_counts["in_aot"]
                         and linkage_result.linkage_counts["in_aot"] == 0
                         else "mission_area"
                     ),
@@ -163,7 +209,7 @@ async def get_gdelt_events(
                 rows = [
                     dict(row)
                     for row in await conn.fetch(
-                    """
+                        """
                     SELECT event_id, time, headline, actor1, actor2, url, goldstein, tone, lat, lon,
                            actor1_country, actor2_country, event_code, event_root_code,
                            quad_class, num_mentions, num_sources, num_articles
@@ -172,8 +218,8 @@ async def get_gdelt_events(
                     ORDER BY time DESC
                     LIMIT $2
                 """,
-                    str(hours),
-                    limit,
+                        str(hours),
+                        limit,
                     )
                 ]
 
@@ -184,7 +230,10 @@ async def get_gdelt_events(
                 "id": r.get("event_id") or r.get("event_id_cnty"),
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [r.get("lon", r.get("event_longitude")), r.get("lat", r.get("event_latitude"))],
+                    "coordinates": [
+                        r.get("lon", r.get("event_longitude")),
+                        r.get("lat", r.get("event_latitude")),
+                    ],
                 },
                 "properties": {
                     "event_id": r.get("event_id") or r.get("event_id_cnty"),
@@ -243,10 +292,22 @@ ACTORS_CACHE_TTL = 300  # 5 minutes
 async def get_gdelt_actors(
     limit: int = Query(default=25, le=100, description="Max actors to return"),
     hours: int = Query(default=24, le=72, description="Lookback window in hours"),
-    h3_region: str | None = Query(default=None, description="Optional mission H3 cell for linked-only filtering"),
-    lat: float | None = Query(default=None, description="Optional center latitude for radius mission filtering"),
-    lon: float | None = Query(default=None, description="Optional center longitude for radius mission filtering"),
-    radius_nm: float | None = Query(default=None, gt=0, description="Optional radius in nautical miles for mission filtering"),
+    h3_region: str | None = Query(
+        default=None, description="Optional mission H3 cell for linked-only filtering"
+    ),
+    lat: float | None = Query(
+        default=None,
+        description="Optional center latitude for radius mission filtering",
+    ),
+    lon: float | None = Query(
+        default=None,
+        description="Optional center longitude for radius mission filtering",
+    ),
+    radius_nm: float | None = Query(
+        default=None,
+        gt=0,
+        description="Optional radius in nautical miles for mission filtering",
+    ),
     refresh: bool = Query(default=False, description="Bypass cache"),
 ):
     """
@@ -255,7 +316,9 @@ async def get_gdelt_actors(
     Each row includes centroid lat/lon derived from the average of their events.
     """
     cache_key = f"{ACTORS_CACHE_KEY}:{hours}:{limit}"
-    mission_mode = _resolve_mission_mode(h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm)
+    mission_mode = _resolve_mission_mode(
+        h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm
+    )
 
     if mission_mode is None and not refresh and db.redis_client:
         try:
@@ -327,7 +390,7 @@ async def get_gdelt_actors(
                 rows = [
                     dict(row)
                     for row in await conn.fetch(
-                    """
+                        """
                     SELECT
                         actor1_country                                    AS actor,
                         'COUNTRY'                                        AS actor_type,
@@ -349,8 +412,8 @@ async def get_gdelt_actors(
                     ORDER BY weighted_mentions DESC
                     LIMIT $2
                     """,
-                    str(hours),
-                    limit,
+                        str(hours),
+                        limit,
                     )
                 ]
 
@@ -401,10 +464,14 @@ async def get_gdelt_actors(
                     "avg_goldstein": round(avg_g, 2),
                     "threat_level": threat_level,
                     "centroid_lat": float(
-                        (r["lat_total"] / r["event_count"]) if "lat_total" in r and r["event_count"] else r.get("centroid_lat") or 0.0
+                        (r["lat_total"] / r["event_count"])
+                        if "lat_total" in r and r["event_count"]
+                        else r.get("centroid_lat") or 0.0
                     ),
                     "centroid_lon": float(
-                        (r["lon_total"] / r["event_count"]) if "lon_total" in r and r["event_count"] else r.get("centroid_lon") or 0.0
+                        (r["lon_total"] / r["event_count"])
+                        if "lon_total" in r and r["event_count"]
+                        else r.get("centroid_lon") or 0.0
                     ),
                     "verbal_conflict": int(r.get("verbal_conflict") or 0),
                     "material_conflict": int(r.get("material_conflict") or 0),
@@ -412,7 +479,12 @@ async def get_gdelt_actors(
                     "material_coop": int(r.get("material_coop") or 0),
                     "threat_score": round(threat_score, 2),
                     "material_ratio": round(material_ratio, 3),
-                    "weighted_mentions": int(r.get("weighted_mentions") or r.get("mentions_total") or r.get("event_count") or 0),
+                    "weighted_mentions": int(
+                        r.get("weighted_mentions")
+                        or r.get("mentions_total")
+                        or r.get("event_count")
+                        or 0
+                    ),
                 }
             )
 

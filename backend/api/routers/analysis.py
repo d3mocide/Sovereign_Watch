@@ -182,6 +182,10 @@ async def analyze_track(
                         )
                         now = datetime.now(timezone.utc)
                         pts = []
+                        valid_indices = []
+                        r_ecefs = []
+                        times = []
+
                         for i in range(10):
                             t = now - timedelta(hours=req.lookback_hours * (i / 10))
                             jd, fr = jday(
@@ -190,17 +194,24 @@ async def analyze_track(
                             e, r, v = satrec.sgp4(jd, fr)
                             if e == 0:
                                 r_ecef = teme_to_ecef(r, jd, fr)
-                                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
-                                    np.array(r_ecef).reshape(1, 3)
-                                )
+                                r_ecefs.append(r_ecef)
+                                times.append(t)
+                                valid_indices.append(i)
+
+                        if r_ecefs:
+                            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
+                                np.array(r_ecefs)
+                            )
+                            for idx in range(len(valid_indices)):
                                 pts.append(
                                     {
-                                        "lat": lat_arr[0],
-                                        "lon": lon_arr[0],
-                                        "alt": alt_arr[0] * 1000,
-                                        "time": t.isoformat(),
+                                        "lat": float(lat_arr[idx]),
+                                        "lon": float(lon_arr[idx]),
+                                        "alt": float(alt_arr[idx]) * 1000,
+                                        "time": times[idx].isoformat(),
                                     }
                                 )
+
                         if pts:
                             track_summary = {
                                 "points": len(pts),
@@ -305,9 +316,7 @@ async def analyze_track(
             rendezvous = escalation_detector.detect_rendezvous(tak_clauses)
             if rendezvous:
                 descs = "; ".join(r.description for r in rendezvous)
-                behavioral_signals.append(
-                    f"[SIGNAL] Multi-entity rendezvous: {descs}"
-                )
+                behavioral_signals.append(f"[SIGNAL] Multi-entity rendezvous: {descs}")
 
             clustering = escalation_detector.detect_anomaly_concentration(tak_clauses)
             if clustering:
@@ -318,9 +327,7 @@ async def analyze_track(
             emergency = escalation_detector.detect_emergency_transponders(tak_clauses)
             if emergency:
                 descs = "; ".join(e.description for e in emergency)
-                behavioral_signals.append(
-                    f"[SIGNAL] Emergency Squawk: {descs}"
-                )
+                behavioral_signals.append(f"[SIGNAL] Emergency Squawk: {descs}")
         except Exception as e:
             logger.warning(f"Escalation detection failed for analysis: {e}")
 
@@ -344,9 +351,9 @@ async def analyze_track(
     persona = ai_service.get_persona(
         mode_normalized,
         context={
-            "is_hold": is_hold, 
+            "is_hold": is_hold,
             "is_gdelt": uid.startswith("gdelt-"),
-            "is_sitrep": is_sitrep
+            "is_sitrep": is_sitrep,
         },
     )
 

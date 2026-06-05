@@ -47,9 +47,16 @@ def _resolve_mission_mode(
 
     has_radius_args = any(value is not None for value in (lat, lon, radius_nm))
     if h3_region and has_radius_args:
-        raise HTTPException(status_code=400, detail="Provide either h3_region or lat/lon/radius_nm, not both")
-    if has_radius_args and not all(value is not None for value in (lat, lon, radius_nm)):
-        raise HTTPException(status_code=400, detail="lat, lon, and radius_nm are required together")
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either h3_region or lat/lon/radius_nm, not both",
+        )
+    if has_radius_args and not all(
+        value is not None for value in (lat, lon, radius_nm)
+    ):
+        raise HTTPException(
+            status_code=400, detail="lat, lon, and radius_nm are required together"
+        )
     if h3_region:
         return {"h3_region": str(h3_region)}
     if has_radius_args:
@@ -86,10 +93,14 @@ def _build_outage_cell_map(
 ) -> dict[str, float]:
     """Project outage severity onto H3 cells hosting cable landing points."""
     outage_map: dict[str, float] = defaultdict(float)
-    countries = cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+    countries = (
+        cable_index.get("countries", {}) if isinstance(cable_index, dict) else {}
+    )
     for feature in outages_data.get("features", []):
         properties = feature.get("properties", {})
-        country_key = _normalize_country_label(properties.get("country") or properties.get("region"))
+        country_key = _normalize_country_label(
+            properties.get("country") or properties.get("region")
+        )
         if allowed_country_keys is not None and country_key not in allowed_country_keys:
             continue
         country_entry = countries.get(country_key)
@@ -123,11 +134,23 @@ def _entity_domain(entity_id: str) -> str:
 @router.get("/api/h3/risk", response_model=H3RiskResponse)
 async def get_h3_risk(
     resolution: int = Query(default=6, description="H3 resolution (4, 6, or 9)"),
-    hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours"),
-    h3_region: str | None = Query(default=None, description="Optional mission H3 cell for scoped risk analysis"),
-    lat: float | None = Query(default=None, description="Optional center latitude for mission risk analysis"),
-    lon: float | None = Query(default=None, description="Optional center longitude for mission risk analysis"),
-    radius_nm: float | None = Query(default=None, gt=0, description="Optional radius in nautical miles for mission risk analysis"),
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Lookback window in hours"
+    ),
+    h3_region: str | None = Query(
+        default=None, description="Optional mission H3 cell for scoped risk analysis"
+    ),
+    lat: float | None = Query(
+        default=None, description="Optional center latitude for mission risk analysis"
+    ),
+    lon: float | None = Query(
+        default=None, description="Optional center longitude for mission risk analysis"
+    ),
+    radius_nm: float | None = Query(
+        default=None,
+        gt=0,
+        description="Optional radius in nautical miles for mission risk analysis",
+    ),
 ):
     """
     Returns H3-indexed composite risk scores for all active cells.
@@ -139,7 +162,9 @@ async def get_h3_risk(
     if resolution not in VALID_RESOLUTIONS:
         resolution = 6
 
-    mission_mode = _resolve_mission_mode(h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm)
+    mission_mode = _resolve_mission_mode(
+        h3_region=h3_region, lat=lat, lon=lon, radius_nm=radius_nm
+    )
     cache_key = f"h3:risk:{resolution}:{hours}:{_mission_cache_suffix(mission_mode)}"
     if db.redis_client:
         cached = await db.redis_client.get(cache_key)
@@ -155,26 +180,26 @@ async def get_h3_risk(
     # positions count more than positions from earlier in the lookback window.
     density_map: dict[str, float] = defaultdict(float)
     async with db.pool.acquire() as conn:
-                if mission_mode is None or aot_context is None:
-                        rows = await conn.fetch(
-                                """
+        if mission_mode is None or aot_context is None:
+            rows = await conn.fetch(
+                """
                                 SELECT time, entity_id, lat, lon FROM tracks
                                 WHERE time > NOW() - ($1 || ' hours')::INTERVAL
                                     AND lat IS NOT NULL AND lon IS NOT NULL
                                 """,
-                                str(hours),
-                        )
-                else:
-                        rows = await conn.fetch(
-                                f"""
+                str(hours),
+            )
+        else:
+            rows = await conn.fetch(
+                f"""
                                 SELECT time, entity_id, lat, lon FROM tracks
                                 WHERE time > NOW() - ($1 || ' hours')::INTERVAL
                                     AND lat IS NOT NULL AND lon IS NOT NULL
-                                    AND {aot_context.aot_filter_sql.replace('geom', 'ST_SetSRID(ST_MakePoint(lon, lat), 4326)')}
+                                    AND {aot_context.aot_filter_sql.replace("geom", "ST_SetSRID(ST_MakePoint(lon, lat), 4326)")}
                                 """,
-                                str(hours),
-                                *aot_context.aot_sql_params,
-                        )
+                str(hours),
+                *aot_context.aot_sql_params,
+            )
     for row in rows:
         cell = h3.latlng_to_cell(row["lat"], row["lon"], resolution)
         domain = _entity_domain(row["entity_id"])
@@ -217,19 +242,26 @@ async def get_h3_risk(
                 if event_lat is None or event_lon is None or goldstein is None:
                     continue
                 cell = h3.latlng_to_cell(float(event_lat), float(event_lon), resolution)
-                quad = event.get("quad_class") if event.get("quad_class") is not None else 0
+                quad = (
+                    event.get("quad_class")
+                    if event.get("quad_class") is not None
+                    else 0
+                )
                 conf_key = "gdelt_conflict" if quad in (3, 4) else "gdelt_verbal"
                 weight = SOURCE_CONFIDENCE[conf_key]
                 linkage_score = event.get("linkage_score")
                 score_multiplier = 1.0
                 if isinstance(linkage_score, (int, float)):
                     score_multiplier = max(0.0, min(1.0, float(linkage_score)))
-                sentiment_map[cell].append((float(goldstein) * score_multiplier, weight))
+                sentiment_map[cell].append(
+                    (float(goldstein) * score_multiplier, weight)
+                )
 
             source_scope = {
                 "scope": (
                     "impact_linked_external"
-                    if sum(linkage_result.linkage_counts.values()) > linkage_result.linkage_counts["in_aot"]
+                    if sum(linkage_result.linkage_counts.values())
+                    > linkage_result.linkage_counts["in_aot"]
                     and linkage_result.linkage_counts["in_aot"] == 0
                     else "mission_area"
                 ),
@@ -242,7 +274,11 @@ async def get_h3_risk(
     if db.redis_client:
         outages_raw = await db.redis_client.get("infra:outages")
         cable_index_raw = await db.redis_client.get("infra:cable_country_index")
-        cables_raw = await db.redis_client.get("infra:cables") if mission_mode is not None else None
+        cables_raw = (
+            await db.redis_client.get("infra:cables")
+            if mission_mode is not None
+            else None
+        )
         if outages_raw and cable_index_raw:
             try:
                 allowed_country_keys = None
@@ -254,7 +290,8 @@ async def get_h3_risk(
                         aot_context.region_lon,
                     )
                     allowed_country_keys = {
-                        _normalize_country_label(country_name) for country_name in cable_countries
+                        _normalize_country_label(country_name)
+                        for country_name in cable_countries
                     }
                 outage_map = _build_outage_cell_map(
                     json.loads(outages_raw),
@@ -266,7 +303,9 @@ async def get_h3_risk(
                 logger.warning("H3 outage projection failed: %s", exc)
 
     # --- Merge cells from both sources ---
-    all_cells = set(density_map.keys()) | set(sentiment_map.keys()) | set(outage_map.keys())
+    all_cells = (
+        set(density_map.keys()) | set(sentiment_map.keys()) | set(outage_map.keys())
+    )
     if not all_cells:
         return H3RiskResponse(
             cells=[],
@@ -296,7 +335,9 @@ async def get_h3_risk(
 
         outage_norm = outage_map.get(cell, 0.0)
 
-        risk_score = OMEGA_D * density_norm + OMEGA_S * sentiment_norm + OMEGA_O * outage_norm
+        risk_score = (
+            OMEGA_D * density_norm + OMEGA_S * sentiment_norm + OMEGA_O * outage_norm
+        )
         risk_score = round(max(0.0, min(1.0, risk_score)), 4)
 
         lat, lon = h3.cell_to_latlng(cell)

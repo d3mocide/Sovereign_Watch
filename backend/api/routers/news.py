@@ -144,7 +144,9 @@ async def _fetch_feeds() -> list[dict]:
     urls = [u.strip() for u in raw_urls.split(",") if u.strip()]
 
     all_items: list[dict] = []
-    async with httpx.AsyncClient(transport=SSRFSafeTransport(), timeout=10.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        transport=SSRFSafeTransport(), timeout=10.0, follow_redirects=True
+    ) as client:
         for url in urls:
             source = _source_name(url)
             try:
@@ -169,8 +171,13 @@ async def _fetch_feeds() -> list[dict]:
                     try:
                         await db.redis_client.set(
                             "poller:news:last_error",
-                            json.dumps({"ts": time.time(), "msg": f"{source}: Internal fetch error"}),
-                            ex=3600
+                            json.dumps(
+                                {
+                                    "ts": time.time(),
+                                    "msg": f"{source}: Internal fetch error",
+                                }
+                            ),
+                            ex=3600,
                         )
                     except Exception:
                         pass
@@ -179,7 +186,9 @@ async def _fetch_feeds() -> list[dict]:
     if all_items:
         if db.redis_client:
             try:
-                await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
+                await db.redis_client.set(
+                    "news:last_fetch", str(time.time()), ex=CACHE_TTL * 2
+                )
             except Exception:
                 pass
 
@@ -202,7 +211,9 @@ async def get_news_feed(limit: int = Query(default=40, le=100)):
     if db.redis_client:
         try:
             # Set/Update heartbeat on every access to show aggregator is alive
-            await db.redis_client.set("news:last_fetch", str(time.time()), ex=CACHE_TTL * 2)
+            await db.redis_client.set(
+                "news:last_fetch", str(time.time()), ex=CACHE_TTL * 2
+            )
 
             cached = await db.redis_client.get(CACHE_KEY)
             if cached:
@@ -289,6 +300,7 @@ class SSRFSafeTransport(httpx.AsyncHTTPTransport):
     It replaces the host with the resolved IP while keeping the original host in the SNI,
     thus ensuring the IP validated is exactly the one connected to.
     """
+
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         original_host = request.url.host
         loop = asyncio.get_running_loop()
@@ -301,7 +313,12 @@ class SSRFSafeTransport(httpx.AsyncHTTPTransport):
         for addr in addrs:
             ip = addr[4][0]
             ip_obj = ipaddress.ip_address(ip)
-            if not (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified):
+            if not (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+                or ip_obj.is_unspecified
+            ):
                 safe_ip = ip
                 break
 
@@ -330,7 +347,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
 
     try:
         async with httpx.AsyncClient(
-            transport=SSRFSafeTransport(), timeout=ARTICLE_TIMEOUT, follow_redirects=True
+            transport=SSRFSafeTransport(),
+            timeout=ARTICLE_TIMEOUT,
+            follow_redirects=True,
         ) as client:
             resp = await client.get(
                 url,

@@ -81,10 +81,16 @@ def format_heuristic_fallback_narrative(
 
     pressure = _risk_pressure_label(heuristic_risk_score)
     confidence = _confidence_label(heuristic_risk_score, anomalous_count)
-    positive_linkage_categories = _extract_positive_linkage_categories(gdelt_linkage_notes)
+    positive_linkage_categories = _extract_positive_linkage_categories(
+        gdelt_linkage_notes
+    )
     has_external_linkage = bool(positive_linkage_categories)
 
-    if heuristic_risk_score < 0.15 and not escalation_indicators and not has_external_linkage:
+    if (
+        heuristic_risk_score < 0.15
+        and not escalation_indicators
+        and not has_external_linkage
+    ):
         if is_sitrep:
             return (
                 "### ACTIVE ZONES\n"
@@ -108,9 +114,7 @@ def format_heuristic_fallback_narrative(
         )
 
     if anomalous_count > 0:
-        behavior_line = (
-            f"{anomalous_count} anomalous platform(s) contribute local pressure, suggesting the risk picture is not purely contextual."
-        )
+        behavior_line = f"{anomalous_count} anomalous platform(s) contribute local pressure, suggesting the risk picture is not purely contextual."
     elif has_external_linkage:
         categories_text = ", ".join(positive_linkage_categories[:2])
         behavior_line = (
@@ -118,9 +122,7 @@ def format_heuristic_fallback_narrative(
             f"{categories_text} is shaping the local operating environment."
         )
     else:
-        behavior_line = (
-            "Pressure is present, but local entity-level anomalies remain limited and the picture is being driven mainly by broader context."
-        )
+        behavior_line = "Pressure is present, but local entity-level anomalies remain limited and the picture is being driven mainly by broader context."
 
     signal_lines = [f"- {indicator}." for indicator in escalation_indicators[:3]] or [
         "- Heuristic risk scoring indicates regional pressure above background levels."
@@ -144,16 +146,12 @@ def format_heuristic_fallback_narrative(
         classification_header = "### ACTIVE ZONES"
         behavior_header = "### ACTOR BEHAVIOR"
         risk_header = "### ESCALATION SIGNALS"
-        classification_line = (
-            f"- {pressure.capitalize()} regional pressure is active, with mission-linked external reporting shaping the zone risk picture."
-        )
+        classification_line = f"- {pressure.capitalize()} regional pressure is active, with mission-linked external reporting shaping the zone risk picture."
     else:
         classification_header = "### CLASSIFICATION"
         behavior_header = "### BEHAVIORAL ASSESSMENT"
         risk_header = "### RISK SIGNALS"
-        classification_line = (
-            f"- {pressure.capitalize()} regional pressure is active, with mission-linked external reporting degrading the local operating picture."
-        )
+        classification_line = f"- {pressure.capitalize()} regional pressure is active, with mission-linked external reporting degrading the local operating picture."
 
     return "\n".join(
         [
@@ -224,7 +222,9 @@ class SequenceEvaluationEngine:
                 "Ensure narrative_summary is structured with the requested ### headers."
             )
 
-            system_instruction = f"{persona['sys']}\n{persona['inst']}{json_requirement}"
+            system_instruction = (
+                f"{persona['sys']}\n{persona['inst']}{json_requirement}"
+            )
 
             redis_url = os.getenv("REDIS_URL", "redis://sovereign-redis:6379")
             sem_cache = await get_semantic_cache(redis_url)
@@ -300,7 +300,9 @@ class SequenceEvaluationEngine:
         if escalation_indicators:
             indicators_text = "\n".join([f"- {item}" for item in escalation_indicators])
 
-        gdelt_linkage_text = gdelt_linkage_notes or "No explicit linked-external GDELT notes"
+        gdelt_linkage_text = (
+            gdelt_linkage_notes or "No explicit linked-external GDELT notes"
+        )
 
         prompt = f"""Analyze the following multi-INT data for regional risk:
 

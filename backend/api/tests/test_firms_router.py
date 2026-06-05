@@ -71,16 +71,20 @@ def test_parse_firms_csv_to_rows_filters_and_normalizes_live_world_feed() -> Non
 
 
 @pytest.mark.asyncio
-async def test_get_firms_hotspots_prefers_live_global_fallback_when_cache_misses() -> None:
+async def test_get_firms_hotspots_prefers_live_global_fallback_when_cache_misses() -> (
+    None
+):
     redis_client = AsyncMock()
     redis_client.get = AsyncMock(return_value=None)
     redis_client.setex = AsyncMock()
 
-    with patch.object(firms_router.db, "redis_client", redis_client), patch.object(
-        firms_router.db, "pool", None
-    ), patch.object(
-        firms_router, "_fetch_live_global_hotspots", new_callable=AsyncMock
-    ) as mock_live_fetch:
+    with (
+        patch.object(firms_router.db, "redis_client", redis_client),
+        patch.object(firms_router.db, "pool", None),
+        patch.object(
+            firms_router, "_fetch_live_global_hotspots", new_callable=AsyncMock
+        ) as mock_live_fetch,
+    ):
         mock_live_fetch.return_value = {
             "type": "FeatureCollection",
             "features": [
@@ -124,11 +128,13 @@ async def test_get_firms_hotspots_uses_primary_global_cache_when_available() -> 
     redis_client = AsyncMock()
     redis_client.get = AsyncMock(return_value=json.dumps(cached))
 
-    with patch.object(firms_router.db, "redis_client", redis_client), patch.object(
-        firms_router.db, "pool", None
-    ), patch.object(
-        firms_router, "_fetch_live_global_hotspots", new_callable=AsyncMock
-    ) as mock_live_fetch:
+    with (
+        patch.object(firms_router.db, "redis_client", redis_client),
+        patch.object(firms_router.db, "pool", None),
+        patch.object(
+            firms_router, "_fetch_live_global_hotspots", new_callable=AsyncMock
+        ) as mock_live_fetch,
+    ):
         result = await firms_router.get_firms_hotspots(
             min_lat=-90.0,
             max_lat=90.0,
@@ -162,8 +168,9 @@ async def test_get_dark_vessels_applies_land_mask_geometries() -> None:
     pool = MagicMock()
     pool.acquire.return_value = _Acquire(conn)
 
-    with patch.object(firms_router.db, "redis_client", None), patch.object(
-        firms_router.db, "pool", pool
+    with (
+        patch.object(firms_router.db, "redis_client", None),
+        patch.object(firms_router.db, "pool", pool),
     ):
         result = await firms_router.get_dark_vessels()
 

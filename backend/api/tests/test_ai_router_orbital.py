@@ -38,6 +38,7 @@ mock_hmm.classify_trajectory = _stub_classify_trajectory
 sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
+
 del sys.modules["services.hmm_trajectory"]
 
 
@@ -54,7 +55,9 @@ async def test_analyze_orbital_domain_keeps_only_mission_area_satnogs_events():
     region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
     redis_payloads = {
         "space_weather:kp_current": json.dumps({"kp": 5.0, "storm_level": "G1"}),
-        "space_weather:noaa_scales": json.dumps({"0": {"R": {"Scale": "R2"}, "G": {"Scale": "G1"}, "S": {"Scale": "S1"}}}),
+        "space_weather:noaa_scales": json.dumps(
+            {"0": {"R": {"Scale": "R2"}, "G": {"Scale": "G1"}, "S": {"Scale": "S1"}}}
+        ),
     }
 
     event_time = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
@@ -105,7 +108,9 @@ async def test_analyze_orbital_domain_keeps_only_mission_area_satnogs_events():
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
-        patch.object(ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint),
+        patch.object(
+            ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint
+        ),
         patch.object(
             ai_router.ai_service,
             "generate_static",
@@ -118,9 +123,17 @@ async def test_analyze_orbital_domain_keeps_only_mission_area_satnogs_events():
 
     assert response.context_snapshot["signal_loss_count"] == 1
     assert response.context_snapshot["signal_loss_events"][0]["norad_id"] == 11111
-    assert response.context_snapshot["context_scope"]["space_weather"]["scope"] == "impact_linked_external"
-    assert response.context_snapshot["context_scope"]["satnogs"]["scope"] == "mission_area"
+    assert (
+        response.context_snapshot["context_scope"]["space_weather"]["scope"]
+        == "impact_linked_external"
+    )
+    assert (
+        response.context_snapshot["context_scope"]["satnogs"]["scope"] == "mission_area"
+    )
 
     prompt = mock_generate.await_args.kwargs["user_prompt"]
     assert "Mission-area SatNOGS signal-loss events: 1" in prompt
-    assert "Scope contract: mission-area signals plus impact-linked external drivers only" in prompt
+    assert (
+        "Scope contract: mission-area signals plus impact-linked external drivers only"
+        in prompt
+    )

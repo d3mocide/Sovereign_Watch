@@ -37,6 +37,7 @@ mock_hmm.classify_trajectory = _stub_classify_trajectory
 sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
+
 del sys.modules["services.hmm_trajectory"]
 
 
@@ -119,7 +120,9 @@ async def test_clausal_chains_enrichment_uses_h3_and_time_scope():
 
     with (
         patch.object(ai_router.db, "pool", mock_pool),
-        patch.object(ai_router, "_satellite_subpoint_for_time", return_value=(0.0, 0.0)),
+        patch.object(
+            ai_router, "_satellite_subpoint_for_time", return_value=(0.0, 0.0)
+        ),
     ):
         result = await ai_router.get_clausal_chains(
             region=region,
@@ -136,9 +139,14 @@ async def test_clausal_chains_enrichment_uses_h3_and_time_scope():
     assert chain["context_scope"]["outages"]["scope"] == "mission_area"
     assert chain["context_scope"]["outages"]["linkage_reason"] == "h3_filter"
     assert chain["context_scope"]["space_weather"]["scope"] == "impact_linked_external"
-    assert chain["context_scope"]["space_weather"]["notes"] == "Thresholded external-driver gate applied: kp>=5"
+    assert (
+        chain["context_scope"]["space_weather"]["notes"]
+        == "Thresholded external-driver gate applied: kp>=5"
+    )
     assert chain["context_scope"]["satnogs"]["scope"] == "mission_area"
-    assert chain["context_scope"]["satnogs"]["linkage_reason"] == "orbital_subpoint_in_aot"
+    assert (
+        chain["context_scope"]["satnogs"]["linkage_reason"] == "orbital_subpoint_in_aot"
+    )
     assert chain["outage_context"][0]["country_code"] == "AA"
     assert chain["space_weather_context"]["kp_index"] == 5.0
     assert chain["space_weather_context"]["threshold_passed"] is True
@@ -147,7 +155,9 @@ async def test_clausal_chains_enrichment_uses_h3_and_time_scope():
     assert chain["satnogs_context"][0]["scope"] == "mission_area"
     assert chain["satnogs_context"][0]["subpoint_lat"] == 0.0
 
-    outage_query = next(sql for sql in captured_queries if "FROM internet_outages" in sql)
+    outage_query = next(
+        sql for sql in captured_queries if "FROM internet_outages" in sql
+    )
     assert "ST_Within(geom, ST_GeomFromText($2, 4326))" in outage_query
     assert "time > now() - ($1 * interval '1 hour')" in outage_query
 
@@ -222,7 +232,9 @@ async def test_clausal_chains_enrichment_uses_radius_scoped_satnogs_events():
 
     with (
         patch.object(ai_router.db, "pool", mock_pool),
-        patch.object(ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint),
+        patch.object(
+            ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint
+        ),
     ):
         result = await ai_router.get_clausal_chains(
             region=None,
@@ -237,7 +249,10 @@ async def test_clausal_chains_enrichment_uses_radius_scoped_satnogs_events():
     chain = result[0]
     assert chain["context_scope"]["spatial_mode"] == "radius"
     assert chain["context_scope"]["satnogs"]["scope"] == "mission_area"
-    assert chain["context_scope"]["satnogs"]["linkage_reason"] == "orbital_subpoint_in_radius"
+    assert (
+        chain["context_scope"]["satnogs"]["linkage_reason"]
+        == "orbital_subpoint_in_radius"
+    )
     assert len(chain["satnogs_context"]) == 1
     assert chain["satnogs_context"][0]["ground_station_name"] == "GS-NEAR"
     assert chain["satnogs_context"][0]["scope"] == "mission_area"
@@ -302,7 +317,10 @@ async def test_clausal_chains_omits_below_threshold_space_weather_context():
     assert len(result) == 1
     chain = result[0]
     assert chain["context_scope"]["space_weather"]["scope"] == "impact_linked_external"
-    assert chain["context_scope"]["space_weather"]["notes"] == "Thresholded external-driver gate applied: kp>=5"
+    assert (
+        chain["context_scope"]["space_weather"]["notes"]
+        == "Thresholded external-driver gate applied: kp>=5"
+    )
     assert chain["space_weather_context"] is None
 
 
@@ -314,7 +332,7 @@ async def test_clausal_chains_outages_use_cable_topology_country_filter_for_h3()
     redis_payloads = {
         "infra:cable_country_index": '{"countries":{"country a":{"country":"Country A","station_points":[{"lat":0.0,"lon":-0.4}]},"country c":{"country":"Country C","station_points":[{"lat":8.0,"lon":8.0}]}},"cables":{"A-B Cable":{"countries":["country a"]}}}',
         "infra:cables": '{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-0.4,0.0],[0.0,0.0],[0.4,0.0]]},"properties":{"name":"A-B Cable"}}]}',
-        "infra:outages": '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"country":"Country A","country_code":"AA","severity":82.0},"geometry":{"type":"Point","coordinates":[-0.4,0.0]}},{"type":"Feature","properties":{"country":"Country C","country_code":"CC","severity":91.0},"geometry":{"type":"Point","coordinates":[8.0,8.0]}}]}'
+        "infra:outages": '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"country":"Country A","country_code":"AA","severity":82.0},"geometry":{"type":"Point","coordinates":[-0.4,0.0]}},{"type":"Feature","properties":{"country":"Country C","country_code":"CC","severity":91.0},"geometry":{"type":"Point","coordinates":[8.0,8.0]}}]}',
     }
 
     mock_conn = MagicMock()
@@ -378,7 +396,9 @@ async def test_clausal_chains_outages_use_cable_topology_country_filter_for_h3()
     assert chain["context_scope"]["outages"]["scope"] == "impact_linked_external"
     assert chain["context_scope"]["outages"]["linkage_reason"] == "cable_topology"
     assert chain["outage_context"][0]["country_code"] == "AA"
-    assert "country_code = ANY($2::text[])" in next(sql for sql in captured_queries if "FROM internet_outages" in sql)
+    assert "country_code = ANY($2::text[])" in next(
+        sql for sql in captured_queries if "FROM internet_outages" in sql
+    )
 
 
 @pytest.mark.asyncio
@@ -387,7 +407,7 @@ async def test_clausal_chains_outages_use_cable_topology_country_filter_for_radi
     redis_payloads = {
         "infra:cable_country_index": '{"countries":{"country a":{"country":"Country A","station_points":[{"lat":0.0,"lon":-0.4}]},"country c":{"country":"Country C","station_points":[{"lat":8.0,"lon":8.0}]}},"cables":{"A-B Cable":{"countries":["country a"]}}}',
         "infra:cables": '{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-0.4,0.0],[0.0,0.0],[0.4,0.0]]},"properties":{"name":"A-B Cable"}}]}',
-        "infra:outages": '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"country":"Country A","country_code":"AA","severity":82.0},"geometry":{"type":"Point","coordinates":[-0.4,0.0]}},{"type":"Feature","properties":{"country":"Country C","country_code":"CC","severity":91.0},"geometry":{"type":"Point","coordinates":[8.0,8.0]}}]}'
+        "infra:outages": '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"country":"Country A","country_code":"AA","severity":82.0},"geometry":{"type":"Point","coordinates":[-0.4,0.0]}},{"type":"Feature","properties":{"country":"Country C","country_code":"CC","severity":91.0},"geometry":{"type":"Point","coordinates":[8.0,8.0]}}]}',
     }
 
     mock_conn = MagicMock()

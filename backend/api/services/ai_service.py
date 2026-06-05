@@ -99,38 +99,38 @@ class AIService:
             "sitrep": {
                 "sys": "Sovereign Watch Strategic Director",
                 "headers": "### ACTIVE ZONES, ### ACTOR BEHAVIOR, ### ESCALATION SIGNALS, ### CONFIDENCE",
-                "goal": "Analyze the strategic escalation risk for this H3 region."
+                "goal": "Analyze the strategic escalation risk for this H3 region.",
             },
             "tactical": {
                 "sys": "Sovereign Watch Tactical Analyst",
                 "headers": "### CLASSIFICATION, ### BEHAVIORAL ASSESSMENT, ### RISK SIGNALS, ### CONFIDENCE",
-                "goal": "Assess the tactical profile and risk of this specific target."
+                "goal": "Assess the tactical profile and risk of this specific target.",
             },
             "osint": {
                 "sys": "Sovereign Watch OSINT Analyst",
                 "headers": "### SOURCE/CONTEXT, ### ACTOR INTENT HYPOTHESIS, ### REGIONAL IMPACT, ### CONFIDENCE",
-                "goal": "Evaluate the geopolitical and OSINT narrative for this target."
+                "goal": "Evaluate the geopolitical and OSINT narrative for this target.",
             },
             "sar": {
                 "sys": "Sovereign Watch SAR Analyst",
                 "headers": "### DISTRESS INDICATORS, ### OPERATIONAL RISK, ### RECOMMENDED ACTIONS, ### CONFIDENCE",
-                "goal": "Identify Search and Rescue distress markers and mission risks."
+                "goal": "Identify Search and Rescue distress markers and mission risks.",
             },
             "gdelt": {
                 "sys": "Sovereign Watch Geopolitical Analyst",
                 "headers": "### EVENT CONTEXT, ### POTENTIAL IMPACT, ### ESCALATION RISK, ### CONFIDENCE",
-                "goal": "Assess the escalation risk and regional impact of this GDELT event."
+                "goal": "Assess the escalation risk and regional impact of this GDELT event.",
             },
             "hold": {
                 "sys": "Tactical Flight Safety Analyst",
                 "headers": "### PATTERN EVIDENCE, ### RISK SIGNALS, ### CONFIDENCE",
-                "goal": "Confirm and assess the Distant Pattern / Holding logic of this aircraft."
+                "goal": "Confirm and assess the Distant Pattern / Holding logic of this aircraft.",
             },
             "hold_sar": {
                 "sys": "Aviation SAR Specialist",
                 "headers": "### DISTRESS EVIDENCE, ### CONFIDENCE",
-                "goal": "Evaluate if this holding pattern indicates mechanical distress or mission failure."
-            }
+                "goal": "Evaluate if this holding pattern indicates mechanical distress or mission failure.",
+            },
         }
 
         # 3. Dynamic Selection
@@ -141,7 +141,7 @@ class AIService:
             p_key = "hold_sar" if mode == "sar" else "hold"
         elif is_gdelt and mode != "sar":
             p_key = "gdelt"
-        
+
         selected = persona_defs.get(p_key, persona_defs["tactical"])
 
         return {
@@ -149,7 +149,7 @@ class AIService:
             "inst": (
                 f"{selected['goal']} Use exactly these sections in order: {selected['headers']}. "
                 f"{MARKDOWN_RULES}"
-            )
+            ),
         }
 
     async def generate_stream(
@@ -158,9 +158,9 @@ class AIService:
         """Stream completion from the active model."""
         params = await self.get_model_params()
         model_name = params.get("model", "unknown")
-        
+
         logger.info(f"🚀 [UNIFIED-BRAIN] Initiating stream from model: {model_name}")
-        
+
         try:
             response = await acompletion(
                 **params,
@@ -184,9 +184,11 @@ class AIService:
         """Get a full static completion from the active model."""
         params = await self.get_model_params()
         model_name = params.get("model", "unknown")
-        
-        logger.info(f"🧠 [UNIFIED-BRAIN] Processing static completion for model: {model_name}")
-        
+
+        logger.info(
+            f"🧠 [UNIFIED-BRAIN] Processing static completion for model: {model_name}"
+        )
+
         try:
             response = await acompletion(
                 **params,

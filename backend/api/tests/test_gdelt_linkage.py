@@ -26,7 +26,9 @@ def test_build_mission_country_set_expands_first_order_neighbors():
 
 
 def test_build_cable_country_set_maps_normalized_landing_names_to_codes():
-    assert gdelt_linkage.build_cable_country_set({"Russia", "United States", "Tanzania"}) == {
+    assert gdelt_linkage.build_cable_country_set(
+        {"Russia", "United States", "Tanzania"}
+    ) == {
         "RUS",
         "TZA",
         "USA",
@@ -100,9 +102,17 @@ def test_classify_gdelt_linkage_buckets_events_by_phase1_rules():
         "in_aot": 1,
         "state_actor": 1,
         "cable_infra": 1,
-        "chokepoint": 1, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+        "chokepoint": 1,
+        "alliance_support": 0,
+        "basing_support": 0,
+        "second_order_neighbor": 0,
     }
-    assert next(event for event in admitted if event["event_id_cnty"] == "chokepoint")["linkage_chokepoint"] == "Strait of Hormuz"
+    assert (
+        next(event for event in admitted if event["event_id_cnty"] == "chokepoint")[
+            "linkage_chokepoint"
+        ]
+        == "Strait of Hormuz"
+    )
     assert scores["in-aot"] == 1.0
     assert scores["state"] == 0.8
     assert scores["cable"] == 0.85
@@ -177,7 +187,10 @@ def test_classify_gdelt_linkage_orders_admitted_events_by_linkage_score():
         primary_mission_country_code="UKR",
     )
 
-    assert [event["event_id_cnty"] for event in admitted] == ["higher-score", "lower-score"]
+    assert [event["event_id_cnty"] for event in admitted] == [
+        "higher-score",
+        "lower-score",
+    ]
 
 
 def test_classify_gdelt_linkage_boosts_theater_aligned_chokepoint_score():
@@ -220,7 +233,10 @@ def test_classify_gdelt_linkage_boosts_theater_aligned_chokepoint_score():
     assert admitted_aligned[0]["linkage_score"] == 0.85
     assert admitted_non_aligned[0]["linkage_score"] == 0.65
     assert admitted_aligned[0]["linkage_evidence"]["matched_theater"] == "CENTCOM"
-    assert admitted_aligned[0]["linkage_evidence"]["chokepoint_theaters"] == ["CENTCOM", "INDOPACOM"]
+    assert admitted_aligned[0]["linkage_evidence"]["chokepoint_theaters"] == [
+        "CENTCOM",
+        "INDOPACOM",
+    ]
     assert "matched_theater" not in admitted_non_aligned[0]["linkage_evidence"]
 
 

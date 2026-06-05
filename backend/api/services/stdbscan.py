@@ -170,7 +170,9 @@ def detect_clusters(
         lons = [parsed[i][2] for i in indices]
         times = [parsed[i][3] for i in indices]
         uids_raw = [parsed[i][0] for i in indices]
-        unique_uids = list(dict.fromkeys(uids_raw))  # preserve insertion order, deduplicate
+        unique_uids = list(
+            dict.fromkeys(uids_raw)
+        )  # preserve insertion order, deduplicate
 
         clusters.append(
             Cluster(

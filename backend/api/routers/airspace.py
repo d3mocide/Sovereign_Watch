@@ -54,7 +54,8 @@ async def get_airspace_history(
         description="Filter by zone type (RESTRICTED, DANGER, PROHIBITED, WARNING, TRA, TSA, ADIZ)",
     ),
     country: Optional[str] = Query(
-        default=None, description="Filter by ISO 3166-1 alpha-2 country code (e.g. US, DE)"
+        default=None,
+        description="Filter by ISO 3166-1 alpha-2 country code (e.g. US, DE)",
     ),
 ):
     """
@@ -104,14 +105,14 @@ async def get_airspace_history(
                     "type": "Feature",
                     "geometry": geom,
                     "properties": {
-                        "zone_id":    row["zone_id"],
-                        "name":       row["name"],
-                        "type":       row["type"],
+                        "zone_id": row["zone_id"],
+                        "name": row["name"],
+                        "type": row["type"],
                         "icao_class": row["icao_class"],
-                        "country":    row["country"],
+                        "country": row["country"],
                         "upper_limit": row["upper_limit"],
                         "lower_limit": row["lower_limit"],
-                        "time":       row["time"].isoformat() if row["time"] else None,
+                        "time": row["time"].isoformat() if row["time"] else None,
                     },
                 }
             )
@@ -145,9 +146,7 @@ async def get_airspace_types():
         async with db.pool.acquire() as conn:
             rows = await conn.fetch(query)
 
-        return {
-            "types": [{"type": row["type"], "count": row["count"]} for row in rows]
-        }
+        return {"types": [{"type": row["type"], "count": row["count"]} for row in rows]}
     except Exception as exc:
         logger.error("Error fetching airspace types: %s", exc)
         raise HTTPException(status_code=500, detail="Database error")

@@ -37,7 +37,9 @@ SATNOGS_STATIONS_URL = "https://network.satnogs.org/api/stations/"
 SATNOGS_STATIONS_TIMEOUT = httpx.Timeout(15.0, connect=20.0)
 SATNOGS_STATIONS_TIMEOUT_RETRIES = 1
 
-_THROTTLE_DETAIL_RE = re.compile(r"expected available in\s+(\d+)\s+seconds", re.IGNORECASE)
+_THROTTLE_DETAIL_RE = re.compile(
+    r"expected available in\s+(\d+)\s+seconds", re.IGNORECASE
+)
 
 
 def _stations_response(
@@ -395,7 +397,9 @@ async def get_stations(
     error_backoff_key = f"{cache_key}:error"
 
     # During upstream outages, avoid repeated external calls for a short window.
-    if db.redis_client and (backoff_raw := await db.redis_client.get(error_backoff_key)):
+    if db.redis_client and (
+        backoff_raw := await db.redis_client.get(error_backoff_key)
+    ):
         backoff = _parse_backoff_payload(backoff_raw) or {}
         retry_after_s = max(
             1,
@@ -438,7 +442,9 @@ async def get_stations(
             "User-Agent": "SovereignWatch/1.0 (admin@sovereignwatch.local)",
             "Accept": "application/json",
         }
-        async with httpx.AsyncClient(timeout=SATNOGS_STATIONS_TIMEOUT, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=SATNOGS_STATIONS_TIMEOUT, headers=headers
+        ) as client:
             # Retry one transient timeout before falling back to cache/empty payload.
             data = await _fetch_upstream_stations(client)
 
@@ -495,7 +501,9 @@ async def get_stations(
                 error_backoff_key,
                 _build_backoff_payload(
                     retry_after_s=retry_after_s,
-                    reason="http_429" if exc.response.status_code == 429 else "http_error",
+                    reason="http_429"
+                    if exc.response.status_code == 429
+                    else "http_error",
                 ),
                 ex=retry_after_s,
             )

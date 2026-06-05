@@ -48,7 +48,10 @@ def test_apply_consistency_guard_rewrites_contradictory_summary() -> None:
     guarded = engine._apply_consistency_guard(
         assessment,
         heuristic_risk_score=0.43,
-        escalation_indicators=["GDELT conflict intensity elevated", "Entity clustering detected"],
+        escalation_indicators=[
+            "GDELT conflict intensity elevated",
+            "Entity clustering detected",
+        ],
         gdelt_linkage_notes="1 in-AOT, 3 maritime-chokepoint",
         mode="tactical",
         is_sitrep=True,

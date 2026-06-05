@@ -59,6 +59,7 @@ def _build_firms_detail(snapshot_raw: str | None) -> str | None:
 
     return " | ".join(parts) if parts else None
 
+
 # ---------------------------------------------------------------------------
 # AI model registry — read from models.yaml at project root (mounted in Docker).
 # ---------------------------------------------------------------------------
@@ -770,27 +771,31 @@ async def get_poller_health():
         async with httpx.AsyncClient(timeout=1.0) as client:
             resp = await client.get(js8_url)
             js8_healthy = resp.status_code == 200
-        results.append({
-            "id": "js8_bridge",
-            "name": "Radio Bridge",
-            "group": "RF",
-            "status": "active" if js8_healthy else "error",
-            "last_success": now if js8_healthy else None,
-            "last_error_ts": None if js8_healthy else now,
-            "last_error_msg": None if js8_healthy else "JS8 Bridge unreachable",
-            "stale_after_s": None,
-        })
+        results.append(
+            {
+                "id": "js8_bridge",
+                "name": "Radio Bridge",
+                "group": "RF",
+                "status": "active" if js8_healthy else "error",
+                "last_success": now if js8_healthy else None,
+                "last_error_ts": None if js8_healthy else now,
+                "last_error_msg": None if js8_healthy else "JS8 Bridge unreachable",
+                "stale_after_s": None,
+            }
+        )
     except Exception:
-        results.append({
-            "id": "js8_bridge",
-            "name": "Radio Bridge",
-            "group": "RF",
-            "status": "error",
-            "last_success": None,
-            "last_error_ts": now,
-            "last_error_msg": "JS8 Bridge unreachable",
-            "stale_after_s": None,
-        })
+        results.append(
+            {
+                "id": "js8_bridge",
+                "name": "Radio Bridge",
+                "group": "RF",
+                "status": "error",
+                "last_success": None,
+                "last_error_ts": now,
+                "last_error_msg": "JS8 Bridge unreachable",
+                "stale_after_s": None,
+            }
+        )
 
     return results
 

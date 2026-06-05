@@ -71,11 +71,17 @@ async def test_get_poller_health_includes_firms_summary_detail() -> None:
     redis_client.expire = AsyncMock()
     redis_client.lrange = AsyncMock(return_value=["1", "1", "1"])
 
-    with patch.object(system_router.db, "redis_client", redis_client), patch.dict(
-        os.environ,
-        {"FIRMS_MAP_KEY": "test-key"},
-        clear=False,
-    ), patch.object(system_router.httpx, "AsyncClient", return_value=_MockAsyncClient()):
+    with (
+        patch.object(system_router.db, "redis_client", redis_client),
+        patch.dict(
+            os.environ,
+            {"FIRMS_MAP_KEY": "test-key"},
+            clear=False,
+        ),
+        patch.object(
+            system_router.httpx, "AsyncClient", return_value=_MockAsyncClient()
+        ),
+    ):
         result = await system_router.get_poller_health()
 
     firms = next(item for item in result if item["id"] == "firms")

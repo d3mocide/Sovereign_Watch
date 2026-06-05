@@ -37,19 +37,26 @@ sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
 from services.gdelt_linkage import GdeltLinkageResult  # noqa: E402
+
 del sys.modules["services.hmm_trajectory"]
 
 
 class _FakeAlignment:
-    async def align_clauses(self, *, h3_region, clausal_chains, gdelt_events, lookback_window):
-        return types.SimpleNamespace(tak_clauses=[], gdelt_clauses=[], alignment_score=0.0)
+    async def align_clauses(
+        self, *, h3_region, clausal_chains, gdelt_events, lookback_window
+    ):
+        return types.SimpleNamespace(
+            tak_clauses=[], gdelt_clauses=[], alignment_score=0.0
+        )
 
 
 class _CapturingAlignment(_FakeAlignment):
     def __init__(self):
         self.gdelt_event_ids: list[str] = []
 
-    async def align_clauses(self, *, h3_region, clausal_chains, gdelt_events, lookback_window):
+    async def align_clauses(
+        self, *, h3_region, clausal_chains, gdelt_events, lookback_window
+    ):
         self.gdelt_event_ids = [event["event_id_cnty"] for event in gdelt_events]
         return await super().align_clauses(
             h3_region=h3_region,
@@ -86,19 +93,33 @@ class _FakeEscalationDetector:
         return []
 
     def detect_internet_outage(self, outage_data):
-        return types.SimpleNamespace(score=0.0, affected_uids=[], metric_type="internet_outage", description="")
+        return types.SimpleNamespace(
+            score=0.0, affected_uids=[], metric_type="internet_outage", description=""
+        )
 
     def detect_space_weather(self, kp_index):
-        return types.SimpleNamespace(score=0.0, affected_uids=[], metric_type="space_weather", description=str(kp_index))
+        return types.SimpleNamespace(
+            score=0.0,
+            affected_uids=[],
+            metric_type="space_weather",
+            description=str(kp_index),
+        )
 
     def detect_satnogs_signal_loss(self, signal_events):
         return []
 
     def detect_internet_outage_correlation(self, outage_data):
-        return types.SimpleNamespace(score=0.0, affected_uids=[], metric_type="internet_outage", description="")
+        return types.SimpleNamespace(
+            score=0.0, affected_uids=[], metric_type="internet_outage", description=""
+        )
 
     def detect_space_weather_anomaly(self, kp_index):
-        return types.SimpleNamespace(score=0.0, affected_uids=[], metric_type="space_weather", description=str(kp_index))
+        return types.SimpleNamespace(
+            score=0.0,
+            affected_uids=[],
+            metric_type="space_weather",
+            description=str(kp_index),
+        )
 
     def compute_risk_score(self, **kwargs):
         return 0.0
@@ -114,7 +135,11 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
     mock_conn = MagicMock()
 
     async def _fetch(sql: str, *params):
-        if "FROM gdelt_events" in sql or "FROM clausal_chains" in sql or "FROM satnogs_signal_events" in sql:
+        if (
+            "FROM gdelt_events" in sql
+            or "FROM clausal_chains" in sql
+            or "FROM satnogs_signal_events" in sql
+        ):
             return []
         return []
 
@@ -131,7 +156,9 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", None),
-        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(
+            ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()
+        ),
         patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
     ):
         response = await ai_router.evaluate_regional_escalation(
@@ -146,12 +173,21 @@ async def test_evaluate_regional_escalation_returns_scope_metadata():
 
     assert response.source_scope is not None
     assert response.source_scope["tak"]["scope"] == "mission_area"
-    assert response.source_scope["gdelt"]["linkage_reason"] == "explicit_geopolitical_linkage"
-    assert response.source_scope["gdelt"]["notes"] == "0 in-AOT, 0 state-actor/border, 0 exp:alliance, 0 exp:basing, 0 exp:proxy, 0 cable-infra, 0 maritime-chokepoint"
+    assert (
+        response.source_scope["gdelt"]["linkage_reason"]
+        == "explicit_geopolitical_linkage"
+    )
+    assert (
+        response.source_scope["gdelt"]["notes"]
+        == "0 in-AOT, 0 state-actor/border, 0 exp:alliance, 0 exp:basing, 0 exp:proxy, 0 cable-infra, 0 maritime-chokepoint"
+    )
     assert response.source_scope["space_weather"]["scope"] == "impact_linked_external"
     # Valid H3 cell → wkt_polygon is set → mission-area SatNOGS path used
     assert response.source_scope["satnogs"]["scope"] == "mission_area"
-    assert response.source_scope["satnogs"]["linkage_reason"] == "satellite_subpoint_intersection"
+    assert (
+        response.source_scope["satnogs"]["linkage_reason"]
+        == "satellite_subpoint_intersection"
+    )
 
 
 @pytest.mark.asyncio
@@ -185,9 +221,13 @@ async def test_evaluate_regional_escalation_preserves_heuristic_narrative_when_l
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", None),
-        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(
+            ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()
+        ),
         patch.object(ai_router, "EscalationDetector", _ElevatedRiskEscalationDetector),
-        patch.object(ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine),
+        patch.object(
+            ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine
+        ),
     ):
         response = await ai_router.evaluate_regional_escalation(
             ai_router.EvaluationRequest(
@@ -230,14 +270,20 @@ async def test_evaluate_regional_escalation_passes_mode_to_sequence_engine():
         confidence=0.8,
     )
     mock_sequence_engine = MagicMock()
-    mock_sequence_engine.evaluate_escalation = AsyncMock(return_value=successful_assessment)
+    mock_sequence_engine.evaluate_escalation = AsyncMock(
+        return_value=successful_assessment
+    )
 
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", None),
-        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(
+            ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()
+        ),
         patch.object(ai_router, "EscalationDetector", _ElevatedRiskEscalationDetector),
-        patch.object(ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine),
+        patch.object(
+            ai_router, "SequenceEvaluationEngine", return_value=mock_sequence_engine
+        ),
     ):
         await ai_router.evaluate_regional_escalation(
             ai_router.EvaluationRequest(
@@ -270,12 +316,22 @@ async def test_evaluate_satnogs_mission_area_scope_when_polygon_set():
         if "FROM satnogs_signal_events" in sql:
             # Two events: one whose satellite will be over the AOT, one far away
             return [
-                {"norad_id": 11111, "ground_station_name": "GS-LOCAL",
-                 "signal_strength": -16.0, "time": event_time,
-                 "modulation": "FM", "frequency": 145800000},
-                {"norad_id": 22222, "ground_station_name": "GS-FAR",
-                 "signal_strength": -18.0, "time": event_time,
-                 "modulation": "FM", "frequency": 145900000},
+                {
+                    "norad_id": 11111,
+                    "ground_station_name": "GS-LOCAL",
+                    "signal_strength": -16.0,
+                    "time": event_time,
+                    "modulation": "FM",
+                    "frequency": 145800000,
+                },
+                {
+                    "norad_id": 22222,
+                    "ground_station_name": "GS-FAR",
+                    "signal_strength": -18.0,
+                    "time": event_time,
+                    "modulation": "FM",
+                    "frequency": 145900000,
+                },
             ]
         if "FROM satellites" in sql:
             return [
@@ -303,9 +359,13 @@ async def test_evaluate_satnogs_mission_area_scope_when_polygon_set():
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", None),
-        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(
+            ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()
+        ),
         patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
-        patch.object(ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint),
+        patch.object(
+            ai_router, "_satellite_subpoint_for_time", side_effect=_fake_subpoint
+        ),
     ):
         response = await ai_router.evaluate_regional_escalation(
             ai_router.EvaluationRequest(
@@ -318,7 +378,10 @@ async def test_evaluate_satnogs_mission_area_scope_when_polygon_set():
         )
 
     assert response.source_scope["satnogs"]["scope"] == "mission_area"
-    assert response.source_scope["satnogs"]["linkage_reason"] == "satellite_subpoint_intersection"
+    assert (
+        response.source_scope["satnogs"]["linkage_reason"]
+        == "satellite_subpoint_intersection"
+    )
 
 
 @pytest.mark.asyncio
@@ -370,7 +433,10 @@ async def test_evaluate_regional_escalation_sorts_linked_gdelt_events_by_score()
             "in_aot": 0,
             "state_actor": 2,
             "cable_infra": 0,
-            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+            "chokepoint": 0,
+            "alliance_support": 0,
+            "basing_support": 0,
+            "second_order_neighbor": 0,
         },
         mission_country_codes={"ARE"},
         cable_country_codes=set(),
@@ -381,7 +447,11 @@ async def test_evaluate_regional_escalation_sorts_linked_gdelt_events_by_score()
         patch.object(ai_router.db, "redis_client", None),
         patch.object(ai_router, "SpatialTemporalAlignment", return_value=alignment),
         patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
-        patch.object(ai_router, "fetch_linked_gdelt_events", AsyncMock(return_value=linkage_result)),
+        patch.object(
+            ai_router,
+            "fetch_linked_gdelt_events",
+            AsyncMock(return_value=linkage_result),
+        ),
     ):
         await ai_router.evaluate_regional_escalation(
             ai_router.EvaluationRequest(
@@ -418,7 +488,9 @@ async def test_evaluate_satnogs_global_scope_when_no_polygon():
     with (
         patch.object(ai_router.db, "pool", mock_pool),
         patch.object(ai_router.db, "redis_client", None),
-        patch.object(ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()),
+        patch.object(
+            ai_router, "SpatialTemporalAlignment", return_value=_FakeAlignment()
+        ),
         patch.object(ai_router, "EscalationDetector", _FakeEscalationDetector),
         # Force _h3_cell_to_wkt to return None (simulates an invalid H3 cell)
         patch.object(ai_router, "_h3_cell_to_wkt", return_value=None),
@@ -434,4 +506,6 @@ async def test_evaluate_satnogs_global_scope_when_no_polygon():
         )
 
     assert response.source_scope["satnogs"]["scope"] == "global"
-    assert response.source_scope["satnogs"]["linkage_reason"] == "ungated_signal_loss_feed"
+    assert (
+        response.source_scope["satnogs"]["linkage_reason"] == "ungated_signal_loss_feed"
+    )

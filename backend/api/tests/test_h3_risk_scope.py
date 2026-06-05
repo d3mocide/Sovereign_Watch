@@ -74,11 +74,19 @@ async def test_h3_risk_projects_outage_to_landing_cells():
                     "country a": {
                         "country": "Country A",
                         "landing_names": ["Alpha Landing, Country A"],
-                        "station_points": [{"name": "Alpha Landing, Country A", "lat": landing_lat, "lon": landing_lon}],
+                        "station_points": [
+                            {
+                                "name": "Alpha Landing, Country A",
+                                "lat": landing_lat,
+                                "lon": landing_lon,
+                            }
+                        ],
                         "cable_ids": ["a-b-cable"],
                     }
                 },
-                "cables": {"a-b-cable": {"name": "A-B Cable", "countries": ["country a"]}},
+                "cables": {
+                    "a-b-cable": {"name": "A-B Cable", "countries": ["country a"]}
+                },
             }
         ),
     }
@@ -89,7 +97,9 @@ async def test_h3_risk_projects_outage_to_landing_cells():
     ):
         response = await h3_risk.get_h3_risk(resolution=resolution, hours=24)
 
-    target_cell = next((cell for cell in response.cells if cell.cell == landing_cell), None)
+    target_cell = next(
+        (cell for cell in response.cells if cell.cell == landing_cell), None
+    )
     assert target_cell is not None
     assert target_cell.outage == 0.8
     assert target_cell.risk_score >= 0.16
@@ -134,7 +144,10 @@ async def test_h3_risk_mission_mode_uses_linked_gdelt_scope():
             "in_aot": 0,
             "state_actor": 1,
             "cable_infra": 0,
-            "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+            "chokepoint": 0,
+            "alliance_support": 0,
+            "basing_support": 0,
+            "second_order_neighbor": 0,
         },
         mission_country_codes={"ARE"},
         cable_country_codes=set(),
@@ -143,9 +156,13 @@ async def test_h3_risk_mission_mode_uses_linked_gdelt_scope():
     with (
         patch.object(h3_risk.db, "pool", mock_pool),
         patch.object(h3_risk.db, "redis_client", None),
-        patch.object(h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=linkage_result)) as mock_fetch_linked,
+        patch.object(
+            h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=linkage_result)
+        ) as mock_fetch_linked,
     ):
-        response = await h3_risk.get_h3_risk(resolution=resolution, hours=24, h3_region="877b05c9cffffff")
+        response = await h3_risk.get_h3_risk(
+            resolution=resolution, hours=24, h3_region="877b05c9cffffff"
+        )
 
     assert response.source_scope is not None
     assert response.source_scope["linkage_reason"] == "explicit_geopolitical_linkage"
@@ -186,7 +203,10 @@ async def test_h3_risk_weights_mission_gdelt_sentiment_by_linkage_score():
                 "in_aot": 0,
                 "state_actor": 1,
                 "cable_infra": 0,
-                "chokepoint": 0, "alliance_support": 0, "basing_support": 0, "second_order_neighbor": 0, 
+                "chokepoint": 0,
+                "alliance_support": 0,
+                "basing_support": 0,
+                "second_order_neighbor": 0,
             },
             mission_country_codes={"ARE"},
             cable_country_codes=set(),
@@ -214,7 +234,11 @@ async def test_h3_risk_weights_mission_gdelt_sentiment_by_linkage_score():
     with (
         patch.object(h3_risk.db, "pool", _mock_pool_with_track()),
         patch.object(h3_risk.db, "redis_client", None),
-        patch.object(h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=_build_response(1.0))),
+        patch.object(
+            h3_risk,
+            "fetch_linked_gdelt_events",
+            AsyncMock(return_value=_build_response(1.0)),
+        ),
     ):
         high_score_response = await h3_risk.get_h3_risk(
             resolution=resolution,
@@ -225,7 +249,11 @@ async def test_h3_risk_weights_mission_gdelt_sentiment_by_linkage_score():
     with (
         patch.object(h3_risk.db, "pool", _mock_pool_with_track()),
         patch.object(h3_risk.db, "redis_client", None),
-        patch.object(h3_risk, "fetch_linked_gdelt_events", AsyncMock(return_value=_build_response(0.25))),
+        patch.object(
+            h3_risk,
+            "fetch_linked_gdelt_events",
+            AsyncMock(return_value=_build_response(0.25)),
+        ),
     ):
         low_score_response = await h3_risk.get_h3_risk(
             resolution=resolution,
@@ -235,4 +263,6 @@ async def test_h3_risk_weights_mission_gdelt_sentiment_by_linkage_score():
 
     assert len(high_score_response.cells) == 1
     assert len(low_score_response.cells) == 1
-    assert high_score_response.cells[0].risk_score > low_score_response.cells[0].risk_score
+    assert (
+        high_score_response.cells[0].risk_score > low_score_response.cells[0].risk_score
+    )

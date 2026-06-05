@@ -54,18 +54,18 @@ class EscalationDetector:
     # "multi" means the signal is domain-agnostic (behavioural / positional).
     # Only domain-specific signals (non-"multi") count toward convergence boosting.
     ANOMALY_DOMAIN_MAP: Dict[str, str] = {
-        "clustering":            "multi",
-        "directional_change":    "multi",
-        "emergency":             "aviation",
-        "rendezvous":            "multi",
-        "holding_pattern":       "multi",
-        "maneuvering":           "multi",
-        "converging":            "multi",
-        "stdbscan_cluster":      "multi",
-        "hmm_trajectory":        "multi",
+        "clustering": "multi",
+        "directional_change": "multi",
+        "emergency": "aviation",
+        "rendezvous": "multi",
+        "holding_pattern": "multi",
+        "maneuvering": "multi",
+        "converging": "multi",
+        "stdbscan_cluster": "multi",
+        "hmm_trajectory": "multi",
         "satellite_signal_loss": "orbital",
-        "space_weather":         "orbital",
-        "internet_outage":       "infrastructure",
+        "space_weather": "orbital",
+        "internet_outage": "infrastructure",
     }
 
     def __init__(self):
@@ -539,9 +539,7 @@ class EscalationDetector:
 
         return anomalies
 
-    def detect_stdbscan_clusters(
-        self, tak_clauses: List[Dict]
-    ) -> List[AnomalyMetric]:
+    def detect_stdbscan_clusters(self, tak_clauses: List[Dict]) -> List[AnomalyMetric]:
         """Run ST-DBSCAN; return AnomalyMetric for each cluster with >= min_samples entities."""
         if not tak_clauses:
             return []
@@ -652,7 +650,9 @@ class EscalationDetector:
             active_context = [a for a in context_anomalies if a.score > 0.0]
 
             if active_context:
-                context_score = sum(a.score for a in active_context) / len(active_context)
+                context_score = sum(a.score for a in active_context) / len(
+                    active_context
+                )
                 # Blend context score to avoid hard zeroes when only context signals fire.
                 context_weight = 0.2
                 risk = (1.0 - context_weight) * risk + context_weight * context_score

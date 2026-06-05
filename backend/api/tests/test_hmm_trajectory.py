@@ -67,24 +67,18 @@ class TestClassifyTrajectoryStateSequence:
     def test_state_sequence_length_is_n_minus_1(self):
         """With N track points, exactly N-1 observations are derived."""
         n = 10
-        points = [
-            _make_point(300.0, 90.0, 35000.0, i * 60) for i in range(n)
-        ]
+        points = [_make_point(300.0, 90.0, 35000.0, i * 60) for i in range(n)]
         result = classify_trajectory("uid-len", points)
         assert len(result.state_sequence) == n - 1
 
     def test_all_states_are_valid(self):
-        points = [
-            _make_point(100.0, 45.0, 5000.0, i * 30) for i in range(8)
-        ]
+        points = [_make_point(100.0, 45.0, 5000.0, i * 30) for i in range(8)]
         result = classify_trajectory("uid-valid", points)
         for s in result.state_sequence:
             assert s in STATES
 
     def test_confidence_is_fraction_of_dominant_state(self):
-        points = [
-            _make_point(300.0, 90.0, 35000.0, i * 60) for i in range(6)
-        ]
+        points = [_make_point(300.0, 90.0, 35000.0, i * 60) for i in range(6)]
         result = classify_trajectory("uid-conf", points)
         dominant_count = result.state_sequence.count(result.dominant_state)
         expected = dominant_count / len(result.state_sequence)
@@ -93,7 +87,9 @@ class TestClassifyTrajectoryStateSequence:
     def test_anomaly_score_is_fraction_of_anomalous_states(self):
         points = [_make_point(50.0, float(i * 45), 5000.0, i * 10) for i in range(8)]
         result = classify_trajectory("uid-anom", points)
-        anomalous_count = sum(1 for s in result.state_sequence if s in _ANOMALOUS_STATES)
+        anomalous_count = sum(
+            1 for s in result.state_sequence if s in _ANOMALOUS_STATES
+        )
         expected = anomalous_count / len(result.state_sequence)
         assert abs(result.anomaly_score - expected) < 1e-9
 
@@ -104,10 +100,7 @@ class TestClassifyTrajectoryTransiting:
         Constant fast speed, constant heading, constant altitude.
         ST-DBSCAN emission matrix strongly favours TRANSITING for this pattern.
         """
-        points = [
-            _make_point(300.0, 90.0, 35000.0, i * 60)
-            for i in range(10)
-        ]
+        points = [_make_point(300.0, 90.0, 35000.0, i * 60) for i in range(10)]
         result = classify_trajectory("fast-jet", points)
         # Dominant state should be TRANSITING (highest emission probability for FAST+STRAIGHT+LEVEL)
         assert result.dominant_state == "TRANSITING"
@@ -129,7 +122,9 @@ class TestClassifyTrajectoryAnomalous:
         # Alternate between 0° and 90° every 1 second at medium speed → SHARP turn rate
         headings = [0.0, 90.0, 0.0, 90.0, 0.0, 90.0, 0.0, 90.0, 0.0]
         points = [
-            _make_point(150.0, headings[i], 10000.0, i * 1)  # medium speed, 1 s intervals
+            _make_point(
+                150.0, headings[i], 10000.0, i * 1
+            )  # medium speed, 1 s intervals
             for i in range(len(headings))
         ]
         result = classify_trajectory("sharp-turner", points)
@@ -144,10 +139,7 @@ class TestClassifyTrajectoryAnomalous:
         # Turn 10°/s = TURNING category; slow speed; level altitude
         # With 30-second intervals: 300° heading change → 10°/s turn rate
         headings = [float(i * 300 % 360) for i in range(8)]
-        points = [
-            _make_point(30.0, headings[i], 1000.0, i * 30)
-            for i in range(8)
-        ]
+        points = [_make_point(30.0, headings[i], 1000.0, i * 30) for i in range(8)]
         result = classify_trajectory("holding", points)
         assert isinstance(result, HMMResult)
         # Should produce some non-zero anomaly score (HOLDING_PATTERN is anomalous)
@@ -171,10 +163,18 @@ class TestClassifyTrajectoryAnomalous:
 class TestClassifyTrajectoryTimeParsing:
     def test_iso_string_time_is_accepted(self):
         points = [
-            {"speed_kts": 200.0, "heading_deg": 90.0, "alt_ft": 20000.0,
-             "time": "2024-06-01T00:00:00Z"},
-            {"speed_kts": 200.0, "heading_deg": 90.0, "alt_ft": 20000.0,
-             "time": "2024-06-01T00:01:00Z"},
+            {
+                "speed_kts": 200.0,
+                "heading_deg": 90.0,
+                "alt_ft": 20000.0,
+                "time": "2024-06-01T00:00:00Z",
+            },
+            {
+                "speed_kts": 200.0,
+                "heading_deg": 90.0,
+                "alt_ft": 20000.0,
+                "time": "2024-06-01T00:01:00Z",
+            },
         ]
         result = classify_trajectory("iso-test", points)
         assert len(result.state_sequence) == 1

@@ -65,7 +65,8 @@ class SovereignSemanticCache:
             self._cache = SemanticCache(
                 name=CACHE_KEY_PREFIX,
                 redis_url=redis_url,
-                distance_threshold=1.0 - SIMILARITY_THRESHOLD,  # RedisVL uses distance, not similarity
+                distance_threshold=1.0
+                - SIMILARITY_THRESHOLD,  # RedisVL uses distance, not similarity
                 ttl=CACHE_TTL_SECONDS,
             )
             self._available = True
@@ -92,7 +93,10 @@ class SovereignSemanticCache:
         try:
             results = self._cache.check(prompt=prompt, num_results=1)
             if results:
-                logger.debug("SemanticCache HIT (distance=%.4f)", results[0].get("vector_distance", 0))
+                logger.debug(
+                    "SemanticCache HIT (distance=%.4f)",
+                    results[0].get("vector_distance", 0),
+                )
                 return results[0].get("response")
         except Exception as exc:
             logger.debug("SemanticCache check error (ignored): %s", exc)
@@ -108,7 +112,9 @@ class SovereignSemanticCache:
             logger.debug("SemanticCache store error (ignored): %s", exc)
 
 
-async def get_semantic_cache(redis_url: str = "redis://sovereign-redis:6379") -> SovereignSemanticCache:
+async def get_semantic_cache(
+    redis_url: str = "redis://sovereign-redis:6379",
+) -> SovereignSemanticCache:
     """
     Return the process-level SemanticCache singleton, initialising it on first
     call.  Thread-safe for asyncio (single-threaded event loop).
@@ -120,6 +126,8 @@ async def get_semantic_cache(redis_url: str = "redis://sovereign-redis:6379") ->
     elif not _cache_instance._available:
         elapsed = time.monotonic() - _cache_instance._last_init_attempt
         if elapsed >= SovereignSemanticCache._RETRY_COOLDOWN_S:
-            logger.info("SemanticCache: retrying initialisation after %.0fs cooldown", elapsed)
+            logger.info(
+                "SemanticCache: retrying initialisation after %.0fs cooldown", elapsed
+            )
             await _cache_instance.initialise(redis_url)
     return _cache_instance

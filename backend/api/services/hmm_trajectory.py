@@ -80,13 +80,17 @@ def _build_emission_matrix() -> object:
     trans_idx = _STATE_IDX["TRANSITING"]
     _boost(trans_idx, [_obs_index(2, 0, 0)], 0.30)  # FAST+STRAIGHT+LEVEL
     _boost(trans_idx, [_obs_index(1, 0, 0)], 0.15)  # MEDIUM+STRAIGHT+LEVEL
-    _boost(trans_idx, [_obs_index(2, 0, 1), _obs_index(2, 0, 2)], 0.05)  # FAST+STRAIGHT+CLB/DES
+    _boost(
+        trans_idx, [_obs_index(2, 0, 1), _obs_index(2, 0, 2)], 0.05
+    )  # FAST+STRAIGHT+CLB/DES
 
     # LOITERING (1): slow speed, straight or gentle turns only, mostly level
     loit_idx = _STATE_IDX["LOITERING"]
     _boost(loit_idx, [_obs_index(0, 0, 0)], 0.25)  # SLOW+STRAIGHT+LEVEL
     _boost(loit_idx, [_obs_index(0, 1, 0)], 0.20)  # SLOW+TURNING+LEVEL
-    _boost(loit_idx, [_obs_index(0, 0, 1), _obs_index(0, 0, 2)], 0.05)  # SLOW+STRAIGHT+CLB/DES
+    _boost(
+        loit_idx, [_obs_index(0, 0, 1), _obs_index(0, 0, 2)], 0.05
+    )  # SLOW+STRAIGHT+CLB/DES
     # Note: sharp turns map to MANEUVERING, not LOITERING
 
     # MANEUVERING (2): sharp or rapid turns at any speed, or evasive manoeuvres
@@ -107,7 +111,9 @@ def _build_emission_matrix() -> object:
     conv_idx = _STATE_IDX["CONVERGING"]
     _boost(conv_idx, [_obs_index(1, 0, 0)], 0.20)  # MEDIUM+STRAIGHT+LEVEL
     _boost(conv_idx, [_obs_index(2, 0, 0)], 0.20)  # FAST+STRAIGHT+LEVEL
-    _boost(conv_idx, [_obs_index(1, 1, 0)], 0.05)  # MEDIUM+TURNING+LEVEL (course adjustments)
+    _boost(
+        conv_idx, [_obs_index(1, 1, 0)], 0.05
+    )  # MEDIUM+TURNING+LEVEL (course adjustments)
 
     row_sums = b.sum(axis=1, keepdims=True)
     b /= row_sums
@@ -117,9 +123,7 @@ def _build_emission_matrix() -> object:
 def _get_model() -> tuple:
     """Return (log_pi, log_A, log_B), building them once and caching."""
     if "log_pi" not in _MODEL_CACHE:
-        log_pi = np.log(
-            np.array([0.50, 0.20, 0.15, 0.10, 0.05], dtype=np.float64)
-        )
+        log_pi = np.log(np.array([0.50, 0.20, 0.15, 0.10, 0.05], dtype=np.float64))
         log_A = np.log(
             np.array(
                 [
@@ -143,7 +147,10 @@ def _get_model() -> tuple:
 # Viterbi algorithm (log-domain)
 # ---------------------------------------------------------------------------
 
-def _viterbi(obs_seq: list[int], log_pi: object, log_A: object, log_B: object) -> list[int]:
+
+def _viterbi(
+    obs_seq: list[int], log_pi: object, log_A: object, log_B: object
+) -> list[int]:
     """
     Decode the most-probable hidden state sequence via the Viterbi algorithm.
 
@@ -188,6 +195,7 @@ def _viterbi(obs_seq: list[int], log_pi: object, log_A: object, log_B: object) -
 # Public interface
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HMMResult:
     """Output from classify_trajectory()."""
@@ -195,7 +203,7 @@ class HMMResult:
     uid: str
     state_sequence: list[str] = field(default_factory=list)
     dominant_state: str = "TRANSITING"
-    confidence: float = 1.0   # fraction of steps in dominant state
+    confidence: float = 1.0  # fraction of steps in dominant state
     anomaly_score: float = 0.0  # fraction of steps in anomalous states
 
 

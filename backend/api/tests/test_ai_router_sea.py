@@ -37,6 +37,7 @@ mock_hmm.classify_trajectory = _stub_classify_trajectory
 sys.modules["services.hmm_trajectory"] = mock_hmm
 
 import routers.ai_router as ai_router  # noqa: E402
+
 del sys.modules["services.hmm_trajectory"]
 
 
@@ -69,12 +70,20 @@ async def test_analyze_sea_domain_scopes_wave_height_to_mission_area():
                     {
                         "type": "Feature",
                         "geometry": {"type": "Point", "coordinates": [0.2, 0.1]},
-                        "properties": {"buoy_id": "nearby", "wvht_m": 2.5, "time": "2026-04-09T00:00:00Z"},
+                        "properties": {
+                            "buoy_id": "nearby",
+                            "wvht_m": 2.5,
+                            "time": "2026-04-09T00:00:00Z",
+                        },
                     },
                     {
                         "type": "Feature",
                         "geometry": {"type": "Point", "coordinates": [20.0, 0.0]},
-                        "properties": {"buoy_id": "far", "wvht_m": 8.0, "time": "2026-04-09T00:00:00Z"},
+                        "properties": {
+                            "buoy_id": "far",
+                            "wvht_m": 8.0,
+                            "time": "2026-04-09T00:00:00Z",
+                        },
                     },
                 ],
             }
@@ -190,7 +199,9 @@ async def test_analyze_sea_domain_scopes_outages_to_cable_connected_countries():
         )
 
     assert response.context_snapshot["cable_correlated_outages"] == 1
-    assert response.context_snapshot["cable_correlated_outage_countries"] == ["Country A"]
+    assert response.context_snapshot["cable_correlated_outage_countries"] == [
+        "Country A"
+    ]
     assert "Country C" not in response.context_snapshot["cable_relevant_countries"]
 
     prompt = mock_generate.await_args.kwargs["user_prompt"]

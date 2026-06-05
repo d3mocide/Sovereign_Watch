@@ -95,8 +95,14 @@ async def test_analyze_air_domain_uses_region_scoped_nws_alerts():
     assert response.context_snapshot["nws_alerts"]["count"] == 0
     assert response.context_snapshot["nws_alerts"]["severe_count"] == 0
     assert response.context_snapshot["nws_alerts"]["scope"] == "mission_area"
-    assert response.context_snapshot["context_scope"]["space_weather"]["scope"] == "impact_linked_external"
-    assert response.context_snapshot["space_weather_driver_summary"] == "below mission threshold"
+    assert (
+        response.context_snapshot["context_scope"]["space_weather"]["scope"]
+        == "impact_linked_external"
+    )
+    assert (
+        response.context_snapshot["space_weather_driver_summary"]
+        == "below mission threshold"
+    )
     assert all("nationally" not in indicator for indicator in response.indicators)
 
     prompt = mock_generate.await_args.kwargs["user_prompt"]
@@ -120,7 +126,9 @@ async def test_analyze_air_domain_flags_model_overload_notice():
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
 
     redis_payloads = {
-        "nws:alerts:summary": json.dumps({"count": 0, "severe_count": 0, "extreme_count": 0}),
+        "nws:alerts:summary": json.dumps(
+            {"count": 0, "severe_count": 0, "extreme_count": 0}
+        ),
         "nws:alerts:active": json.dumps({"type": "FeatureCollection", "features": []}),
         "space_weather:kp_current": json.dumps({"kp": 1.0, "storm_level": "Quiet"}),
     }
@@ -146,5 +154,8 @@ async def test_analyze_air_domain_flags_model_overload_notice():
         )
 
     assert response.ai_status == "overloaded"
-    assert response.ai_notice == "AI model temporarily overloaded. Please try again shortly."
+    assert (
+        response.ai_notice
+        == "AI model temporarily overloaded. Please try again shortly."
+    )
     assert "Air domain:" in response.narrative

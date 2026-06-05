@@ -66,8 +66,7 @@ class TestDetectClustersSingleCluster:
         lats = [1.0, 1.0, 1.0, 1.0, 1.0, 2.0]
         lons = [2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
         points = [
-            _make_point(f"uid-{i}", lats[i], lons[i], _BASE_TIME)
-            for i in range(6)
+            _make_point(f"uid-{i}", lats[i], lons[i], _BASE_TIME) for i in range(6)
         ]
         result = detect_clusters(points, eps_km=200.0, eps_t=300, min_samples=5)
         assert len(result.clusters) == 1
@@ -79,9 +78,7 @@ class TestDetectClustersSingleCluster:
 
     def test_start_end_time_bounds(self):
         times = [_BASE_TIME + timedelta(seconds=i * 10) for i in range(6)]
-        points = [
-            _make_point(f"uid-{i}", 0.0, 0.0, times[i]) for i in range(6)
-        ]
+        points = [_make_point(f"uid-{i}", 0.0, 0.0, times[i]) for i in range(6)]
         result = detect_clusters(points, eps_km=2.0, eps_t=300, min_samples=5)
         assert len(result.clusters) == 1
         c = result.clusters[0]
@@ -89,9 +86,7 @@ class TestDetectClustersSingleCluster:
         assert c.end_time == times[-1]
 
     def test_fewer_than_min_samples_produces_no_cluster(self):
-        points = [
-            _make_point(f"uid-{i}", 0.0, 0.0, _BASE_TIME) for i in range(4)
-        ]
+        points = [_make_point(f"uid-{i}", 0.0, 0.0, _BASE_TIME) for i in range(4)]
         result = detect_clusters(points, eps_km=2.0, eps_t=300, min_samples=5)
         assert result.clusters == []
 
@@ -186,7 +181,9 @@ class TestDetectClustersTemporalSeparation:
             )
             for i in range(5)
         ]
-        result = detect_clusters(group_a + group_b, eps_km=2.0, eps_t=eps_t, min_samples=5)
+        result = detect_clusters(
+            group_a + group_b, eps_km=2.0, eps_t=eps_t, min_samples=5
+        )
         assert len(result.clusters) == 2
         cluster_uid_sets = [set(c.uids) for c in result.clusters]
         assert {f"a-{i}" for i in range(5)} in cluster_uid_sets

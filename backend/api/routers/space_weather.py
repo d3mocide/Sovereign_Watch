@@ -152,14 +152,17 @@ async def get_space_weather_alerts():
         raise HTTPException(status_code=503, detail="Redis not ready")
 
     try:
-        scales_raw      = await db.redis_client.get("space_weather:noaa_scales")
-        suppression_raw = await db.redis_client.get("space_weather:suppress_signal_loss")
+        scales_raw = await db.redis_client.get("space_weather:noaa_scales")
+        suppression_raw = await db.redis_client.get(
+            "space_weather:suppress_signal_loss"
+        )
 
         from datetime import datetime, UTC
+
         return {
-            "scales":      json.loads(scales_raw)      if scales_raw      else None,
+            "scales": json.loads(scales_raw) if scales_raw else None,
             "suppression": json.loads(suppression_raw) if suppression_raw else None,
-            "fetched_at":  datetime.now(UTC).isoformat(),
+            "fetched_at": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error("Failed to fetch space weather alerts: %s", e)
