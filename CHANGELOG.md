@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-12
+
+### Security
+- **SSRF DNS-Rebinding Hardening in News Fetcher**: Implemented a custom `SSRFSafeTransport` for httpx to resolve hostnames to IP addresses exactly once and validate them before dispatching requests, closing the DNS rebinding window in RSS feed fetching and article extraction.
+
+### Performance
+- **Frontend Core Rendering and Bundle Optimization**: Introduced a keyed `LayerCache` memoization layer to reuse static deck.gl overlays frame-to-frame, and quantized pulse shimmers to 10Hz to reduce deck.gl diffing. Split vendor assets into cacheable chunks (`deck-gl`, `maplibre`, `mapbox`, `echarts`) and lazy-loaded major views (TacticalMap, OrbitalMap, IntelGlobe, DashboardView, RadioTerminal) to reduce the initial JS load bundle size.
+- **SGP4 Orbital Pass Prediction**: Optimized pass duration computation by calculating duration mathematically from point counts instead of repeatedly parsing timestamp strings back to datetimes.
+- **Vectorized Groundtrack Generation**: Batched LLA coordinate conversion outside the SGP4 propagation loops to exploit NumPy's vectorized functions, speeding up groundtrack predictions up to 5x.
+- **Track History Loop Optimization**: Precalculated the starting Julian date and step increments to step mathematically through fractional days, eliminating datetime construction and redundant conversions.
+
+### Fixed
+- **Satellite Position Jumps**: Resolved the constellation-wide catch-up surge by anchoring dead-reckoning state blend times directly to SGP4 epoch timestamps rather than message receive times, adding a teleport guard for antimeridian crossings, and clearing visual state after long frame stalls.
+- **Space Pulse Test Cooldown Sleep**: Fixed a test hang in space_pulse tests by mocking `asyncio.sleep` in the update loop tests.
+
+### Accessibility
+- **Form Control Association**: Explicitly paired label headers and inputs using matching `id`/`htmlFor` across all visibility controls and map filters.
+- **UI Button Integrity**: Added explicit `type="button"`, ARIA labels, and focus rings to standalone buttons across User Management, System Settings, and Analysis widgets.
+
 ## [1.1.0] - 2026-05-26
 
 ### Security

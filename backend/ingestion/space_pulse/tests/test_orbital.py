@@ -105,7 +105,8 @@ def test_load_cached_tle_data_primes_sat_arrays(tmp_path):
     assert src.sat_meta[0]["name"] == "ISS (ZARYA)"
 
 
-def test_tle_update_loop_seeds_immediately_when_cache_missing():
+@patch("sources.orbital.asyncio.sleep", new_callable=AsyncMock)
+def test_tle_update_loop_seeds_immediately_when_cache_missing(mock_sleep):
     src = make_source()
     src.running = True
     src.fetch_hour = 2

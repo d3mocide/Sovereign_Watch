@@ -1,45 +1,50 @@
-# Release - v1.1.0 - Security, Orbital Feeds, and Accessibility Hardening
+# Release - v1.1.1 - Core Rendering, Performance, and Position Stabilization
 
 ## Summary
-Sovereign Watch **v1.1.0** represents a significant milestone in platform security, data ingestion reliability, performance optimization, and accessibility. It hardens news aggregation against advanced server-side request forgery (SSRF), migrates core satellite tracking to standard CelesTrak OMM CSV formats, and delivers a robust accessibility overhaul across high-use operator controls.
+Sovereign Watch **v1.1.1** is a patch release focusing on rendering pipeline optimization, client-side performance, tracking stabilization, and security hardening. It introduces frontend layer memoization and vendor code splitting to dramatically improve initial page load times and main-thread responsiveness, resolves a critical satellite position jump/surge bug, hardens news article extraction against DNS-rebinding SSRF attacks, and refactors UI control surfaces to improve keyboard and screen reader accessibility.
 
 ## Key Features
 
-### 🛡️ Security Hardening
-* **SSRF DNS-Rebinding Protection**: Hardened the `/api/news/article` extraction gateway to resolve target hostnames via DNS and actively filter resolved IP addresses against private, loopback, link-local, and multicast ranges before dispatching HTTP request handles.
+### ⚡ Rendering & Performance Optimization
+* **Frontend Layer Caching (`LayerCache`)**: Implemented a keyed layer cache for static overlays (airspaces, cables, alerts, etc.) in `composeAllLayers()`, returning identical Layer instances across frames. This allows deck.gl to skip diffing and attribute re-uploads entirely, reducing per-frame CPU overhead.
+* **Pulse Quantization**: Quantized shimmer pulse calculations to a 10 Hz interval (rather than 60 Hz), keeping static animated layers cached for consecutive frames.
+* **Bundle Code-Splitting**: Code-split large chunks (Vite config `manualChunks` for `deck-gl`, `maplibre`, `mapbox`, and `echarts`) and lazy-loaded major routes (`TacticalMap`, `OrbitalMap`, `IntelGlobe`, `DashboardView`, and `RadioTerminal`), reducing the initial JavaScript payload from ~5MB to ~200KB.
+* **Vectorized Groundtrack Propagation**: Batched ECEF-to-LLA conversion in `get_groundtrack` to process coordinate sequences using NumPy's vectorized functions in a single call, resulting in a **5x speedup** on the SGP4 pass path.
+* **Track History Loop Optimization**: Precalculated the starting Julian date and step increments to step mathematically through fractional days, eliminating datetime construction and redundant conversions.
 
-### 🛰️ Orbital Feeds & Performance
-* **CelesTrak OMM CSV Feed Migration**: Migrated the `space_pulse` orbital poller away from legacy, fixed-width TLE text endpoints to CelesTrak's modern OMM CSV feed format (`FORMAT=CSV`). Ingestion now uses standard `sgp4.omm` schemas to build orbital models without disrupting downstream SGP4 propagation or TAK event streams.
-* **SGP4 Pass Prediction Optimization**: Deferred `strftime` formatting and dictionary allocations in the orbital pass predictor loop to execute only when satellites exceed the minimum elevation threshold, preventing up to **8,640 redundant allocations per window** and reducing CPU overhead.
+### 🛰️ Tracking & Position Stabilization
+* **Epoch-Anchored Dead Reckoning**: Anchored the dead reckoning (`DRState`) blend time directly to SGP4 propagation epochs rather than message receive times, resolving persistent display lag and eliminating the startup "fast-forward" catch-up surge.
+* **Teleport Guard & Frame Stall Reset**: Implemented a distance-based teleport guard in `interpolatePVB` to immediately snap elements when the visual-to-target gap exceeds normal bounds, and automatically clear visual state during long frame stalls (>1s) to prevent catch-up surges.
+* **Antimeridian Crossing**: Unwrapped longitude updates to ensure entities snap cleanly across the antimeridian rather than wrapping around the globe.
+
+### 🛡️ Security Hardening
+* **SSRF DNS-Rebinding Mitigation**: Implemented a custom `SSRFSafeTransport` for httpx that resolves domain names to IP addresses exactly once, validates them against private/multicast ranges, and rewrites the request URL to target the validated IP. This closes the TOCTOU DNS-rebinding window on article extraction and RSS feed fetches.
 
 ### ♿ Operational Accessibility (A11y) Sweep
-* **Keyboard & Screen Reader Access**: Integrated `aria-expanded`, `aria-controls`, and `onKeyDown` support for collapsible panels across the dashboard (such as accordion grids in `ListeningPost`).
-* **Interactive Control States**: Bound `aria-pressed`, `aria-label`, and `aria-hidden` attributes across custom map toggles and NWS alerts widgets.
-* **Semantic Disabled States**: Standardized watchlist buttons around `aria-disabled="true"` with custom tooltips, preserving focus capability for keyboard users.
-* **Action Authorization Prompts**: Integrated dynamic `aria-label` feedback explaining authorization requirements for locked SITREP action panels.
-
-### 🛠️ Ingestion & Packaging Compatibility
-* **PEP 517 Standards**: Standardized Python packaging setups across microservices (`backend/api`, `aviation_poller`, `gdelt_pulse`, `js8call`) to eliminate setuptools flat-layout discovery errors.
-* **Space Pulse Alignment**: Upgraded `asyncpg` to `0.31.0` for full Python 3.12 compatibility.
+* **Form & Filter Labeling**: Added explicit `id` and corresponding `<label htmlFor="...">` attributes across all layer filters and visibility controls to support keyboard navigation and screen readers.
+* **Button Safety & Types**: Added explicit `type="button"` attributes, ARIA labels, and custom focus indicators to standalone UI controls, mitigating accidental form submissions and popover close accessibility issues.
 
 ---
 
 ## Technical Details
-* **Ingestion cache files** shifted suffix from `.tle` to `.omm.csv` to ensure clean cache transitions.
-* All unit test and lint gates (frontend `272/272` tests, backend `158/158` tests, space pulse OMM validation tests) passed successfully.
+* **Database Migrations**: No database schema migrations are introduced in this patch.
+* **Verification Gates**: Passed all test suites on the host environment:
+  * **Frontend**: `pnpm run lint` (clean), `pnpm run typecheck` (clean), `pnpm run test` (278/278 tests passed).
+  * **Backend API**: `ruff check` (clean), `pytest` (158/158 tests passed).
+  * **Space Pulse**: `ruff check` (clean), `pytest` (63/63 tests passed).
 
 ---
 
 ## Upgrade Instructions
 
-To apply these updates, pull the latest changes and rebuild the docker stack:
+To apply these updates, pull the latest changes and rebuild the development or production stack:
 
 ```bash
 git pull origin dev
 make dev  # or make prod
 ```
 
-For production environments, rebuild and restart the containers to activate the updated frontend and backend services:
+For production deployments, rebuild and restart the containers:
 ```bash
 docker compose build sovereign-frontend sovereign-backend sovereign-space-pulse
 docker compose up -d
