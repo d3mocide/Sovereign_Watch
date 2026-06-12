@@ -15,6 +15,24 @@ const SEA_ENTITY_CACHE_KEY = "tracks:sea:recent";
 const SEA_ENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
 const SEA_ENTITY_CACHE_WRITE_INTERVAL_MS = 10 * 1000;
 
+/**
+ * Dead-reckoning anchor for an update: the position's source epoch when the
+ * message carries a plausible one, else the receive time. Pipeline latency
+ * (sweep chunking, Kafka, WS delivery) makes positions seconds old on
+ * arrival; anchoring to receive time renders entities persistently behind
+ * their true position until the next update "corrects" them with a jump.
+ * Values outside (now − 120 s, now] are treated as clock skew / wrong units
+ * and fall back to receive time.
+ */
+function drAnchorTime(sourceTime: number | undefined, now: number): number {
+  return typeof sourceTime === "number" &&
+    Number.isFinite(sourceTime) &&
+    sourceTime <= now &&
+    sourceTime > now - 120_000
+    ? sourceTime
+    : now;
+}
+
 type CachedSeaEntity = {
   uid: string;
   lat: number;
@@ -236,6 +254,17 @@ export function useEntityWorker({
         const existingSat = satellitesRef.current.get(entity.uid);
         const isNewSat = !existingSat && !knownUidsRef.current.has(entity.uid);
 
+        // Reject out-of-order / duplicate sweeps — with epoch-anchored dead
+        // reckoning a stale message would drag the anchor (and the rendered
+        // satellite) backwards along its orbit.
+        if (
+          existingSat?.lastSourceTime &&
+          entity.time &&
+          existingSat.lastSourceTime >= entity.time
+        ) {
+          return;
+        }
+
         const norad_id =
           entity.detail?.norad_id ?? entity.detail?.classification?.norad_id;
         const category =
@@ -296,6 +325,7 @@ export function useEntityWorker({
           },
           lastSeen: Date.now(),
           time: entity.time,
+          lastSourceTime: entity.time || existingSat?.lastSourceTime,
           trail,
           smoothedTrail: getSmoothedTrail(trail, existingSat),
           uidHash: existingSat ? existingSat.uidHash : uidToHash(entity.uid),
@@ -303,12 +333,16 @@ export function useEntityWorker({
         };
 
         const now = Date.now();
+        const sourceTime = drAnchorTime(entity.time, now);
         const existingDr = drStateRef.current.get(entity.uid);
         const visual = visualStateRef.current.get(entity.uid);
         const blendLat = visual ? visual.lat : newLat;
         const blendLon = visual ? visual.lon : newLon;
-        const lastServerTime = existingDr ? existingDr.serverTime : now - 5000;
-        const timeSinceLast = Math.max(now - lastServerTime, 4000);
+        // space_pulse propagates a full SGP4 sweep every ~15 s
+        const lastServerTime = existingDr
+          ? existingDr.serverTime
+          : sourceTime - 15_000;
+        const timeSinceLast = Math.max(sourceTime - lastServerTime, 4000);
 
         drStateRef.current.set(entity.uid, {
           serverLat: newLat,
@@ -316,7 +350,7 @@ export function useEntityWorker({
           serverSpeed: entity.detail?.track?.speed || 0,
           serverCourseRad:
             ((entity.detail?.track?.course || 0) * Math.PI) / 180,
-          serverTime: now,
+          serverTime: sourceTime,
           blendLat,
           blendLon,
           blendSpeed: existingDr
@@ -325,6 +359,10 @@ export function useEntityWorker({
           blendCourseRad: existingDr
             ? existingDr.serverCourseRad
             : ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+          // A satellite with no prior visual should appear at its
+          // epoch-projected (true current) position immediately, not ease
+          // forward from the stale epoch position over the next interval.
+          blendTime: visual ? now : sourceTime,
           expectedInterval: timeSinceLast,
         });
 
@@ -415,8 +453,11 @@ export function useEntityWorker({
         | import("../types").VesselClassification
         | undefined;
 
-      const lastServerTime = existingDr ? existingDr.serverTime : now - 1000;
-      const timeSinceLast = Math.max(now - lastServerTime, 800);
+      const sourceTime = drAnchorTime(entity.time, now);
+      const lastServerTime = existingDr
+        ? existingDr.serverTime
+        : sourceTime - 1000;
+      const timeSinceLast = Math.max(sourceTime - lastServerTime, 800);
 
       drStateRef.current.set(entity.uid, {
         serverLat: newLat,
@@ -424,7 +465,7 @@ export function useEntityWorker({
         serverSpeed: entity.detail?.track?.speed || 0,
         serverCourseRad:
           ((entity.detail?.track?.course || 0) * Math.PI) / 180,
-        serverTime: now,
+        serverTime: sourceTime,
         blendLat,
         blendLon,
         blendSpeed: existingDr
@@ -433,6 +474,7 @@ export function useEntityWorker({
         blendCourseRad: existingDr
           ? existingDr.serverCourseRad
           : ((entity.detail?.track?.course || 0) * Math.PI) / 180,
+        blendTime: visual ? now : sourceTime,
         expectedInterval: timeSinceLast,
       });
 

@@ -408,11 +408,14 @@ export interface DRState {
   serverLon: number;
   serverSpeed: number;
   serverCourseRad: number;
+  /** Epoch (ms) the position was computed/measured at — NOT receive time. */
   serverTime: number;
   blendLat: number;
   blendLon: number;
   blendSpeed: number;
   blendCourseRad: number;
+  /** Epoch (ms) the blend state was captured (when the update was received). */
+  blendTime: number;
   expectedInterval: number;
 }
 

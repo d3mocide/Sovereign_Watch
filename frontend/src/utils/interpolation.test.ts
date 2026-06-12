@@ -29,6 +29,7 @@ const makeDR = (overrides: Partial<DRState> = {}): DRState => ({
   blendLon: -74.0,
   blendSpeed: 0,
   blendCourseRad: 0,
+  blendTime: Date.now() - 1000,
   expectedInterval: 5000,
   ...overrides,
 });
@@ -198,5 +199,127 @@ describe("interpolatePVB — DR present, speed > 0.5", () => {
 
     expect(newVisualHuge.lat).toBeCloseTo(newVisual33.lat, 8);
     expect(newVisualHuge.lon).toBeCloseTo(newVisual33.lon, 8);
+  });
+});
+
+// ─── Epoch-anchored server projection ─────────────────────────────────────────
+
+describe("interpolatePVB — epoch anchoring (serverTime vs blendTime)", () => {
+  it("places a brand-new satellite at its epoch-projected position immediately", () => {
+    const now = Date.now();
+    // Position epoch is 10 s old (pipeline latency); satellite moves north
+    // at LEO speed. blendTime === serverTime (no prior visual on screen).
+    const speed = 7500; // m/s
+    const entity = makeEntity({ lat: 0, lon: 0, altitude: 500000, speed });
+    const dr = makeDR({
+      serverLat: 0,
+      serverLon: 0,
+      serverSpeed: speed,
+      serverCourseRad: 0, // North
+      serverTime: now - 10_000,
+      blendLat: 0,
+      blendLon: 0,
+      blendSpeed: speed,
+      blendCourseRad: 0,
+      blendTime: now - 10_000,
+      expectedInterval: 15000,
+    });
+
+    const { visual } = interpolatePVB(entity, dr, undefined, now, 16, 0.45);
+
+    // 7500 m/s * 10 s = 75 km north ≈ 0.674° latitude
+    const expectedLat = (speed * 10) / 111320;
+    expect(visual.lat).toBeCloseTo(expectedLat, 2);
+    expect(visual.lon).toBeCloseTo(0, 4);
+  });
+
+  it("projects the server position from its epoch, not from receive time", () => {
+    const now = Date.now();
+    // Update received 1 s ago (blendTime), but the position itself was
+    // computed 6 s ago (serverTime). The server projection must cover the
+    // full 6 s of motion.
+    const speed = 1000; // m/s
+    const entity = makeEntity({ lat: 0, lon: 0, altitude: 10000, speed });
+    const dr = makeDR({
+      serverLat: 0,
+      serverLon: 0,
+      serverSpeed: speed,
+      serverCourseRad: 0,
+      serverTime: now - 6_000,
+      blendLat: 0,
+      blendLon: 0,
+      blendSpeed: speed,
+      blendCourseRad: 0,
+      blendTime: now - 1_000,
+      expectedInterval: 1000, // alpha saturates → target = server projection
+    });
+
+    const { visual } = interpolatePVB(entity, dr, undefined, now, 16);
+
+    // alpha = 1 → target = serverProj = 1000 m/s * 6 s = 6 km ≈ 0.0539°
+    const expectedLat = (speed * 6) / 111320;
+    expect(visual.lat).toBeCloseTo(expectedLat, 3);
+  });
+});
+
+// ─── Teleport guard (snap instead of surge) ──────────────────────────────────
+
+describe("interpolatePVB — teleport guard", () => {
+  it("snaps to the target in one frame when the gap exceeds the threshold", () => {
+    // Stationary entity (threshold floor 2°) whose target jumped 5°.
+    const entity = makeEntity({ lat: 5.0, lon: 0.0, altitude: 0, speed: 0 });
+    const visual = makeVisual({ lat: 0.0, lon: 0.0, alt: 0 });
+
+    const { visual: newVisual } = interpolatePVB(entity, undefined, visual, Date.now(), 16.67);
+
+    // Without the guard, smoothing would land at ~1.25; the guard snaps to 5.
+    expect(newVisual.lat).toBe(5.0);
+    expect(newVisual.lon).toBe(0.0);
+  });
+
+  it("keeps smoothing when the gap is below the threshold", () => {
+    const entity = makeEntity({ lat: 0.3, lon: 0.0, altitude: 0, speed: 0 });
+    const visual = makeVisual({ lat: 0.0, lon: 0.0, alt: 0 });
+
+    const { visual: newVisual } = interpolatePVB(entity, undefined, visual, Date.now(), 16.67);
+
+    // baseAlpha 0.25 → 0 + 0.3 * 0.25 = 0.075 (no snap)
+    expect(newVisual.lat).toBeCloseTo(0.075, 4);
+  });
+
+  it("scales the threshold with entity speed so fast satellites don't snap on normal corrections", () => {
+    const now = Date.now();
+    // LEO satellite: threshold = 7500 m/s * 15 s * 3 / 111320 ≈ 3.03°.
+    // A 2° correction must smooth, not snap.
+    const speed = 7500;
+    const entity = makeEntity({ lat: 2.0, lon: 0.0, altitude: 500000, speed });
+    const dr = makeDR({
+      serverLat: 2.0,
+      serverLon: 0,
+      serverSpeed: 0, // zero-speed projections → target stays at (2, 0)
+      serverTime: now,
+      blendLat: 2.0,
+      blendLon: 0,
+      blendSpeed: 0,
+      blendTime: now,
+      expectedInterval: 15000,
+    });
+    const visual = makeVisual({ lat: 0.0, lon: 0.0, alt: 500000 });
+
+    const { visual: newVisual } = interpolatePVB(entity, dr, visual, now, 16.67, 0.45);
+
+    // Smoothed (0 < lat < 2), not snapped to exactly 2
+    expect(newVisual.lat).toBeGreaterThan(0);
+    expect(newVisual.lat).toBeLessThan(2.0);
+  });
+
+  it("snaps across the antimeridian instead of smoothing the long way around", () => {
+    const entity = makeEntity({ lat: 0, lon: -179.9, altitude: 0, speed: 0 });
+    const visual = makeVisual({ lat: 0, lon: 179.9, alt: 0 });
+
+    const { visual: newVisual } = interpolatePVB(entity, undefined, visual, Date.now(), 16.67);
+
+    // Raw lon delta is 359.8° > threshold → snap to the far side directly.
+    expect(newVisual.lon).toBe(-179.9);
   });
 });

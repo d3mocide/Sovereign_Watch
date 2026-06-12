@@ -528,8 +528,17 @@ export function useAnimationLoop({
     const animate = () => {
       const entities = entitiesRef.current;
       const now = Date.now();
-      const dt = Math.min(now - lastFrameTimeRef.current, 100);
+      const rawDt = now - lastFrameTimeRef.current;
+      const dt = Math.min(rawDt, 100);
       lastFrameTimeRef.current = now;
+
+      // After a long frame stall (hidden tab, heavy GC, shader compilation)
+      // every entity's projected target has moved on while the visuals stayed
+      // frozen. Drop the visual states so this frame re-seeds them directly
+      // at their targets — one clean snap instead of a global catch-up surge.
+      if (rawDt > 1000) {
+        visualStateRef.current.clear();
+      }
 
       const _filters = filtersRef.current;
       const _replayMode = replayModeRef.current;
