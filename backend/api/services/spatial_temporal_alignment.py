@@ -88,7 +88,7 @@ class SpatialTemporalAlignment:
             if not event.get("event_date"):
                 continue
 
-            event_time = self._parse_event_time(event.get("event_date"))
+            event_time = self._parse_event_time(str(event.get("event_date")))
             if event_time < cutoff_time:
                 continue
 
@@ -174,8 +174,13 @@ class SpatialTemporalAlignment:
     def _parse_event_time(self, event_date_str: str) -> datetime:
         """Parse GDELT event date (YYYYMMDD format) to datetime."""
         try:
-            dt = datetime.strptime(event_date_str, "%Y%m%d")
-            return dt.replace(tzinfo=timezone.utc)
+            # ⚡ Bolt: manual slicing is faster than datetime.strptime(..., "%Y%m%d")
+            year, month, day = (
+                int(event_date_str[:4]),
+                int(event_date_str[4:6]),
+                int(event_date_str[6:8]),
+            )
+            return datetime(year, month, day, tzinfo=timezone.utc)
         except (ValueError, TypeError):
             return datetime.now(timezone.utc)
 
@@ -244,7 +249,7 @@ class SpatialTemporalAlignment:
 
     def h3_parent_map(self, gdelt_events: List[Dict]) -> Dict[str, List[Dict]]:
         """Map GDELT events to H3-7 parent cells."""
-        result = {}
+        result: Dict[str, List[Dict]] = {}
         for event in gdelt_events:
             lat = event.get("event_latitude")
             lon = event.get("event_longitude")
@@ -263,7 +268,7 @@ class SpatialTemporalAlignment:
 
     def h3_child_clusters(self, clauses: List[Dict]) -> Dict[str, List[Dict]]:
         """Cluster TAK clauses by H3-9 child cells within regions."""
-        result = {}
+        result: Dict[str, List[Dict]] = {}
         for clause in clauses:
             lat = clause.get("locative_lat")
             lon = clause.get("locative_lon")

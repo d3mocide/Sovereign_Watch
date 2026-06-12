@@ -21,3 +21,7 @@
 ## 2026-05-30 - Python datetime parsing performance
 **Learning:** Replacing `datetime.strptime(date, "%Y-%m-%d")` with `datetime.fromisoformat(date)` is a ~40x speedup micro-optimization. However, it requires the ISO 8601 extended format with hyphens (e.g. "YYYY-MM-DD") in older Python versions (< 3.11). Trying to use it on the basic format ("YYYYMMDD") without hyphens will raise a ValueError and introduce critical regressions.
 **Action:** Always strictly verify the format of date strings. Only use `datetime.fromisoformat` for the extended format with hyphens ("YYYY-MM-DD") unless ensuring Python 3.11+ is used. Avoid `fromisoformat` for basic formats to prevent code review rejections and backward compatibility regressions.
+
+## 2024-06-13 - Fast basic date parsing
+**Learning:** Parsing basic YYYYMMDD date strings with `datetime.strptime` is slower compared to manual string slicing and `datetime` object instantiation.
+**Action:** When parsing basic date formats like YYYYMMDD where `fromisoformat` is unavailable, use manual string slicing and type casting to integer before passing them to the `datetime` constructor for a performance boost.
