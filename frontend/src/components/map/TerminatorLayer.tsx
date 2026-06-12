@@ -103,13 +103,24 @@ function computeTerminator(date: Date) {
   } as TerminatorGeoJson;
 }
 
+// The terminator only moves meaningfully once per minute, but this function is
+// called from per-frame layer composition. Memoize the (360-point) polygon so
+// repeat calls within the same minute return the identical GeoJSON object —
+// a stable `data` reference also lets deck.gl skip re-uploading attributes.
+let cachedMinute = 0;
+let cachedGeoJson: TerminatorGeoJson | null = null;
+
 export function getTerminatorLayer(visible: boolean) {
   // We use Date.now() rounded to nearest minute to avoid constant re-renders
   // For a pure layer creator function, we calculate the current terminator
   const now = new Date();
   now.setSeconds(0, 0);
 
-  const terminatorGeoJson = computeTerminator(now);
+  if (!cachedGeoJson || cachedMinute !== now.getTime()) {
+    cachedMinute = now.getTime();
+    cachedGeoJson = computeTerminator(now);
+  }
+  const terminatorGeoJson = cachedGeoJson;
 
   return new GeoJsonLayer({
     id: 'terminator-layer',

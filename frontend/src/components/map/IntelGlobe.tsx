@@ -15,7 +15,6 @@
  */
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
-import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchH3Risk, type H3RiskCellData } from "../../api/h3Risk";
 import { buildH3RiskLayer } from "../../layers/buildH3RiskLayer";

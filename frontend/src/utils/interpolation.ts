@@ -1,5 +1,10 @@
 import { CoTEntity, DRState, VisualState } from "../types";
 
+const R_EARTH = 6371000;
+const DEG_PER_RAD = 180 / Math.PI;
+const RAD_PER_DEG = Math.PI / 180;
+const TWO_PI = 2 * Math.PI;
+
 /**
  * Projective Velocity Blending (PVB)
  * Smooths jitter and predicts position between low-frequency updates.
@@ -21,10 +26,9 @@ export function interpolatePVB(
     const dtSec = timeSinceUpdate / 1000;
 
     // 1. Server Projection (Where it should be now based on latest report)
-    const R = 6371000;
     const distServer = dr.serverSpeed * dtSec;
-    const dLatServer = ((distServer * Math.cos(dr.serverCourseRad)) / R) * (180 / Math.PI);
-    const dLonServer = ((distServer * Math.sin(dr.serverCourseRad)) / (R * Math.cos((dr.serverLat * Math.PI) / 180))) * (180 / Math.PI);
+    const dLatServer = ((distServer * Math.cos(dr.serverCourseRad)) / R_EARTH) * DEG_PER_RAD;
+    const dLonServer = ((distServer * Math.sin(dr.serverCourseRad)) / (R_EARTH * Math.cos(dr.serverLat * RAD_PER_DEG))) * DEG_PER_RAD;
 
     const serverProjLat = dr.serverLat + dLatServer;
     const serverProjLon = dr.serverLon + dLonServer;
@@ -34,13 +38,13 @@ export function interpolatePVB(
 
     // Angle blending (taking shortest path)
     let dAngle = dr.serverCourseRad - dr.blendCourseRad;
-    while (dAngle <= -Math.PI) dAngle += 2 * Math.PI;
-    while (dAngle > Math.PI) dAngle -= 2 * Math.PI;
+    while (dAngle <= -Math.PI) dAngle += TWO_PI;
+    while (dAngle > Math.PI) dAngle -= TWO_PI;
     const blendCourse = dr.blendCourseRad + dAngle * alpha;
 
     const distClient = blendSpeed * dtSec;
-    const dLatClient = ((distClient * Math.cos(blendCourse)) / R) * (180 / Math.PI);
-    const dLonClient = ((distClient * Math.sin(blendCourse)) / (R * Math.cos((dr.blendLat * Math.PI) / 180))) * (180 / Math.PI);
+    const dLatClient = ((distClient * Math.cos(blendCourse)) / R_EARTH) * DEG_PER_RAD;
+    const dLonClient = ((distClient * Math.sin(blendCourse)) / (R_EARTH * Math.cos(dr.blendLat * RAD_PER_DEG))) * DEG_PER_RAD;
 
     const clientProjLat = dr.blendLat + dLatClient;
     const clientProjLon = dr.blendLon + dLonClient;
@@ -77,7 +81,7 @@ export function interpolatePVB(
     lat: newVisual.lat,
     altitude: newVisual.alt,
     course: dr
-      ? ((dr.blendCourseRad * 180) / Math.PI + 360) % 360
+      ? (dr.blendCourseRad * DEG_PER_RAD + 360) % 360
       : entity.course,
   };
 

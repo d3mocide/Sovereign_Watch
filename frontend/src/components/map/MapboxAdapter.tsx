@@ -1,4 +1,7 @@
 import { MapboxOverlay } from "@deck.gl/mapbox";
+// CSS lives with the adapter so only the selected map library's styles are
+// loaded — the lazy chunk for the unused adapter (and its CSS) never downloads.
+import "mapbox-gl/dist/mapbox-gl.css";
 import type { StyleSpecification } from "mapbox-gl";
 import { forwardRef, useEffect, useMemo, useRef } from "react";
 import {

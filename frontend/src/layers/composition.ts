@@ -30,6 +30,7 @@ import { buildRFLayers } from "./buildRFLayers";
 import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
 import { getOrbitalLayers } from "./OrbitalLayer";
+import { LayerCache } from "./layerCache";
 
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
@@ -114,6 +115,13 @@ interface LayerCompositionOptions {
   firmsData?: FeatureCollection | null;
   /** Dark vessel candidates (AIS-gap cross-reference) GeoJSON */
   darkVesselData?: FeatureCollection | null;
+  /**
+   * Frame-to-frame layer memoization. Pass a per-overlay instance so layer
+   * groups whose inputs are unchanged return the identical Layer instances
+   * (deck.gl then skips diffing and attribute regeneration for them).
+   * Omitting it disables caching (every group rebuilds on every call).
+   */
+  cache?: LayerCache;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -170,60 +178,121 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     darkVesselData,
   } = options;
 
+  const cache = options.cache ?? new LayerCache();
+
+  // Pulse/glow animations tick at 10 Hz instead of every frame. The shimmer
+  // stays visually smooth, but the pulsing groups become cache hits for ~6
+  // consecutive frames instead of recomputing their color attributes at 60 fps.
+  const pulseNow = now - (now % 100);
+
   // JS8 station layers
-  let js8Layers: Layer[] = [];
-  if (js8Stations.length > 0 && ownGrid) {
-    const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
-    const selectedJS8Callsign =
-      currentSelected?.type === "js8" ? currentSelected.callsign : null;
-    js8Layers = buildJS8Layers(
+  const js8Layers = cache.get(
+    "js8",
+    [
       js8Stations,
-      ownLat,
-      ownLon,
+      ownGrid,
       globeMode,
-      selectedJS8Callsign,
+      currentSelected,
       onEntitySelect,
       setHoveredEntity,
       setHoverPosition,
       zoom,
-    );
-  }
+    ],
+    () => {
+      if (js8Stations.length === 0 || !ownGrid) return [];
+      const [ownLat, ownLon] = maidenheadToLatLon(ownGrid);
+      const selectedJS8Callsign =
+        currentSelected?.type === "js8" ? currentSelected.callsign : null;
+      return buildJS8Layers(
+        js8Stations,
+        ownLat,
+        ownLon,
+        globeMode,
+        selectedJS8Callsign,
+        onEntitySelect,
+        setHoveredEntity,
+        setHoverPosition,
+        zoom,
+      );
+    },
+  );
 
   // Repeater infrastructure layers
-  let repeaterLayers: Layer[] = [];
-  if (filters?.showRepeaters && rfSites.length > 0) {
-    repeaterLayers = buildRFLayers(
+  const repeaterLayers = cache.get(
+    "repeaters",
+    [
+      filters?.showRepeaters,
       rfSites,
       globeMode,
       onEntitySelect,
       setHoveredEntity,
       setHoverPosition,
-    );
-  }
+    ],
+    () =>
+      filters?.showRepeaters && rfSites.length > 0
+        ? buildRFLayers(
+            rfSites,
+            globeMode,
+            onEntitySelect,
+            setHoveredEntity,
+            setHoverPosition,
+          )
+        : [],
+  );
 
   // Submarine Cables & Stations Layers (+ PeeringDB IXPs/Facilities)
-  const { outages: outageLayers, assets: infraAssetLayers } = buildInfraLayers(
+  // Built once per input change; the outage and asset groups are spread at
+  // different z-positions, so they are cached under separate keys sharing
+  // one memoized build.
+  const infraDeps = [
     cablesData,
     stationsData,
     outagesData,
-    filters || null,
+    filters,
     setHoveredInfra,
     setSelectedInfra,
     currentSelected,
     globeMode,
     worldCountriesData,
     countryOutageMap,
-    ixpData ?? null,
-    facilityData ?? null,
-    dnsRootData ?? [],
+    ixpData,
+    facilityData,
+    dnsRootData,
+  ];
+  let infraResult: { outages: Layer[]; assets: Layer[] } | null = null;
+  const buildInfra = () =>
+    (infraResult ??= buildInfraLayers(
+      cablesData,
+      stationsData,
+      outagesData,
+      filters || null,
+      setHoveredInfra,
+      setSelectedInfra,
+      currentSelected,
+      globeMode,
+      worldCountriesData,
+      countryOutageMap,
+      ixpData ?? null,
+      facilityData ?? null,
+      dnsRootData ?? [],
+    ));
+  const outageLayers = cache.get(
+    "infra-outages",
+    infraDeps,
+    () => buildInfra().outages,
+  );
+  const infraAssetLayers = cache.get(
+    "infra-assets",
+    infraDeps,
+    () => buildInfra().assets,
   );
 
   // KiwiSDR node marker layer
-  const kiwiLayers: Layer[] = [];
-  if (kiwiNode && kiwiNode.lat !== 0 && kiwiNode.lon !== 0) {
-    const pulse = (Math.sin(now / 400) + 1) / 2;
+  const kiwiLayers = cache.get("kiwi-node", [kiwiNode, pulseNow], () => {
+    if (!kiwiNode || kiwiNode.lat === 0 || kiwiNode.lon === 0) return [];
+    const pulse = (Math.sin(pulseNow / 400) + 1) / 2;
 
-    kiwiLayers.push(
+    return [
       new ScatterplotLayer({
         id: "kiwi-node-core",
         data: [kiwiNode],
@@ -240,10 +309,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         lineWidthUnits: "meters",
         pickable: true,
       }),
-    );
 
-    // Kiwi Node Label (re-enabled as requested by user - HUD style)
-    kiwiLayers.push(
+      // Kiwi Node Label (re-enabled as requested by user - HUD style)
       new TextLayer({
         id: "kiwi-node-label",
         data: [kiwiNode],
@@ -267,126 +334,254 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         pickable: false,
         lineHeight: 1.2,
       }),
-    );
-  }
+    ];
+  });
 
   return [
-    ...buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
-    ...buildH3RiskLayer(h3RiskCells, !!filters?.showH3Risk),
-    getTerminatorLayer(!!filters?.showTerminator),
+    ...cache.get("h3-coverage", [h3Cells, filters?.showH3Coverage], () =>
+      buildH3CoverageLayer(h3Cells, !!filters?.showH3Coverage),
+    ),
+    ...cache.get("h3-risk", [h3RiskCells, filters?.showH3Risk], () =>
+      buildH3RiskLayer(h3RiskCells, !!filters?.showH3Risk),
+    ),
+    // Terminator geometry only changes once per minute
+    ...cache.get(
+      "terminator",
+      [filters?.showTerminator, Math.floor(now / 60_000)],
+      () => [getTerminatorLayer(!!filters?.showTerminator)],
+    ),
     // Aurora oval sits below infra/entity layers — large translucent area fill
-    ...buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, now),
+    ...cache.get(
+      "aurora",
+      [auroraData, filters?.showAurora, globeMode, pulseNow],
+      () => buildAuroraLayer(auroraData, !!filters?.showAurora, globeMode, pulseNow),
+    ),
     // Regional Shading Tier: Internet Outages
     ...outageLayers,
     // Regional Shading Tier: NWS Alerts
     // Keep NWS above outages so polygon picking is not masked in 2D.
-    ...buildNWSAlertsLayer(
-      nwsAlertsData ?? null,
-      !!filters?.showNWSAlerts,
-      globeMode,
-      setHoveredInfra,
-      setSelectedInfra,
+    ...cache.get(
+      "nws-alerts",
+      [
+        nwsAlertsData,
+        filters?.showNWSAlerts,
+        globeMode,
+        setHoveredInfra,
+        setSelectedInfra,
+      ],
+      () =>
+        buildNWSAlertsLayer(
+          nwsAlertsData ?? null,
+          !!filters?.showNWSAlerts,
+          globeMode,
+          setHoveredInfra,
+          setSelectedInfra,
+        ),
     ),
     // Tactical Zones Tier: OpenAIP global airspace zones
-    ...buildAirspaceLayer({
-      data: airspaceZonesData ?? null,
-      enabled: !!filters?.showAirspaceZones,
-      globeMode,
-      onHover: setHoveredInfra,
-      onSelect: setSelectedInfra,
-      enabledTypes: filters?.airspaceZoneTypes as string[] | undefined,
-    }),
-    // Fixed Infrastructure Assets Tier
-    ...infraAssetLayers,
-    // NDBC Ocean Buoys — Maritime Layer Group (Z-order 8–11)
-    ...buildNDBCLayer(
-      buoyData ?? null,
-      !!filters?.showBuoys,
-      globeMode,
-      setHoveredInfra,
-      setSelectedInfra,
-    ),
-    // Jamming zones sit above infra but below entity chevrons
-    ...buildJammingLayer(
-      jammingData,
-      !!filters?.showJamming,
-      globeMode,
-      now,
-      setHoveredEntity,
-      setHoverPosition,
-      onEntitySelect,
-    ),
-    // Dark vessel candidates — Tier 5 Dynamic (depthBias -108, above jamming)
-    ...buildDarkVesselLayer(
-      darkVesselData ?? null,
-      !!filters?.showDarkVessels,
-      globeMode,
-      now,
-      setHoveredInfra,
-      setSelectedInfra,
-    ),
-    // NASA FIRMS thermal hotspots — Tier 4 Infra Assets (depthBias -92)
-    ...buildFIRMSLayer(
-      firmsData ?? null,
-      !!filters?.showFIRMS,
-      globeMode,
-      now,
-      setHoveredInfra,
-      setSelectedInfra,
-    ),
-    // Cluster octagons sit above jamming so they are visible through the circular halos
-    ...buildClusterLayer(clusterData ?? [], !!filters?.showClusters, globeMode, setHoveredEntity, setHoverPosition, onEntitySelect),
-    // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
-    // Auto-enabled when a mission area is active (shows all events in AOT)
-    ...buildGdeltLayer(
-      gdeltData,
-      !!filters?.showGdelt,
-      globeMode,
-      gdeltToneThreshold,
-      filters?.showGdeltLabels === true,
-      (entity, pos) => {
-        setHoveredEntity(entity);
-        setHoverPosition(pos);
-      },
-      (g) => {
-        // Transform GDELT point into a virtual entity for the sidebar
-        onEntitySelect({
-          uid: `gdelt-${g.event_id}`,
-          type: "gdelt",
-          callsign: g.name,
-          lat: g.lat,
-          lon: g.lon,
-          altitude: 0,
-          course: 0,
-          speed: 0,
-          lastSeen: Date.now(),
-          detail: g as any,
-          trail: [],
-          uidHash: 0,
-        });
-      },
-    ),
-    // Clausal chain narrative traces — sits above GDELT events, below ISS/orbital
-    ...buildClausalChainLayer(
-      clausalChainsData || null,
-      filters?.showClausalChains === true,
-      globeMode,
-      (entity, pos) => {
-        setHoveredEntity(entity);
-        setHoverPosition(pos);
-      },
-      onEntitySelect,
-    ),
-    // ISS real-time tracker — Navigation/Orbital group (Z-order 15–17)
-    ...(filters?.showISS !== false
-      ? buildISSLayer({
-          position: issPosition ?? null,
-          track: issTrack ?? [],
+    ...cache.get(
+      "airspace",
+      [
+        airspaceZonesData,
+        filters?.showAirspaceZones,
+        globeMode,
+        setHoveredInfra,
+        setSelectedInfra,
+        filters?.airspaceZoneTypes,
+      ],
+      () =>
+        buildAirspaceLayer({
+          data: airspaceZonesData ?? null,
+          enabled: !!filters?.showAirspaceZones,
           globeMode,
           onHover: setHoveredInfra,
           onSelect: setSelectedInfra,
-        })
-      : []),
+          enabledTypes: filters?.airspaceZoneTypes as string[] | undefined,
+        }),
+    ),
+    // Fixed Infrastructure Assets Tier
+    ...infraAssetLayers,
+    // NDBC Ocean Buoys — Maritime Layer Group (Z-order 8–11)
+    ...cache.get(
+      "ndbc-buoys",
+      [buoyData, filters?.showBuoys, globeMode, setHoveredInfra, setSelectedInfra],
+      () =>
+        buildNDBCLayer(
+          buoyData ?? null,
+          !!filters?.showBuoys,
+          globeMode,
+          setHoveredInfra,
+          setSelectedInfra,
+        ),
+    ),
+    // Jamming zones sit above infra but below entity chevrons
+    ...cache.get(
+      "jamming",
+      [
+        jammingData,
+        filters?.showJamming,
+        globeMode,
+        pulseNow,
+        setHoveredEntity,
+        setHoverPosition,
+        onEntitySelect,
+      ],
+      () =>
+        buildJammingLayer(
+          jammingData,
+          !!filters?.showJamming,
+          globeMode,
+          pulseNow,
+          setHoveredEntity,
+          setHoverPosition,
+          onEntitySelect,
+        ),
+    ),
+    // Dark vessel candidates — Tier 5 Dynamic (depthBias -108, above jamming)
+    ...cache.get(
+      "dark-vessels",
+      [
+        darkVesselData,
+        filters?.showDarkVessels,
+        globeMode,
+        pulseNow,
+        setHoveredInfra,
+        setSelectedInfra,
+      ],
+      () =>
+        buildDarkVesselLayer(
+          darkVesselData ?? null,
+          !!filters?.showDarkVessels,
+          globeMode,
+          pulseNow,
+          setHoveredInfra,
+          setSelectedInfra,
+        ),
+    ),
+    // NASA FIRMS thermal hotspots — Tier 4 Infra Assets (depthBias -92)
+    ...cache.get(
+      "firms",
+      [
+        firmsData,
+        filters?.showFIRMS,
+        globeMode,
+        pulseNow,
+        setHoveredInfra,
+        setSelectedInfra,
+      ],
+      () =>
+        buildFIRMSLayer(
+          firmsData ?? null,
+          !!filters?.showFIRMS,
+          globeMode,
+          pulseNow,
+          setHoveredInfra,
+          setSelectedInfra,
+        ),
+    ),
+    // Cluster octagons sit above jamming so they are visible through the circular halos
+    ...cache.get(
+      "clusters",
+      [
+        clusterData,
+        filters?.showClusters,
+        globeMode,
+        setHoveredEntity,
+        setHoverPosition,
+        onEntitySelect,
+      ],
+      () =>
+        buildClusterLayer(
+          clusterData ?? [],
+          !!filters?.showClusters,
+          globeMode,
+          setHoveredEntity,
+          setHoverPosition,
+          onEntitySelect,
+        ),
+    ),
+    // GDELT geolocated news events — sit above infra/jamming, below entity chevrons
+    // Auto-enabled when a mission area is active (shows all events in AOT)
+    ...cache.get(
+      "gdelt",
+      [
+        gdeltData,
+        filters?.showGdelt,
+        globeMode,
+        gdeltToneThreshold,
+        filters?.showGdeltLabels,
+        setHoveredEntity,
+        setHoverPosition,
+        onEntitySelect,
+      ],
+      () =>
+        buildGdeltLayer(
+          gdeltData,
+          !!filters?.showGdelt,
+          globeMode,
+          gdeltToneThreshold,
+          filters?.showGdeltLabels === true,
+          (entity, pos) => {
+            setHoveredEntity(entity);
+            setHoverPosition(pos);
+          },
+          (g) => {
+            // Transform GDELT point into a virtual entity for the sidebar
+            onEntitySelect({
+              uid: `gdelt-${g.event_id}`,
+              type: "gdelt",
+              callsign: g.name,
+              lat: g.lat,
+              lon: g.lon,
+              altitude: 0,
+              course: 0,
+              speed: 0,
+              lastSeen: Date.now(),
+              detail: g as any,
+              trail: [],
+              uidHash: 0,
+            });
+          },
+        ),
+    ),
+    // Clausal chain narrative traces — sits above GDELT events, below ISS/orbital
+    ...cache.get(
+      "clausal-chains",
+      [
+        clausalChainsData,
+        filters?.showClausalChains,
+        globeMode,
+        setHoveredEntity,
+        setHoverPosition,
+        onEntitySelect,
+      ],
+      () =>
+        buildClausalChainLayer(
+          clausalChainsData || null,
+          filters?.showClausalChains === true,
+          globeMode,
+          (entity, pos) => {
+            setHoveredEntity(entity);
+            setHoverPosition(pos);
+          },
+          onEntitySelect,
+        ),
+    ),
+    // ISS real-time tracker — Navigation/Orbital group (Z-order 15–17)
+    ...cache.get(
+      "iss",
+      [issPosition, issTrack, globeMode, filters?.showISS, setHoveredInfra, setSelectedInfra],
+      () =>
+        filters?.showISS !== false
+          ? buildISSLayer({
+              position: issPosition ?? null,
+              track: issTrack ?? [],
+              globeMode,
+              onHover: setHoveredInfra,
+              onSelect: setSelectedInfra,
+            })
+          : [],
+    ),
     ...getOrbitalLayers({
       satellites: filteredSatellites,
       selectedEntity: currentSelected,
@@ -407,87 +602,103 @@ export function composeAllLayers(options: LayerCompositionOptions) {
         }
       },
     }),
-    ...buildAOTLayers(
-      aotShapes,
-      filters,
-      globeMode,
-      observer,
-      currentMission
-        ? {
-            lat: currentMission.lat,
-            lon: currentMission.lon,
-            radiusKm: (Number(filters?.rfRadius) || 300) * 1.852,
-          }
-        : null,
+    ...cache.get(
+      "aot",
+      [aotShapes, filters, globeMode, observer, currentMission],
+      () =>
+        buildAOTLayers(
+          aotShapes,
+          filters,
+          globeMode,
+          observer,
+          currentMission
+            ? {
+                lat: currentMission.lat,
+                lon: currentMission.lon,
+                radiusKm: (Number(filters?.rfRadius) || 300) * 1.852,
+              }
+            : null,
+        ),
     ),
     ...repeaterLayers,
     ...kiwiLayers,
-    ...buildTowerLayer(
-      towersData || [],
-      filters?.showTowers === true,
-      globeMode,
-      setHoveredInfra,
-      setSelectedInfra,
+    ...cache.get(
+      "towers",
+      [towersData, filters?.showTowers, globeMode, setHoveredInfra, setSelectedInfra],
+      () =>
+        buildTowerLayer(
+          towersData || [],
+          filters?.showTowers === true,
+          globeMode,
+          setHoveredInfra,
+          setSelectedInfra,
+        ),
     ),
     // Historical flight path (solid coverage segments + ghost gap segments)
-    ...(historySegments && historySegments.length > 0
-      ? [
-          new PathLayer({
-            id: "history-track-solid",
-            data: historySegments.filter((s) => !s.isGap),
-            getPath: (d: HistorySegment) => d.path,
-            getColor: [0, 255, 65, 160],
-            getWidth: 2,
-            widthUnits: "pixels",
-            jointRounded: true,
-            capRounded: true,
-            pickable: false,
-          }),
-          new PathLayer({
-            id: "history-track-gap",
-            data: historySegments.filter((s) => s.isGap),
-            getPath: (d: HistorySegment) => d.path,
-            getColor: [251, 191, 36, 80],
-            getWidth: 1,
-            widthUnits: "pixels",
-            dashJustified: true,
-            getDashArray: [4, 4],
-            extensions: [],
-            pickable: false,
-          }),
-          // Start dot (oldest point) and end dot (current / newest)
-          new ScatterplotLayer({
-            id: "history-track-endpoints",
-            data: (() => {
-              const solid = historySegments.filter((s) => !s.isGap);
-              if (solid.length === 0) return [];
-              const firstSeg = solid[0];
-              const lastSeg = solid[solid.length - 1];
-              return [
-                {
-                  pos: firstSeg.path[0],
-                  color: [0, 255, 65, 220] as [number, number, number, number],
-                },
-                {
-                  pos: lastSeg.path[lastSeg.path.length - 1],
-                  color: [255, 200, 0, 220] as [number, number, number, number],
-                },
-              ];
-            })(),
-            getPosition: (d: {
-              pos: [number, number, number];
-              color: [number, number, number, number];
-            }) => d.pos,
-            getFillColor: (d: {
-              pos: [number, number, number];
-              color: [number, number, number, number];
-            }) => d.color,
-            getRadius: 5,
-            radiusUnits: "pixels",
-            pickable: false,
-          }),
-        ]
-      : []),
+    ...cache.get("history-track", [historySegments], () => {
+      if (!historySegments || historySegments.length === 0) return [];
+      const solid = historySegments.filter((s) => !s.isGap);
+      const firstSeg = solid[0];
+      const lastSeg = solid[solid.length - 1];
+      return [
+        new PathLayer({
+          id: "history-track-solid",
+          data: solid,
+          getPath: (d: HistorySegment) => d.path,
+          getColor: [0, 255, 65, 160],
+          getWidth: 2,
+          widthUnits: "pixels",
+          jointRounded: true,
+          capRounded: true,
+          pickable: false,
+        }),
+        new PathLayer({
+          id: "history-track-gap",
+          data: historySegments.filter((s) => s.isGap),
+          getPath: (d: HistorySegment) => d.path,
+          getColor: [251, 191, 36, 80],
+          getWidth: 1,
+          widthUnits: "pixels",
+          dashJustified: true,
+          getDashArray: [4, 4],
+          extensions: [],
+          pickable: false,
+        }),
+        // Start dot (oldest point) and end dot (current / newest)
+        new ScatterplotLayer({
+          id: "history-track-endpoints",
+          data:
+            solid.length === 0
+              ? []
+              : [
+                  {
+                    pos: firstSeg.path[0],
+                    color: [0, 255, 65, 220] as [number, number, number, number],
+                  },
+                  {
+                    pos: lastSeg.path[lastSeg.path.length - 1],
+                    color: [255, 200, 0, 220] as [
+                      number,
+                      number,
+                      number,
+                      number,
+                    ],
+                  },
+                ],
+          getPosition: (d: {
+            pos: [number, number, number];
+            color: [number, number, number, number];
+          }) => d.pos,
+          getFillColor: (d: {
+            pos: [number, number, number];
+            color: [number, number, number, number];
+          }) => d.color,
+          getRadius: 5,
+          radiusUnits: "pixels",
+          pickable: false,
+        }),
+      ];
+    }),
     ...buildTrailLayers(
       interpolatedEntities,
       currentSelected,
@@ -495,16 +706,29 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       historyTails,
     ),
     // Aviation Holding Patterns - Pulsed Amber tactical zones
-    ...buildHoldingPatternLayer(
-      holdingPatternData || null,
-      filters?.showHoldingPatterns !== false,
-      globeMode,
-      now,
-      (entity, pos) => {
-        setHoveredEntity(entity);
-        setHoverPosition(pos);
-      },
-      onEntitySelect,
+    ...cache.get(
+      "holding-patterns",
+      [
+        holdingPatternData,
+        filters?.showHoldingPatterns,
+        globeMode,
+        pulseNow,
+        setHoveredEntity,
+        setHoverPosition,
+        onEntitySelect,
+      ],
+      () =>
+        buildHoldingPatternLayer(
+          holdingPatternData || null,
+          filters?.showHoldingPatterns !== false,
+          globeMode,
+          pulseNow,
+          (entity, pos) => {
+            setHoveredEntity(entity);
+            setHoverPosition(pos);
+          },
+          onEntitySelect,
+        ),
     ),
     ...buildEntityLayers(
       interpolatedEntities,

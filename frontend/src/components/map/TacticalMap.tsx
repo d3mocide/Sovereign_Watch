@@ -1,6 +1,4 @@
 import type { FeatureCollection } from "geojson";
-import "mapbox-gl/dist/mapbox-gl.css";
-import "maplibre-gl/dist/maplibre-gl.css";
 import React, {
   MutableRefObject,
   Suspense,
