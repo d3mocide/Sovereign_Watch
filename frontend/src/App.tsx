@@ -1,19 +1,14 @@
 import type { FeatureCollection } from "geojson";
 import { AlertTriangle, CheckCircle2, ExternalLink, Globe, Loader2, Plane, Radar, Ship, X, XCircle } from "lucide-react";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentProps, type ComponentType } from "react";
 import { getSetupStatus } from "./api/auth";
 import { fetchMissionH3Risk, type RiskSeverity } from "./api/h3Risk";
-import RadioTerminal from "./components/js8call/RadioTerminal";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
 import { MainHud } from "./components/layouts/MainHud";
 import { OrbitalSidebarLeft } from "./components/layouts/OrbitalSidebarLeft";
 import { SidebarLeft } from "./components/layouts/SidebarLeft";
 import { SidebarRight } from "./components/layouts/SidebarRight";
 import { TopBar } from "./components/layouts/TopBar";
-import { IntelGlobe } from "./components/map/IntelGlobe";
-import { OrbitalMap } from "./components/map/OrbitalMap";
-import TacticalMap from "./components/map/TacticalMap";
-import { DashboardView } from "./components/views/DashboardView";
 import { LoginView } from "./components/views/LoginView";
 import { AIAnalystPanel } from "./components/widgets/AIAnalystPanel";
 import { AnalysisFormatter } from "./components/widgets/AnalysisFormatter";
@@ -54,6 +49,40 @@ interface IntelArticleContent {
 
 const StatsDashboardView = lazy(() => import('./components/views/StatsDashboardView'));
 const LinkageAuditView = lazy(() => import('./components/views/LinkageAuditView'));
+
+// ── Code-split heavy views ──────────────────────────────────────────────────
+// The map/globe views pull in deck.gl + maplibre/mapbox (multi-MB chunks) and
+// the radio terminal pulls its own widget tree. Loading them on demand keeps
+// the login screen and app shell out from under that cost. Each wrapper
+// carries its own Suspense boundary so the view-switch JSX stays untouched.
+function lazyView<T extends ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+) {
+  const LazyComp = lazy(importer);
+  return function LazyViewBoundary(props: ComponentProps<T>) {
+    return (
+      <Suspense fallback={<div className="absolute inset-0 bg-[#050505]" />}>
+        <LazyComp {...props} />
+      </Suspense>
+    );
+  };
+}
+
+const TacticalMap = lazyView(() => import("./components/map/TacticalMap"));
+const OrbitalMap = lazyView(() =>
+  import("./components/map/OrbitalMap").then((m) => ({ default: m.OrbitalMap })),
+);
+const IntelGlobe = lazyView(() =>
+  import("./components/map/IntelGlobe").then((m) => ({ default: m.IntelGlobe })),
+);
+const DashboardView = lazyView(() =>
+  import("./components/views/DashboardView").then((m) => ({
+    default: m.DashboardView,
+  })),
+);
+const RadioTerminal = lazyView(
+  () => import("./components/js8call/RadioTerminal"),
+);
 
 function AuthenticatedApp() {
 

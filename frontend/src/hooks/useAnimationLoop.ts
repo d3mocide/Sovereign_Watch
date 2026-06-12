@@ -13,6 +13,7 @@ import { fetchClusters, ClusterInfo } from "../api/clusters";
 import { latLngToCell } from "h3-js";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
+import { LayerCache } from "../layers/layerCache";
 import {
 
   CoTEntity,
@@ -348,6 +349,13 @@ export function useAnimationLoop({
   const js8StationsArrayRef = useRef<import("../types").JS8Station[]>([]);
   const js8StationsSizeRef = useRef<number>(0);
 
+  // Per-overlay layer memoization: static layer groups (infra, airspace,
+  // weather, …) are only rebuilt when their inputs change instead of on
+  // every rAF tick. Must be per-hook-instance — Layer objects hold internal
+  // state tied to a single deck overlay.
+  const layerCacheRef = useRef<LayerCache | null>(null);
+  if (!layerCacheRef.current) layerCacheRef.current = new LayerCache();
+
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
     const map: Record<string, Record<string, unknown>> = {};
@@ -520,8 +528,17 @@ export function useAnimationLoop({
     const animate = () => {
       const entities = entitiesRef.current;
       const now = Date.now();
-      const dt = Math.min(now - lastFrameTimeRef.current, 100);
+      const rawDt = now - lastFrameTimeRef.current;
+      const dt = Math.min(rawDt, 100);
       lastFrameTimeRef.current = now;
+
+      // After a long frame stall (hidden tab, heavy GC, shader compilation)
+      // every entity's projected target has moved on while the visuals stayed
+      // frozen. Drop the visual states so this frame re-seeds them directly
+      // at their targets — one clean snap instead of a global catch-up surge.
+      if (rawDt > 1000) {
+        visualStateRef.current.clear();
+      }
 
       const _filters = filtersRef.current;
       const _replayMode = replayModeRef.current;
@@ -794,6 +811,7 @@ export function useAnimationLoop({
         clausalChainsData: clausalChainsDataRef.current,
         firmsData: firmsDataRef.current,
         darkVesselData: darkVesselDataRef.current,
+        cache: layerCacheRef.current ?? undefined,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {

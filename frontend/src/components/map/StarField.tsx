@@ -52,15 +52,17 @@ export function StarField({ active, contained = false }: StarFieldProps) {
 
       ctx.clearRect(0, 0, W, H);
 
-      // Draw stars with subtle twinkling
+      // Draw stars with subtle twinkling — vary globalAlpha instead of
+      // formatting a new rgba() string per star per frame
+      ctx.fillStyle = '#ffffff';
       for (const star of stars) {
         const t = Math.sin(frame * star.twinkleSpeed + star.twinklePhase);
-        const opacity = star.baseOpacity * (0.65 + 0.35 * t);
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity.toFixed(3)})`;
+        ctx.globalAlpha = star.baseOpacity * (0.65 + 0.35 * t);
         ctx.beginPath();
         ctx.arc(star.x * W, star.y * H, star.size, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
 
       frame++;
       animId = requestAnimationFrame(render);

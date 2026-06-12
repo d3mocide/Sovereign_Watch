@@ -9,8 +9,6 @@ import React, {
 import type { MapRef } from "react-map-gl/maplibre";
 
 import type { FeatureCollection } from "geojson";
-import "maplibre-gl/dist/maplibre-gl.css";
-import "mapbox-gl/dist/mapbox-gl.css";
 import { CoTEntity, JS8Station, MissionProps, RFSite, GroundTrackPoint, SatNOGSStation } from "../../types";
 import { MapTooltip } from "./MapTooltip";
 import { MapContextMenu } from "./MapContextMenu";
