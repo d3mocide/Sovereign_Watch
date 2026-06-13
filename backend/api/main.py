@@ -121,6 +121,9 @@ async def lifespan(app: FastAPI):
     historian_task_handle = asyncio.create_task(_historian_supervisor())
     rf_cleanup_task_handle = asyncio.create_task(rf_sites_cleanup_task())
     await broadcast_service.start()
+    # Warm the news feed cache in the background so the first dashboard load
+    # after a restart isn't blocked on the upstream RSS fetch.
+    await news.warm_cache()
     logger.info("Database, Redis, Historian, RF Cleanup, and Broadcast Service started")
 
     yield

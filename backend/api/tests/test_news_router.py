@@ -141,3 +141,16 @@ async def test_trigger_refresh_dedupes_with_nx_lock(monkeypatch):
 
     await news._trigger_refresh()
     assert spawned["n"] == 0  # lock contended → nothing spawned
+
+
+@pytest.mark.asyncio
+async def test_warm_cache_triggers_refresh(monkeypatch):
+    """Startup warm-up delegates to the background refresh and never blocks."""
+    called = {"n": 0}
+
+    async def _spy():
+        called["n"] += 1
+
+    monkeypatch.setattr(news, "_trigger_refresh", _spy)
+    await news.warm_cache()
+    assert called["n"] == 1

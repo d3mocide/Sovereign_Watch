@@ -259,6 +259,16 @@ async def _trigger_refresh() -> None:
     _refresh_task = asyncio.create_task(_refresh_and_release())
 
 
+async def warm_cache() -> None:
+    """Populate the feed cache in the background (non-blocking).
+
+    Called at API startup so the first dashboard load after a restart isn't
+    blocked on the upstream RSS fetch. Delegates to the same deduped background
+    refresh used by the stale-while-revalidate path, so it returns immediately.
+    """
+    await _trigger_refresh()
+
+
 @router.get("/api/news/feed")
 async def get_news_feed(limit: int = Query(default=40, le=100)):
     """
