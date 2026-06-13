@@ -43,6 +43,15 @@ class Settings:
     # Kafka
     KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "sovereign-redpanda:9092")
 
+    # Live-stream snapshot (last-value cache).
+    # A freshly-connected WebSocket client is replayed the current world state
+    # so the map paints immediately instead of waiting for each poller's next
+    # full sweep (the orbital sweep alone is a ~15-37 s cycle). Entities not
+    # re-emitted within the TTL are dropped from the snapshot; the hard cap
+    # bounds memory if the uid space ever runs away.
+    LIVE_SNAPSHOT_TTL_SECONDS = int(os.getenv("LIVE_SNAPSHOT_TTL_SECONDS", "300"))
+    LIVE_SNAPSHOT_MAX_ENTITIES = int(os.getenv("LIVE_SNAPSHOT_MAX_ENTITIES", "20000"))
+
     # Authentication
     # When AUTH_ENABLED=false all authentication checks are skipped (local dev only — NEVER in production).
     AUTH_ENABLED: bool = os.getenv("AUTH_ENABLED", "true").lower() not in (
