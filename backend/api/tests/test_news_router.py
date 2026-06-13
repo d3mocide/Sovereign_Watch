@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -154,3 +155,41 @@ async def test_warm_cache_triggers_refresh(monkeypatch):
     monkeypatch.setattr(news, "_trigger_refresh", _spy)
     await news.warm_cache()
     assert called["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_prewarm_loop_refreshes_then_sleeps(monkeypatch):
+    """The loop warms the cache, then waits the interval (cancelled to exit)."""
+    calls = {"warm": 0}
+
+    async def _warm():
+        calls["warm"] += 1
+
+    async def _sleep(_seconds):
+        raise asyncio.CancelledError  # break out after the first cycle
+
+    monkeypatch.setattr(news, "warm_cache", _warm)
+    monkeypatch.setattr(news.asyncio, "sleep", _sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await news.prewarm_loop()
+    assert calls["warm"] == 1
+
+
+@pytest.mark.asyncio
+async def test_prewarm_loop_survives_refresh_error(monkeypatch):
+    """A failing refresh cycle is swallowed; the loop still reaches the sleep."""
+
+    async def _warm():
+        raise RuntimeError("boom")
+
+    async def _sleep(_seconds):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(news, "warm_cache", _warm)
+    monkeypatch.setattr(news.asyncio, "sleep", _sleep)
+
+    # If the RuntimeError weren't caught it would surface here instead of the
+    # CancelledError from sleep.
+    with pytest.raises(asyncio.CancelledError):
+        await news.prewarm_loop()

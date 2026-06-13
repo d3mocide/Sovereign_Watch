@@ -57,12 +57,17 @@ dashboard's slow text feeds.
   - Added `_store_feed`, `_refresh_and_release`, `_trigger_refresh`, and a module
     `_refresh_task` ref.
   - Rewrote `get_news_feed` for stale-while-revalidate.
-  - Added `warm_cache()` — a non-blocking startup warm that delegates to the
-    deduped background refresh.
+  - Added `warm_cache()` (non-blocking refresh delegating to the deduped
+    background refresh) and `prewarm_loop()` — a continuous pre-warmer that
+    refreshes on startup and then every `NEWS_PREWARM_INTERVAL`
+    (`NEWS_PREWARM_INTERVAL_SECONDS`, default 600 s — comfortably inside the
+    900 s freshness window so the cache is always warm even with no traffic).
 - **`backend/api/main.py`**
-  - Lifespan now calls `news.warm_cache()` after `broadcast_service.start()`, so
-    the feed cache is populated in the background at startup and the first
-    dashboard load after a restart never blocks on the upstream RSS fetch.
+  - Lifespan launches `news.prewarm_loop()` as a supervised background task
+    after `broadcast_service.start()` and cancels it on shutdown alongside the
+    historian / RF-cleanup tasks. The feed cache is therefore kept warm
+    independent of client traffic, so a fresh dashboard never blocks on the
+    upstream RSS fetch.
 - **`backend/api/tests/test_news_router.py`**
   - Added tests: fresh cache served without refresh; stale cache served +
     triggers refresh; cold cache fetches synchronously; `_fetch_feeds` merges +

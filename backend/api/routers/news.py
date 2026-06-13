@@ -27,6 +27,9 @@ CACHE_REFRESH_LOCK = "news:feed:refreshing"
 CACHE_TTL = 900  # 15 minutes — freshness window
 CACHE_HARD_TTL = 6 * 3600  # keep stale data servable (stale-while-revalidate)
 CACHE_REFRESH_LOCK_TTL = 120
+# Pre-warm interval: refresh proactively, comfortably inside the freshness
+# window, so the cache stays warm even when no client is polling the feed.
+NEWS_PREWARM_INTERVAL = int(os.getenv("NEWS_PREWARM_INTERVAL_SECONDS", "600"))
 
 # Default RSS feeds — world/conflict/OSINT relevant, all public
 DEFAULT_RSS_URLS = ",".join(
@@ -262,11 +265,27 @@ async def _trigger_refresh() -> None:
 async def warm_cache() -> None:
     """Populate the feed cache in the background (non-blocking).
 
-    Called at API startup so the first dashboard load after a restart isn't
-    blocked on the upstream RSS fetch. Delegates to the same deduped background
-    refresh used by the stale-while-revalidate path, so it returns immediately.
+    Delegates to the same deduped background refresh used by the
+    stale-while-revalidate path, so it returns immediately.
     """
     await _trigger_refresh()
+
+
+async def prewarm_loop() -> None:
+    """Keep the news cache warm independent of client traffic.
+
+    Refreshes immediately on startup and then every NEWS_PREWARM_INTERVAL, so a
+    fresh dashboard always hits a warm cache instead of waiting on the upstream
+    RSS fetch — even if no one has polled the feed recently. Per-cycle errors
+    are logged and the loop continues; cancellation (lifespan shutdown)
+    propagates for a clean stop.
+    """
+    while True:
+        try:
+            await warm_cache()
+        except Exception as e:  # never let one bad cycle kill the loop
+            logger.warning(f"News pre-warm cycle failed: {e}")
+        await asyncio.sleep(NEWS_PREWARM_INTERVAL)
 
 
 @router.get("/api/news/feed")
