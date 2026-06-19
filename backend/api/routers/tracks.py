@@ -120,7 +120,12 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
         step_days = step_seconds / 86400.0
         one_sec_days = 1.0 / 86400.0
 
-        results = []
+        r_ecefs = []
+        r2_ecefs = []
+        vs = []
+        valid_indices = []
+        e2_valid = []
+
         for i in range(limit):
             elapsed_seconds = i * step_seconds
             if elapsed_seconds > total_seconds:
@@ -129,41 +134,51 @@ async def get_track_history(entity_id: str, limit: int = 100, hours: int = 24):
             fr = fr_end - i * step_days
             e, r, v = satrec.sgp4(jd_end, fr)
             if e == 0:
-                r_ecef = teme_to_ecef(r, jd_end, fr)
-                lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(
-                    np.array(r_ecef).reshape(1, 3)
-                )
+                r_ecefs.append(teme_to_ecef(r, jd_end, fr))
+                vs.append(v)
+                valid_indices.append(i)
 
                 # Heading: bearing from 1 second ago to now
                 fr2 = fr - one_sec_days
                 e2, r2, _ = satrec.sgp4(jd_end, fr2)
-                heading = 0.0
                 if e2 == 0:
-                    r2_ecef = teme_to_ecef(r2, jd_end, fr2)
-                    la2, lo2, _ = ecef_to_lla_vectorized(
-                        np.array(r2_ecef).reshape(1, 3)
-                    )
-                    dlat = float(lat_arr[0]) - float(la2[0])
-                    dlon = float(lon_arr[0]) - float(lo2[0])
+                    r2_ecefs.append(teme_to_ecef(r2, jd_end, fr2))
+                    e2_valid.append(True)
+                else:
+                    # Dummy values to keep arrays aligned, heading will remain 0.0
+                    r2_ecefs.append([0.0, 0.0, 0.0])
+                    e2_valid.append(False)
+
+        results = []
+        if r_ecefs:
+            lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecefs))
+            la2, lo2, _ = ecef_to_lla_vectorized(np.array(r2_ecefs))
+
+            for idx, i in enumerate(valid_indices):
+                heading = 0.0
+                if e2_valid[idx]:
+                    dlat = float(lat_arr[idx]) - float(la2[idx])
+                    dlon = float(lon_arr[idx]) - float(lo2[idx])
                     heading = (
                         math.degrees(
                             math.atan2(
-                                dlon * math.cos(math.radians(float(lat_arr[0]))),
+                                dlon * math.cos(math.radians(float(lat_arr[idx]))),
                                 dlat,
                             )
                         )
                         % 360.0
                     )
 
+                elapsed_seconds = i * step_seconds
                 t = end_dt - timedelta(seconds=elapsed_seconds)
                 results.append(
                     {
                         "time": t,
-                        "lat": round(float(lat_arr[0]), 5),
-                        "lon": round(float(lon_arr[0]), 5),
-                        "alt": round(float(alt_arr[0]) * 1000.0, 1),  # km → m
+                        "lat": round(float(lat_arr[idx]), 5),
+                        "lon": round(float(lon_arr[idx]), 5),
+                        "alt": round(float(alt_arr[idx]) * 1000.0, 1),  # km → m
                         "speed": round(
-                            float(np.linalg.norm(v)) * 1000.0, 2
+                            float(np.linalg.norm(vs[idx])) * 1000.0, 2
                         ),  # km/s → m/s
                         "heading": round(heading, 2),
                         "meta": None,
@@ -256,26 +271,37 @@ async def search_tracks(q: str, limit: int = 10):
 
         # For each matched satellite compute its current position via SGP4
         now = datetime.now(timezone.utc)
-        for row in sat_rows:
-            lat, lon = None, None
+        jd, fr = _jday(now)
+
+        r_ecefs = []
+        valid_indices = []
+
+        for idx, row in enumerate(sat_rows):
             try:
                 satrec = Satrec.twoline2rv(row["tle_line1"], row["tle_line2"])
-                jd, fr = _jday(now)
                 e, r, _ = satrec.sgp4(jd, fr)
                 if e == 0:
-                    r_ecef = teme_to_ecef(r, jd, fr)
-                    la, lo, _ = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
-                    lat = round(float(la[0]), 5)
-                    lon = round(float(lo[0]), 5)
+                    r_ecefs.append(teme_to_ecef(r, jd, fr))
+                    valid_indices.append(idx)
             except Exception:
                 pass
+
+        lat_map = {}
+        lon_map = {}
+        if r_ecefs:
+            la, lo, _ = ecef_to_lla_vectorized(np.array(r_ecefs))
+            for i, idx in enumerate(valid_indices):
+                lat_map[idx] = round(float(la[i]), 5)
+                lon_map[idx] = round(float(lo[i]), 5)
+
+        for idx, row in enumerate(sat_rows):
             results.append(
                 {
                     "entity_id": f"SAT-{row['norad_id']}",
                     "type": "a-s-K",
                     "last_seen": now,
-                    "lat": lat,
-                    "lon": lon,
+                    "lat": lat_map.get(idx),
+                    "lon": lon_map.get(idx),
                     "callsign": row["name"],
                     "classification": None,
                 }
