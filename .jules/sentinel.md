@@ -71,3 +71,8 @@
 **Vulnerability:** A Time-Of-Check to Time-Of-Use (TOCTOU) DNS Rebinding vulnerability existed in `backend/api/routers/news.py`'s `/api/news/article` endpoint. The code extracted a host via `urlparse`, verified the host's IP was not private/loopback using `_is_safe_host()`, and then passed the original URL to `httpx.AsyncClient().get()`.
 **Learning:** Checking a hostname's resolution prior to passing it to an HTTP client is insufficient because the HTTP client performs a second, independent DNS resolution. A malicious DNS server can exploit this gap by returning a safe public IP during the check and a private IP (e.g., `127.0.0.1` or `169.254.169.254`) during the fetch.
 **Prevention:** Never rely on pre-flight DNS checks. Instead, write a custom `httpx.AsyncHTTPTransport` wrapper that performs a single DNS lookup, replaces the destination host with the verified safe IP address (`request.url.copy_with(host=safe_ip)`), and injects the original hostname into `request.extensions["sni_hostname"]` to preserve TLS verification.
+
+## 2024-05-18 - Prevent Information Disclosure in API Errors
+**Vulnerability:** Raw exception details (`str(e)`) were being leaked to the client in HTTP 400 responses during failed outbound requests.
+**Learning:** Returning `str(e)` in an `HTTPException` can inadvertently leak internal network details, unhandled edge cases, or stack traces to untrusted clients, aiding in reconnaissance.
+**Prevention:** Always catch exceptions securely, log the raw `exc_info` internally using a logger, and return a sanitized, generic error message (e.g., "Failed to connect to article source") to the client.
