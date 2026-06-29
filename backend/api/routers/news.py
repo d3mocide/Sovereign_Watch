@@ -392,6 +392,7 @@ class SSRFSafeTransport(httpx.AsyncHTTPTransport):
     It replaces the host with the resolved IP while keeping the original host in the SNI,
     thus ensuring the IP validated is exactly the one connected to.
     """
+
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         original_host = request.url.host
         loop = asyncio.get_running_loop()
@@ -404,7 +405,12 @@ class SSRFSafeTransport(httpx.AsyncHTTPTransport):
         for addr in addrs:
             ip = addr[4][0]
             ip_obj = ipaddress.ip_address(ip)
-            if not (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast or ip_obj.is_unspecified):
+            if not (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+                or ip_obj.is_unspecified
+            ):
                 safe_ip = ip
                 break
 
@@ -433,7 +439,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
 
     try:
         async with httpx.AsyncClient(
-            transport=SSRFSafeTransport(), timeout=ARTICLE_TIMEOUT, follow_redirects=True
+            transport=SSRFSafeTransport(),
+            timeout=ARTICLE_TIMEOUT,
+            follow_redirects=True,
         ) as client:
             resp = await client.get(
                 url,
@@ -444,7 +452,9 @@ async def get_article_content(url: str = Query(..., min_length=8, max_length=204
             )
     except httpx.ConnectError as e:
         logger.warning(f"Article connection failed for {url}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400, detail="Failed to connect to article source"
+        )
     except Exception as e:
         logger.warning(f"Article fetch failed for {url}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch article content")
