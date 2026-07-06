@@ -148,7 +148,10 @@ RUN wget -q -O /tmp/JS8Call-2.5.2-x86_64.AppImage "https://github.com/JS8Call-im
     && chmod +x /tmp/JS8Call-2.5.2-x86_64.AppImage \
     && cd /opt && /tmp/JS8Call-2.5.2-x86_64.AppImage --appimage-extract \
     && ln -s /opt/squashfs-root/AppRun /usr/bin/js8call \
-    && mkdir -p /root/.config && printf "[Main]\n[Configuration]\nTCPEnabled=false\nUDPEnabled=true\nUDPServer=127.0.0.1\nUDPServerPort=2242\nAcceptUDPRequests=true\nUDPClient2=127.0.0.1\nUDPClient2Port=2245\nMyCall=N0CALL\nMyGrid=CN85\n[MultiSettings]\n" > "/root/.config/JS8Call - KiwiSDR-Virtual.ini" \
+    # UDPServer/UDPServerPort = where JS8Call PUSHES its API event datagrams
+    # (PING/RX.SPOT/RX.DIRECTED/...). The FastAPI bridge binds that port and
+    # replies to the datagram source address for commands (AcceptUDPRequests).
+    && mkdir -p /root/.config && printf "[Main]\n[Configuration]\nTCPEnabled=false\nUDPEnabled=true\nUDPServer=127.0.0.1\nUDPServerPort=2242\nAcceptUDPRequests=true\nMyCall=N0CALL\nMyGrid=CN85\n[MultiSettings]\n" > "/root/.config/JS8Call - KiwiSDR-Virtual.ini" \
     && cp "/root/.config/JS8Call - KiwiSDR-Virtual.ini" /root/.config/JS8Call.ini \
     && rm /tmp/JS8Call-2.5.2-x86_64.AppImage && rm -rf /var/lib/apt/lists/*
 
@@ -231,9 +234,9 @@ ENV KIWI_PORT=8073
 ENV KIWI_FREQ=14078
 ENV KIWI_MODE=usb
 
-# JS8Call API port
+# JS8Call UDP API — port the bridge binds to receive JS8Call event datagrams
 ENV JS8CALL_HOST=127.0.0.1
-ENV JS8CALL_PORT=2442
+ENV JS8CALL_UDP_SERVER_PORT=2242
 
 # Ensure Python logs are unbuffered
 ENV PYTHONUNBUFFERED=1

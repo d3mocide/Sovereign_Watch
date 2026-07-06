@@ -2,7 +2,7 @@
 test_kiwi_compatibility.py — Tests covering KiwiSDR protocol compatibility fixes.
 
 Tests:
-  - MD5 auth command generation (_make_auth_cmd)
+  - Auth command generation (_make_auth_cmd, plaintext p= per reference kiwiclient)
   - MODE_FILTERS completeness (all 18 official modes present)
   - New DSP methods: notch, NR, noise filter, RF attn, passband, mute
   - New waterfall controls: cmap, aperture
@@ -33,20 +33,11 @@ class TestMakeAuthCmd(unittest.TestCase):
         cmd = _make_auth_cmd("")
         self.assertEqual(cmd, "SET auth t=kiwi p=")
 
-    def test_password_uses_md5_pwd_form(self):
+    def test_password_uses_plaintext_p_form(self):
+        # The KiwiSDR protocol (reference kiwiclient) sends the password in
+        # plaintext via p= — an MD5 pwd= form is rejected by real nodes.
         cmd = _make_auth_cmd("secret")
-        # Must start with modern prefix and contain 32-char hex MD5
-        self.assertTrue(cmd.startswith("SET auth t=kiwi pwd="), cmd)
-        md5_part = cmd.split("pwd=")[1]
-        self.assertEqual(len(md5_part), 32)
-        self.assertTrue(all(c in "0123456789abcdef" for c in md5_part), md5_part)
-
-    def test_known_md5_value(self):
-        import hashlib
-        pw = "kiwi"
-        expected = hashlib.md5(pw.encode()).hexdigest()
-        cmd = _make_auth_cmd(pw)
-        self.assertIn(expected, cmd)
+        self.assertEqual(cmd, "SET auth t=kiwi p=secret")
 
 
 # ---------------------------------------------------------------------------
