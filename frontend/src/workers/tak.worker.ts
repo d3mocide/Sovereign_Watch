@@ -1,4 +1,5 @@
 import { load, Type } from 'protobufjs';
+import { isBatchFrame, isTakFrame, splitBatchFrame } from './batchFraming';
 
 // --- State ---
 let takType: Type | null = null;
@@ -51,47 +52,50 @@ self.onmessage = async (e: MessageEvent) => {
     if (type === 'decode_batch') {
         if (!takType) return;
 
-        // Payload is Array<ArrayBuffer> or just ArrayBuffer
-        // We expect raw bytes.
         const buffer = new Uint8Array(payload);
 
-        // 1. Check Magic Bytes (Simple Check)
-        if (buffer[0] === 0xbf && buffer[1] === 0x01 && buffer[2] === 0xbf) {
-            try {
-                // Skip 3 bytes? Or does the proto include them?
-                // Usually protocol wrappers strip headers before proto decoding.
-                // If the proto IS the payload after magic bytes:
-                const cleanBuffer = buffer.subarray(3);
-
-                const message = takType.decode(cleanBuffer);
-
-                // Convert to plain object
-                const object = takType.toObject(message, {
-                    longs: Number,
-                    enums: String,
-                    bytes: String,
-                });
-
-                // BUG-018: Removed hex debug computation (Array.from().map().join())
-                // that ran on every decoded message in production. Raw hex is
-                // a debug/inspection artifact and not consumed by any UI feature.
-
-                // Return Parsed Data
-                // Optimization: In real world, we would write to a SharedArrayBuffer here.
-                // For FE-05 MVP, we just return the object.
-                batch.push(object);
-                if (batch.length >= BATCH_SIZE) {
-                    flushBatch();
-                } else if (!flushTimer) {
-                    flushTimer = setTimeout(flushBatch, FLUSH_INTERVAL_MS);
-                }
-
-            } catch (parseErr) {
-                console.error("TAK Parse Error:", parseErr);
+        // Coalesced frame: repeated [u32le length + single-message payload]
+        if (isBatchFrame(buffer)) {
+            for (const record of splitBatchFrame(buffer)) {
+                decodeOne(record);
             }
+            return;
         }
+
+        // Legacy frame: exactly one magic-prefixed TAK message
+        decodeOne(buffer);
     }
 };
+
+function decodeOne(buffer: Uint8Array): void {
+    if (!takType || !isTakFrame(buffer)) return;
+    try {
+        // The proto payload follows the 3-byte magic header.
+        const cleanBuffer = buffer.subarray(3);
+
+        const message = takType.decode(cleanBuffer);
+
+        // Convert to plain object
+        const object = takType.toObject(message, {
+            longs: Number,
+            enums: String,
+            bytes: String,
+        });
+
+        // BUG-018: Removed hex debug computation (Array.from().map().join())
+        // that ran on every decoded message in production. Raw hex is
+        // a debug/inspection artifact and not consumed by any UI feature.
+
+        batch.push(object);
+        if (batch.length >= BATCH_SIZE) {
+            flushBatch();
+        } else if (!flushTimer) {
+            flushTimer = setTimeout(flushBatch, FLUSH_INTERVAL_MS);
+        }
+    } catch (parseErr) {
+        console.error("TAK Parse Error:", parseErr);
+    }
+}
 
 function str(err: unknown): string {
     return err instanceof Error ? err.message : String(err);

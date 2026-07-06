@@ -50,6 +50,27 @@
 - KiwiSDR auth: plaintext `p=<password>` per reference kiwiclient, applied to
   both SND and W/F streams.
 
+## Follow-up (same branch): WS frame batching + binary icon attributes
+
+- **Coalesced WebSocket frames**: the broadcast service previously sent one
+  binary frame per Kafka message per client with a 256-deep drop-oldest
+  queue — the ~11k-message orbital sweep could silently drop most of a slow
+  client's data. The client worker now drains its queue and coalesces
+  consecutive proto messages into batch frames (`0xbf 0x02 0xbf` magic +
+  u32le length-prefixed records, each record an unmodified legacy frame),
+  capped at 128 messages / 60 KB per send, alert JSON ordering preserved.
+  Queue deepened to 4096. Single messages still use the legacy frame, and the
+  frontend worker decodes both formats (`workers/batchFraming.ts`).
+- **Binary attributes for the 2D entity icon layer**
+  (`layers/entityIconAttributes.ts`): position/angle/color/size are uploaded
+  as persistent typed arrays filled in one pass per paced frame — deck.gl no
+  longer iterates entity objects for them. Per-frame buffers ping-pong so
+  external-buffer references change with content; colors/sizes refresh only
+  on membership/selection change or a 1 s cadence (entityColor tracks
+  altitude/speed, which drift slowly). Picking is index-based; the overlay
+  hover-miss check now keys on `info.index` so binary picks aren't cleared.
+  Globe mode and the no-cache path keep the object-based layers.
+
 ## Changes
 
 - `frontend/src/hooks/useAnimationLoop.ts` — adaptive frame pacing; rAF

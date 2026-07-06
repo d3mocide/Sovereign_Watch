@@ -14,6 +14,7 @@ import { latLngToCell } from "h3-js";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import { LayerCache } from "../layers/layerCache";
+import { EntityIconAttributeCache } from "../layers/entityIconAttributes";
 import {
 
   CoTEntity,
@@ -337,8 +338,11 @@ export function useAnimationLoop({
 
   // Stable overlay hover handler — defined once so setProps doesn't receive a new
   // function reference every frame. Accesses setters via their refs (always current).
+  // Layers with binary attributes pick by index with no backing object, so a
+  // hover only counts as a miss when nothing was picked at all (index -1).
   const onOverlayHoverRef = useRef((info: PickingInfo) => {
-    if (!info.object) {
+    const picked = info.index != null && info.index >= 0;
+    if (!picked && !info.object) {
       setHoveredEntityRef.current(null);
       setHoverPositionRef.current(null);
     }
@@ -355,6 +359,12 @@ export function useAnimationLoop({
   // state tied to a single deck overlay.
   const layerCacheRef = useRef<LayerCache | null>(null);
   if (!layerCacheRef.current) layerCacheRef.current = new LayerCache();
+
+  // Persistent binary-attribute buffers for the 2D entity icon layer —
+  // per-overlay for the same reason as LayerCache.
+  const entityIconCacheRef = useRef<EntityIconAttributeCache | null>(null);
+  if (!entityIconCacheRef.current)
+    entityIconCacheRef.current = new EntityIconAttributeCache();
 
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
@@ -835,6 +845,7 @@ export function useAnimationLoop({
         firmsData: firmsDataRef.current,
         darkVesselData: darkVesselDataRef.current,
         cache: layerCacheRef.current ?? undefined,
+        entityIconCache: entityIconCacheRef.current ?? undefined,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {

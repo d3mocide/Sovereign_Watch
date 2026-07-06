@@ -31,6 +31,7 @@ import { buildTowerLayer } from "./buildTowerLayer";
 import { buildTrailLayers } from "./buildTrailLayers";
 import { getOrbitalLayers } from "./OrbitalLayer";
 import { LayerCache } from "./layerCache";
+import type { EntityIconAttributeCache } from "./entityIconAttributes";
 
 import type { GroundTrackPoint, ISSPosition, SatNOGSStation } from "../types";
 import type { H3CellData } from "./buildH3CoverageLayer";
@@ -122,6 +123,12 @@ interface LayerCompositionOptions {
    * Omitting it disables caching (every group rebuilds on every call).
    */
   cache?: LayerCache;
+  /**
+   * Persistent binary-attribute buffers for the 2D entity icon layer.
+   * Per-overlay instance, same ownership rules as `cache`. Omitting it
+   * falls back to the object-based icon layer.
+   */
+  entityIconCache?: EntityIconAttributeCache;
 }
 
 export function composeAllLayers(options: LayerCompositionOptions) {
@@ -741,6 +748,7 @@ export function composeAllLayers(options: LayerCompositionOptions) {
       setHoveredEntity,
       setHoverPosition,
       currentSelected,
+      options.entityIconCache,
     ),
     ...js8Layers,
   ];

@@ -9,6 +9,7 @@ import {
 import { CoTEntity } from "../types";
 import { entityColor } from "../utils/map/colorUtils";
 import { ICON_ATLAS } from "../utils/map/iconAtlas";
+import type { EntityIconAttributeCache } from "./entityIconAttributes";
 
 type PathPoint3D = [number, number, number];
 interface VelocityDatum {
@@ -27,6 +28,7 @@ export function buildEntityLayers(
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   selectedEntity: CoTEntity | null,
+  iconCache?: EntityIconAttributeCache,
 ): Layer[] {
   const layers: Layer[] = [];
 
@@ -271,6 +273,60 @@ export function buildEntityLayers(
         },
         updateTriggers: {
           getPolygon: [currentSelected?.uid, now],
+        },
+      }),
+    );
+  } else if (iconCache) {
+    // Standard 2D / 3D pitch mode with precomputed binary attributes:
+    // position/angle/color/size are uploaded as typed arrays, so deck.gl
+    // never iterates the entity objects for them. Only the icon-frame
+    // accessor still runs per instance (it reads a precomputed flag array).
+    // Picking is index-based: handlers resolve entities via info.index.
+    const { data: iconData, shipFlags } = iconCache.update(
+      interpolated,
+      currentSelected?.uid ?? null,
+      now,
+    );
+    const entityAt = (info: PickingInfo): CoTEntity | null =>
+      info.index != null && info.index >= 0 && info.index < interpolated.length
+        ? interpolated[info.index]
+        : null;
+
+    layers.push(
+      new IconLayer({
+        id: `heading-arrows-merc`,
+        data: iconData as unknown as CoTEntity[],
+        getIcon: ((_: unknown, info: { index: number }) =>
+          shipFlags[info.index] ? "vessel" : "aircraft") as unknown as (
+          d: CoTEntity,
+        ) => string,
+        iconAtlas: ICON_ATLAS.url,
+        iconMapping: ICON_ATLAS.mapping,
+        sizeUnits: "pixels" as const,
+        sizeMinPixels: 18,
+        billboard: false,
+        pickable: true,
+        wrapLongitude: true,
+        parameters: { depthTest: false, depthBias: 0 },
+        onHover: (info: PickingInfo) => {
+          const entity = entityAt(info);
+          if (entity) {
+            setHoveredEntity(entity);
+            setHoverPosition({ x: info.x, y: info.y });
+          } else {
+            setHoveredEntity(null);
+            setHoverPosition(null);
+          }
+        },
+        onClick: (info: PickingInfo) => {
+          const entity = entityAt(info);
+          if (entity) {
+            const newSelection =
+              selectedEntity?.uid === entity.uid ? null : entity;
+            onEntitySelect(newSelection);
+          } else {
+            onEntitySelect(null);
+          }
         },
       }),
     );
