@@ -4,10 +4,13 @@ import { load, Type } from 'protobufjs';
 let takType: Type | null = null;
 // let processing = false;
 
-// Batching: accumulate decoded entities and flush periodically
+// Batching: accumulate decoded entities and flush periodically.
+// A larger batch means fewer worker→main postMessage wakeups during dense
+// bursts (the orbital sweep alone emits ~11k messages per cycle); latency is
+// still bounded by FLUSH_INTERVAL_MS for sparse traffic.
 let batch: unknown[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 64;
 const FLUSH_INTERVAL_MS = 50;
 
 function flushBatch() {

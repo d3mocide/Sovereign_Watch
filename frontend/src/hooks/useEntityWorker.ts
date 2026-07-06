@@ -13,7 +13,10 @@ import { startWorkerProtocol } from "../workers/WorkerProtocol";
 
 const SEA_ENTITY_CACHE_KEY = "tracks:sea:recent";
 const SEA_ENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
-const SEA_ENTITY_CACHE_WRITE_INTERVAL_MS = 10 * 1000;
+const SEA_ENTITY_CACHE_WRITE_INTERVAL_MS = 30 * 1000;
+// Cap the snapshot so JSON.stringify stays bounded (and inside the ~5 MB
+// localStorage quota) even when thousands of AIS tracks are in memory.
+const SEA_ENTITY_CACHE_MAX = 750;
 
 /**
  * Dead-reckoning anchor for an update: the position's source epoch when the
@@ -60,6 +63,7 @@ function buildSeaSnapshot(entities: Map<string, CoTEntity>): CachedSeaEntity[] {
   const out: CachedSeaEntity[] = [];
   entities.forEach((entity) => {
     if (!isSeaEntity(entity)) return;
+    if (out.length >= SEA_ENTITY_CACHE_MAX * 2) return;
     out.push({
       uid: entity.uid,
       lat: entity.lat,
@@ -84,13 +88,37 @@ function buildSeaSnapshot(entities: Map<string, CoTEntity>): CachedSeaEntity[] {
 
 function writeSeaSnapshot(entities: Map<string, CoTEntity>): void {
   try {
+    let snapshot = buildSeaSnapshot(entities);
+    if (snapshot.length > SEA_ENTITY_CACHE_MAX) {
+      snapshot = snapshot
+        .sort((a, b) => b.lastSeen - a.lastSeen)
+        .slice(0, SEA_ENTITY_CACHE_MAX);
+    }
     const payload = {
       savedAt: Date.now(),
-      entities: buildSeaSnapshot(entities),
+      entities: snapshot,
     };
     localStorage.setItem(SEA_ENTITY_CACHE_KEY, JSON.stringify(payload));
   } catch {
     // Ignore browser storage failures.
+  }
+}
+
+// Serialize + write during idle time instead of inline on the WebSocket
+// message path — with thousands of AIS tracks the JSON.stringify alone is a
+// multi-ms main-thread hitch that competes with the render loop.
+let seaSnapshotScheduled = false;
+function scheduleSeaSnapshotWrite(entities: Map<string, CoTEntity>): void {
+  if (seaSnapshotScheduled) return;
+  seaSnapshotScheduled = true;
+  const run = () => {
+    seaSnapshotScheduled = false;
+    writeSeaSnapshot(entities);
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 5000 });
+  } else {
+    setTimeout(run, 250);
   }
 }
 
@@ -526,7 +554,7 @@ export function useEntityWorker({
           nowMs - lastSeaCacheWriteRef.current >=
           SEA_ENTITY_CACHE_WRITE_INTERVAL_MS
         ) {
-          writeSeaSnapshot(entitiesRef.current);
+          scheduleSeaSnapshotWrite(entitiesRef.current);
           lastSeaCacheWriteRef.current = nowMs;
         }
       }

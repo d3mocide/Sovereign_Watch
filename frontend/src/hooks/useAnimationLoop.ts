@@ -525,10 +525,33 @@ export function useAnimationLoop({
   }, [filters?.showClausalChains, filters?.clausalLookbackHours]);
 
   useEffect(() => {
+    // Adaptive frame pacing. The per-tick work (interpolation of every track,
+    // full layer recomposition, GPU attribute re-upload for the entity/trail
+    // layers) scales linearly with entity count, so at thousands of COTs a
+    // steady 30 fps is both smoother and far cheaper than a janky
+    // display-rate loop — and on 120/144 Hz displays an uncapped rAF loop
+    // does 2-2.5x redundant work even at low counts.
+    const PACE_ENTITY_THRESHOLD = 800; // above this, pace to ~30 fps
+    const FRAME_BUDGET_BUSY_MS = 33; // ~30 fps
+    const FRAME_BUDGET_IDLE_MS = 15; // ~60 fps cap (skip extra 120/144 Hz ticks)
+
     const animate = () => {
+      // Schedule the next tick first so an early (paced) return keeps the loop alive.
+      rafRef.current = requestAnimationFrame(animate);
+
       const entities = entitiesRef.current;
       const now = Date.now();
       const rawDt = now - lastFrameTimeRef.current;
+
+      const entityLoad = entities.size + satellitesRef.current.size;
+      const frameBudget =
+        entityLoad > PACE_ENTITY_THRESHOLD
+          ? FRAME_BUDGET_BUSY_MS
+          : FRAME_BUDGET_IDLE_MS;
+      // Not yet due: skip all work this tick. dt keeps accumulating, so the
+      // interpolators see the true elapsed time on the next executed frame.
+      if (rawDt < frameBudget) return;
+
       const dt = Math.min(rawDt, 100);
       lastFrameTimeRef.current = now;
 
@@ -820,8 +843,6 @@ export function useAnimationLoop({
           onHover: onOverlayHoverRef.current,
         });
       }
-
-      rafRef.current = requestAnimationFrame(animate);
     };
 
     const rafId = requestAnimationFrame(animate);

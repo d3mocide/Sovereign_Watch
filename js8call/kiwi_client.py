@@ -26,13 +26,11 @@ WebSocket URL compatibility:
   Legacy KiwiSDR:            ws://host:port/<ts>/SND
   Both formats are tried automatically (modern first).
 
-Authentication:
-  Open nodes (no password):         SET auth t=kiwi p=
-  Password-protected nodes (modern): SET auth t=kiwi pwd=<md5(password)>
+Authentication (matches reference kiwiclient):
+  SET auth t=kiwi p=<password>   (p= empty for open public nodes)
 """
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Callable, Optional, Dict
@@ -110,14 +108,12 @@ MAX_REDIRECTS      = 3   # maximum redirect hops to follow
 def _make_auth_cmd(password: str) -> str:
     """Build the SET auth command for the given password.
 
-    Open nodes (empty password) use the legacy ``p=`` form accepted by all
-    KiwiSDR versions.  Password-protected nodes use ``pwd=<md5>`` as required
-    by current KiwiSDR server code (rx/rx_cmd.cpp).
+    Matches the reference kiwiclient implementation: the password is sent
+    in plaintext via ``p=`` (empty for open public nodes). The previous
+    ``pwd=<md5>`` form is not part of the KiwiSDR protocol and caused every
+    password-protected connection to be rejected.
     """
-    if not password:
-        return "SET auth t=kiwi p="
-    md5 = hashlib.md5(password.encode()).hexdigest()
-    return f"SET auth t=kiwi pwd={md5}"
+    return f"SET auth t=kiwi p={password}"
 
 
 # ---------------------------------------------------------------------------
@@ -218,8 +214,8 @@ class KiwiClient:
         ----------
         password : Optional KiwiSDR password.  Required for password-protected
                    or private nodes; leave empty ("") for open public nodes.
-                   Non-empty passwords are hashed with MD5 per the current
-                   KiwiSDR auth protocol (``SET auth t=kiwi pwd=<md5>``).
+                   Sent in plaintext via ``SET auth t=kiwi p=<password>`` per
+                   the KiwiSDR protocol (reference kiwiclient behaviour).
         """
         if not _HAS_WEBSOCKETS:
             raise RuntimeError("websockets library not installed")
@@ -273,7 +269,7 @@ class KiwiClient:
         })
 
         if self._on_waterfall:
-            await self._start_waterfall(host, port)
+            await self._start_waterfall(host, port, password)
 
         logger.info("KiwiClient connected: %s:%d @ %.3f kHz %s", host, port, freq_khz, mode)
 
@@ -675,9 +671,8 @@ class KiwiClient:
     async def _handshake(self, freq_khz: float, mode: str, password: str = "") -> None:
         """Execute the KiwiSDR SND handshake sequence.
 
-        Auth format follows the current KiwiSDR protocol:
-          - Open nodes (empty password): ``SET auth t=kiwi p=``
-          - Password-protected nodes:    ``SET auth t=kiwi pwd=<md5(password)>``
+        Auth format follows the KiwiSDR protocol (reference kiwiclient):
+        ``SET auth t=kiwi p=<password>`` with an empty ``p=`` for open nodes.
         """
         self._freq_khz = freq_khz
         self._mode     = mode
@@ -782,11 +777,11 @@ class KiwiClient:
         except Exception as exc:
             logger.debug("KiwiClient keepalive error: %s", exc)
 
-    async def _start_waterfall(self, host: str, port: int) -> None:
+    async def _start_waterfall(self, host: str, port: int, password: str = "") -> None:
         """Start the KiwiSDR waterfall stream (W/F).
 
         Full W/F handshake per the KiwiSDR protocol:
-          1. SET auth t=kiwi p=       — authenticate (waterfall always open)
+          1. SET auth t=kiwi p=<pwd>  — same credentials as the SND stream
           2. SET zoom=<n> cf=<freq>   — centres waterfall on audio frequency
           3. SET maxdb=-10 mindb=-110 — colour scale
           4. SET wf_speed=4           — rows/second; must be > 0 to receive frames
@@ -820,8 +815,8 @@ class KiwiClient:
                 raise RuntimeError("Could not connect to waterfall on any URL format")
 
             self._wf_ws = ws
-            # Waterfall auth is always open (public endpoint regardless of node password)
-            await ws.send("SET auth t=kiwi p=")
+            # Same auth as the SND stream (password required on protected nodes)
+            await ws.send(_make_auth_cmd(password))
             await ws.send(f"SET zoom={self._zoom} cf={self._freq_khz:.3f}")
             await ws.send("SET maxdb=-10 mindb=-110")
             await ws.send("SET wf_speed=4")

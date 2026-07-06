@@ -87,8 +87,12 @@ except ImportError as _ie:
 # Configuration (read from environment; Dockerfile sets sensible defaults)
 # ---------------------------------------------------------------------------
 JS8CALL_HOST = os.getenv("JS8CALL_HOST", "0.0.0.0")
+# JS8Call's UDP API follows the WSJT-X model: JS8Call is the *client*. It
+# binds an ephemeral local port and pushes event datagrams to the configured
+# "UDP Server" address (our JS8Call.ini sets 127.0.0.1:2242). This bridge is
+# therefore the UDP *server*: it must bind 2242 to receive events, and send
+# commands back to the source address of JS8Call's own datagrams.
 JS8CALL_UDP_SERVER_PORT = int(os.getenv("JS8CALL_UDP_SERVER_PORT", "2242"))
-JS8CALL_UDP_CLIENT_PORT = int(os.getenv("JS8CALL_UDP_CLIENT_PORT", "2245"))
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "8080"))
 MY_GRID = os.getenv("MY_GRID", "CN85")  # Operator's Maidenhead locator
 
@@ -198,6 +202,18 @@ _waterfall_ws_clients: list[WebSocket] = []
 # Written from the background task (single asyncio thread) – no lock needed.
 _station_registry: dict[str, dict] = {}
 
+# JS8Call reply routing state. JS8Call binds an ephemeral UDP port and pushes
+# events (PING every ~15 s, RX.*, STATION.*) to our bound server port; commands
+# must be sent back to that observed source address, not to a fixed port.
+_js8_reply_addr: Optional[tuple[str, int]] = None
+_js8_last_heard: float = 0.0
+JS8_HEARD_TIMEOUT = 60.0  # seconds without a datagram → considered disconnected
+
+# Merged local station state (callsign/grid/freq/speed), updated from JS8Call
+# responses so partial updates can be broadcast as complete STATION.STATUS
+# payloads (the frontend overwrites its grid with whatever arrives).
+_station_state: dict = {}
+
 # KiwiSDR subprocess state – managed by _start/_stop_kiwi_pipeline().
 # Accessed from both asyncio executor threads and the main thread; guarded by _kiwi_lock.
 _kiwi_proc: Optional[subprocess.Popen] = None
@@ -222,13 +238,41 @@ FAILOVER_MAX_CANDIDATES: int = 3
 # Utilities
 # ===========================================================================
 
-def _udp_send(msg: dict) -> None:
-    """Send a single UDP datagram to the JS8Call API port. Fire-and-forget."""
+def _udp_send(msg_type: str, value="", params: Optional[dict] = None) -> None:
+    """
+    Send a single JS8Call API datagram. Fire-and-forget.
+
+    The JSON envelope uses lowercase keys ({"type", "value", "params"}) per
+    the JS8Call API. Commands are sent to the source address JS8Call's own
+    datagrams arrive from — until JS8Call has announced itself (first PING),
+    there is nowhere to send and the command is dropped with a warning.
+    """
+    if _js8_reply_addr is None:
+        logger.warning(
+            "UDP send dropped (%s): JS8Call has not announced itself yet "
+            "(no datagram received on port %d)",
+            msg_type, JS8CALL_UDP_SERVER_PORT,
+        )
+        return
+    msg = {"type": msg_type, "value": value, "params": params or {}}
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as tx:
-            tx.sendto(json.dumps(msg).encode("utf-8") + b"\n", ("127.0.0.1", JS8CALL_UDP_SERVER_PORT))
+            tx.sendto(json.dumps(msg).encode("utf-8") + b"\n", _js8_reply_addr)
     except Exception as exc:
         logger.warning("UDP send failed: %s", exc)
+
+
+def _js8_is_connected() -> bool:
+    """True if JS8Call has sent us a datagram recently (it PINGs every ~15 s)."""
+    return (
+        _js8_reply_addr is not None
+        and (time.monotonic() - _js8_last_heard) < JS8_HEARD_TIMEOUT
+    )
+
+
+# JS8Call submode integers used by MODE.SET_SPEED / MODE.SPEED
+_JS8_SPEED_TO_INT = {"SLOW": 4, "NORMAL": 0, "FAST": 1, "TURBO": 2}
+_JS8_INT_TO_SPEED = {v: k for k, v in _JS8_SPEED_TO_INT.items()}
 
 
 # ===========================================================================
@@ -750,34 +794,100 @@ def on_station_status(message: dict) -> None:
             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
             "ts_unix": int(time.time()),
         }
+        # Keep the merged local state in sync so later partial updates
+        # (STATION.CALLSIGN, RIG.FREQ, …) broadcast complete payloads.
+        speed_raw = params.get("SPEED")
+        _station_state.update({
+            k: v
+            for k, v in {
+                "callsign": params.get("CALL"),
+                "grid": params.get("GRID"),
+                "freq": params.get("FREQ"),
+                "speed": _JS8_INT_TO_SPEED.get(speed_raw)
+                if isinstance(speed_raw, int)
+                else None,
+            }.items()
+            if v
+        })
         _enqueue_from_thread(payload)
     except Exception as exc:
         logger.warning("on_station_status error: %s", exc)
 
 
+def _update_station_state(**fields) -> None:
+    """Merge fields into the local station state and broadcast the result."""
+    _station_state.update({k: v for k, v in fields.items() if v is not None})
+    payload = {
+        "type": "STATION.STATUS",
+        "callsign": _station_state.get("callsign", ""),
+        "grid": _station_state.get("grid", MY_GRID),
+        "freq": _station_state.get("freq", 0),
+        "speed": _station_state.get("speed", ""),
+        "status": "",
+        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+        "ts_unix": int(time.time()),
+    }
+    _enqueue_from_thread(payload)
+
+
 class JS8CallUDPProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         self.transport = transport
-        logger.info("JS8Call UDP API listener active on port %d", JS8CALL_UDP_CLIENT_PORT)
+        logger.info("JS8Call UDP API listener active on port %d", JS8CALL_UDP_SERVER_PORT)
 
     def datagram_received(self, data, addr):
+        global _js8_reply_addr, _js8_last_heard
         # Only accept datagrams from localhost — JS8Call runs on the same host.
         sender_ip = addr[0] if addr else ""
         if sender_ip not in ("127.0.0.1", "::1"):
             logger.warning("UDP: rejected datagram from unexpected source %s", sender_ip)
             return
+
+        # Every datagram (including the periodic PING) tells us where JS8Call's
+        # socket lives — commands must be sent back to this address.
+        first_contact = _js8_reply_addr is None
+        _js8_reply_addr = addr
+        _js8_last_heard = time.monotonic()
+
         try:
             line = data.decode("utf-8").strip()
             if not line:
                 return
             message = json.loads(line)
             m_type = message.get("type", "")
+            params = message.get("params", {}) or {}
+            value = message.get("value", "")
+
+            if first_contact:
+                logger.info("JS8Call announced itself from %s (type=%s)", addr, m_type)
+                # Pull the initial station state now that we can reach it.
+                _udp_send("STATION.GET_CALLSIGN")
+                _udp_send("STATION.GET_GRID")
+                _udp_send("RIG.GET_FREQ")
+                _udp_send("MODE.GET_SPEED")
+
             if m_type == "RX.DIRECTED":
                 on_rx_directed(message)
             elif m_type == "RX.SPOT":
                 on_rx_spot(message)
             elif m_type == "STATION.STATUS":
                 on_station_status(message)
+            elif m_type == "STATION.CALLSIGN":
+                _update_station_state(callsign=str(value).strip() or None)
+            elif m_type == "STATION.GRID":
+                _update_station_state(grid=str(value).strip() or None)
+            elif m_type == "RIG.FREQ":
+                dial = params.get("DIAL") or params.get("FREQ")
+                if isinstance(dial, (int, float)):
+                    _update_station_state(freq=int(dial))
+            elif m_type == "MODE.SPEED":
+                speed_int = params.get("SPEED")
+                if isinstance(speed_int, int):
+                    _update_station_state(
+                        speed=_JS8_INT_TO_SPEED.get(speed_int, "NORMAL")
+                    )
+            elif m_type == "PING":
+                pass  # heartbeat — reply address / liveness already recorded
             elif m_type:
                 logger.debug("UDP: ignoring unknown message type %r from %s", m_type, sender_ip)
         except json.JSONDecodeError as exc:
@@ -845,19 +955,19 @@ async def lifespan(app: FastAPI):
         try:
             logger.info(
                 "Starting UDP listener on %s:%d (attempt %d/5)...",
-                JS8CALL_HOST, JS8CALL_UDP_CLIENT_PORT, attempt,
+                JS8CALL_HOST, JS8CALL_UDP_SERVER_PORT, attempt,
             )
             transport, protocol = await _event_loop.create_datagram_endpoint(
                 lambda: JS8CallUDPProtocol(),
-                local_addr=(JS8CALL_HOST, JS8CALL_UDP_CLIENT_PORT),
+                local_addr=(JS8CALL_HOST, JS8CALL_UDP_SERVER_PORT),
             )
             js8_client_udp_transport = transport
             logger.info(
-                "UDP listener bound to %s:%d", JS8CALL_HOST, JS8CALL_UDP_CLIENT_PORT
+                "UDP listener bound to %s:%d", JS8CALL_HOST, JS8CALL_UDP_SERVER_PORT
             )
             break
         except Exception as exc:
-            logger.warning("Failed to bind UDP listener (port %d): %s", JS8CALL_UDP_CLIENT_PORT, exc)
+            logger.warning("Failed to bind UDP listener (port %d): %s", JS8CALL_UDP_SERVER_PORT, exc)
             if attempt < 5:
                 await asyncio.sleep(2)
             else:
@@ -947,14 +1057,14 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
     remote = websocket.client
     logger.info("WebSocket connected: %s", remote)
 
-    # Send immediate simulated connect message
-    callsign = os.getenv("JS8CALL_CALLSIGN", "N0CALL")
-    grid = MY_GRID
-    
+    # Send immediate connect message with the best station state we have
+    callsign = _station_state.get("callsign") or os.getenv("JS8CALL_CALLSIGN", "N0CALL")
+    grid = _station_state.get("grid") or MY_GRID
+
     await websocket.send_json({
         "type": "CONNECTED",
         "message": "JS8Call bridge active",
-        "js8call_connected": js8_client_udp_transport is not None,
+        "js8call_connected": _js8_is_connected(),
         "kiwi_connected": _kiwi_is_running(),
         "kiwi_host": _kiwi_config.get("host", ""),
         "kiwi_port": _kiwi_config.get("port", 0),
@@ -962,11 +1072,17 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
         "kiwi_mode": _kiwi_config.get("mode", ""),
         "callsign": callsign,
         "grid": grid,
+        "speed": _station_state.get("speed", "NORMAL"),
         "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
     })
 
-    # Ask JS8Call to broadcast its STATUS via UDP immediately
-    _udp_send({"TYPE": "STATION.GET_STATUS", "VALUE": "", "PARAMS": {}})
+    # Ask JS8Call for its current state (responses arrive as UDP datagrams
+    # typed STATION.CALLSIGN / STATION.GRID / RIG.FREQ / MODE.SPEED).
+    if _js8_reply_addr is not None:
+        _udp_send("STATION.GET_CALLSIGN")
+        _udp_send("STATION.GET_GRID")
+        _udp_send("RIG.GET_FREQ")
+        _udp_send("MODE.GET_SPEED")
 
     try:
         # Receive loop – handle commands from the frontend
@@ -1000,7 +1116,7 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                 tx_target = target.upper()
                 tx_msg = f"{tx_target} {message}"
                 # Forward dynamically to JS8Call UDP port
-                _udp_send({"TYPE": "TX.SEND_MESSAGE", "VALUE": tx_msg, "PARAMS": {}})
+                _udp_send("TX.SEND_MESSAGE", tx_msg)
                 # Echo the sent message back so the UI can display it in the log
                 _enqueue_from_thread({
                     "type": "TX.SENT",
@@ -1025,7 +1141,11 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                         "message": f"SET_MODE: invalid mode '{requested_mode}'. Valid: {sorted(_VALID_MODES)}",
                     })
                 else:
-                    _udp_send({"TYPE": "MODE.SET_SPEED", "VALUE": requested_mode, "PARAMS": {}})
+                    # JS8Call expects the numeric submode in params.SPEED
+                    _udp_send(
+                        "MODE.SET_SPEED",
+                        params={"SPEED": _JS8_SPEED_TO_INT[requested_mode]},
+                    )
                     logger.info("SET_MODE → %s", requested_mode)
 
             # ------------------------------------------------------------------
@@ -1038,7 +1158,7 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                     await websocket.send_json({"type": "ERROR", "message": "SET_FREQ: freq must be 100 kHz–500 MHz in Hz"})
                     continue
                 # Forward dynamically to JS8Call UDP port
-                _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": freq, "PARAMS": {}})
+                _udp_send("RIG.SET_FREQ", params={"DIAL": freq})
 
             # ------------------------------------------------------------------
             # Action: GET_STATIONS – force a station list refresh
@@ -1103,7 +1223,7 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                         })
                         # Sync JS8Call dial frequency to the KiwiSDR dial frequency
                         # so that decoded message metadata reflects the correct band.
-                        _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": int(float(freq) * 1000), "PARAMS": {}})
+                        _udp_send("RIG.SET_FREQ", params={"DIAL": int(float(freq) * 1000)})
                     except ValueError as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:
@@ -1128,7 +1248,7 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                             await _kiwi_native.connect(host, port, float(freq), mode, password=password)
                         # Sync JS8Call dial frequency to the KiwiSDR dial frequency
                         # so that decoded message metadata reflects the correct band.
-                        _udp_send({"TYPE": "RIG.SET_FREQ", "VALUE": int(float(freq) * 1000), "PARAMS": {}})
+                        _udp_send("RIG.SET_FREQ", params={"DIAL": int(float(freq) * 1000)})
                     except ValueError as exc:
                         await websocket.send_json({"type": "ERROR", "message": f"SET_KIWI validation: {exc}"})
                     except Exception as exc:
@@ -1395,10 +1515,10 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
                     })
                 else:
                     if new_callsign:
-                        _udp_send({"TYPE": "STATION.SET_CALLSIGN", "VALUE": new_callsign, "PARAMS": {}})
+                        _udp_send("STATION.SET_CALLSIGN", new_callsign)
                         logger.info("SET_STATION callsign → %s", new_callsign)
                     if new_grid:
-                        _udp_send({"TYPE": "STATION.SET_GRID", "VALUE": new_grid, "PARAMS": {}})
+                        _udp_send("STATION.SET_GRID", new_grid)
                         logger.info("SET_STATION grid → %s", new_grid)
                     # Optimistic echo so the UI updates without waiting for JS8Call confirmation
                     _enqueue_from_thread({
@@ -1626,7 +1746,7 @@ async def get_websdr_nodes(
 async def health() -> dict:
     return {
         "status": "ok",
-        "js8call_connected": js8_client_udp_transport is not None,
+        "js8call_connected": _js8_is_connected(),
         "kiwi_connected": _kiwi_is_running(),
     }
 
