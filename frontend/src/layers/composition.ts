@@ -354,8 +354,8 @@ export function composeAllLayers(options: LayerCompositionOptions) {
     // Terminator geometry only changes once per minute
     ...cache.get(
       "terminator",
-      [filters?.showTerminator, Math.floor(now / 60_000)],
-      () => [getTerminatorLayer(!!filters?.showTerminator)],
+      [filters?.showTerminator, globeMode, Math.floor(now / 60_000)],
+      () => [getTerminatorLayer(!!filters?.showTerminator, globeMode)],
     ),
     // Aurora oval sits below infra/entity layers — large translucent area fill
     ...cache.get(

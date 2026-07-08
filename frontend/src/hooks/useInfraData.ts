@@ -282,8 +282,10 @@ export const useInfraData = () => {
 
     // Refresh outages every 10 minutes from the backend (which caches every 30m)
     const outageInterval = setInterval(fetchOutages, 10 * 60 * 1000);
-    // Refresh GDELT every 15 minutes
-    const gdeltInterval = setInterval(fetchGdelt, 15 * 60 * 1000);
+    // Refresh GDELT every 5 minutes — matches the server-side Redis cache TTL,
+    // so a cold-started backend (empty first response) recovers within one
+    // cache window instead of leaving the dashboard empty for 15 minutes.
+    const gdeltInterval = setInterval(fetchGdelt, 5 * 60 * 1000);
     // Refresh NWS active alerts every 5 minutes (poller updates every 10 minutes)
     const nwsInterval = setInterval(fetchNwsAlerts, 5 * 60 * 1000);
     // Refresh PeeringDB once every 24 hours (matches poller cadence)

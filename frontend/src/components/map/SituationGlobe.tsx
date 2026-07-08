@@ -125,7 +125,9 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       }
     };
     fetchGdelt();
-    const id = setInterval(fetchGdelt, 15 * 60_000);
+    // 5 min matches the server-side cache TTL, so a cold-started backend
+    // (empty first response) recovers within one cache window.
+    const id = setInterval(fetchGdelt, 5 * 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -270,8 +272,9 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         // Country conflict heat — fills countries by GDELT threat level (below cables/dots)
         ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, 0),
         // Night-side overlay — rendered after country heat so the shadow tints over it;
-        // depthTest:false on the layer ensures it never occludes surface layers.
-        getTerminatorLayer(!!showTerminator),
+        // globe mode depth-tests against the globe mask so the far-side night
+        // hemisphere doesn't bleed through the planet.
+        getTerminatorLayer(!!showTerminator, true),
         ...infra.outages,
         ...infra.assets,
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
