@@ -221,8 +221,11 @@ async def get_gdelt_events(
         if source_scope is not None:
             geojson["source_scope"] = source_scope
 
-        # Cache result
-        if db.redis_client and mission_mode is None:
+        # Cache result. Empty payloads are never cached: right after a cold
+        # start (fresh DB / poller cycle not landed yet) caching an empty
+        # FeatureCollection would pin the dashboard at zero for another TTL
+        # even though rows arrive seconds later.
+        if features and db.redis_client and mission_mode is None:
             try:
                 await db.redis_client.setex(CACHE_KEY, CACHE_TTL, json.dumps(geojson))
             except Exception as e:
@@ -416,7 +419,8 @@ async def get_gdelt_actors(
                 }
             )
 
-        if db.redis_client and mission_mode is None:
+        # Same rationale as the events cache: never pin an empty actor list.
+        if result and db.redis_client and mission_mode is None:
             try:
                 await db.redis_client.setex(
                     cache_key, ACTORS_CACHE_TTL, json.dumps(result)

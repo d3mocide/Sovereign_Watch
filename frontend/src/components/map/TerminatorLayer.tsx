@@ -110,7 +110,7 @@ function computeTerminator(date: Date) {
 let cachedMinute = 0;
 let cachedGeoJson: TerminatorGeoJson | null = null;
 
-export function getTerminatorLayer(visible: boolean) {
+export function getTerminatorLayer(visible: boolean, globeMode = false) {
   // We use Date.now() rounded to nearest minute to avoid constant re-renders
   // For a pure layer creator function, we calculate the current terminator
   const now = new Date();
@@ -123,7 +123,7 @@ export function getTerminatorLayer(visible: boolean) {
   const terminatorGeoJson = cachedGeoJson;
 
   return new GeoJsonLayer({
-    id: 'terminator-layer',
+    id: `terminator-layer-${globeMode ? 'globe' : 'merc'}`,
     data: terminatorGeoJson,
     visible: visible,
     getFillColor: [0, 0, 20, 80],
@@ -132,11 +132,17 @@ export function getTerminatorLayer(visible: boolean) {
     lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
-    // Transparent night overlay — must not write to the depth buffer so it
-    // doesn't occlude surface layers (country heat, cables, etc.) beneath it.
-    parameters: {
-      depthTest: false,
-    } as any,
+    wrapLongitude: !globeMode,
+    // Flat map: depthTest off so the transparent night fill never occludes
+    // surface layers (country heat, cables, etc.) beneath it.
+    // Globe: depthTest ON — deck.gl's globe depth mask then occludes the
+    // far-hemisphere half of the night polygon, which otherwise renders
+    // through the planet and shades the wrong side of the visible globe.
+    // The small negative bias lifts the near-side fill above the mask
+    // (same technique as the aurora oval).
+    parameters: (globeMode
+      ? { depthTest: true, depthBias: -5.0 }
+      : { depthTest: false }) as any,
     // Add updateTriggers if we want it to react to time changes
     updateTriggers: {
       getFillColor: [now.getTime()]
