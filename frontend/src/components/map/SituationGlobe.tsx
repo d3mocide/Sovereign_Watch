@@ -7,6 +7,7 @@ import { buildAuroraLayer } from "../../layers/buildAuroraLayer";
 import { buildCountryHeatLayer, type ActorEntry } from "../../layers/buildCountryHeatLayer";
 import { buildGdeltLayer } from "../../layers/buildGdeltLayer";
 import { buildInfraLayers } from "../../layers/buildInfraLayers";
+import { LayerCache } from "../../layers/layerCache";
 import { getOrbitalLayers } from "../../layers/OrbitalLayer";
 import { CoTEntity, DRState } from "../../types";
 import { interpolatePVB } from "../../utils/interpolation";
@@ -59,6 +60,15 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   const lngRef = useRef(0);
   const mapRef = useRef<MapRef>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
+
+  // Per-overlay layer memoization. Without this, the layer groups below get
+  // rebuilt with brand-new accessor closures on every rAF tick (the effect
+  // is keyed on `now`, which updates 60x/sec from the auto-rotation loop),
+  // forcing deck.gl to regenerate and re-upload GPU attribute buffers for
+  // infra/aurora/country-heat/terminator/gdelt every single frame instead of
+  // only when their actual inputs change. Same pattern as useAnimationLoop.ts.
+  const layerCacheRef = useRef<LayerCache | null>(null);
+  if (!layerCacheRef.current) layerCacheRef.current = new LayerCache();
 
   const [viewState, setViewState] = useState({
     latitude: 15,
@@ -125,7 +135,9 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       }
     };
     fetchGdelt();
-    const id = setInterval(fetchGdelt, 15 * 60_000);
+    // 5 min matches the server-side cache TTL, so a cold-started backend
+    // (empty first response) recovers within one cache window.
+    const id = setInterval(fetchGdelt, 5 * 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -182,11 +194,19 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   // Imperative Layer Update to avoid reading refs in render
   useEffect(() => {
     if (now === 0 || !overlayRef.current) return;
+    const cache = layerCacheRef.current!;
 
     const dt = now - lastFrameTimeRef.current;
     lastFrameTimeRef.current = now;
 
-    // 1. Interpolate Satellites for smooth motion on the globe
+    // Pulse-driven layers tick at 10Hz instead of every frame (matches the
+    // pulseNow convention in layers/composition.ts) so they stay cache hits
+    // for ~6 consecutive frames instead of recomputing color attributes at 60fps.
+    const pulseNow = now - (now % 100);
+
+    // 1. Interpolate Satellites for smooth motion on the globe.
+    // Positions genuinely change every frame, so this (and the orbital
+    // layers it feeds) intentionally stays outside the layer cache.
     const filteredSats: CoTEntity[] = [];
     satellitesRef.current.forEach((sat, uid) => {
       // Filter for Intel/Surveillance assets specifically as requested
@@ -212,31 +232,40 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       filteredSats.push(interpolatedEntity);
     });
 
-    // 2. Build Infrastructure Layers
-    const infra = buildInfraLayers(
-      cablesData,
-      stationsData,
-      outagesData,
-      {
-        showCables: true,
-        showLandingStations: false,
-        showOutages: false,  // replaced by GDELT conflict zones as primary geographic layer
-        showIXPs: false,     // too dense alongside conflict dots
-        showFacilities: false,
-        cableOpacity: 0.35,  // subtle — cables as background geography only
+    // 2. Build Infrastructure Layers — cached; cables/stations/outages/country
+    // data change on a second-to-minute cadence, not every frame.
+    const infra = cache.get(
+      "infra",
+      [cablesData, stationsData, outagesData, worldCountriesData, countryOutageMap, ixpData, facilityData, dnsRootData],
+      () => {
+        const built = buildInfraLayers(
+          cablesData,
+          stationsData,
+          outagesData,
+          {
+            showCables: true,
+            showLandingStations: false,
+            showOutages: false,  // replaced by GDELT conflict zones as primary geographic layer
+            showIXPs: false,     // too dense alongside conflict dots
+            showFacilities: false,
+            cableOpacity: 0.35,  // subtle — cables as background geography only
+          },
+          () => {}, // No-op hover
+          () => {}, // No-op click
+          null,
+          true, // globeMode
+          worldCountriesData,
+          countryOutageMap,
+          ixpData ?? null,
+          facilityData ?? null,
+          dnsRootData ?? [],
+        );
+        return [...built.outages, ...built.assets];
       },
-      () => {}, // No-op hover
-      () => {}, // No-op click
-      null,
-      true, // globeMode
-      worldCountriesData,
-      countryOutageMap,
-      ixpData ?? null,
-      facilityData ?? null,
-      dnsRootData ?? [],
     );
 
-    // 3. Build Orbital Layers
+    // 3. Build Orbital Layers — intentionally uncached; satellite positions
+    // animate continuously.
     const orbital = getOrbitalLayers({
       satellites: filteredSats,
       selectedEntity: null,
@@ -249,40 +278,54 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
       onHover: () => {},
     });
 
-    // 4. Build Mission Area / AO Ring
-    const missionLayers = buildAOTLayers(
-      null,
-      { showRepeaters: true } as any,
-      true, // globeMode
-      null, // observer
-      mission
-        ? {
-            lat: mission.lat,
-            lon: mission.lon,
-            radiusKm: mission.radius_nm * 1.852,
-          }
-        : null,
+    // 4. Build Mission Area / AO Ring — cached on mission
+    const missionLayers = cache.get(
+      "aot",
+      [mission],
+      () =>
+        buildAOTLayers(
+          null,
+          { showRepeaters: true } as any,
+          true, // globeMode
+          null, // observer
+          mission
+            ? {
+                lat: mission.lat,
+                lon: mission.lon,
+                radiusKm: mission.radius_nm * 1.852,
+              }
+            : null,
+        ),
     );
 
     overlayRef.current.setProps({
       layers: [
-        ...buildAuroraLayer(auroraData, true, true, now),
+        ...cache.get("aurora", [auroraData, pulseNow], () =>
+          buildAuroraLayer(auroraData, true, true, pulseNow),
+        ),
         // Country conflict heat — fills countries by GDELT threat level (below cables/dots)
-        ...buildCountryHeatLayer(worldCountriesData as any, actors, true, true, 0),
+        ...cache.get("country-heat", [worldCountriesData, actors], () =>
+          buildCountryHeatLayer(worldCountriesData as any, actors, true, true, 0),
+        ),
         // Night-side overlay — rendered after country heat so the shadow tints over it;
-        // depthTest:false on the layer ensures it never occludes surface layers.
-        getTerminatorLayer(!!showTerminator),
-        ...infra.outages,
-        ...infra.assets,
+        // globe mode depth-tests against the globe mask so the far-side night
+        // hemisphere doesn't bleed through the planet.
+        // Terminator geometry only changes once per minute.
+        ...cache.get("terminator", [showTerminator, Math.floor(now / 60_000)], () => [
+          getTerminatorLayer(!!showTerminator, true),
+        ]),
+        ...infra,
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
-        ...buildGdeltLayer(
-          gdeltData,
-          true,
-          true,
-          -2,
-          true,
-          onHover || (() => {}),
-          onGdeltClick,
+        ...cache.get("gdelt", [gdeltData, onHover, onGdeltClick], () =>
+          buildGdeltLayer(
+            gdeltData,
+            true,
+            true,
+            -2,
+            true,
+            onHover || (() => {}),
+            onGdeltClick,
+          ),
         ),
         ...missionLayers,
         ...orbital,
@@ -297,6 +340,9 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     outagesData,
     worldCountriesData,
     countryOutageMap,
+    ixpData,
+    facilityData,
+    dnsRootData,
     viewState.zoom,
     showTerminator,
     mission,

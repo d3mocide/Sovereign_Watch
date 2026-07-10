@@ -360,7 +360,7 @@ services:
       - KIWI_MODE=${KIWI_MODE:-usb}
       - MY_GRID=${MY_GRID:-CN85}
       - JS8CALL_HOST=0.0.0.0
-      - JS8CALL_PORT=2442
+      - JS8CALL_UDP_SERVER_PORT=2242
       - BRIDGE_PORT=8080
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}

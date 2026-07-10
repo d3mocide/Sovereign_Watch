@@ -9,6 +9,7 @@ import {
 import { CoTEntity } from "../types";
 import { entityColor } from "../utils/map/colorUtils";
 import { ICON_ATLAS } from "../utils/map/iconAtlas";
+import type { EntityIconAttributeCache } from "./entityIconAttributes";
 
 type PathPoint3D = [number, number, number];
 interface VelocityDatum {
@@ -27,18 +28,76 @@ export function buildEntityLayers(
   setHoveredEntity: (entity: CoTEntity | null) => void,
   setHoverPosition: (pos: { x: number; y: number } | null) => void,
   selectedEntity: CoTEntity | null,
+  iconCache?: EntityIconAttributeCache,
 ): Layer[] {
   const layers: Layer[] = [];
 
-  // GPS Integrity warning halos — amber ring on aircraft with degraded NIC/NACp (Ingest-04)
-  const integrityDegraded = interpolated.filter((e) => {
-    const nic = e.classification?.nic;
-    const nacp = e.classification?.nacP;
-    return (
+  // Single pass over the interpolated entities. This function runs on every
+  // paced animation frame with (potentially) thousands of COTs, so the
+  // per-layer datasets are derived in one walk instead of 5-6 separate
+  // filter/map passes that each allocate an intermediate array.
+  const integrityDegraded: CoTEntity[] = [];
+  const airborne: CoTEntity[] = [];
+  const haloEntities: CoTEntity[] = [];
+  const selectedArr: CoTEntity[] = [];
+  const velocityData: VelocityDatum[] = [];
+
+  for (const d of interpolated) {
+    const nic = d.classification?.nic;
+    const nacp = d.classification?.nacP;
+    if (
       (nic !== null && nic !== undefined && nic <= 4) ||
       (nacp !== null && nacp !== undefined && nacp <= 6)
-    );
-  });
+    ) {
+      integrityDegraded.push(d);
+    }
+
+    if (enable3d && d.altitude > 10) {
+      airborne.push(d);
+    }
+
+    const isVessel = d.type.includes("S");
+    if (isVessel) {
+      const cat = d.vesselClassification?.category || "";
+      if (cat === "sar" || cat === "military" || cat === "law_enforcement") {
+        haloEntities.push(d);
+      }
+    } else {
+      const platform = d.classification?.platform || "";
+      const affiliation = d.classification?.affiliation || "";
+      if (
+        platform === "helicopter" ||
+        platform === "drone" ||
+        affiliation === "military" ||
+        affiliation === "government"
+      ) {
+        haloEntities.push(d);
+      }
+    }
+
+    if (currentSelected && d.uid === currentSelected.uid) {
+      selectedArr.push(d);
+    }
+
+    if (velocityVectorsEnabled && d.speed > 0.1) {
+      const projectionSeconds = 45;
+      const distMeters = d.speed * projectionSeconds;
+      const courseRad = ((d.course || 0) * Math.PI) / 180;
+      const R = 6371000;
+      const latRad = (d.lat * Math.PI) / 180;
+      const dLat = (distMeters * Math.cos(courseRad)) / R;
+      const dLon = (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
+      const target: PathPoint3D = [
+        d.lon + dLon * (180 / Math.PI),
+        d.lat + dLat * (180 / Math.PI),
+        d.altitude || 0,
+      ];
+      velocityData.push({
+        path: [[d.lon, d.lat, d.altitude || 0] as PathPoint3D, target],
+        entity: d,
+      });
+    }
+  }
 
   if (integrityDegraded.length > 0) {
     layers.push(
@@ -74,7 +133,7 @@ export function buildEntityLayers(
     layers.push(
       new LineLayer({
         id: `altitude-stems-${globeMode ? "globe" : "merc"}`,
-        data: interpolated.filter((e) => e.altitude > 10), // Only for airborne
+        data: airborne, // Only for airborne
         getSourcePosition: (d: CoTEntity) => [d.lon, d.lat, 0],
         getTargetPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude],
         getColor: (d: CoTEntity) => entityColor(d, 80), // Faint line
@@ -85,7 +144,7 @@ export function buildEntityLayers(
       }),
       new ScatterplotLayer({
         id: `ground-shadows-${globeMode ? "globe" : "merc"}`,
-        data: interpolated.filter((e) => e.altitude > 10),
+        data: airborne,
         getPosition: (d: CoTEntity) => [d.lon, d.lat, 0],
         getRadius: 3,
         radiusUnits: "pixels" as const,
@@ -104,23 +163,7 @@ export function buildEntityLayers(
   layers.push(
     new IconLayer({
       id: `entity-tactical-halo-${globeMode ? "globe" : "merc"}`,
-      data: interpolated.filter((d) => {
-        const isVessel = d.type.includes("S");
-        if (isVessel) {
-          return ["sar", "military", "law_enforcement"].includes(
-            d.vesselClassification?.category || "",
-          );
-        } else {
-          return (
-            ["helicopter", "drone"].includes(
-              d.classification?.platform || "",
-            ) ||
-            ["military", "government"].includes(
-              d.classification?.affiliation || "",
-            )
-          );
-        }
-      }),
+      data: haloEntities,
       getIcon: () => "halo",
       iconAtlas: ICON_ATLAS.url,
       iconMapping: ICON_ATLAS.mapping,
@@ -233,6 +276,60 @@ export function buildEntityLayers(
         },
       }),
     );
+  } else if (iconCache) {
+    // Standard 2D / 3D pitch mode with precomputed binary attributes:
+    // position/angle/color/size are uploaded as typed arrays, so deck.gl
+    // never iterates the entity objects for them. Only the icon-frame
+    // accessor still runs per instance (it reads a precomputed flag array).
+    // Picking is index-based: handlers resolve entities via info.index.
+    const { data: iconData, shipFlags } = iconCache.update(
+      interpolated,
+      currentSelected?.uid ?? null,
+      now,
+    );
+    const entityAt = (info: PickingInfo): CoTEntity | null =>
+      info.index != null && info.index >= 0 && info.index < interpolated.length
+        ? interpolated[info.index]
+        : null;
+
+    layers.push(
+      new IconLayer({
+        id: `heading-arrows-merc`,
+        data: iconData as unknown as CoTEntity[],
+        getIcon: ((_: unknown, info: { index: number }) =>
+          shipFlags[info.index] ? "vessel" : "aircraft") as unknown as (
+          d: CoTEntity,
+        ) => string,
+        iconAtlas: ICON_ATLAS.url,
+        iconMapping: ICON_ATLAS.mapping,
+        sizeUnits: "pixels" as const,
+        sizeMinPixels: 18,
+        billboard: false,
+        pickable: true,
+        wrapLongitude: true,
+        parameters: { depthTest: false, depthBias: 0 },
+        onHover: (info: PickingInfo) => {
+          const entity = entityAt(info);
+          if (entity) {
+            setHoveredEntity(entity);
+            setHoverPosition({ x: info.x, y: info.y });
+          } else {
+            setHoveredEntity(null);
+            setHoverPosition(null);
+          }
+        },
+        onClick: (info: PickingInfo) => {
+          const entity = entityAt(info);
+          if (entity) {
+            const newSelection =
+              selectedEntity?.uid === entity.uid ? null : entity;
+            onEntitySelect(newSelection);
+          } else {
+            onEntitySelect(null);
+          }
+        },
+      }),
+    );
   } else {
     // Standard 2D / 3D Pitch Map Mode uses heavily optimized sprites
     layers.push(
@@ -296,7 +393,7 @@ export function buildEntityLayers(
     layers.push(
       new ScatterplotLayer({
         id: `selection-ring-${currentSelected.uid}-${globeMode ? "globe" : "merc"}`,
-        data: interpolated.filter((e) => e.uid === currentSelected.uid),
+        data: selectedArr,
         getPosition: (d: CoTEntity) => [d.lon, d.lat, d.altitude || 0],
         getRadius: () => {
           const cycle = (now % 2000) / 2000; // Faster pulse (2s)
@@ -327,27 +424,7 @@ export function buildEntityLayers(
     layers.push(
       new PathLayer({
         id: `velocity-vectors-${globeMode ? "globe" : "merc"}`,
-        data: interpolated
-          .filter((e) => e.speed > 0.1)
-          .map((d) => {
-            const projectionSeconds = 45;
-            const distMeters = d.speed * projectionSeconds;
-            const courseRad = ((d.course || 0) * Math.PI) / 180;
-            const R = 6371000;
-            const latRad = (d.lat * Math.PI) / 180;
-            const dLat = (distMeters * Math.cos(courseRad)) / R;
-            const dLon =
-              (distMeters * Math.sin(courseRad)) / (R * Math.cos(latRad));
-            const target: PathPoint3D = [
-              d.lon + dLon * (180 / Math.PI),
-              d.lat + dLat * (180 / Math.PI),
-              d.altitude || 0,
-            ];
-            return {
-              path: [[d.lon, d.lat, d.altitude || 0] as PathPoint3D, target],
-              entity: d,
-            };
-          }),
+        data: velocityData,
         getPath: (d: VelocityDatum) => d.path,
         getColor: (d: VelocityDatum) => entityColor(d.entity, 120),
         getWidth: 2.2,

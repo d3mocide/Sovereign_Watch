@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-07-10
+
+### Security
+- **Information Disclosure Sanitization in News Article Fetcher**: Caught connection errors in the article content retrieval endpoint to return sanitized "Failed to connect to article source" details instead of raw exception messages, preventing internal system or host network details leakage to untrusted clients.
+
+### Performance
+- **Vectorized SGP4 Orbit Propagation**: Refactored satellite groundtrack generation to propagate coordinates in batch using `satrec.sgp4_array` and a new vectorized TEME-to-ECEF coordinate conversion function, bypassing Python loop overhead for a ~3.5x endpoint speedup.
+- **Vectorized ECEF to LLA Conversion**: Batched scalar Earth-Centered, Earth-Fixed (ECEF) to Latitude-Longitude-Altitude (LLA) conversions in track history and track analysis endpoints using vectorized NumPy operations, eliminating loops and reducing redundant array allocations.
+- **Event Time Parsing Optimization**: Replaced `datetime.strptime` formatting loops with manual string slicing and integer casting for fixed-format GDELT event timestamps, accelerating event-time alignment processes by ~5x.
+- **Last-Value Cache (LVC) for WebSocket Replays**: Introduced an in-memory LVC to replay state-valid track snapshots directly to fresh WebSocket clients upon connection, bypassing the client queues to reduce initial map rendering delay from 15-37 seconds to a single connection round-trip.
+- **Concurrent News Fetching & Stale-While-Revalidate**: Parallelized RSS feed fetching using `asyncio.gather` and implemented a background stale-while-revalidate pre-warming loop to serve the dashboard news feed cache instantly, ensuring users never block on upstream network requests.
+- **Map Asset Preloading**: Injected critical map bundle `<link rel="modulepreload">` hints (`deck-gl`, MapLibre, and `TacticalMap`) at build time using a custom Vite plugin, eliminating the dynamic import waterfall for cold-cache clients.
+- **Paced Render Loop & Binary Attribute Uploads**: Capped the map's requestAnimationFrame loops to 30 FPS in dense environments and uploaded entity coordinates, sizes, angles, and colors as flat typed arrays, cutting array allocations, React rendering pressure, and GC frame hitches.
+- **WebSocket Frame Coalescing**: Bundled consecutive tactical updates into batch frames to scale with large sweeps, preventing queue drops and packet loss for slower clients.
+- **Global Situation Globe Layer Caching**: Wrapped static layer builders (`buildInfraLayers`, `buildAuroraLayer`, `buildCountryHeatLayer`, `getTerminatorLayer`, `buildGdeltLayer`, and `buildAOTLayers`) in `LayerCache` logic inside `SituationGlobe.tsx`, preventing redundant GPU attribute regenerations and buffer uploads on every 60Hz frame.
+
+### Changed
+- **Sponsorships Configuration**: Configured the GitHub Sponsors profile username to `d3mocide` in `.github/FUNDING.yml`.
+
+### Fixed
+- **JS8 UDP Bridge & KiwiSDR Auth**: Corrected the JS8 UDP server to bind to port 2242, reply to dynamic ports using active datagram routes, and shapes lowercase API requests. Aligned KiwiSDR audio and waterfall authentication packets to use the reference plaintext format.
+- **GDELT Cold-Start & Cache Recovery**: Prevented Redis from caching empty actor or event datasets on cold-start, enabling immediate UI population once data is ingested. Reduced GDELT UI refresh intervals from 15 minutes to 5 minutes to align with server-side cache TTLs.
+- **3D Globe Terminator Shading**: Re-enabled depth testing and applied depth bias to the terminator night-shading layer in globe mode, preventing the dark hemisphere overlay from bleeding through the planet to the daylight side.
+- **Globe Terminator Geometry Densification**: Densified the pole-closing edges of the night-side terminator polygon in 2-degree latitude increments, resolving a rendering artifact where long unsubdivided edges formed straight chords cutting through the 3D situation globe.
+- **Kinetic Ranker NaN Shield**: Guarded the GDELT breakdown widget ratio math against zero values, preventing `NaN%` displays when dashboard feeds are empty.
+
 ## [1.1.1] - 2026-06-12
 
 ### Security

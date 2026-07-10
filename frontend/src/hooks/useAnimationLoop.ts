@@ -14,6 +14,7 @@ import { latLngToCell } from "h3-js";
 import { H3CellData } from "../layers/buildH3CoverageLayer";
 import { composeAllLayers } from "../layers/composition";
 import { LayerCache } from "../layers/layerCache";
+import { EntityIconAttributeCache } from "../layers/entityIconAttributes";
 import {
 
   CoTEntity,
@@ -337,8 +338,11 @@ export function useAnimationLoop({
 
   // Stable overlay hover handler — defined once so setProps doesn't receive a new
   // function reference every frame. Accesses setters via their refs (always current).
+  // Layers with binary attributes pick by index with no backing object, so a
+  // hover only counts as a miss when nothing was picked at all (index -1).
   const onOverlayHoverRef = useRef((info: PickingInfo) => {
-    if (!info.object) {
+    const picked = info.index != null && info.index >= 0;
+    if (!picked && !info.object) {
       setHoveredEntityRef.current(null);
       setHoverPositionRef.current(null);
     }
@@ -355,6 +359,12 @@ export function useAnimationLoop({
   // state tied to a single deck overlay.
   const layerCacheRef = useRef<LayerCache | null>(null);
   if (!layerCacheRef.current) layerCacheRef.current = new LayerCache();
+
+  // Persistent binary-attribute buffers for the 2D entity icon layer —
+  // per-overlay for the same reason as LayerCache.
+  const entityIconCacheRef = useRef<EntityIconAttributeCache | null>(null);
+  if (!entityIconCacheRef.current)
+    entityIconCacheRef.current = new EntityIconAttributeCache();
 
   const countryOutageMap = React.useMemo(() => {
     if (!outagesData || !outagesData.features) return {};
@@ -525,10 +535,33 @@ export function useAnimationLoop({
   }, [filters?.showClausalChains, filters?.clausalLookbackHours]);
 
   useEffect(() => {
+    // Adaptive frame pacing. The per-tick work (interpolation of every track,
+    // full layer recomposition, GPU attribute re-upload for the entity/trail
+    // layers) scales linearly with entity count, so at thousands of COTs a
+    // steady 30 fps is both smoother and far cheaper than a janky
+    // display-rate loop — and on 120/144 Hz displays an uncapped rAF loop
+    // does 2-2.5x redundant work even at low counts.
+    const PACE_ENTITY_THRESHOLD = 800; // above this, pace to ~30 fps
+    const FRAME_BUDGET_BUSY_MS = 33; // ~30 fps
+    const FRAME_BUDGET_IDLE_MS = 15; // ~60 fps cap (skip extra 120/144 Hz ticks)
+
     const animate = () => {
+      // Schedule the next tick first so an early (paced) return keeps the loop alive.
+      rafRef.current = requestAnimationFrame(animate);
+
       const entities = entitiesRef.current;
       const now = Date.now();
       const rawDt = now - lastFrameTimeRef.current;
+
+      const entityLoad = entities.size + satellitesRef.current.size;
+      const frameBudget =
+        entityLoad > PACE_ENTITY_THRESHOLD
+          ? FRAME_BUDGET_BUSY_MS
+          : FRAME_BUDGET_IDLE_MS;
+      // Not yet due: skip all work this tick. dt keeps accumulating, so the
+      // interpolators see the true elapsed time on the next executed frame.
+      if (rawDt < frameBudget) return;
+
       const dt = Math.min(rawDt, 100);
       lastFrameTimeRef.current = now;
 
@@ -812,6 +845,7 @@ export function useAnimationLoop({
         firmsData: firmsDataRef.current,
         darkVesselData: darkVesselDataRef.current,
         cache: layerCacheRef.current ?? undefined,
+        entityIconCache: entityIconCacheRef.current ?? undefined,
       });
 
       if (mapLoadedRef.current && overlayRef.current?.setProps) {
@@ -820,8 +854,6 @@ export function useAnimationLoop({
           onHover: onOverlayHoverRef.current,
         });
       }
-
-      rafRef.current = requestAnimationFrame(animate);
     };
 
     const rafId = requestAnimationFrame(animate);

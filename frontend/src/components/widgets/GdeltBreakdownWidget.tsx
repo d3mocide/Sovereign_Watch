@@ -35,6 +35,11 @@ export const GdeltBreakdownWidget: React.FC<GdeltBreakdownWidgetProps> = ({
     return stats;
   }, [gdeltData]);
 
+  // Guard the ratio bars against 0/0 → NaN% while the feed is still empty
+  // (e.g. right after a cold start, before the first GDELT cycle lands).
+  const pct = (count: number) =>
+    breakdown && breakdown.total > 0 ? (count / breakdown.total) * 100 : 0;
+
   if (!breakdown) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 text-white/20">
@@ -85,14 +90,14 @@ export const GdeltBreakdownWidget: React.FC<GdeltBreakdownWidgetProps> = ({
                 <ShieldAlert size={10} /> Kinetic / Conflict
               </span>
               <span className="text-[10px] text-red-400 font-mono font-bold">
-                {((breakdown.conflict / breakdown.total) * 100).toFixed(0)}%
+                {pct(breakdown.conflict).toFixed(0)}%
               </span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]"
                 style={{
-                  width: `${(breakdown.conflict / breakdown.total) * 100}%`,
+                  width: `${pct(breakdown.conflict)}%`,
                 }}
               />
             </div>
@@ -111,14 +116,14 @@ export const GdeltBreakdownWidget: React.FC<GdeltBreakdownWidgetProps> = ({
                 <Thermometer size={10} /> Political Tension
               </span>
               <span className="text-[10px] text-amber-400 font-mono font-bold">
-                {((breakdown.tension / breakdown.total) * 100).toFixed(0)}%
+                {pct(breakdown.tension).toFixed(0)}%
               </span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-amber-500"
                 style={{
-                  width: `${(breakdown.tension / breakdown.total) * 100}%`,
+                  width: `${pct(breakdown.tension)}%`,
                 }}
               />
             </div>
@@ -137,14 +142,14 @@ export const GdeltBreakdownWidget: React.FC<GdeltBreakdownWidgetProps> = ({
                 <Globe size={10} /> Volatile / Unstable
               </span>
               <span className="text-[10px] text-hud-green/60 font-mono">
-                {((breakdown.unstable / breakdown.total) * 100).toFixed(0)}%
+                {pct(breakdown.unstable).toFixed(0)}%
               </span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-hud-green/30"
                 style={{
-                  width: `${(breakdown.unstable / breakdown.total) * 100}%`,
+                  width: `${pct(breakdown.unstable)}%`,
                 }}
               />
             </div>
@@ -163,14 +168,14 @@ export const GdeltBreakdownWidget: React.FC<GdeltBreakdownWidgetProps> = ({
                 <Zap size={10} /> Stability Indicators
               </span>
               <span className="text-[10px] text-hud-green/80 font-mono">
-                {((breakdown.stable / breakdown.total) * 100).toFixed(0)}%
+                {pct(breakdown.stable).toFixed(0)}%
               </span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-hud-green"
                 style={{
-                  width: `${(breakdown.stable / breakdown.total) * 100}%`,
+                  width: `${pct(breakdown.stable)}%`,
                 }}
               />
             </div>

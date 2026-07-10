@@ -129,7 +129,10 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
 
   useEffect(() => {
     fetchThreats();
-    const timer = setInterval(fetchThreats, 15 * 60 * 1000);
+    // 5 min matches the server-side GDELT cache TTL (same cadence as the
+    // dashboard/globe consumers) so live threats recover quickly after a
+    // backend cold start.
+    const timer = setInterval(fetchThreats, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [fetchThreats]);
 

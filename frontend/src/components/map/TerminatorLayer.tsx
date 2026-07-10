@@ -76,13 +76,31 @@ function computeTerminator(date: Date) {
   // To make a polygon representing the *night* side, we need to connect the terminator
   // to either the north or south pole, depending on season (subSolarLat).
   // If sun is in north hemisphere (subSolarLat > 0), night covers south pole.
+  const poleLat = subSolarLat > 0 ? -90 : 90;
 
-  if (subSolarLat > 0) {
-    coords.push([180, -90]);
-    coords.push([-180, -90]);
-  } else {
-    coords.push([180, 90]);
-    coords.push([-180, 90]);
+  // These two closing edges run along a fixed meridian (lon = ±180) from the
+  // terminator curve to the pole. On flat/Mercator maps a single long edge is
+  // fine (it renders as a straight vertical line), but on the 3D globe the
+  // renderer only bends existing vertices onto the sphere and interpolates
+  // linearly *between* them — an edge spanning ~100+ degrees of latitude in
+  // one hop becomes a straight chord that cuts across the visible globe
+  // instead of following its curvature. Sample every few degrees so the
+  // edge hugs the sphere on both projections.
+  const LAT_STEP_DEG = 2;
+  const lastLat = coords[coords.length - 1][1]; // terminator lat at lon = 180
+  const firstLat = coords[0][1]; // terminator lat at lon = -180
+
+  const rampSteps = Math.max(1, Math.round(Math.abs(poleLat - lastLat) / LAT_STEP_DEG));
+  for (let i = 1; i <= rampSteps; i++) {
+    coords.push([180, lastLat + (poleLat - lastLat) * (i / rampSteps)]);
+  }
+
+  // Start this ramp exactly at the pole (i = returnSteps) so the pole-to-pole
+  // edge above lands on the same point in 3D at both ends, then step back
+  // down to the terminator curve's start.
+  const returnSteps = Math.max(1, Math.round(Math.abs(poleLat - firstLat) / LAT_STEP_DEG));
+  for (let i = returnSteps; i >= 1; i--) {
+    coords.push([-180, firstLat + (poleLat - firstLat) * (i / returnSteps)]);
   }
 
   // Close the polygon
@@ -110,7 +128,7 @@ function computeTerminator(date: Date) {
 let cachedMinute = 0;
 let cachedGeoJson: TerminatorGeoJson | null = null;
 
-export function getTerminatorLayer(visible: boolean) {
+export function getTerminatorLayer(visible: boolean, globeMode = false) {
   // We use Date.now() rounded to nearest minute to avoid constant re-renders
   // For a pure layer creator function, we calculate the current terminator
   const now = new Date();
@@ -123,7 +141,7 @@ export function getTerminatorLayer(visible: boolean) {
   const terminatorGeoJson = cachedGeoJson;
 
   return new GeoJsonLayer({
-    id: 'terminator-layer',
+    id: `terminator-layer-${globeMode ? 'globe' : 'merc'}`,
     data: terminatorGeoJson,
     visible: visible,
     getFillColor: [0, 0, 20, 80],
@@ -132,11 +150,17 @@ export function getTerminatorLayer(visible: boolean) {
     lineWidthMinPixels: 1,
     stroked: true,
     filled: true,
-    // Transparent night overlay — must not write to the depth buffer so it
-    // doesn't occlude surface layers (country heat, cables, etc.) beneath it.
-    parameters: {
-      depthTest: false,
-    } as any,
+    wrapLongitude: !globeMode,
+    // Flat map: depthTest off so the transparent night fill never occludes
+    // surface layers (country heat, cables, etc.) beneath it.
+    // Globe: depthTest ON — deck.gl's globe depth mask then occludes the
+    // far-hemisphere half of the night polygon, which otherwise renders
+    // through the planet and shades the wrong side of the visible globe.
+    // The small negative bias lifts the near-side fill above the mask
+    // (same technique as the aurora oval).
+    parameters: (globeMode
+      ? { depthTest: true, depthBias: -5.0 }
+      : { depthTest: false }) as any,
     // Add updateTriggers if we want it to react to time changes
     updateTriggers: {
       getFillColor: [now.getTime()]

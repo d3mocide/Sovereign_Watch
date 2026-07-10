@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import json
+import time
 from typing import Dict
 from fastapi import WebSocket, WebSocketDisconnect
 from aiokafka import AIOKafkaConsumer
@@ -14,8 +15,69 @@ from services.tak import transform_to_proto
 logger = logging.getLogger("SovereignWatch.Broadcast")
 
 # Max messages queued per client before we start dropping (oldest dropped first).
-# At ~37s orbital cycles emitting 11k messages, 256 gives ~23ms grace before dropping.
-_CLIENT_QUEUE_SIZE = 256
+# The client worker drains the queue in coalesced batch frames (up to
+# _MAX_BATCH_MSGS per WebSocket send), so even the ~11k-message orbital sweep
+# is flushed in a few dozen sends. The deeper queue absorbs that burst for a
+# slow client instead of silently dropping most of it (~1.7 MB transient
+# worst case at ~150 B/message).
+_CLIENT_QUEUE_SIZE = 4096
+
+# Coalesced binary frame format:
+#   [0:3]  0xbf 0x02 0xbf                     — batch magic
+#   then per record: uint32 little-endian length + payload
+# Each payload is an unmodified single TAK message (with its own
+# 0xbf 0x01 0xbf prefix), so the frontend decodes records with the exact
+# same code path as legacy single-message frames. Single messages are still
+# sent as legacy frames for wire compatibility.
+_BATCH_MAGIC = b"\xbf\x02\xbf"
+_MAX_BATCH_MSGS = 128
+_MAX_BATCH_BYTES = 60_000
+
+
+def coalesce_outgoing(items: list) -> list[tuple[str, bytes]]:
+    """
+    Group an ordered mix of proto messages (bytes) and alert tuples
+    (("alert", json_bytes)) into outgoing WebSocket sends, preserving order.
+
+    Returns a list of ("bytes", frame) / ("text", payload) send instructions.
+    Consecutive proto messages are coalesced into batch frames capped at
+    _MAX_BATCH_BYTES; a lone proto message keeps the legacy single frame.
+    """
+    sends: list[tuple[str, bytes]] = []
+    pending: list[bytes] = []
+    pending_bytes = 0
+
+    def flush() -> None:
+        nonlocal pending, pending_bytes
+        if not pending:
+            return
+        if len(pending) == 1:
+            sends.append(("bytes", pending[0]))
+        else:
+            parts = [_BATCH_MAGIC]
+            for m in pending:
+                parts.append(len(m).to_bytes(4, "little"))
+                parts.append(m)
+            sends.append(("bytes", b"".join(parts)))
+        pending = []
+        pending_bytes = 0
+
+    for item in items:
+        if isinstance(item, tuple):
+            msg_type, data = item
+            if msg_type == "alert":
+                flush()
+                sends.append(("text", data))
+            continue
+        if pending_bytes + len(item) > _MAX_BATCH_BYTES or len(pending) >= _MAX_BATCH_MSGS:
+            flush()
+        pending.append(item)
+        pending_bytes += len(item)
+    flush()
+    return sends
+
+# How often the last-value cache is swept for stale entities (seconds).
+_LVC_PRUNE_INTERVAL_S = 30.0
 
 
 class BroadcastManager:
@@ -28,6 +90,13 @@ class BroadcastManager:
         self.redis_pubsub: aioredis.client.PubSub | None = None
         self.redis_task: asyncio.Task | None = None
         self.running = False
+        # Last-value cache: uid → (TAK frame bytes, monotonic receive time).
+        # Replayed to freshly-connected clients so a late joiner paints the
+        # current world immediately instead of waiting for each poller's next
+        # full sweep. Populated even when no clients are connected so the cache
+        # is warm by the time someone joins.
+        self._lvc: Dict[str, tuple[bytes, float]] = {}
+        self._last_prune: float = 0.0
 
     @property
     def active_connections(self):
@@ -137,6 +206,8 @@ class BroadcastManager:
         for ws in list(self._clients.keys()):
             await self.disconnect(ws)
 
+        self._lvc.clear()
+
     async def _consume_redis_alerts(self):
         """Consume from Redis pub/sub and broadcast alerts (jamming zones, holding patterns)."""
         if not self.redis_pubsub:
@@ -211,6 +282,10 @@ class BroadcastManager:
                     logger.error(f"Error transforming message: {e}")
                     continue
 
+                # Keep the last-value cache warm regardless of client count, so
+                # the next client to connect can be bootstrapped immediately.
+                self._record_live(data.get("uid"), tak_bytes)
+
                 if not self._clients:
                     continue
 
@@ -237,22 +312,105 @@ class BroadcastManager:
                     pass
             self._clients.clear()
 
+    def _record_live(self, uid, frame: bytes) -> None:
+        """Store the latest frame for an entity, pruning stale ones periodically."""
+        if not uid:
+            return
+        now = time.monotonic()
+        self._lvc[str(uid)] = (frame, now)
+        self._maybe_prune(now)
+
+    def _maybe_prune(self, now: float) -> None:
+        """Drop entities not seen within the TTL; enforce a hard size cap."""
+        over_cap = len(self._lvc) > settings.LIVE_SNAPSHOT_MAX_ENTITIES
+        if not over_cap and now - self._last_prune < _LVC_PRUNE_INTERVAL_S:
+            return
+        self._last_prune = now
+        cutoff = now - settings.LIVE_SNAPSHOT_TTL_SECONDS
+        self._lvc = {
+            uid: entry for uid, entry in self._lvc.items() if entry[1] >= cutoff
+        }
+        # If a runaway uid space still blows the budget, keep the freshest.
+        if len(self._lvc) > settings.LIVE_SNAPSHOT_MAX_ENTITIES:
+            freshest = sorted(
+                self._lvc.items(), key=lambda kv: kv[1][1], reverse=True
+            )[: settings.LIVE_SNAPSHOT_MAX_ENTITIES]
+            self._lvc = dict(freshest)
+
+    def _snapshot_frames(self) -> list[bytes]:
+        """Current, non-stale frames for bootstrapping a freshly-connected client."""
+        cutoff = time.monotonic() - settings.LIVE_SNAPSHOT_TTL_SECONDS
+        # Copy first — _consume mutates _lvc from another task.
+        return [frame for (frame, ts) in list(self._lvc.values()) if ts >= cutoff]
+
+    async def _send_snapshot(self, ws: WebSocket) -> bool:
+        """Replay the last-value cache to a newly connected client.
+
+        Frames are sent directly rather than through the bounded live queue,
+        which would otherwise drop most of a multi-thousand-entity snapshot. We
+        yield periodically so a large replay never starves the event loop or
+        other clients. Returns False if the client went away mid-snapshot so the
+        caller can stop.
+        """
+        frames = self._snapshot_frames()
+        if not frames:
+            return True
+
+        sent = 0
+        for frame in frames:
+            try:
+                await asyncio.wait_for(ws.send_bytes(frame), timeout=3.0)
+            except asyncio.TimeoutError:
+                logger.warning("Snapshot send timed out — disconnecting")
+                return False
+            except (
+                WebSocketDisconnect,
+                ConnectionClosedOK,
+                ConnectionClosedError,
+                ClientDisconnected,
+            ):
+                return False
+            except Exception as e:
+                logger.error(f"Snapshot send error: {e}")
+                return False
+            sent += 1
+            if sent % 256 == 0:
+                await asyncio.sleep(0)
+
+        logger.info(f"Replayed snapshot of {sent} entities to new client")
+        return True
+
     async def _client_worker(self, ws: WebSocket, q: asyncio.Queue):
-        """Background task per client: dequeue and send, with a generous timeout."""
+        """
+        Background task per client: drain the queue and send coalesced frames.
+
+        Waiting on the first message then opportunistically draining whatever
+        else is already queued turns per-message sends into a handful of batch
+        frames during dense bursts (orbital sweeps), while sparse traffic
+        still goes out immediately as legacy single frames.
+        """
         try:
+            # Bootstrap the late joiner with the current world before streaming
+            # live deltas, so the map isn't empty until the next poller sweep.
+            if not await self._send_snapshot(ws):
+                return
             while True:
-                msg = await q.get()
+                first = await q.get()
+                items = [first]
+                while len(items) < _MAX_BATCH_MSGS:
+                    try:
+                        items.append(q.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
                 try:
-                    # Handle both TAK proto (bytes) and alert JSON (tuple)
-                    if isinstance(msg, tuple):
-                        msg_type, data = msg
-                        if msg_type == "alert":
+                    for kind, payload in coalesce_outgoing(items):
+                        if kind == "text":
                             await asyncio.wait_for(
-                                ws.send_text(data.decode("utf-8")), timeout=3.0
+                                ws.send_text(payload.decode("utf-8")), timeout=3.0
                             )
-                    else:
-                        # TAK proto (bytes)
-                        await asyncio.wait_for(ws.send_bytes(msg), timeout=3.0)
+                        else:
+                            await asyncio.wait_for(ws.send_bytes(payload), timeout=3.0)
                 except asyncio.TimeoutError:
                     logger.warning("Client send timed out — disconnecting")
                     break

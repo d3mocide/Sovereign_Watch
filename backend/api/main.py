@@ -78,6 +78,7 @@ async def _historian_supervisor():
 # Global task handles
 historian_task_handle: asyncio.Task | None = None
 rf_cleanup_task_handle: asyncio.Task | None = None
+news_prewarm_task_handle: asyncio.Task | None = None
 
 
 @asynccontextmanager
@@ -86,7 +87,7 @@ async def lifespan(app: FastAPI):
     BUG-017: Replaced deprecated @app.on_event("startup") / @app.on_event("shutdown")
     decorators with the modern lifespan context manager pattern (FastAPI >= 0.93).
     """
-    global historian_task_handle, rf_cleanup_task_handle
+    global historian_task_handle, rf_cleanup_task_handle, news_prewarm_task_handle
     # --- Startup ---
     settings.validate()
     await db.connect()
@@ -121,12 +122,23 @@ async def lifespan(app: FastAPI):
     historian_task_handle = asyncio.create_task(_historian_supervisor())
     rf_cleanup_task_handle = asyncio.create_task(rf_sites_cleanup_task())
     await broadcast_service.start()
-    logger.info("Database, Redis, Historian, RF Cleanup, and Broadcast Service started")
+    # Continuously pre-warm the news feed cache in the background so a fresh
+    # dashboard always hits a warm cache instead of blocking on the upstream
+    # RSS fetch (refreshes on startup, then on an interval).
+    news_prewarm_task_handle = asyncio.create_task(news.prewarm_loop())
+    logger.info(
+        "Database, Redis, Historian, RF Cleanup, Broadcast Service, "
+        "and News Pre-warm started"
+    )
 
     yield
 
     # --- Shutdown ---
-    for handle in (historian_task_handle, rf_cleanup_task_handle):
+    for handle in (
+        historian_task_handle,
+        rf_cleanup_task_handle,
+        news_prewarm_task_handle,
+    ):
         if handle:
             handle.cancel()
             try:

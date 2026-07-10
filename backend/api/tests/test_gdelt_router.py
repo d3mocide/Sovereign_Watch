@@ -293,3 +293,94 @@ async def test_stable_actor_not_promoted_by_material_shortcut():
     with patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)):
         result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
     assert result[0]["threat_level"] == "STABLE"
+
+
+# ---------------------------------------------------------------------------
+# Cold-start cache tests: an empty payload must NOT be cached, otherwise a
+# freshly-started backend pins the dashboard at zero for a full TTL even
+# after rows land seconds later.
+# ---------------------------------------------------------------------------
+
+
+def _mock_redis():
+    redis = MagicMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.setex = AsyncMock()
+    return redis
+
+
+@pytest.mark.asyncio
+async def test_gdelt_events_does_not_cache_empty_result():
+    redis = _mock_redis()
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    with (
+        patch.object(gdelt_router.db, "redis_client", redis),
+        patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)),
+    ):
+        result = await gdelt_router.get_gdelt_events(limit=10, hours=24, refresh=True)
+    assert result["features"] == []
+    redis.setex.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_gdelt_events_caches_non_empty_result():
+    redis = _mock_redis()
+    row = {
+        "event_id": "evt-1",
+        "time": None,
+        "headline": "Test",
+        "actor1": "USA",
+        "actor2": None,
+        "url": None,
+        "goldstein": -3.0,
+        "tone": -2.0,
+        "lat": 1.0,
+        "lon": 2.0,
+        "actor1_country": "USA",
+        "actor2_country": None,
+        "event_code": "190",
+        "event_root_code": "19",
+        "quad_class": 4,
+        "num_mentions": 1,
+        "num_sources": 1,
+        "num_articles": 1,
+    }
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with (
+        patch.object(gdelt_router.db, "redis_client", redis),
+        patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)),
+    ):
+        result = await gdelt_router.get_gdelt_events(limit=10, hours=24, refresh=True)
+    assert len(result["features"]) == 1
+    redis.setex.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_gdelt_actors_does_not_cache_empty_result():
+    redis = _mock_redis()
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    with (
+        patch.object(gdelt_router.db, "redis_client", redis),
+        patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)),
+    ):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert result == []
+    redis.setex.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_gdelt_actors_caches_non_empty_result():
+    redis = _mock_redis()
+    row = _make_db_row("USA", avg_goldstein=-3.0, material_conflict=5, event_count=100)
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[row])
+    with (
+        patch.object(gdelt_router.db, "redis_client", redis),
+        patch.object(gdelt_router.db, "pool", _mock_pool(mock_conn)),
+    ):
+        result = await gdelt_router.get_gdelt_actors(limit=10, hours=24, refresh=True)
+    assert len(result) == 1
+    redis.setex.assert_awaited_once()
