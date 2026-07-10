@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-07-10
+
 ### Security
 - **Information Disclosure Sanitization in News Article Fetcher**: Caught connection errors in the article content retrieval endpoint to return sanitized "Failed to connect to article source" details instead of raw exception messages, preventing internal system or host network details leakage to untrusted clients.
 
@@ -14,6 +16,7 @@
 - **Map Asset Preloading**: Injected critical map bundle `<link rel="modulepreload">` hints (`deck-gl`, MapLibre, and `TacticalMap`) at build time using a custom Vite plugin, eliminating the dynamic import waterfall for cold-cache clients.
 - **Paced Render Loop & Binary Attribute Uploads**: Capped the map's requestAnimationFrame loops to 30 FPS in dense environments and uploaded entity coordinates, sizes, angles, and colors as flat typed arrays, cutting array allocations, React rendering pressure, and GC frame hitches.
 - **WebSocket Frame Coalescing**: Bundled consecutive tactical updates into batch frames to scale with large sweeps, preventing queue drops and packet loss for slower clients.
+- **Global Situation Globe Layer Caching**: Wrapped static layer builders (`buildInfraLayers`, `buildAuroraLayer`, `buildCountryHeatLayer`, `getTerminatorLayer`, `buildGdeltLayer`, and `buildAOTLayers`) in `LayerCache` logic inside `SituationGlobe.tsx`, preventing redundant GPU attribute regenerations and buffer uploads on every 60Hz frame.
 
 ### Changed
 - **Sponsorships Configuration**: Configured the GitHub Sponsors profile username to `d3mocide` in `.github/FUNDING.yml`.

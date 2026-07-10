@@ -1,51 +1,50 @@
-# Release - v1.1.1 - Core Rendering, Performance, and Position Stabilization
+# Release - v1.1.2 - Performance, Globe Visualization, and JS8Call Integration
 
-## Summary
-Sovereign Watch **v1.1.1** is a patch release focusing on rendering pipeline optimization, client-side performance, tracking stabilization, and security hardening. It introduces frontend layer memoization and vendor code splitting to dramatically improve initial page load times and main-thread responsiveness, resolves a critical satellite position jump/surge bug, hardens news article extraction against DNS-rebinding SSRF attacks, and refactors UI control surfaces to improve keyboard and screen reader accessibility.
-
-## Key Features
-
-### ⚡ Rendering & Performance Optimization
-* **Frontend Layer Caching (`LayerCache`)**: Implemented a keyed layer cache for static overlays (airspaces, cables, alerts, etc.) in `composeAllLayers()`, returning identical Layer instances across frames. This allows deck.gl to skip diffing and attribute re-uploads entirely, reducing per-frame CPU overhead.
-* **Pulse Quantization**: Quantized shimmer pulse calculations to a 10 Hz interval (rather than 60 Hz), keeping static animated layers cached for consecutive frames.
-* **Bundle Code-Splitting**: Code-split large chunks (Vite config `manualChunks` for `deck-gl`, `maplibre`, `mapbox`, and `echarts`) and lazy-loaded major routes (`TacticalMap`, `OrbitalMap`, `IntelGlobe`, `DashboardView`, and `RadioTerminal`), reducing the initial JavaScript payload from ~5MB to ~200KB.
-* **Vectorized Groundtrack Propagation**: Batched ECEF-to-LLA conversion in `get_groundtrack` to process coordinate sequences using NumPy's vectorized functions in a single call, resulting in a **5x speedup** on the SGP4 pass path.
-* **Track History Loop Optimization**: Precalculated the starting Julian date and step increments to step mathematically through fractional days, eliminating datetime construction and redundant conversions.
-
-### 🛰️ Tracking & Position Stabilization
-* **Epoch-Anchored Dead Reckoning**: Anchored the dead reckoning (`DRState`) blend time directly to SGP4 propagation epochs rather than message receive times, resolving persistent display lag and eliminating the startup "fast-forward" catch-up surge.
-* **Teleport Guard & Frame Stall Reset**: Implemented a distance-based teleport guard in `interpolatePVB` to immediately snap elements when the visual-to-target gap exceeds normal bounds, and automatically clear visual state during long frame stalls (>1s) to prevent catch-up surges.
-* **Antimeridian Crossing**: Unwrapped longitude updates to ensure entities snap cleanly across the antimeridian rather than wrapping around the globe.
-
-### 🛡️ Security Hardening
-* **SSRF DNS-Rebinding Mitigation**: Implemented a custom `SSRFSafeTransport` for httpx that resolves domain names to IP addresses exactly once, validates them against private/multicast ranges, and rewrites the request URL to target the validated IP. This closes the TOCTOU DNS-rebinding window on article extraction and RSS feed fetches.
-
-### ♿ Operational Accessibility (A11y) Sweep
-* **Form & Filter Labeling**: Added explicit `id` and corresponding `<label htmlFor="...">` attributes across all layer filters and visibility controls to support keyboard navigation and screen readers.
-* **Button Safety & Types**: Added explicit `type="button"` attributes, ARIA labels, and custom focus indicators to standalone UI controls, mitigating accidental form submissions and popover close accessibility issues.
+Sovereign Watch v1.1.2 introduces critical performance optimizations, renders corrections for the 3D Global Situation view, fixes UDP bridge compatibility with JS8Call and KiwiSDR audio nodes, and includes an API information leakage security patch.
 
 ---
+
+## High-Level Summary
+
+This release resolves the visual artifact on the Global Situation globe view where night-shading appeared as a jagged, misplaced chord. It integrates `LayerCache` logic inside the globe view to prevent redundant 60Hz GPU buffer uploads. Startup delays for fresh map loads have been eliminated via WebSocket client last-value caching, concurrent RSS pre-warming, and Vite-level module preloading. In addition, JS8Call and KiwiSDR communication bridges have been corrected, and connection-level exception disclosures have been fully sanitized.
+
+## Key Changes
+
+* **Globe Visualization Improvements**:
+  * Fixed 3D terminator Night overlay geometry by densifying pole-closing meridian edges to follow the sphere's curvature.
+  * Memoized static global layer stack builders to eliminate CPU and GPU resource starvation on cold dashboard load.
+  * Re-enabled depth-testing and depth-bias on globe night-shading to prevent far-hemisphere overlays from bleeding to the daylight side.
+* **Cold-Start Map & Dashboard Optimizations**:
+  * Added last-value caching (LVC) to the event broadcast manager to stream active tracks to fresh clients instantly on connect.
+  * Implemented concurrent RSS fetching and stale-while-revalidate pre-warming loops to prevent blocked text widgets.
+  * Hoisted critical Mapbox/MapLibre and Deck.gl module preloading links into the index template at build time.
+* **Operational Hardware Integrations**:
+  * Corrected the JS8Call UDP bridge listener model to dynamically route replies to active sender addresses and format lowercase API keys.
+  * Aligned virtual KiwiSDR clients with standard plaintext password auth formatting.
+* **Security & Stability Enhancements**:
+  * Sanitized outbound news article connection exceptions to return generic status details instead of internal stack traces.
+  * Vectorized SGP4 groundtrack propagation and ECEF-to-LLA conversions using NumPy arrays, yielding up to a 5x speedup.
+  * Coalesced consecutive WebSocket updates into batches to prevent packet drops.
 
 ## Technical Details
-* **Database Migrations**: No database schema migrations are introduced in this patch.
-* **Verification Gates**: Passed all test suites on the host environment:
-  * **Frontend**: `pnpm run lint` (clean), `pnpm run typecheck` (clean), `pnpm run test` (278/278 tests passed).
-  * **Backend API**: `ruff check` (clean), `pytest` (158/158 tests passed).
-  * **Space Pulse**: `ruff check` (clean), `pytest` (63/63 tests passed).
 
----
+* **Database Migrations**: None.
+* **Dependencies**: None.
+* **Performance Impact**:
+  * CPU/GPU allocation churn reduced significantly in dense environments due to paced render cycles (30 FPS cap under load) and binary attribute uploads.
+  * SGP4 propagation latency reduced by ~3.5x.
+  * Event time parsing and LLA coordinate conversions improved by ~5x.
+  * Map painting and dashboard news loading latency dropped from ~30s to near-instant.
 
-## Upgrade Instructions
+## Upgrade & Deployment Instructions
 
-To apply these updates, pull the latest changes and rebuild the development or production stack:
+To upgrade a local deployment to v1.1.2:
 
 ```bash
-git pull origin dev
-make dev  # or make prod
-```
+# 1. Pull the latest release changes
+git fetch origin && git checkout dev && git pull
 
-For production deployments, rebuild and restart the containers:
-```bash
-docker compose build sovereign-frontend sovereign-backend sovereign-space-pulse
-docker compose up -d
+# 2. Rebuild and restart the container services
+docker compose down
+docker compose up -d --build
 ```
