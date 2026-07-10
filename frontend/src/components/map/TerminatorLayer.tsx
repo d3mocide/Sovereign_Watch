@@ -76,13 +76,31 @@ function computeTerminator(date: Date) {
   // To make a polygon representing the *night* side, we need to connect the terminator
   // to either the north or south pole, depending on season (subSolarLat).
   // If sun is in north hemisphere (subSolarLat > 0), night covers south pole.
+  const poleLat = subSolarLat > 0 ? -90 : 90;
 
-  if (subSolarLat > 0) {
-    coords.push([180, -90]);
-    coords.push([-180, -90]);
-  } else {
-    coords.push([180, 90]);
-    coords.push([-180, 90]);
+  // These two closing edges run along a fixed meridian (lon = ±180) from the
+  // terminator curve to the pole. On flat/Mercator maps a single long edge is
+  // fine (it renders as a straight vertical line), but on the 3D globe the
+  // renderer only bends existing vertices onto the sphere and interpolates
+  // linearly *between* them — an edge spanning ~100+ degrees of latitude in
+  // one hop becomes a straight chord that cuts across the visible globe
+  // instead of following its curvature. Sample every few degrees so the
+  // edge hugs the sphere on both projections.
+  const LAT_STEP_DEG = 2;
+  const lastLat = coords[coords.length - 1][1]; // terminator lat at lon = 180
+  const firstLat = coords[0][1]; // terminator lat at lon = -180
+
+  const rampSteps = Math.max(1, Math.round(Math.abs(poleLat - lastLat) / LAT_STEP_DEG));
+  for (let i = 1; i <= rampSteps; i++) {
+    coords.push([180, lastLat + (poleLat - lastLat) * (i / rampSteps)]);
+  }
+
+  // Start this ramp exactly at the pole (i = returnSteps) so the pole-to-pole
+  // edge above lands on the same point in 3D at both ends, then step back
+  // down to the terminator curve's start.
+  const returnSteps = Math.max(1, Math.round(Math.abs(poleLat - firstLat) / LAT_STEP_DEG));
+  for (let i = returnSteps; i >= 1; i--) {
+    coords.push([-180, firstLat + (poleLat - firstLat) * (i / returnSteps)]);
   }
 
   // Close the polygon

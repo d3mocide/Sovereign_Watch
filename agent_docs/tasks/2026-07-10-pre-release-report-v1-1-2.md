@@ -1,9 +1,9 @@
 # Pre-Release Report — v1.1.2
 
-- **Scope**: 9 commits since `v1.1.1`. Changes span `backend/api/`, `frontend/`, and `js8call/`.
-- **Risk Level**: Medium (includes multiple performance optimizations like vectorized SGP4 calculations, ECEF-to-LLA conversion batched via NumPy, binary attribute uploads for deck.gl overlays, and a medium security fix regarding API exception details sanitization).
+- **Scope**: 10 commits since `v1.1.1`. Changes span `backend/api/`, `frontend/`, and `js8call/`.
+- **Risk Level**: Medium (includes multiple performance optimizations like vectorized SGP4 calculations, ECEF-to-LLA conversion batched via NumPy, binary attribute uploads for deck.gl overlays, a globe terminator rendering chord fix, and a medium security fix regarding API exception details sanitization).
 - **Verification**:
-  - **Frontend**: `pnpm run lint` (passed), `pnpm run typecheck` (passed), `pnpm run test` (289/289 tests passed).
+  - **Frontend**: `pnpm run lint` (passed), `pnpm run typecheck` (passed), `pnpm run test` (290/290 tests passed).
   - **Backend API**: `ruff check` (passed), `pytest` (185/185 tests passed).
   - **Radio Service (JS8Call)**: `ruff check` (passed), `pytest` (26/26 tests pass).
 - **Changelog**: Complete (added detailed `[Unreleased]` changes documenting all security, performance, changed, and fixed categories).
@@ -16,5 +16,6 @@
 ## Verdict Rationale
 - **Security Vulnerability Remediated**: Information disclosure regarding connection details and stack trace leakage in the RSS feed reader and article content extraction endpoint has been fully mitigated.
 - **Operational Data & Hardware Integrity**: Aligned KiwiSDR/JS8 UDP bridge implementation with reference standards, fixing radio integration and WebSocket connection dropping/surges on dense sweeps.
+- **Globe Terminator Geometry Densification**: Densified the pole-closing edges of the terminator night polygon, eliminating straight chord rendering artifacts cutting across the 3D situation globe.
 - **Improved Cold-Start UX**: Replaced the 15-minute dashboard block with dynamic WebSocket caching, stale-while-revalidate feed caching, and module preloading, reducing initial load painting times from ~30s to immediate.
 - **All Quality Gates Clear**: Linting, typechecking, and the full test suite run successfully on the host environment across all affected services.

@@ -22,6 +22,7 @@
 - **JS8 UDP Bridge & KiwiSDR Auth**: Corrected the JS8 UDP server to bind to port 2242, reply to dynamic ports using active datagram routes, and shapes lowercase API requests. Aligned KiwiSDR audio and waterfall authentication packets to use the reference plaintext format.
 - **GDELT Cold-Start & Cache Recovery**: Prevented Redis from caching empty actor or event datasets on cold-start, enabling immediate UI population once data is ingested. Reduced GDELT UI refresh intervals from 15 minutes to 5 minutes to align with server-side cache TTLs.
 - **3D Globe Terminator Shading**: Re-enabled depth testing and applied depth bias to the terminator night-shading layer in globe mode, preventing the dark hemisphere overlay from bleeding through the planet to the daylight side.
+- **Globe Terminator Geometry Densification**: Densified the pole-closing edges of the night-side terminator polygon in 2-degree latitude increments, resolving a rendering artifact where long unsubdivided edges formed straight chords cutting through the 3D situation globe.
 - **Kinetic Ranker NaN Shield**: Guarded the GDELT breakdown widget ratio math against zero values, preventing `NaN%` displays when dashboard feeds are empty.
 
 ## [1.1.1] - 2026-06-12
