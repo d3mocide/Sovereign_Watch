@@ -10,6 +10,40 @@ import math
 import numpy as np
 
 
+def teme_to_ecef_vectorized(
+    r_teme: np.ndarray, jd: np.ndarray, fr: np.ndarray
+) -> np.ndarray:
+    """
+    Rotate a batch of TEME position vectors (km) to ECEF using GMST.
+
+    Parameters
+    ----------
+    r_teme : (N, 3) ndarray of TEME coordinates
+    jd     : (N,) or scalar Julian date (integer part)
+    fr     : (N,) or scalar Julian date (fractional part)
+
+    Returns
+    -------
+    (N, 3) ndarray in ECEF km
+    """
+    d = (jd - 2451545.0) + fr
+    gmst = (18.697374558 + 24.06570982441908 * d) % 24.0
+    theta = gmst * 15.0 * np.pi / 180.0
+
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    x = r_teme[:, 0]
+    y = r_teme[:, 1]
+    z = r_teme[:, 2]
+
+    return np.column_stack((
+        x * cos_t + y * sin_t,
+        -x * sin_t + y * cos_t,
+        z
+    ))
+
+
 def teme_to_ecef(
     r_teme: tuple[float, float, float], jd: float, fr: float
 ) -> tuple[float, float, float]:

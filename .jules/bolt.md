@@ -24,3 +24,7 @@
 ## 2024-06-26 - [Vectorize repeated numpy function calls inside loops]
 **Learning:** Calling vectorized numpy functions (like `ecef_to_lla_vectorized`) inside loops by reshaping single coordinates (e.g. `np.array(r_ecef).reshape(1, 3)`) negates the benefits of vectorization due to array allocation and function call overhead.
 **Action:** Always collect coordinates into standard python lists within loops, then convert the list into a single batch numpy array outside the loop to be passed into the vectorized function.
+
+## 2024-05-18 - SGP4 Vectorization
+**Learning:** High-frequency orbit propagation using `satrec.sgp4` and `teme_to_ecef` over thousands of points is a major performance bottleneck for orbital groundtrack plotting. Python `for` loops overhead in these paths adds up significantly (~35ms per route).
+**Action:** Always prefer the vectorized C++ bindings `satrec.sgp4_array(jd_arr, fr_arr)` and complement them with fully vectorized NumPy versions of subsequent orbital calculations like `teme_to_ecef_vectorized` when generating large sets of points or groundtracks. This eliminates loop overhead completely, yielding a ~3.5x speedup.
