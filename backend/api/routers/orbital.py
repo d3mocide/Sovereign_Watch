@@ -18,6 +18,7 @@ from sgp4.api import Satrec, jday
 
 from utils.sgp4_utils import (
     teme_to_ecef,
+    teme_to_ecef_vectorized,
     ecef_to_lla_vectorized,
     geodetic_to_ecef,
     ecef_to_topocentric,
@@ -380,22 +381,25 @@ async def get_groundtrack(
     step_days = step_seconds / 86400.0
     num_steps = int(minutes * 60 / step_seconds)
 
-    # Collect all ECEF coordinates first to vectorize the LLA conversion
-    valid_indices = []
-    r_ecefs = []
+    # ⚡ Bolt: Vectorize SGP4 calculations and TEME to ECEF rotation
+    jd_arr = np.full(num_steps + 1, jd_start)
+    fr_arr = fr_start + np.arange(num_steps + 1) * step_days
 
-    for i in range(num_steps + 1):
-        fr = fr_start + i * step_days
-        e, r, _ = satrec.sgp4(jd_start, fr)
-        if e == 0:
-            r_ecefs.append(teme_to_ecef(r, jd_start, fr))
-            valid_indices.append(i)
+    e_arr, r_arr, _ = satrec.sgp4_array(jd_arr, fr_arr)
+    valid_mask = e_arr == 0
+    valid_indices = np.where(valid_mask)[0]
 
-    if not r_ecefs:
+    if len(valid_indices) == 0:
         return []
 
+    valid_r = r_arr[valid_mask]
+    valid_fr = fr_arr[valid_mask]
+
+    # ⚡ Bolt: Vectorized TEME to ECEF rotation
+    r_ecefs = teme_to_ecef_vectorized(valid_r, jd_arr[valid_mask], valid_fr)
+
     # Batch process all coordinates at once
-    lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(np.array(r_ecefs))
+    lat_arr, lon_arr, alt_arr = ecef_to_lla_vectorized(r_ecefs)
 
     for idx, i in enumerate(valid_indices):
         t = now + timedelta(seconds=i * step_seconds)
