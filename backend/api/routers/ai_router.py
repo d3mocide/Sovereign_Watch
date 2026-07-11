@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sgp4.api import Satrec, jday as sgp4_jday
 
+from routers.firms import query_dark_vessel_features
 from services.escalation_detector import EscalationDetector
 from services.gdelt_linkage import (
     GDELT_LINKAGE_REASON,
@@ -47,6 +48,7 @@ _HEATMAP_MAX_CONCURRENCY = 4
 # Keep UI interactions responsive even if the model endpoint is slow/unreachable.
 _LLM_EVAL_TIMEOUT_SECONDS = 8.0
 _SEA_CONTEXT_RADIUS_KM = 400.0
+_AIR_CONTEXT_RADIUS_KM = 100.0
 _SEA_CABLE_PROXIMITY_KM = 250.0
 _SEA_CABLE_ENDPOINT_MATCH_KM = 75.0
 _SPACE_WEATHER_MISSION_KP_THRESHOLD = 5.0
@@ -2004,13 +2006,81 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     if emergency_squawks:
         indicators.append(f"Emergency squawk codes active: {len(emergency_squawks)} aircraft")
 
-    # Holding pattern detection (repeated heading reversals)
-    uid_counts: Dict[str, int] = {}
-    for r in adsb_rows:
-        uid_counts[r["uid"]] = uid_counts.get(r["uid"], 0) + 1
-    high_dwell = [uid for uid, cnt in uid_counts.items() if cnt >= 5]
-    if high_dwell:
-        indicators.append(f"Possible holding patterns: {len(high_dwell)} UIDs with ≥5 observations")
+    # Holding pattern detection — use the real detection pipeline: the
+    # aviation poller identifies racetrack turn patterns and publishes active
+    # zones to Redis plus a history hypertable.  Raw clausal row counts are
+    # NOT a holding signal — any maneuvering aircraft emits many state changes.
+    region_center = _h3_region_center(request.h3_region)
+    active_holdings: List[Dict] = []
+    holding_history_uids: Set[str] = set()
+    if region_center is not None:
+        region_lat, region_lon = region_center
+
+        if db.redis_client:
+            hp_raw = await db.redis_client.get("holding_pattern:active_zones")
+            if hp_raw:
+                try:
+                    hp_data = json.loads(hp_raw)
+                    for feature in hp_data.get("features", []):
+                        coords = feature.get("geometry", {}).get("coordinates") or []
+                        if len(coords) < 2:
+                            continue
+                        if (
+                            haversine_km(region_lat, region_lon, coords[1], coords[0])
+                            <= _AIR_CONTEXT_RADIUS_KM
+                        ):
+                            active_holdings.append(feature.get("properties", {}))
+                except (json.JSONDecodeError, TypeError) as exc:
+                    logger.debug("Active holding zones payload unreadable: %s", exc)
+
+        try:
+            async with db.pool.acquire() as conn:
+                hp_rows = await conn.fetch(
+                    """
+                    SELECT hex_id, callsign, confidence, time
+                    FROM holding_pattern_events
+                    WHERE time > now() - ($1 * interval '1 hour')
+                      AND centroid_lat IS NOT NULL
+                      AND centroid_lon IS NOT NULL
+                      AND ST_DWithin(
+                          ST_SetSRID(ST_MakePoint(centroid_lon, centroid_lat), 4326)::geography,
+                          ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                          $4
+                      )
+                    ORDER BY time DESC
+                    LIMIT 50
+                    """,
+                    request.lookback_hours,
+                    region_lon,
+                    region_lat,
+                    _AIR_CONTEXT_RADIUS_KM * 1000.0,
+                )
+            holding_history_uids = {r["hex_id"] for r in hp_rows if r["hex_id"]}
+        except Exception as exc:
+            logger.warning("Air domain holding-pattern history query failed: %s", exc)
+
+    context["holding_pattern_active_count"] = len(active_holdings)
+    context["holding_pattern_history_aircraft"] = len(holding_history_uids)
+    if active_holdings:
+        max_conf = max(float(p.get("confidence") or 0.0) for p in active_holdings)
+        context["holding_pattern_active_samples"] = [
+            {
+                "hex_id": p.get("hex_id"),
+                "callsign": p.get("callsign"),
+                "confidence": p.get("confidence"),
+                "turns_completed": p.get("turns_completed"),
+            }
+            for p in active_holdings[:5]
+        ]
+        indicators.append(
+            f"Active holding patterns within {_AIR_CONTEXT_RADIUS_KM:.0f} km: "
+            f"{len(active_holdings)} aircraft (max confidence {max_conf:.2f})"
+        )
+    elif holding_history_uids:
+        indicators.append(
+            f"Holding-pattern events in the last {request.lookback_hours}h: "
+            f"{len(holding_history_uids)} aircraft near the mission area"
+        )
 
     # NWS severe weather context
     nws_data = await _summarize_nws_alerts_for_region(wkt_polygon)
@@ -2043,7 +2113,13 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
     context["space_weather_driver_summary"] = space_weather_summary
 
     entity_count = len(set(r["uid"] for r in adsb_rows))
-    risk_score = min(1.0, (len(emergency_squawks) * 0.4 + len(high_dwell) * 0.1 + entity_count * 0.005))
+    holding_signal = len(active_holdings) + len(holding_history_uids)
+    risk_score = min(
+        1.0,
+        len(emergency_squawks) * 0.4
+        + min(0.3, holding_signal * 0.1)
+        + min(0.15, entity_count * 0.005),
+    )
 
     context["adsb_entity_count"] = entity_count
     context["emergency_squawk_count"] = len(emergency_squawks)
@@ -2054,6 +2130,7 @@ async def analyze_air_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         f"Air domain assessment for H3 region {request.h3_region}:\n"
         f"- {entity_count} ADS-B tracks in {request.lookback_hours}h window\n"
         f"- Target Objective / View: {request.mode.upper()}\n"
+        f"- Active holding patterns (poller-detected): {len(active_holdings)}\n"
         f"- Space-weather driver: {context.get('space_weather_driver_summary', 'below mission threshold')}\n"
         f"- NWS alerts in target region: {context.get('nws_alerts', {})}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
@@ -2212,15 +2289,56 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
                         f"{len(correlated_outages)} affected regions across {', '.join(impacted_countries[:4])}"
                     )
 
-    # Dark vessel detection (vessels with very infrequent AIS updates)
-    uid_last: Dict[str, int] = {}
-    for r in ais_rows:
-        uid_last[r["uid"]] = uid_last.get(r["uid"], 0) + 1
-    sparse_vessels = [uid for uid, cnt in uid_last.items() if cnt == 1]
-    if len(sparse_vessels) > 3:
-        indicators.append(f"Possible AIS dark vessels: {len(sparse_vessels)} with single observation")
+    # Dark vessel detection: FIRMS thermal hotspots with no matching AIS
+    # track (the real cross-reference, shared with /api/firms/dark-vessels).
+    # Clausal-chain row counts are NOT a dark-vessel signal — chains only
+    # record state changes, so a steadily-cruising vessel legitimately emits
+    # few rows.
+    dark_vessel_count = 0
+    if region_center is not None:
+        region_lat, region_lon = region_center
+        lat_pad = _SEA_CONTEXT_RADIUS_KM / 111.0
+        lon_pad = lat_pad / max(math.cos(math.radians(region_lat)), 0.2)
+        try:
+            async with db.pool.acquire() as conn:
+                dark_vessel_features = await query_dark_vessel_features(
+                    conn,
+                    min_lat=max(region_lat - lat_pad, -90.0),
+                    max_lat=min(region_lat + lat_pad, 90.0),
+                    min_lon=max(region_lon - lon_pad, -180.0),
+                    max_lon=min(region_lon + lon_pad, 180.0),
+                    hours_back=min(request.lookback_hours, 72),
+                    min_risk_score=0.4,  # MEDIUM+ candidates only
+                )
+        except Exception as exc:
+            logger.warning("Sea domain dark-vessel query failed: %s", exc)
+            dark_vessel_features = []
 
-    risk_score = min(1.0, len(indicators) * 0.2 + entity_count * 0.005)
+        if dark_vessel_features:
+            dark_vessel_count = len(dark_vessel_features)
+            context["dark_vessel_candidates"] = dark_vessel_count
+            context["dark_vessel_samples"] = [
+                {
+                    "lat": f["geometry"]["coordinates"][1],
+                    "lon": f["geometry"]["coordinates"][0],
+                    "frp": f["properties"].get("frp"),
+                    "risk_score": f["properties"].get("risk_score"),
+                    "risk_severity": f["properties"].get("risk_severity"),
+                    "nearest_ais_dist_nm": f["properties"].get("nearest_ais_dist_nm"),
+                }
+                for f in dark_vessel_features[:5]
+            ]
+            indicators.append(
+                f"Dark-vessel candidates: {dark_vessel_count} FIRMS thermal "
+                f"detections with no matching AIS track in the mission sea area"
+            )
+
+    risk_score = min(
+        1.0,
+        len(indicators) * 0.15
+        + min(0.4, dark_vessel_count * 0.1)
+        + min(0.15, entity_count * 0.005),
+    )
     context["ais_entity_count"] = entity_count
 
     # Build narrative via unified AIService (MDA Specialist persona)
@@ -2230,7 +2348,8 @@ async def analyze_sea_domain(request: DomainAnalysisRequest) -> DomainAnalysisRe
         f"- {entity_count} AIS tracks in {request.lookback_hours}h window\n"
         f"- Target Objective / View: {request.mode.upper()}\n"
         f"- Max wave height: {context.get('max_wave_height_m', 'N/A')}m (NDBC)\n"
-        f"- Cable-correlated outages: {context.get('cable_correlated_outages', 0)}\n\n"
+        f"- Cable-correlated outages: {context.get('cable_correlated_outages', 0)}\n"
+        f"- Dark-vessel candidates (FIRMS x AIS): {context.get('dark_vessel_candidates', 0)}\n\n"
         f"HEURISTIC SIGNALS:\n{signals_text}"
     )
     persona = ai_service.get_persona(mode=request.mode)

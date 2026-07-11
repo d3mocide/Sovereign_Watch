@@ -59,8 +59,7 @@ INPUT SOURCES (Pollers)
 │    └─ Partition key: UID (ensures ordering)                    │
 │    └─ Payload: StateChangeEvent with confidence               │
 │                                                                  │
-│ Processing: consume_loop() + batch_flush_loop()                │
-│ (concurrent, ordered by UID partition)                         │
+│ Processing: consumer_loop() (ordered by UID partition)         │
 └─────────────────────────────────────────────────────────────────┘
 
                            ↓
@@ -167,7 +166,7 @@ INPUT SOURCES (Pollers)
 │ ├─ Output: heatmap with risk scores for region + neighbors   │
 │ └─ Uses: H3 ring aggregation (grid_ring)                     │
 │                                                                  │
-│ POST /api/clausal-chains                                     │
+│ GET /api/ai_router/clausal-chains                            │
 │ ├─ Input: region, lookback_hours, source (TAK/GDELT)         │
 │ ├─ Output: ClausalChain[] with full state narratives         │
 │ └─ Groups by UID, orders by time                             │
@@ -265,7 +264,7 @@ INPUT SOURCES (Pollers)
 **Endpoints:**
 - `POST /api/ai_router/evaluate` - Regional risk assessment
 - `GET /api/ai_router/regional_risk` - H3 heatmap for region + neighbors
-- `POST /api/clausal-chains` - Fetch narrative chains by region
+- `GET /api/ai_router/clausal-chains` - Fetch narrative chains by region
 - `GET /api/ai_router/health` - Health check
 
 ---
@@ -428,7 +427,6 @@ litellm_config = {
 
 ### **Streaming Architecture**
 - Kafka partitioning by UID ensures ordered processing
-- Batch flush loop (5-second windows) reduces database writes
 - Redis medial clause caching reduces repeated state lookups
 - SSE streaming prevents large response payload buffering
 

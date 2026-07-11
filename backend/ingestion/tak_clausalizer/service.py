@@ -3,11 +3,10 @@ TAK Clausalizer Service: Main orchestrator for the clausalizer microservice.
 Consumes from Kafka, applies delta calculation, evaluates state changes, emits clauses.
 """
 
-import asyncio
 import json
 import logging
 import os
-from typing import Dict, Optional
+from typing import Optional
 
 from aiokafka import AIOKafkaConsumer
 import redis.asyncio as redis
@@ -47,12 +46,6 @@ class TakClausalizerService:
         self.evaluator = StateChangeEvaluator()
         self.emitter = ClauseEmitter(self.kafka_brokers, self.output_topic)
 
-        # Batch processing
-        self.batch_size = 100
-        self.batch_timeout_s = 2.0
-        self.message_batch: Dict = {}
-        self.last_flush_time: float = 0.0  # Set to running loop time in setup()
-
         # Statistics
         self.stats = {
             "messages_consumed": 0,
@@ -88,16 +81,12 @@ class TakClausalizerService:
         # Connect clause emitter
         await self.emitter.connect()
 
-        self.last_flush_time = asyncio.get_event_loop().time()
         logger.info("TAK Clausalizer Service setup complete")
 
     async def shutdown(self):
         """Graceful shutdown of all components."""
         logger.info("TAK Clausalizer Service shutting down...")
         self.running = False
-
-        # Flush pending messages
-        await self.flush_batch()
 
         # Stop consumer
         if self.consumer:
@@ -115,12 +104,7 @@ class TakClausalizerService:
     async def run(self):
         """Main event loop."""
         logger.info("TAK Clausalizer Service running...")
-
-        # Run consumer loop and batch flush loop concurrently
-        await asyncio.gather(
-            self.consumer_loop(),
-            self.batch_flush_loop(),
-        )
+        await self.consumer_loop()
 
     async def consumer_loop(self):
         """Main consumer loop: process incoming messages."""
@@ -137,23 +121,9 @@ class TakClausalizerService:
                     logger.error(f"Error processing message: {e}")
                     self.stats["errors"] += 1
 
-                # Batch flush check
-                if len(self.message_batch) >= self.batch_size:
-                    await self.flush_batch()
-
         except Exception as e:
             logger.error(f"Consumer loop error: {e}")
             self.stats["errors"] += 1
-
-    async def batch_flush_loop(self):
-        """Periodically flush pending messages."""
-        while self.running:
-            await asyncio.sleep(self.batch_timeout_s)
-
-            current_time = asyncio.get_event_loop().time()
-            if current_time - self.last_flush_time >= self.batch_timeout_s:
-                if self.message_batch:
-                    await self.flush_batch()
 
     async def process_message(self, message: dict, topic: str):
         """
@@ -287,7 +257,3 @@ class TakClausalizerService:
             state_change_reason=state_change_reason,
         )
 
-    async def flush_batch(self):
-        """Flush pending batch (currently unused, but kept for future optimization)."""
-        self.message_batch.clear()
-        self.last_flush_time = asyncio.get_event_loop().time()

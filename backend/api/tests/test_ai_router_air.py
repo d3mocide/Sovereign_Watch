@@ -148,3 +148,130 @@ async def test_analyze_air_domain_flags_model_overload_notice():
     assert response.ai_status == "overloaded"
     assert response.ai_notice == "AI model temporarily overloaded. Please try again shortly."
     assert "Air domain:" in response.narrative
+
+
+@pytest.mark.asyncio
+async def test_analyze_air_domain_uses_real_holding_pattern_pipeline():
+    """Active holding zones near the region must surface as an indicator;
+    zones far outside the air-context radius must not."""
+    region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
+
+    mock_conn = MagicMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    mock_conn.fetchrow = AsyncMock(
+        return_value={"count": 0, "severe_count": 0, "extreme_count": 0}
+    )
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    redis_payloads = {
+        "nws:alerts:summary": json.dumps({"count": 0, "severe_count": 0, "extreme_count": 0}),
+        "nws:alerts:active": json.dumps({"type": "FeatureCollection", "features": []}),
+        "space_weather:kp_current": json.dumps({"kp": 1.0, "storm_level": "Quiet"}),
+        "holding_pattern:active_zones": json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [0.1, 0.1]},
+                        "properties": {
+                            "hex_id": "abc123",
+                            "callsign": "TEST1",
+                            "confidence": 0.85,
+                            "turns_completed": 3,
+                        },
+                    },
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [20.0, 20.0]},
+                        "properties": {
+                            "hex_id": "far999",
+                            "callsign": "FAR1",
+                            "confidence": 0.9,
+                            "turns_completed": 4,
+                        },
+                    },
+                ],
+            }
+        ),
+    }
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
+        patch.object(
+            ai_router.ai_service,
+            "generate_static",
+            AsyncMock(return_value="### CLASSIFICATION\nNominal."),
+        ) as mock_generate,
+    ):
+        response = await ai_router.analyze_air_domain(
+            ai_router.DomainAnalysisRequest(h3_region=region, lookback_hours=24)
+        )
+
+    assert response.context_snapshot["holding_pattern_active_count"] == 1
+    samples = response.context_snapshot["holding_pattern_active_samples"]
+    assert samples[0]["hex_id"] == "abc123"
+    assert any("Active holding patterns" in i for i in response.indicators)
+    assert response.risk_score >= 0.1
+
+    prompt = mock_generate.await_args.kwargs["user_prompt"]
+    assert "Active holding patterns (poller-detected): 1" in prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_air_domain_no_holding_indicator_without_signals():
+    """Many clausal rows for one aircraft must NOT be reported as holding."""
+    region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
+
+    adsb_rows = [
+        {
+            "uid": "same-aircraft",
+            "predicate_type": "a-f-A",
+            "locative_lat": 0.0,
+            "locative_lon": 0.0,
+            "locative_hae": 1000.0,
+            "adverbial_context": {},
+            "time": None,
+        }
+        for _ in range(8)
+    ]
+
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        if "FROM clausal_chains" in sql:
+            return adsb_rows
+        return []
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(
+        return_value={"count": 0, "severe_count": 0, "extreme_count": 0}
+    )
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    redis_payloads = {
+        "nws:alerts:summary": json.dumps({"count": 0, "severe_count": 0, "extreme_count": 0}),
+        "nws:alerts:active": json.dumps({"type": "FeatureCollection", "features": []}),
+        "space_weather:kp_current": json.dumps({"kp": 1.0, "storm_level": "Quiet"}),
+    }
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
+        patch.object(
+            ai_router.ai_service,
+            "generate_static",
+            AsyncMock(return_value="### CLASSIFICATION\nNominal."),
+        ),
+    ):
+        response = await ai_router.analyze_air_domain(
+            ai_router.DomainAnalysisRequest(h3_region=region, lookback_hours=24)
+        )
+
+    assert response.context_snapshot["holding_pattern_active_count"] == 0
+    assert not any("holding" in i.lower() for i in response.indicators)
