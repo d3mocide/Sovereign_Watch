@@ -102,6 +102,13 @@ class ClauseEmitter:
                 ) if state_changes else 0.85,
                 "state_change_reasons": [event.reason for event in state_changes],
             }
+            # Carry the transponder code when present — downstream emergency
+            # detection (7500/7600/7700) reads adverbial_context.squawk.
+            squawk = str(
+                (new_detail.get("classification") or {}).get("squawk") or ""
+            ).strip()
+            if squawk:
+                adverbial_context["squawk"] = squawk
 
             # Build medial clause (JSON)
             # Prefer the observation timestamp from the TAK message so that

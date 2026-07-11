@@ -39,6 +39,9 @@ class StateChangeEvaluator:
     ALTITUDE_CHANGE_M = 500.0  # > 500m delta = altitude change
     BATTERY_CRITICAL_PCT = 20.0  # < 20% = critical
 
+    # Aviation emergency transponder codes (hijack / radio failure / mayday)
+    EMERGENCY_SQUAWK_CODES = frozenset({"7500", "7600", "7700"})
+
     def __init__(self):
         pass
 
@@ -77,6 +80,9 @@ class StateChangeEvaluator:
         new_course = safe_float(new_track.get("course"), default=0.0)
         new_status = new_detail.get("status", {})
         new_battery = safe_float(new_status.get("battery"), default=100.0)
+        new_squawk = str(
+            (new_detail.get("classification") or {}).get("squawk") or ""
+        ).strip()
 
         # 1. Type Code Change Detection
         if new_type != prev_clause.predicate_type:
@@ -127,11 +133,15 @@ class StateChangeEvaluator:
                 )
             )
 
-        # 4. Course Change
+        # 4. Course Change — only meaningful while the entity is actually
+        # moving; a stationary GPS fix reports arbitrary heading noise.
         prev_course = safe_float(
             prev_clause.adverbial_context.get("course"), default=0.0
         )
-        if self._detect_course_change(prev_course, new_course):
+        is_moving = (
+            min(prev_speed, new_speed) >= self.SPEED_STATIONARY_MS
+        )
+        if is_moving and self._detect_course_change(prev_course, new_course):
             events.append(
                 StateChangeEvent(
                     reason="COURSE_CHANGE",
@@ -176,6 +186,26 @@ class StateChangeEvaluator:
                         "previous_battery": prev_battery,
                         "new_battery": new_battery,
                         "threshold": self.BATTERY_CRITICAL_PCT,
+                    },
+                )
+            )
+
+        # 7. Emergency Squawk — an aircraft switching to 7500/7600/7700 is the
+        # single most significant state change ADS-B can report.
+        prev_squawk = str(
+            prev_clause.adverbial_context.get("squawk") or ""
+        ).strip()
+        if (
+            new_squawk in self.EMERGENCY_SQUAWK_CODES
+            and new_squawk != prev_squawk
+        ):
+            events.append(
+                StateChangeEvent(
+                    reason="SQUAWK_EMERGENCY",
+                    confidence=1.0,
+                    details={
+                        "previous_squawk": prev_squawk,
+                        "new_squawk": new_squawk,
                     },
                 )
             )

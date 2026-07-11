@@ -261,7 +261,7 @@ async def _fetch_aot_relevant_satnogs_events(
     center_lon: Optional[float] = None,
     radius_nm: Optional[float] = None,
     lookback_hours: int,
-    signal_threshold: float = -10.0,
+    signal_threshold: float = -90.0,
     limit: int = 10,
     candidate_limit: int = 40,
 ) -> List[Dict]:
@@ -273,11 +273,11 @@ async def _fetch_aot_relevant_satnogs_events(
 
     candidate_rows = await conn.fetch(
         """
-        SELECT norad_id, ground_station_name, signal_strength, time, modulation, frequency
+        SELECT norad_id, ground_station_name, signal_strength, time, modulation, frequency, confidence
         FROM satnogs_signal_events
         WHERE time > now() - ($1 * interval '1 hour')
-          AND signal_strength < $2
-        ORDER BY signal_strength ASC, time DESC
+          AND (signal_strength IS NULL OR signal_strength < $2)
+        ORDER BY time DESC, signal_strength ASC
         LIMIT $3
         """,
         lookback_hours,
@@ -341,6 +341,7 @@ async def _fetch_aot_relevant_satnogs_events(
                 "signal_strength": row.get("signal_strength"),
                 "modulation": row.get("modulation"),
                 "frequency": row.get("frequency"),
+                "confidence": row.get("confidence"),
                 "subpoint_lat": round(subpoint_lat, 4),
                 "subpoint_lon": round(subpoint_lon, 4),
                 "scope": "mission_area",
@@ -749,6 +750,7 @@ async def evaluate_regional_escalation(
                 gdelt_query = """
                     SELECT
                         event_id AS event_id_cnty,
+                        time,
                         to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
                         lat AS event_latitude,
                         lon AS event_longitude,
@@ -819,11 +821,17 @@ async def evaluate_regional_escalation(
 
         # Space weather context (most significant event in window)
         space_weather_data = None
+        # space_weather_kp is the Kp table actually fed by the space poller;
+        # space_weather_context was never populated by any writer.
         space_weather_query = """
-            SELECT time, kp_index, kp_category, dst_index, explanation
-            FROM space_weather_context
+            SELECT time,
+                   kp AS kp_index,
+                   storm_level AS kp_category,
+                   NULL::double precision AS dst_index,
+                   NULL::text AS explanation
+            FROM space_weather_kp
             WHERE time > now() - ($1 * interval '1 hour')
-            ORDER BY kp_index DESC, time DESC
+            ORDER BY kp DESC, time DESC
             LIMIT 1
         """
         space_weather_row = await conn.fetchrow(space_weather_query, lookback_hours)
@@ -842,14 +850,14 @@ async def evaluate_regional_escalation(
             _satnogs_mission_scoped = True
         else:
             signal_query = """
-                SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency
+                SELECT time, norad_id, ground_station_name, signal_strength, modulation, frequency, confidence
                 FROM satnogs_signal_events
                 WHERE time > now() - ($1 * interval '1 hour')
-                  AND signal_strength < $2
-                ORDER BY signal_strength ASC, time DESC
+                  AND (signal_strength IS NULL OR signal_strength < $2)
+                ORDER BY time DESC, signal_strength ASC
                 LIMIT 10
             """
-            signal_rows = await conn.fetch(signal_query, lookback_hours, -10.0)
+            signal_rows = await conn.fetch(signal_query, lookback_hours, -90.0)
             signal_events = [dict(row) for row in signal_rows]
 
     source_scope = {
@@ -928,12 +936,14 @@ async def evaluate_regional_escalation(
         lookback_window=lookback_window_key,
     )
 
-    # Detect escalation patterns in GDELT
+    # Detect escalation patterns in GDELT.  Include the event time so the
+    # detector can order the sequence oldest → newest before matching.
     pattern_match, pattern_confidence = escalation_detector.detect_pattern(
         [
             {
                 "event_code": clause.predicate_type,
                 "narrative": clause.narrative,
+                "time": clause.time,
             }
             for clause in aligned.gdelt_clauses
         ]
@@ -945,6 +955,9 @@ async def evaluate_regional_escalation(
             "uid": clause.uid,
             "locative_lat": clause.lat,
             "locative_lon": clause.lon,
+            # Time is required by the rendezvous window and directional
+            # ordering — without it those detectors silently no-op.
+            "time": clause.time,
             # Prefer actual adverbial_context from the clause if available; otherwise use the legacy placeholder
             "adverbial_context": getattr(clause, "adverbial_context", None)
             or {"course": 0.0},
@@ -1049,6 +1062,7 @@ async def evaluate_regional_escalation(
         alignment_score=aligned.alignment_score,
         anomaly_count=len(active_anomalies),
         context_anomalies=context_anomalies if context_anomalies else None,
+        behavioral_anomalies=active_anomalies if active_anomalies else None,
     )
 
     # Build narrative summaries for LLM
@@ -1174,7 +1188,14 @@ async def evaluate_regional_escalation(
                 narrative_summary = assessment.narrative_summary
             confidence = assessment.confidence
             if confidence > 0.7:
-                risk_score = assessment.risk_score
+                # The LLM may refine the score but not overrule the heuristic
+                # evidence outright: clamp the revision to ±0.25 so a single
+                # overconfident completion cannot zero out (or fabricate) an
+                # alert the deterministic detectors disagree with.
+                risk_score = max(
+                    risk_score - 0.25,
+                    min(assessment.risk_score, risk_score + 0.25),
+                )
 
         except TimeoutError:
             logger.warning(
@@ -1406,10 +1427,14 @@ async def get_clausal_chains(
                 )
             space_weather_row = await conn.fetchrow(
                 """
-                SELECT time, kp_index, kp_category, dst_index, explanation
-                FROM space_weather_context
+                SELECT time,
+                       kp AS kp_index,
+                       storm_level AS kp_category,
+                       NULL::double precision AS dst_index,
+                       NULL::text AS explanation
+                FROM space_weather_kp
                 WHERE time > now() - ($1 * interval '1 hour')
-                ORDER BY kp_index DESC, time DESC
+                ORDER BY kp DESC, time DESC
                 LIMIT 1
                 """,
                 lookback_hours,

@@ -167,6 +167,26 @@ async def historian_task():
             ON CONFLICT (observation_id, time) DO NOTHING
         """
 
+        # Bad/failed observations double as satellite signal-loss events for
+        # the AI Router's multi-INT correlation (satnogs_signal_events had no
+        # other writer).  signal_strength stays NULL — SatNOGS observations
+        # carry a status verdict, not a dBm reading — and the detector scores
+        # NULL-strength events by the confidence column instead.
+        satnogs_signal_event_insert_sql = """
+            INSERT INTO satnogs_signal_events (
+                time, norad_id, ground_station_id, ground_station_name,
+                signal_strength, observation_start, observation_end,
+                frequency, modulation, confidence
+            )
+            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+            WHERE NOT EXISTS (
+                SELECT 1 FROM satnogs_signal_events
+                WHERE time = $1
+                  AND norad_id = $2
+                  AND ground_station_id IS NOT DISTINCT FROM $3
+            )
+        """
+
         gdelt_upsert_sql = """
             INSERT INTO gdelt_events (
                 time, event_id, actor1, actor2, headline, url, goldstein, tone, lat, lon, geom,
@@ -339,6 +359,52 @@ async def historian_task():
                             )
                             async with db.pool.acquire() as conn:
                                 await conn.execute(satnogs_obs_insert_sql, *obs_row)
+
+                            # Derive a signal-loss event from failure verdicts
+                            status = str(data.get("status") or "").lower()
+                            vetted = str(data.get("vetted_status") or "").lower()
+                            if status in ("bad", "failed") or vetted == "failed":
+                                try:
+                                    norad_int = int(data.get("norad_id"))
+                                except (TypeError, ValueError):
+                                    norad_int = None
+                                if norad_int is not None:
+                                    end_str = data.get("end")
+                                    obs_end = (
+                                        datetime.fromisoformat(
+                                            end_str.replace("Z", "+00:00")
+                                        )
+                                        if end_str
+                                        else None
+                                    )
+                                    loss_confidence = (
+                                        0.9
+                                        if status == "failed" or vetted == "failed"
+                                        else 0.7
+                                    )
+                                    freq_raw = data.get("frequency")
+                                    try:
+                                        freq_val = (
+                                            float(freq_raw)
+                                            if freq_raw is not None
+                                            else None
+                                        )
+                                    except (TypeError, ValueError):
+                                        freq_val = None
+                                    async with db.pool.acquire() as conn:
+                                        await conn.execute(
+                                            satnogs_signal_event_insert_sql,
+                                            obs_time,
+                                            norad_int,
+                                            data.get("ground_station_id"),
+                                            None,
+                                            None,
+                                            obs_time,
+                                            obs_end,
+                                            freq_val,
+                                            data.get("mode"),
+                                            loss_confidence,
+                                        )
                         except Exception as sobs_err:
                             logger.error(
                                 "Historian SatNOGS observation insert error: %s",

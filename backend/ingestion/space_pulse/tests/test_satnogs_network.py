@@ -126,7 +126,7 @@ def test_fetch_and_publish_advances_pages_and_sleeps(monkeypatch):
     sleep_mock = AsyncMock()
     monkeypatch.setattr("sources.satnogs_network.asyncio.sleep", sleep_mock)
 
-    run(src._fetch_and_publish())
+    run(src._fetch_status("good", fetched_at="2026-07-10T00:00:00+00:00"))
 
     assert fetch_mock.await_count == 2
     assert src.producer.send.await_count == 2
@@ -137,3 +137,27 @@ def test_fetch_and_publish_advances_pages_and_sleeps(monkeypatch):
     assert second_call.args[0].endswith("page=2")
     assert second_call.kwargs["params"] is None
     sleep_mock.assert_awaited_once_with(5.0)
+
+
+def test_fetch_and_publish_covers_failure_statuses(monkeypatch):
+    """_fetch_and_publish must fetch good observations plus the bad/failed
+    statuses that feed satellite signal-loss events."""
+    src = SatNOGSNetworkSource(
+        client=None,
+        producer=AsyncMock(),
+        redis_client=MagicMock(),
+        topic="satnogs_observations",
+        fetch_interval_h=1,
+    )
+    statuses = []
+
+    async def fake_fetch_status(status, fetched_at, max_pages=None):
+        statuses.append((status, max_pages))
+        return 0
+
+    src._fetch_status = fake_fetch_status
+    run(src._fetch_and_publish())
+
+    assert statuses[0] == ("good", None)
+    assert ("bad", 5) in statuses
+    assert ("failed", 5) in statuses

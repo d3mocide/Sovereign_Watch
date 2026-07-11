@@ -21,6 +21,8 @@ Usage::
     await cache.store(prompt, result)
 """
 
+import asyncio
+import json
 import logging
 import time
 from typing import Optional
@@ -82,30 +84,69 @@ class SovereignSemanticCache:
         except Exception as exc:
             logger.warning("SemanticCache init failed (degraded gracefully): %s", exc)
 
-    async def check(self, prompt: str) -> Optional[str]:
+    async def check(self, prompt: str, scope: Optional[str] = None) -> Optional[str]:
         """
         Return a cached LLM response string if a semantically similar prompt
         was stored within TTL, otherwise return None.
+
+        ``scope`` (e.g. the H3 region ID) guards against cross-scope
+        contamination: prompts for adjacent regions differ only by a few
+        tokens, so embedding similarity alone would happily serve one
+        region's assessment for its neighbor.  A hit whose stored scope does
+        not match the requested scope is treated as a miss.
         """
         if not self._available or self._cache is None:
             return None
         try:
-            results = self._cache.check(prompt=prompt, num_results=1)
+            # RedisVL check() embeds the prompt and queries Redis synchronously;
+            # run it off the event loop.
+            results = await asyncio.to_thread(
+                self._cache.check, prompt=prompt, num_results=1
+            )
             if results:
-                logger.debug("SemanticCache HIT (distance=%.4f)", results[0].get("vector_distance", 0))
-                return results[0].get("response")
+                logger.debug(
+                    "SemanticCache candidate (distance=%.4f)",
+                    results[0].get("vector_distance", 0),
+                )
+                return self._unwrap(results[0].get("response"), scope)
         except Exception as exc:
             logger.debug("SemanticCache check error (ignored): %s", exc)
         return None
 
-    async def store(self, prompt: str, response: str) -> None:
-        """Store an LLM response against its prompt vector."""
+    async def store(self, prompt: str, response: str, scope: Optional[str] = None) -> None:
+        """Store an LLM response (tagged with its scope) against its prompt vector."""
         if not self._available or self._cache is None:
             return
         try:
-            self._cache.store(prompt=prompt, response=response)
+            payload = json.dumps({"scope": scope, "response": response})
+            await asyncio.to_thread(self._cache.store, prompt=prompt, response=payload)
         except Exception as exc:
             logger.debug("SemanticCache store error (ignored): %s", exc)
+
+    @staticmethod
+    def _unwrap(stored: Optional[str], scope: Optional[str]) -> Optional[str]:
+        """Decode a stored payload and enforce the scope guard.
+
+        Entries written before scope tagging (plain strings) are only served
+        when no scope is requested.
+        """
+        if stored is None:
+            return None
+        try:
+            decoded = json.loads(stored)
+        except (json.JSONDecodeError, TypeError):
+            decoded = None
+        if isinstance(decoded, dict) and "response" in decoded:
+            if decoded.get("scope") != scope:
+                logger.debug(
+                    "SemanticCache scope mismatch (stored=%r requested=%r) — treating as miss",
+                    decoded.get("scope"),
+                    scope,
+                )
+                return None
+            return decoded.get("response")
+        # Legacy plain-string entry
+        return stored if scope is None else None
 
 
 async def get_semantic_cache(redis_url: str = "redis://sovereign-redis:6379") -> SovereignSemanticCache:

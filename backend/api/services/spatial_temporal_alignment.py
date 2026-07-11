@@ -85,10 +85,16 @@ class SpatialTemporalAlignment:
         # Filter and map GDELT events to parent H3 cell
         gdelt_clauses = []
         for event in gdelt_events:
-            if not event.get("event_date"):
+            if not event.get("time") and not event.get("event_date"):
                 continue
 
-            event_time = self._parse_event_time(event.get("event_date"))
+            # Prefer the full ingest timestamp; event_date only carries daily
+            # granularity (it parses to midnight UTC), which would make the
+            # ±2h alignment window against TAK telemetry meaningless.
+            if event.get("time"):
+                event_time = self._parse_clause_time(event.get("time"))
+            else:
+                event_time = self._parse_event_time(event.get("event_date"))
             if event_time < cutoff_time:
                 continue
 

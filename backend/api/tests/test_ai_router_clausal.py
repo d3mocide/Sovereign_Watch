@@ -100,7 +100,7 @@ async def test_clausal_chains_enrichment_uses_h3_and_time_scope():
 
     async def _fetchrow(sql: str, *params):
         captured_queries.append(sql)
-        if "FROM space_weather_context" in sql:
+        if "FROM space_weather_kp" in sql:
             return {
                 "time": "2026-04-08T11:50:00+00:00",
                 "kp_index": 5.0,
@@ -272,7 +272,7 @@ async def test_clausal_chains_omits_below_threshold_space_weather_context():
         return []
 
     async def _fetchrow(sql: str, *params):
-        if "FROM space_weather_context" in sql:
+        if "FROM space_weather_kp" in sql:
             return {
                 "time": event_time,
                 "kp_index": 3.0,

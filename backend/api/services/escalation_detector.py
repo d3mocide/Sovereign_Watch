@@ -6,6 +6,7 @@ Cross-references GDELT event sequences with TAK behavioral anomalies.
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import h3
@@ -29,13 +30,17 @@ class AnomalyMetric:
 class EscalationDetector:
     """Detects escalation patterns and anomalies in multi-INT data."""
 
-    # Prototypical escalation sequences (GDELT CAMEO codes)
+    # Prototypical escalation sequences expressed as CAMEO *root* codes,
+    # ordered oldest → newest.  gdelt_events.event_code stores numeric CAMEO
+    # codes ("141", "190"); the root is the first two digits.
+    #   13 threaten · 14 protest · 15 exhibit force posture · 17 coerce
+    #   18 assault  · 19 fight   · 20 unconventional mass violence
     ESCALATION_PATTERNS = [
-        ["PROTEST", "POLICE_DEPLOYMENT", "VIOLENT_CLASHES"],
-        ["DEMONSTRATE", "LAW_ENFORCEMENT", "ARRESTS"],
-        ["STRIKE", "MILITARY_MOBILIZATION"],
-        ["ARMED_CONFLICT", "CIVILIAN_CASUALTIES"],
-        ["CURFEW", "ARMED_POLICE", "GUNFIRE"],
+        ["14", "17", "18"],  # protest → coercion → assault
+        ["14", "19"],        # protest → open fighting
+        ["13", "15", "19"],  # threats → force posture → fighting
+        ["15", "18"],        # force posture → assault
+        ["18", "20"],        # assault → mass violence
     ]
 
     # H3 resolution for anomaly detection
@@ -48,7 +53,11 @@ class EscalationDetector:
 
     # Space weather & comms context
     KP_INDEX_THRESHOLD = 6.0  # Kp >= 6 = significant geomagnetic storm
-    SATNOGS_SIGNAL_LOSS_DBM = -10.0  # Threshold for signal loss event
+    # Weak-signal floor for dBm-carrying events.  Typical ground-station
+    # reception sits around -70…-120 dBm, so only readings well below the
+    # normal band qualify.  Events without a dBm reading (SatNOGS bad/failed
+    # observations) are already curated loss events and score by confidence.
+    SATNOGS_SIGNAL_LOSS_DBM = -90.0
 
     # Maps anomaly metric_type to its intelligence domain.
     # "multi" means the signal is domain-agnostic (behavioural / positional).
@@ -71,6 +80,25 @@ class EscalationDetector:
     def __init__(self):
         pass
 
+    @staticmethod
+    def _cameo_root(event_code: object) -> Optional[str]:
+        """Return the 2-digit CAMEO root for an event code, or None.
+
+        Handles numeric codes of any depth ("14", "141", "1411").  Textual
+        codes (e.g. ReliefWeb category names) return None and are excluded
+        from sequence matching — they still contribute to risk via the
+        quad_class conflict score.
+        """
+        text = str(event_code or "").strip()
+        if not text or not text[0].isdigit():
+            return None
+        digits = ""
+        for char in text:
+            if not char.isdigit():
+                break
+            digits += char
+        return digits[:2] if len(digits) >= 2 else digits.zfill(2)
+
     def detect_pattern(
         self, gdelt_events: List[Dict]
     ) -> Tuple[Optional[List[Dict]], float]:
@@ -78,7 +106,10 @@ class EscalationDetector:
         Detect prototypical escalation patterns in GDELT events.
 
         Args:
-            gdelt_events: List of GDELT events with 'event_code' field
+            gdelt_events: List of GDELT events with 'event_code' and,
+                          ideally, 'time' fields.  When every event carries a
+                          datetime 'time', events are sorted ascending so
+                          sequences are matched oldest → newest.
 
         Returns:
             Tuple of (matching_pattern, confidence_0_to_1)
@@ -86,50 +117,56 @@ class EscalationDetector:
         if not gdelt_events or len(gdelt_events) < 2:
             return None, 0.0
 
-        # Extract event codes in temporal order
-        event_codes = [e.get("event_code", "").upper() for e in gdelt_events]
-        event_codes = [c for c in event_codes if c]  # Filter empty
+        # Escalation sequences are directional: sort oldest → newest.
+        if all(isinstance(e.get("time"), datetime) for e in gdelt_events):
+            events = sorted(gdelt_events, key=lambda e: e["time"])
+        else:
+            events = list(gdelt_events)
+
+        # Extract CAMEO root codes in temporal order (keep original indices)
+        indexed_roots: List[Tuple[int, str]] = []
+        for idx, event in enumerate(events):
+            root = self._cameo_root(event.get("event_code"))
+            if root:
+                indexed_roots.append((idx, root))
 
         # Check for pattern matches
         best_match = None
         best_confidence = 0.0
 
         for pattern in self.ESCALATION_PATTERNS:
-            confidence, match_indices = self._match_pattern(event_codes, pattern)
+            confidence, match_indices = self._match_pattern(indexed_roots, pattern)
             if confidence > best_confidence:
                 best_confidence = confidence
-                best_match = [gdelt_events[i] for i in match_indices]
+                best_match = [events[i] for i in match_indices]
 
         return best_match, best_confidence
 
     def _match_pattern(
-        self, event_codes: List[str], pattern: List[str]
+        self, indexed_roots: List[Tuple[int, str]], pattern: List[str]
     ) -> Tuple[float, List[int]]:
         """
-        Match event sequence against pattern (allowing gaps).
+        Match a temporally-ordered root-code sequence against a pattern,
+        allowing gaps (subsequence match).
+
+        Requires at least two matched elements — a single event is not a
+        sequence — and at least 2/3 of the pattern to match.
 
         Returns:
             Tuple of (confidence, match_indices)
         """
-        if len(pattern) > len(event_codes):
-            return 0.0, []
-
-        # Simple substring matching with some tolerance
-        match_indices = []
+        match_indices: List[int] = []
         pattern_idx = 0
 
-        for event_idx, code in enumerate(event_codes):
+        for event_idx, root in indexed_roots:
             if pattern_idx >= len(pattern):
                 break
-
-            pattern_code = pattern[pattern_idx]
-            if code.startswith(pattern_code) or pattern_code in code:
+            if root == pattern[pattern_idx]:
                 match_indices.append(event_idx)
                 pattern_idx += 1
 
-        # Confidence based on how many pattern elements matched
         confidence = len(match_indices) / len(pattern)
-        if confidence >= 0.5:  # Require at least 50% match
+        if len(match_indices) >= 2 and confidence >= 0.66:
             return confidence, match_indices
 
         return 0.0, []
@@ -222,9 +259,10 @@ class EscalationDetector:
                 description=f"Insufficient clustering ({len(unique_uids)} < {self.CLUSTERING_THRESHOLD})",
             )
 
-        # Normalize score (0.0 - 1.0)
-        max_expected = 100  # Arbitrary high threshold for saturation
-        score = min(len(unique_uids) / max_expected, 1.0)
+        # Normalize score (0.0 - 1.0): the trigger threshold maps to 0.5 and
+        # twice the threshold saturates at 1.0, so a qualifying cluster is
+        # always a material signal (an H3-9 cell covers ~0.1 km²).
+        score = min(len(unique_uids) / (2.0 * self.CLUSTERING_THRESHOLD), 1.0)
 
         return AnomalyMetric(
             metric_type="clustering",
@@ -251,12 +289,23 @@ class EscalationDetector:
                     uid_traces[uid] = []
                 uid_traces[uid].append(clause)
 
+        def _clause_sort_time(c: Dict):
+            raw = c.get("time")
+            if isinstance(raw, datetime):
+                return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+            try:
+                return datetime.fromisoformat(str(raw or "").replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                return datetime.min.replace(tzinfo=timezone.utc)
+
         # Check each trace for anomalies
         for uid, trace in uid_traces.items():
             if len(trace) < 2:
                 continue
 
-            # Look for sudden course changes
+            # Sort ascending so we compare the two *most recent* clauses —
+            # callers typically fetch rows in time-DESC order.
+            trace = sorted(trace, key=_clause_sort_time)
             recent = trace[-1]
             prev = trace[-2]
 
@@ -376,11 +425,13 @@ class EscalationDetector:
         # Higher Kp index = higher likelihood of GPS/comms degradation
         normalized_score = min(kp_index / 9.0, 1.0)  # Normalize to 0-1
 
+        # NOAA G-scale mapping: G1=Kp5 … G5=Kp9
         categories = {
-            6: "G1 - Minor Geomagnetic Storm",
-            7: "G2 - Moderate Geomagnetic Storm",
-            8: "G3 - Strong Geomagnetic Storm",
-            9: "G4/G5 - Severe/Extreme Geomagnetic Storm",
+            5: "G1 - Minor Geomagnetic Storm",
+            6: "G2 - Moderate Geomagnetic Storm",
+            7: "G3 - Strong Geomagnetic Storm",
+            8: "G4 - Severe Geomagnetic Storm",
+            9: "G5 - Extreme Geomagnetic Storm",
         }
         category = categories.get(int(kp_index), "Extreme Storm")
 
@@ -430,17 +481,43 @@ class EscalationDetector:
         for event in signal_events:
             signal_strength = event.get("signal_strength")
             norad_id = event.get("norad_id")
-            station = event.get("ground_station_name", "Unknown")
+            station = event.get("ground_station_name") or "Unknown"
 
-            if signal_strength and signal_strength < self.SATNOGS_SIGNAL_LOSS_DBM:
-                anomalies.append(
-                    AnomalyMetric(
-                        metric_type="satellite_signal_loss",
-                        score=min(abs(signal_strength) / 100.0, 1.0),  # Normalize
-                        affected_uids=[f"SAT-{norad_id}"],
-                        description=f"Signal loss for satellite {norad_id} at {station}: {signal_strength:.1f} dBm",
-                    )
+            if signal_strength is None:
+                # Curated loss event (e.g. SatNOGS bad/failed observation):
+                # presence in the feed is the signal; score by ingest confidence.
+                confidence = event.get("confidence")
+                score = (
+                    float(confidence)
+                    if isinstance(confidence, (int, float)) and confidence > 0
+                    else 0.75
                 )
+                description = (
+                    f"Signal loss for satellite {norad_id} at {station}: "
+                    f"failed/degraded observation"
+                )
+            elif signal_strength < self.SATNOGS_SIGNAL_LOSS_DBM:
+                # dBm reading below the weak-signal floor: score by how far
+                # below, saturating 30 dB under the floor.
+                score = min(
+                    (self.SATNOGS_SIGNAL_LOSS_DBM - float(signal_strength)) / 30.0,
+                    1.0,
+                )
+                description = (
+                    f"Signal loss for satellite {norad_id} at {station}: "
+                    f"{signal_strength:.1f} dBm"
+                )
+            else:
+                continue
+
+            anomalies.append(
+                AnomalyMetric(
+                    metric_type="satellite_signal_loss",
+                    score=score,
+                    affected_uids=[f"SAT-{norad_id}"],
+                    description=description,
+                )
+            )
 
         return anomalies
 
@@ -465,8 +542,6 @@ class EscalationDetector:
         Returns:
             List of AnomalyMetrics, one per rendezvous cell detected.
         """
-        from datetime import datetime, timedelta, timezone
-
         if not tak_clauses or len(tak_clauses) < 2:
             return []
 
@@ -617,6 +692,7 @@ class EscalationDetector:
         alignment_score: float,
         anomaly_count: int = 0,
         context_anomalies: Optional[List[AnomalyMetric]] = None,
+        behavioral_anomalies: Optional[List[AnomalyMetric]] = None,
     ) -> float:
         """
         Compute composite risk score from pattern matching and anomalies.
@@ -633,6 +709,9 @@ class EscalationDetector:
             alignment_score: Spatial-temporal alignment score (0.0 - 1.0)
             anomaly_count: Number of distinct anomalies detected (unused; kept for compat)
             context_anomalies: Optional list of contextual anomalies (outages, space weather)
+            behavioral_anomalies: Optional list of TAK behavioral anomalies —
+                used only for cross-domain convergence counting (their magnitude
+                already feeds in via anomaly_score)
 
         Returns:
             Composite risk score (0.0 - 1.0)
@@ -648,19 +727,27 @@ class EscalationDetector:
             + alignment_weight * alignment_score
         )
 
-        if context_anomalies:
-            active_context = [a for a in context_anomalies if a.score > 0.0]
+        active_context = [a for a in (context_anomalies or []) if a.score > 0.0]
+        active_behavioral = [a for a in (behavioral_anomalies or []) if a.score > 0.0]
 
-            if active_context:
-                context_score = sum(a.score for a in active_context) / len(active_context)
-                # Blend context score to avoid hard zeroes when only context signals fire.
-                context_weight = 0.2
-                risk = (1.0 - context_weight) * risk + context_weight * context_score
+        if active_context:
+            # Context evidence adds bounded, headroom-scaled risk so that new
+            # evidence can never *reduce* the base score.  Space weather is
+            # excluded from the additive term: it is an explanatory factor
+            # (dampener) for other signals, not a threat signal itself.
+            contributing = [
+                a for a in active_context if a.metric_type != "space_weather"
+            ]
+            if contributing:
+                context_score = sum(a.score for a in contributing) / len(contributing)
+                risk = min(1.0, risk + 0.2 * context_score * (1.0 - risk))
 
-            # Cross-domain convergence: count distinct non-generic domains active.
+        if active_context or active_behavioral:
+            # Cross-domain convergence: count distinct non-generic domains active
+            # across both behavioral (e.g. aviation emergency) and context signals.
             active_domains = {
                 self.ANOMALY_DOMAIN_MAP.get(a.metric_type, "multi")
-                for a in active_context
+                for a in active_context + active_behavioral
             } - {"multi"}
             if len(active_domains) >= 2:
                 # Each domain beyond the first adds a multiplicative boost.
@@ -669,6 +756,7 @@ class EscalationDetector:
                 )
                 risk *= convergence_factor
 
+        if active_context:
             # Domain-specific dampening / boosting — applied once per domain, not per
             # anomaly, to avoid compounding when multiple signals of the same type fire.
             if any(

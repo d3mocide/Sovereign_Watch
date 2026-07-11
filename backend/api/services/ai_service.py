@@ -47,10 +47,23 @@ class AIService:
             for m in cfg.get("model_list", []):
                 name = m["model_name"]
                 params = m.get("litellm_params", {}).copy()
+                missing_env = []
                 for key, val in params.items():
                     if isinstance(val, str) and val.startswith("os.environ/"):
                         env_var = val.split("/", 1)[1]
-                        params[key] = os.getenv(env_var, val)
+                        resolved = os.getenv(env_var)
+                        if resolved is None:
+                            missing_env.append(env_var)
+                        params[key] = resolved
+                if missing_env:
+                    # Leaving the "os.environ/..." placeholder in place produces a
+                    # baffling provider error at call time; skip the entry instead.
+                    logger.warning(
+                        "Model '%s' disabled: unset environment variable(s) %s",
+                        name,
+                        ", ".join(missing_env),
+                    )
+                    continue
                 model_map[name] = params
             return model_map
         except Exception as e:

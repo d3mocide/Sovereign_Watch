@@ -294,7 +294,7 @@ async def analyze_track(
         try:
             # Query clausal_chains for behavioral signals in the vicinity (50km)
             tak_query = """
-                SELECT DISTINCT ON (uid) uid, locative_lat, locative_lon, source, predicate_type, adverbial_context
+                SELECT DISTINCT ON (uid) uid, time, locative_lat, locative_lon, source, predicate_type, adverbial_context
                 FROM clausal_chains
                 WHERE geom && ST_Expand($1::geometry, 0.5) -- Approx 50km
                   AND time > NOW() - INTERVAL '30 minutes'
@@ -304,6 +304,9 @@ async def analyze_track(
             tak_clauses = [
                 {
                     "uid": r["uid"],
+                    # Rendezvous detection windows on clause time; without it
+                    # every clause is discarded and the detector no-ops.
+                    "time": r["time"],
                     "locative_lat": r["locative_lat"],
                     "locative_lon": r["locative_lon"],
                     "source": r["source"],
@@ -320,7 +323,7 @@ async def analyze_track(
                 behavioral_signals.append(f"[SIGNAL] Multi-entity rendezvous: {descs}")
 
             clustering = escalation_detector.detect_anomaly_concentration(tak_clauses)
-            if clustering:
+            if clustering and clustering.score > 0.0:
                 behavioral_signals.append(
                     f"[SIGNAL] Behavioral clustering: {clustering.description}"
                 )

@@ -500,6 +500,30 @@ def _ingest_ndbc_records_sync(db_url: str, records: list[dict]) -> int:
     return inserted
 
 
+def _insert_outages_sync(db_url: str, rows: list[tuple]) -> int:
+    """Append the current IODA outage snapshot to internet_outages (blocking).
+
+    The table is a short-retention hypertable consumed by the AI Router's
+    multi-INT correlation; each poll cycle appends one row per affected
+    country so severity evolves as a time series.
+    """
+    insert_sql = """
+        INSERT INTO internet_outages
+            (time, country_code, severity, affected_nets, asn_name, geom)
+        VALUES %s
+    """
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        execute_values(cur, insert_sql, rows, page_size=500)
+        conn.commit()
+        inserted = cur.rowcount
+        cur.close()
+    finally:
+        conn.close()
+    return inserted
+
+
 # ---------------------------------------------------------------------------
 # PeeringDB helpers — pure + blocking, unit-testable without I/O
 # ---------------------------------------------------------------------------
@@ -1110,6 +1134,30 @@ class InfraPollerService:
         geojson = {"type": "FeatureCollection", "features": outages}
         await self.redis.set("infra:outages", json.dumps(geojson))
         logger.info("Stored %d internet outages in Redis", len(outages))
+
+        # Persist the snapshot to TimescaleDB — the AI Router correlates TAK
+        # anomalies against internet_outages, which is only populated here.
+        if DB_URL and outages:
+            snapshot_time = datetime.now(UTC)
+            rows = []
+            for feature in outages:
+                props = feature.get("properties", {})
+                o_lon, o_lat = feature["geometry"]["coordinates"]
+                rows.append(
+                    (
+                        snapshot_time,
+                        props.get("country_code"),
+                        props.get("severity"),
+                        None,
+                        None,
+                        f"SRID=4326;POINT({o_lon} {o_lat})",
+                    )
+                )
+            try:
+                inserted = await asyncio.to_thread(_insert_outages_sync, DB_URL, rows)
+                logger.info("Persisted %d internet outages to TimescaleDB", inserted)
+            except Exception as exc:
+                logger.warning("internet_outages DB persist failed: %s", exc)
 
     # -----------------------------------------------------------------------
     # FCC loop — 7-day interval, hour-gated

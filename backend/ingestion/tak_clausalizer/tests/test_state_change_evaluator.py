@@ -233,3 +233,56 @@ class TestBatteryCritical:
         assert "BATTERY_CRITICAL" not in reasons
 
 
+
+
+class TestCourseChangeStationaryGating:
+    def test_course_noise_while_stationary_ignored(self):
+        """A stationary GPS fix reports arbitrary heading — no COURSE_CHANGE."""
+        prev = _make_prev(course=0.0, speed=0.0)
+        new = _make_new(course=180.0, speed=0.1)
+        events = evaluator.evaluate_transitions("TEST-1", new, prev)
+        reasons = [e.reason for e in events]
+        assert "COURSE_CHANGE" not in reasons
+
+    def test_course_change_requires_both_samples_moving(self):
+        prev = _make_prev(course=0.0, speed=10.0)
+        new = _make_new(course=180.0, speed=0.0)  # just stopped
+        events = evaluator.evaluate_transitions("TEST-1", new, prev)
+        reasons = [e.reason for e in events]
+        assert "COURSE_CHANGE" not in reasons
+        assert "SPEED_TRANSITION" in reasons  # the stop itself is the event
+
+
+class TestSquawkEmergency:
+    def _new_with_squawk(self, squawk: str) -> dict:
+        msg = _make_new()
+        msg["detail"]["classification"] = {"squawk": squawk}
+        return msg
+
+    def test_emergency_squawk_detected(self):
+        prev = _make_prev()
+        for code in ("7500", "7600", "7700"):
+            events = evaluator.evaluate_transitions(
+                "TEST-1", self._new_with_squawk(code), prev
+            )
+            squawk_events = [e for e in events if e.reason == "SQUAWK_EMERGENCY"]
+            assert len(squawk_events) == 1, code
+            assert squawk_events[0].confidence == 1.0
+
+    def test_normal_squawk_no_event(self):
+        prev = _make_prev()
+        events = evaluator.evaluate_transitions(
+            "TEST-1", self._new_with_squawk("1200"), prev
+        )
+        reasons = [e.reason for e in events]
+        assert "SQUAWK_EMERGENCY" not in reasons
+
+    def test_sustained_emergency_squawk_not_re_emitted(self):
+        """Once the cached state already carries 7700, repeats are not new events."""
+        prev = _make_prev()
+        prev.adverbial_context["squawk"] = "7700"
+        events = evaluator.evaluate_transitions(
+            "TEST-1", self._new_with_squawk("7700"), prev
+        )
+        reasons = [e.reason for e in events]
+        assert "SQUAWK_EMERGENCY" not in reasons

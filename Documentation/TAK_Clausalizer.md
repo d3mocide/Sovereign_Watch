@@ -43,13 +43,16 @@ INPUT SOURCES (Pollers)
 │ │  └─ Speed/course/altitude transitions                        │
 │ │  └─ Redis-backed state caching (3600s TTL)                   │
 │ │                                                               │
-│ ├─ StateChangeEvaluator: 6 transition types                    │
+│ ├─ StateChangeEvaluator: 7 transition types                    │
 │ │  ├─ Type code changes (affiliation/category updates)         │
 │ │  ├─ Location transitions (H3-9 cell crossing)                │
 │ │  ├─ Speed transitions (< 0.5 m/s threshold)                 │
-│ │  ├─ Course changes (> 30° delta)                             │
+│ │  ├─ Course changes (> 30° delta, only while moving)          │
 │ │  ├─ Altitude changes (> 500m delta)                          │
-│ │  └─ Battery critical (< 20%)                                 │
+│ │  ├─ Battery critical (< 20%)                                 │
+│ │  └─ Emergency squawk (7500/7600/7700)                        │
+│ │  Jitter filtering gates ONLY location transitions —          │
+│ │  non-positional state changes always pass through.           │
 │ │                                                               │
 │ └─ ClauseEmitter: Publishes state-change narratives            │
 │    └─ Topic: clausal_chains_state_changes                      │
@@ -150,7 +153,7 @@ INPUT SOURCES (Pollers)
 │ │  4. CONTEXT ANOMALY DETECTION (NEW):                       │
 │ │     ├─ Internet outage correlation (severity → score)      │
 │ │     ├─ Space weather (Kp normalization: 0-1)             │
-│ │     └─ SatNOGS signal loss (< -10 dBm)                    │
+│ │     └─ SatNOGS signal loss (bad/failed observations)      │
 │ │  5. Risk score computation                                 │
 │ │     ├─ Base: pattern_confidence + anomaly_score           │
 │ │     └─ Apply context dampening/boosting:                  │
@@ -223,7 +226,7 @@ INPUT SOURCES (Pollers)
 - `backend/ingestion/tak_clausalizer/main.py` - Entry point, graceful shutdown
 - `backend/ingestion/tak_clausalizer/service.py` - TakClausalizerService orchestrator
 - `backend/ingestion/tak_clausalizer/delta_engine.py` - State change detection with Redis caching
-- `backend/ingestion/tak_clausalizer/state_change_evaluator.py` - 6 transition type detection
+- `backend/ingestion/tak_clausalizer/state_change_evaluator.py` - 7 transition type detection
 - `backend/ingestion/tak_clausalizer/clause_emitter.py` - Kafka producer for state changes
 - `backend/db/init.sql` - clausal_chains hypertable schema
 
@@ -291,7 +294,8 @@ INPUT SOURCES (Pollers)
 3. **Satellite Signal Intelligence (SatNOGS)**
    - Table: `satnogs_signal_events` (30-day retention)
    - Detector: `detect_satnogs_signal_loss()`
-   - Threshold: -10 dBm signal loss events
+   - Events: bad/failed SatNOGS observations (signal_strength NULL,
+     scored by confidence); dBm readings gated at -90 dBm floor
    - Scoring: Aggregated as list of AnomalyMetric objects
 
 **Data Flow:**
@@ -347,6 +351,7 @@ interface ClausalChain {
       course: number;             // degrees
       altitude: number;           // meters
       battery_pct?: number;        // 0-100
+      squawk?: string;            // transponder code when reported
       confidence: number;         // 0.0-1.0
     }
   }[]
@@ -506,7 +511,7 @@ sovereign-tak-clausalizer:
 
 ### **Unit Tests**
 - [x] DeltaEngine: Haversine filtering, state caching
-- [x] StateChangeEvaluator: All 6 transition types
+- [x] StateChangeEvaluator: All 7 transition types
 - [x] ClauseEmitter: Message formatting, Kafka publishing
 - [x] EscalationDetector: Pattern matching, anomaly detection, context methods
 - [ ] SequenceEvaluationEngine: LLM response parsing, error handling
