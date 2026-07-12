@@ -691,7 +691,8 @@ async def get_clausalizer_stats(hours: int = 24):
     Returns:
     - health KPIs (rows_5m, last_write_at)
     - per-source totals over requested window
-    - 1-minute activity timeline by source
+    - activity timeline by source (1-minute buckets up to 24h; hourly buckets
+      via the hourly_clausal_summaries continuous aggregate beyond that)
     - latest emitted clauses sample
     """
     if not db.pool:
@@ -739,21 +740,48 @@ async def get_clausalizer_stats(hours: int = 24):
         ORDER BY source
     """
 
-    query_timeline = """
-        WITH events AS (
-            SELECT time, source
-            FROM clausal_chains
-            WHERE time > NOW() - ($1 * interval '1 hour')
-            UNION ALL
-            SELECT time, 'GDELT'::text AS source
-            FROM gdelt_events
-            WHERE time > NOW() - ($1 * interval '1 hour')
-        )
-        SELECT time_bucket('1 minute', time) AS bucket, source, COUNT(*) AS row_count
-        FROM events
-        GROUP BY bucket, source
-        ORDER BY bucket ASC, source ASC
-    """
+    if hours > 24:
+        # Long windows: hourly buckets, with the clausal side served by the
+        # hourly_clausal_summaries continuous aggregate (a real-time aggregate:
+        # materialized hourly rollups plus a raw top-up for the current hour)
+        # instead of scanning up to 72h of raw rows into 1-minute buckets.
+        timeline_bucket_minutes = 60
+        query_timeline = """
+            WITH events AS (
+                SELECT hour AS bucket, source, SUM(state_change_count) AS row_count
+                FROM hourly_clausal_summaries
+                WHERE hour > NOW() - ($1 * interval '1 hour')
+                GROUP BY hour, source
+                UNION ALL
+                SELECT time_bucket('1 hour', time) AS bucket,
+                       'GDELT'::text AS source,
+                       COUNT(*) AS row_count
+                FROM gdelt_events
+                WHERE time > NOW() - ($1 * interval '1 hour')
+                GROUP BY bucket
+            )
+            SELECT bucket, source, SUM(row_count) AS row_count
+            FROM events
+            GROUP BY bucket, source
+            ORDER BY bucket ASC, source ASC
+        """
+    else:
+        timeline_bucket_minutes = 1
+        query_timeline = """
+            WITH events AS (
+                SELECT time, source
+                FROM clausal_chains
+                WHERE time > NOW() - ($1 * interval '1 hour')
+                UNION ALL
+                SELECT time, 'GDELT'::text AS source
+                FROM gdelt_events
+                WHERE time > NOW() - ($1 * interval '1 hour')
+            )
+            SELECT time_bucket('1 minute', time) AS bucket, source, COUNT(*) AS row_count
+            FROM events
+            GROUP BY bucket, source
+            ORDER BY bucket ASC, source ASC
+        """
 
     query_latest = """
         WITH events AS (
@@ -829,6 +857,7 @@ async def get_clausalizer_stats(hours: int = 24):
             },
             "totals": totals,
             "timeline": timeline,
+            "timeline_bucket_minutes": timeline_bucket_minutes,
             "latest": latest,
         }
 

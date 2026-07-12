@@ -94,3 +94,57 @@ async def test_get_activity_stats_success():
             assert data["status"] == "ok"
             assert len(data["data"]) == 1
             assert data["data"][0]["counts"]["a-f-A-C-F"] == 10
+
+
+def _clausalizer_mock_pool():
+    """Pool whose conn records every SQL string passed to fetch/fetchrow."""
+    executed: list[str] = []
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        executed.append(sql)
+        return []
+
+    async def _fetchrow(sql: str, *params):
+        executed.append(sql)
+        return None
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    return mock_pool, executed
+
+
+@pytest.mark.asyncio
+async def test_clausalizer_timeline_uses_hourly_aggregate_for_long_windows():
+    from core.database import db
+
+    mock_pool, executed = _clausalizer_mock_pool()
+    with patch.object(db, "pool", mock_pool):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/stats/clausalizer?hours=72")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["timeline_bucket_minutes"] == 60
+    assert any("hourly_clausal_summaries" in sql for sql in executed)
+
+
+@pytest.mark.asyncio
+async def test_clausalizer_timeline_uses_minute_buckets_for_short_windows():
+    from core.database import db
+
+    mock_pool, executed = _clausalizer_mock_pool()
+    with patch.object(db, "pool", mock_pool):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/stats/clausalizer?hours=6")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["timeline_bucket_minutes"] == 1
+    assert not any("hourly_clausal_summaries" in sql for sql in executed)
