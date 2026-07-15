@@ -228,7 +228,9 @@ class SequenceEvaluationEngine:
 
             redis_url = os.getenv("REDIS_URL", "redis://sovereign-redis:6379")
             sem_cache = await get_semantic_cache(redis_url)
-            cached = await sem_cache.check(user_prompt)
+            # Scope the cache by region: near-identical prompts for adjacent
+            # H3 cells must not serve each other's assessments.
+            cached = await sem_cache.check(user_prompt, scope=h3_region)
             if cached is not None:
                 logger.info(
                     "SemanticCache HIT - skipping LLM call for region %s (mode=%s)",
@@ -251,7 +253,7 @@ class SequenceEvaluationEngine:
                 user_prompt=user_prompt,
             )
 
-            await sem_cache.store(user_prompt, response)
+            await sem_cache.store(user_prompt, response, scope=h3_region)
 
             risk_assessment = self._parse_response(response, h3_region)
             risk_assessment.raw_response = response

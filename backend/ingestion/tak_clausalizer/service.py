@@ -3,11 +3,10 @@ TAK Clausalizer Service: Main orchestrator for the clausalizer microservice.
 Consumes from Kafka, applies delta calculation, evaluates state changes, emits clauses.
 """
 
-import asyncio
 import json
 import logging
 import os
-from typing import Dict, Optional
+from typing import Optional
 
 from aiokafka import AIOKafkaConsumer
 import redis.asyncio as redis
@@ -47,12 +46,6 @@ class TakClausalizerService:
         self.evaluator = StateChangeEvaluator()
         self.emitter = ClauseEmitter(self.kafka_brokers, self.output_topic)
 
-        # Batch processing
-        self.batch_size = 100
-        self.batch_timeout_s = 2.0
-        self.message_batch: Dict = {}
-        self.last_flush_time: float = 0.0  # Set to running loop time in setup()
-
         # Statistics
         self.stats = {
             "messages_consumed": 0,
@@ -88,16 +81,12 @@ class TakClausalizerService:
         # Connect clause emitter
         await self.emitter.connect()
 
-        self.last_flush_time = asyncio.get_event_loop().time()
         logger.info("TAK Clausalizer Service setup complete")
 
     async def shutdown(self):
         """Graceful shutdown of all components."""
         logger.info("TAK Clausalizer Service shutting down...")
         self.running = False
-
-        # Flush pending messages
-        await self.flush_batch()
 
         # Stop consumer
         if self.consumer:
@@ -115,12 +104,7 @@ class TakClausalizerService:
     async def run(self):
         """Main event loop."""
         logger.info("TAK Clausalizer Service running...")
-
-        # Run consumer loop and batch flush loop concurrently
-        await asyncio.gather(
-            self.consumer_loop(),
-            self.batch_flush_loop(),
-        )
+        await self.consumer_loop()
 
     async def consumer_loop(self):
         """Main consumer loop: process incoming messages."""
@@ -137,23 +121,9 @@ class TakClausalizerService:
                     logger.error(f"Error processing message: {e}")
                     self.stats["errors"] += 1
 
-                # Batch flush check
-                if len(self.message_batch) >= self.batch_size:
-                    await self.flush_batch()
-
         except Exception as e:
             logger.error(f"Consumer loop error: {e}")
             self.stats["errors"] += 1
-
-    async def batch_flush_loop(self):
-        """Periodically flush pending messages."""
-        while self.running:
-            await asyncio.sleep(self.batch_timeout_s)
-
-            current_time = asyncio.get_event_loop().time()
-            if current_time - self.last_flush_time >= self.batch_timeout_s:
-                if self.message_batch:
-                    await self.flush_batch()
 
     async def process_message(self, message: dict, topic: str):
         """
@@ -196,37 +166,31 @@ class TakClausalizerService:
             self.stats["errors"] += 1
             return
 
-        if self.delta_engine.should_filter_as_jitter(
+        # Step 3: Evaluate state changes BEFORE the jitter gate.  Most
+        # transition types (type change, moving→stationary, altitude change,
+        # battery critical, emergency squawk) involve little or no horizontal
+        # movement — a vessel anchoring is by definition within the jitter
+        # bound.  Jitter filtering must therefore only suppress *positional*
+        # noise, never non-positional state changes.
+        is_jitter = self.delta_engine.should_filter_as_jitter(
             uid, new_lat, new_lon, prev_clause, ce, le
-        ):
-            self.stats["jitter_filtered"] += 1
-            return  # Drop jitter message
-
-        # Step 3: Evaluate state changes
+        )
         state_changes = self.evaluator.evaluate_transitions(uid, message, prev_clause)
+
+        if is_jitter:
+            # Within GPS uncertainty: an H3 boundary "crossing" here is noise.
+            state_changes = [
+                event for event in state_changes if event.reason != "LOCATION_TRANSITION"
+            ]
+            if not state_changes:
+                self.stats["jitter_filtered"] += 1
+                return  # Drop jitter message (cache untouched so drift accumulates)
 
         if not state_changes:
             # No state changes detected: update cache but don't emit
-            new_hae = safe_float(point.get("hae"), default=0.0)
-            track = detail.get("track", {})
-            status = detail.get("status", {})
-
-            clause = MedialClause(
-                uid=uid,
-                time=message.get("time", 0),
-                source=source,
-                predicate_type=message.get("type", ""),
-                lat=new_lat,
-                lon=new_lon,
-                hae=new_hae,
-                adverbial_context={
-                    "speed": safe_float(track.get("speed"), default=0.0),
-                    "course": safe_float(track.get("course"), default=0.0),
-                    "altitude": new_hae,
-                    "battery_pct": safe_float(status.get("battery"), default=100.0),
-                },
+            await self.delta_engine.cache_medial_clause(
+                self._build_medial_clause(uid, source, message, new_lat, new_lon)
             )
-            await self.delta_engine.cache_medial_clause(clause)
             return
 
         # Step 4: Emit state-change clauses
@@ -242,29 +206,54 @@ class TakClausalizerService:
             self.stats["state_changes_emitted"] += 1
 
             # Update cache with new state
-            new_hae = safe_float(point.get("hae"), default=0.0)
-            track = detail.get("track", {})
-            status = detail.get("status", {})
-
-            clause = MedialClause(
-                uid=uid,
-                time=message.get("time", 0),
-                source=source,
-                predicate_type=message.get("type", ""),
-                lat=new_lat,
-                lon=new_lon,
-                hae=new_hae,
-                adverbial_context={
-                    "speed": safe_float(track.get("speed"), default=0.0),
-                    "course": safe_float(track.get("course"), default=0.0),
-                    "altitude": new_hae,
-                    "battery_pct": safe_float(status.get("battery"), default=100.0),
-                },
-                state_change_reason=state_changes[0].reason if state_changes else None,
+            await self.delta_engine.cache_medial_clause(
+                self._build_medial_clause(
+                    uid,
+                    source,
+                    message,
+                    new_lat,
+                    new_lon,
+                    state_change_reason=state_changes[0].reason,
+                )
             )
-            await self.delta_engine.cache_medial_clause(clause)
 
-    async def flush_batch(self):
-        """Flush pending batch (currently unused, but kept for future optimization)."""
-        self.message_batch.clear()
-        self.last_flush_time = asyncio.get_event_loop().time()
+    def _build_medial_clause(
+        self,
+        uid: str,
+        source: str,
+        message: dict,
+        lat: float,
+        lon: float,
+        state_change_reason: Optional[str] = None,
+    ) -> MedialClause:
+        """Construct the cached medial clause snapshot from a TAK message."""
+        point = message.get("point", {})
+        detail = message.get("detail", {})
+        track = detail.get("track", {})
+        status = detail.get("status", {})
+        hae = safe_float(point.get("hae"), default=0.0)
+
+        adverbial_context = {
+            "speed": safe_float(track.get("speed"), default=0.0),
+            "course": safe_float(track.get("course"), default=0.0),
+            "altitude": hae,
+            "battery_pct": safe_float(status.get("battery"), default=100.0),
+        }
+        squawk = str(
+            (detail.get("classification") or {}).get("squawk") or ""
+        ).strip()
+        if squawk:
+            adverbial_context["squawk"] = squawk
+
+        return MedialClause(
+            uid=uid,
+            time=message.get("time", 0),
+            source=source,
+            predicate_type=message.get("type", ""),
+            lat=lat,
+            lon=lon,
+            hae=hae,
+            adverbial_context=adverbial_context,
+            state_change_reason=state_change_reason,
+        )
+

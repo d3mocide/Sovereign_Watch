@@ -198,3 +198,44 @@ class TestClauseEmitterFormatting:
             prev_clause=_make_prev_clause(),
         )
         assert result is False
+
+
+class TestSquawkPassthrough:
+    @pytest.mark.asyncio
+    async def test_squawk_carried_into_adverbial_context(self):
+        emitter = ClauseEmitter("fake-broker:9092")
+        emitter.producer = AsyncMock()
+
+        new_state = _make_new_state()
+        new_state["detail"]["classification"] = {"squawk": "7700"}
+
+        await emitter.emit_state_change(
+            uid="EMIT-TEST",
+            source="TAK_ADSB",
+            state_changes=[_make_state_change("SQUAWK_EMERGENCY", 1.0)],
+            new_state=new_state,
+            prev_clause=_make_prev_clause(),
+        )
+
+        payload = json.loads(
+            emitter.producer.send_and_wait.await_args.kwargs["value"].decode("utf-8")
+        )
+        assert payload["adverbial_context"]["squawk"] == "7700"
+
+    @pytest.mark.asyncio
+    async def test_no_squawk_key_when_absent(self):
+        emitter = ClauseEmitter("fake-broker:9092")
+        emitter.producer = AsyncMock()
+
+        await emitter.emit_state_change(
+            uid="EMIT-TEST",
+            source="TAK_ADSB",
+            state_changes=[_make_state_change()],
+            new_state=_make_new_state(),
+            prev_clause=_make_prev_clause(),
+        )
+
+        payload = json.loads(
+            emitter.producer.send_and_wait.await_args.kwargs["value"].decode("utf-8")
+        )
+        assert "squawk" not in payload["adverbial_context"]

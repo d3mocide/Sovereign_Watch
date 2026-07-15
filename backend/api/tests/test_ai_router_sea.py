@@ -195,3 +195,113 @@ async def test_analyze_sea_domain_scopes_outages_to_cable_connected_countries():
 
     prompt = mock_generate.await_args.kwargs["user_prompt"]
     assert "- Cable-correlated outages: 1" in prompt
+
+@pytest.mark.asyncio
+async def test_analyze_sea_domain_uses_firms_dark_vessel_candidates():
+    region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
+    redis_payloads = {
+        "ndbc:latest_obs": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:outages": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:stations": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:cables": json.dumps({"type": "FeatureCollection", "features": []}),
+    }
+
+    dark_features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [0.5, 0.5]},
+            "properties": {
+                "frp": 12.0,
+                "risk_score": 0.72,
+                "risk_severity": "HIGH",
+                "nearest_ais_dist_nm": None,
+            },
+        }
+    ]
+
+    with (
+        patch.object(ai_router.db, "pool", _mock_pool_with_rows([])),
+        patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
+        patch.object(
+            ai_router,
+            "query_dark_vessel_features",
+            AsyncMock(return_value=dark_features),
+        ) as mock_query,
+        patch.object(
+            ai_router.ai_service,
+            "generate_static",
+            AsyncMock(return_value="### CLASSIFICATION\nNominal."),
+        ) as mock_generate,
+    ):
+        response = await ai_router.analyze_sea_domain(
+            ai_router.DomainAnalysisRequest(h3_region=region, lookback_hours=24)
+        )
+
+    assert response.context_snapshot["dark_vessel_candidates"] == 1
+    assert response.context_snapshot["dark_vessel_samples"][0]["risk_severity"] == "HIGH"
+    assert any("Dark-vessel candidates" in i for i in response.indicators)
+    assert response.risk_score >= 0.2
+
+    kwargs = mock_query.await_args.kwargs
+    assert kwargs["min_risk_score"] == 0.4
+
+    prompt = mock_generate.await_args.kwargs["user_prompt"]
+    assert "Dark-vessel candidates (FIRMS x AIS): 1" in prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_sea_domain_sparse_ais_rows_not_flagged_as_dark():
+    """Single-row AIS entities must NOT be labelled dark vessels — clausal
+    chains are sparse by design for steady traffic."""
+    region = ai_router.h3.latlng_to_cell(0.0, 0.0, 7)
+    redis_payloads = {
+        "ndbc:latest_obs": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:outages": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:stations": json.dumps({"type": "FeatureCollection", "features": []}),
+        "infra:cables": json.dumps({"type": "FeatureCollection", "features": []}),
+    }
+
+    ais_rows = [
+        {
+            "uid": f"vessel-{i}",
+            "predicate_type": "a-f-S",
+            "locative_lat": 0.0,
+            "locative_lon": 0.0,
+            "adverbial_context": {},
+            "time": None,
+        }
+        for i in range(6)
+    ]
+
+    mock_conn = MagicMock()
+
+    async def _fetch(sql: str, *params):
+        if "FROM clausal_chains" in sql:
+            return ais_rows
+        return []
+
+    mock_conn.fetch = AsyncMock(side_effect=_fetch)
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    with (
+        patch.object(ai_router.db, "pool", mock_pool),
+        patch.object(ai_router.db, "redis_client", _FakeRedis(redis_payloads)),
+        patch.object(
+            ai_router,
+            "query_dark_vessel_features",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            ai_router.ai_service,
+            "generate_static",
+            AsyncMock(return_value="### CLASSIFICATION\nNominal."),
+        ),
+    ):
+        response = await ai_router.analyze_sea_domain(
+            ai_router.DomainAnalysisRequest(h3_region=region, lookback_hours=24)
+        )
+
+    assert not any("dark" in i.lower() for i in response.indicators)
+    assert response.context_snapshot.get("dark_vessel_candidates") is None

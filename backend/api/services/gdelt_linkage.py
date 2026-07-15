@@ -512,6 +512,7 @@ async def fetch_linked_gdelt_events(
     candidate_query = f"""
         SELECT
             event_id AS event_id_cnty,
+            time,
             to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
             lat AS event_latitude,
             lon AS event_longitude,
@@ -572,6 +573,7 @@ async def fetch_linked_gdelt_events(
         chokepoint_query = f"""
             SELECT
                 event_id AS event_id_cnty,
+                time,
                 to_char(COALESCE(event_date, time::date), 'YYYYMMDD') AS event_date,
                 lat AS event_latitude,
                 lon AS event_longitude,

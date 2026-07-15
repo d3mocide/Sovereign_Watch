@@ -89,6 +89,24 @@ class SatNOGSNetworkSource(BaseSource):
         fetched_at = datetime.now(UTC).isoformat()
         published  = 0
 
+        # "good" observations feed spectrum verification; "bad"/"failed"
+        # observations are the raw material for satellite signal-loss events
+        # (satnogs_signal_events) consumed by the AI Router.  The failure
+        # statuses are page-bounded — they are only needed as loss signals,
+        # not as a complete catalogue.
+        published += await self._fetch_status("good", fetched_at)
+        published += await self._fetch_status("bad", fetched_at, max_pages=5)
+        published += await self._fetch_status("failed", fetched_at, max_pages=5)
+
+        # Bound in-memory dedup set to avoid unbounded growth across many intervals
+        if len(self._seen_ids) > 50_000:
+            self._seen_ids.clear()
+
+        logger.info("SatNOGS Network: published %d observation records to %s", published, self.topic)
+
+    async def _fetch_status(self, status: str, fetched_at: str, max_pages: int | None = None) -> int:
+        published = 0
+
         # Only fetch observations within our window
         start_after = (datetime.now(UTC) - timedelta(hours=OBSERVATION_WINDOW_H)).strftime(
             "%Y-%m-%dT%H:%M:%S"
@@ -103,13 +121,13 @@ class SatNOGSNetworkSource(BaseSource):
 
         params = {
             "format":    "json",
-            "status":    "good",
+            "status":    status,
             "start":     start_after,
         }
 
         url = OBSERVATIONS_URL
         page = 1
-        while url:
+        while url and (max_pages is None or page <= max_pages):
             try:
                 # Pass params ONLY on the initial URL. Subsequent cursors from Link headers
                 # will already include them.
@@ -121,7 +139,10 @@ class SatNOGSNetworkSource(BaseSource):
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as exc:
-                logger.error("SatNOGS Network request error on page %d: %s", page, repr(exc))
+                logger.error(
+                    "SatNOGS Network request error (status=%s) on page %d: %s",
+                    status, page, repr(exc),
+                )
                 break
 
             # SatNOGS API observations endpoint returns a raw list (no dict wrapper),
@@ -149,11 +170,7 @@ class SatNOGSNetworkSource(BaseSource):
                 delay = 1.0 if self.api_token else 5.0
                 await asyncio.sleep(delay)
 
-        # Bound in-memory dedup set to avoid unbounded growth across many intervals
-        if len(self._seen_ids) > 50_000:
-            self._seen_ids.clear()
-
-        logger.info("SatNOGS Network: published %d observation records to %s", published, self.topic)
+        return published
 
     def _normalise(self, obs: dict, fetched_at: str) -> dict | None:
         norad_id = obs.get("norad_cat_id")
