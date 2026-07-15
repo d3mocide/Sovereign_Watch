@@ -98,9 +98,12 @@ CREATE TABLE IF NOT EXISTS iss_positions (
     geom         GEOMETRY(POINT, 4326)
 );
 
+-- Daily chunks: at the 5 s cadence a 1-hour chunk holds only ~720 rows, which
+-- is too small to compress (ratio < 1.0) and floods the compression job with
+-- micro-chunks. See migration V006.
 SELECT create_hypertable('iss_positions', 'time',
     if_not_exists      => TRUE,
-    chunk_time_interval => INTERVAL '1 hour');
+    chunk_time_interval => INTERVAL '1 day');
 SELECT add_retention_policy('iss_positions', INTERVAL '7 days',
     if_not_exists => TRUE);
 
@@ -108,7 +111,7 @@ ALTER TABLE iss_positions SET (
     timescaledb.compress,
     timescaledb.compress_orderby = 'time DESC'
 );
-SELECT add_compression_policy('iss_positions', INTERVAL '1 hour',
+SELECT add_compression_policy('iss_positions', INTERVAL '1 day',
     if_not_exists => TRUE);
 
 CREATE INDEX IF NOT EXISTS ix_iss_positions_time ON iss_positions (time DESC);

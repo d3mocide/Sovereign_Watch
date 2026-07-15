@@ -259,6 +259,22 @@ services:
     image: timescale/timescaledb-ha:pg16
     container_name: sovereign-timescaledb
     shm_size: 1g
+    # Explicit tuning — the HA image does NOT run timescaledb-tune, so without
+    # this the server sits on stock PG defaults (128 MB shared_buffers, 5-min
+    # checkpoints). Under continuous hypertable ingest + 30 s analytics polling
+    # that thrashes the buffer cache (GBs of re-reads, sustained multi-core
+    # CPU) and forces a ~100 MB full-page-write checkpoint every 5 minutes.
+    # Values sized for an ~8 GB host shared with a dozen other containers.
+    command:
+      - postgres
+      - -cshared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -ceffective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -cwork_mem=16MB
+      - -cmaintenance_work_mem=128MB
+      - -ccheckpoint_timeout=15min
+      - -cmax_wal_size=2GB
+      - -cwal_compression=on
+      - -ctimescaledb.max_background_workers=8
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
