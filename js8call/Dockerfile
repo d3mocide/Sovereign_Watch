@@ -133,27 +133,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Layer 7: Download and install JS8Call-improved .deb package
+# Layer 7: Download and install the JS8Call-improved AppImage
 #
-# JS8Call 2.5.2 is the latest stable release as of the image build date.
-# The deb is installed via dpkg; apt-get install -f resolves any missing
-# runtime deps that dpkg itself cannot fetch (e.g. hamlib, libfftw3).
+# JS8Call-improved 3.0.3 is the latest stable release as of the image build
+# date. Upstream release tags are `v<version>` and the Linux asset is named
+# `JS8Call-v<version>-x86_64.AppImage` (the 2.x-era `release/<version>` tag
+# and un-prefixed asset name no longer exist — old URLs 404).
+# The AppImage is extracted rather than run directly so no FUSE support is
+# required inside the container.
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates libhamlib-utils libqt5svg5 libusb-1.0-0 libportaudio2 libpulse0 \
     libfftw3-double3 libopengl0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q -O /tmp/JS8Call-2.5.2-x86_64.AppImage "https://github.com/JS8Call-improved/JS8Call-improved/releases/download/release/2.5.2/JS8Call-2.5.2-x86_64.AppImage" \
-    && chmod +x /tmp/JS8Call-2.5.2-x86_64.AppImage \
-    && cd /opt && /tmp/JS8Call-2.5.2-x86_64.AppImage --appimage-extract \
+ARG JS8CALL_VERSION=3.0.3
+RUN wget -q -O /tmp/JS8Call.AppImage "https://github.com/JS8Call-improved/JS8Call-improved/releases/download/v${JS8CALL_VERSION}/JS8Call-v${JS8CALL_VERSION}-x86_64.AppImage" \
+    && chmod +x /tmp/JS8Call.AppImage \
+    && cd /opt && /tmp/JS8Call.AppImage --appimage-extract \
     && ln -s /opt/squashfs-root/AppRun /usr/bin/js8call \
     # UDPServer/UDPServerPort = where JS8Call PUSHES its API event datagrams
     # (PING/RX.SPOT/RX.DIRECTED/...). The FastAPI bridge binds that port and
     # replies to the datagram source address for commands (AcceptUDPRequests).
     && mkdir -p /root/.config && printf "[Main]\n[Configuration]\nTCPEnabled=false\nUDPEnabled=true\nUDPServer=127.0.0.1\nUDPServerPort=2242\nAcceptUDPRequests=true\nMyCall=N0CALL\nMyGrid=CN85\n[MultiSettings]\n" > "/root/.config/JS8Call - KiwiSDR-Virtual.ini" \
     && cp "/root/.config/JS8Call - KiwiSDR-Virtual.ini" /root/.config/JS8Call.ini \
-    && rm /tmp/JS8Call-2.5.2-x86_64.AppImage && rm -rf /var/lib/apt/lists/*
+    && rm /tmp/JS8Call.AppImage && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # Layer 7.5: Install uv for reproducible Python dependency installation
