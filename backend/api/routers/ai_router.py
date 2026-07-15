@@ -293,13 +293,15 @@ async def _fetch_aot_relevant_satnogs_events(
     if not norad_ids:
         return []
 
+    # satellites.norad_id is TEXT — compare as text or the query fails with
+    # "operator does not exist: text = integer".
     satellite_rows = await conn.fetch(
         """
         SELECT norad_id, tle_line1, tle_line2
         FROM satellites
-        WHERE norad_id = ANY($1::int[])
+        WHERE norad_id = ANY($1::text[])
         """,
-        norad_ids,
+        [str(norad_id) for norad_id in norad_ids],
     )
     tle_by_norad = {
         int(row["norad_id"]): (row["tle_line1"], row["tle_line2"])
