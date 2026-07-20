@@ -1,50 +1,49 @@
-# Release - v1.1.2 - Performance, Globe Visualization, and JS8Call Integration
+# Release - v1.1.3 - TimescaleDB Tuning, Clausal Intelligence & Orbital Optimization
 
-Sovereign Watch v1.1.2 introduces critical performance optimizations, renders corrections for the 3D Global Situation view, fixes UDP bridge compatibility with JS8Call and KiwiSDR audio nodes, and includes an API information leakage security patch.
+Sovereign Watch v1.1.3 resolves critical database performance thrash, repairs multi-INT correlation legs in the clausal-chain risk scoring pipeline, activates LiteLLM Router provider fallbacks, updates domain agent heuristics with real multi-INT telemetry, and vectorizes topocentric pass prediction calculations.
 
 ---
 
 ## High-Level Summary
 
-This release resolves the visual artifact on the Global Situation globe view where night-shading appeared as a jagged, misplaced chord. It integrates `LayerCache` logic inside the globe view to prevent redundant 60Hz GPU buffer uploads. Startup delays for fresh map loads have been eliminated via WebSocket client last-value caching, concurrent RSS pre-warming, and Vite-level module preloading. In addition, JS8Call and KiwiSDR communication bridges have been corrected, and connection-level exception disclosures have been fully sanitized.
+This release fixes a severe database resource spike caused by a type mismatch in SatNOGS satellite enrichment queries (`text[]` vs `int[]`) and TimescaleDB micro-chunk compression overhead on `iss_positions`. Hypertable chunking has been adjusted via migration `V006` to 1-day intervals alongside custom Postgres shared buffer and checkpoint tuning in Docker Compose. The TAK clausalizer and escalation engines now correctly integrate IODA outages, SatNOGS signal anomalies, and CAMEO root-code sequence matching without dropping non-positional state events (squawk, altitude, battery) to jitter filters. Additionally, orbital pass predictions have been fully vectorized using NumPy, and LiteLLM Router fallbacks have been enabled for high-availability AI analysis.
 
 ## Key Changes
 
-* **Globe Visualization Improvements**:
-  * Fixed 3D terminator Night overlay geometry by densifying pole-closing meridian edges to follow the sphere's curvature.
-  * Memoized static global layer stack builders to eliminate CPU and GPU resource starvation on cold dashboard load.
-  * Re-enabled depth-testing and depth-bias on globe night-shading to prevent far-hemisphere overlays from bleeding to the daylight side.
-* **Cold-Start Map & Dashboard Optimizations**:
-  * Added last-value caching (LVC) to the event broadcast manager to stream active tracks to fresh clients instantly on connect.
-  * Implemented concurrent RSS fetching and stale-while-revalidate pre-warming loops to prevent blocked text widgets.
-  * Hoisted critical Mapbox/MapLibre and Deck.gl module preloading links into the index template at build time.
-* **Operational Hardware Integrations**:
-  * Corrected the JS8Call UDP bridge listener model to dynamically route replies to active sender addresses and format lowercase API keys.
-  * Aligned virtual KiwiSDR clients with standard plaintext password auth formatting.
-* **Security & Stability Enhancements**:
-  * Sanitized outbound news article connection exceptions to return generic status details instead of internal stack traces.
-  * Vectorized SGP4 groundtrack propagation and ECEF-to-LLA conversions using NumPy arrays, yielding up to a 5x speedup.
-  * Coalesced consecutive WebSocket updates into batches to prevent packet drops.
+- **Database Optimization & TimescaleDB Stability**:
+  - Added migration `V006` to resize `iss_positions` hypertable chunk intervals from 1 hour (~720 rows) to 1 day (~17k rows), eliminating micro-chunk compression thrash.
+  - Sized Postgres `shared_buffers` (2GB), `checkpoint_timeout` (15m), and `max_wal_size` (4GB) in `docker-compose.yml` for stable performance on standard host hardware.
+  - Fixed a type mismatch bug comparing `satellites.norad_id` as `int[]` against `text` in SatNOGS enrichment queries.
+- **Clausal Chain & Multi-INT Correlation Pipeline**:
+  - Restored missing multi-INT feed persistence for IODA outage snapshots (`infra_poller`) and SatNOGS signal degradation events (`space_pulse`).
+  - Aligned GDELT escalation pattern matching with CAMEO root-code sequences evaluated chronologically.
+  - Evaluated non-positional entity state transitions (squawk, altitude, battery) prior to location jitter filtering.
+  - Clamped LLM score revisions to ±0.25 of heuristic baselines to enforce monotonic evidence risk composition.
+- **Domain Agent Heuristics & AI Service Fallbacks**:
+  - Replaced raw entity-count proxy heuristics with real multi-INT telemetry (FIRMS thermal x AIS dark vessel cross-referencing and active Redis holding-pattern zones).
+  - Activated LiteLLM Router fallbacks for transient provider failures and added a consumer for `hourly_clausal_summaries`.
+- **Orbital Pass Prediction & Container Upgrades**:
+  - Vectorized `ecef_to_topocentric_vectorized()` coordinate conversions and Julian date calculations in pass predictions.
+  - Updated `JS8Call-improved` AppImage binary to v3.0.3 in the `sovereign-js8call` container build.
 
 ## Technical Details
 
-* **Database Migrations**: None.
-* **Dependencies**: None.
-* **Performance Impact**:
-  * CPU/GPU allocation churn reduced significantly in dense environments due to paced render cycles (30 FPS cap under load) and binary attribute uploads.
-  * SGP4 propagation latency reduced by ~3.5x.
-  * Event time parsing and LLA coordinate conversions improved by ~5x.
-  * Map painting and dashboard news loading latency dropped from ~30s to near-instant.
+- **Database Migrations**: `V006__iss_positions_daily_chunks.sql` (automatic migration on startup).
+- **Dependencies**: Aligned `asyncpg` dependency to `0.31.0` in `backend/ingestion/tak_clausalizer`.
+- **Performance Impact**:
+  - TimescaleDB background compression job churn and buffer cache thrash eliminated.
+  - Orbital topocentric pass prediction calculations accelerated across large satellite pass windows.
+  - Satellite enrichment query errors resolved.
 
 ## Upgrade & Deployment Instructions
 
-To upgrade a local deployment to v1.1.2:
+To upgrade a local deployment to v1.1.3:
 
 ```bash
 # 1. Pull the latest release changes
-git fetch origin && git checkout dev && git pull
+git fetch origin && git checkout main && git pull
 
-# 2. Rebuild and restart the container services
+# 2. Rebuild and restart container services
 docker compose down
 docker compose up -d --build
 ```

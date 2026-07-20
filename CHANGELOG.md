@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-07-20
+
+### Fixed
+- **TimescaleDB CPU, Memory & IO Spike**: Fixed a type-mismatch error in `satellites.norad_id` comparison (`text[]` vs `int[]`) in SatNOGS enrichment queries, added TimescaleDB memory and checkpoint tuning in `docker-compose.yml`, and added migration `V006` to resize `iss_positions` hypertable chunk intervals from 1 hour to 1 day, preventing micro-chunk compression thrash.
+- **Inert Clausal-Chain & Risk-Scoring Correlation Legs**: Restored missing multi-INT feeds by persisting IODA outage snapshots in `infra_poller`, collecting SatNOGS signal degradation events in `space_pulse`, and updating space weather query routing. Fixed GDELT escalation pattern vocabulary to match CAMEO root codes chronologically. Evaluated non-positional state transitions (squawk, altitude, battery) prior to jitter filtering.
+- **Domain Agent Risk Heuristics**: Replaced raw entity-count proxy heuristics with genuine multi-INT cross-references (FIRMS thermal x AIS dark vessels endpoint integration and active Redis holding-pattern zones for aviation risk).
+- **LiteLLM Router & AI Service Fallbacks**: Enabled LiteLLM Router fallbacks for transient LLM provider errors, clamped LLM score revisions to ±0.25 of heuristic baselines, and added a consumer for `hourly_clausal_summaries`.
+- **JS8Call AppImage Build**: Updated `JS8Call-improved` AppImage binary to v3.0.3 in the `sovereign-js8call` container build.
+
+### Performance
+- **Vectorized Topocentric Orbital Pass Prediction**: Refactored pass prediction coordinate conversion to use `ecef_to_topocentric_vectorized()`, vectorizing Julian date calculations and TEME/ECEF/topocentric transformations to bypass Python loop overhead.
+
 ## [1.1.2] - 2026-07-10
 
 ### Security

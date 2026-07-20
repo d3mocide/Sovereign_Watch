@@ -11,7 +11,8 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 .editorconfig
-.markdownlint.json  
+.markdownlint.json 
+.ruff_cache 
 
 # Environment variables
 .env
