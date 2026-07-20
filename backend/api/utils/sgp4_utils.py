@@ -37,11 +37,7 @@ def teme_to_ecef_vectorized(
     y = r_teme[:, 1]
     z = r_teme[:, 2]
 
-    return np.column_stack((
-        x * cos_t + y * sin_t,
-        -x * sin_t + y * cos_t,
-        z
-    ))
+    return np.column_stack((x * cos_t + y * sin_t, -x * sin_t + y * cos_t, z))
 
 
 def teme_to_ecef(
@@ -183,5 +179,52 @@ def ecef_to_topocentric(
 
     azimuth_deg = math.degrees(azimuth_rad) % 360.0
     elevation_deg = math.degrees(elevation_rad)
+
+    return azimuth_deg, elevation_deg, slant_range_km
+
+
+def ecef_to_topocentric_vectorized(
+    obs_ecef: tuple[float, float, float] | np.ndarray,
+    sat_ecef_arr: np.ndarray,
+    obs_lat_deg: float,
+    obs_lon_deg: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Vectorized version of ecef_to_topocentric.
+
+    Parameters
+    ----------
+    obs_ecef     : (3,) observer ECEF position (km)
+    sat_ecef_arr : (N, 3) satellite ECEF positions (km)
+    obs_lat_deg  : observer geodetic latitude (degrees)
+    obs_lon_deg  : observer geodetic longitude (degrees)
+
+    Returns
+    -------
+    (azimuth_deg_arr, elevation_deg_arr, slant_range_km_arr)
+    """
+    dx = sat_ecef_arr[:, 0] - obs_ecef[0]
+    dy = sat_ecef_arr[:, 1] - obs_ecef[1]
+    dz = sat_ecef_arr[:, 2] - obs_ecef[2]
+
+    slant_range_km = np.sqrt(dx**2 + dy**2 + dz**2)
+
+    lat = math.radians(obs_lat_deg)
+    lon = math.radians(obs_lon_deg)
+
+    sin_lat = math.sin(lat)
+    cos_lat = math.cos(lat)
+    sin_lon = math.sin(lon)
+    cos_lon = math.cos(lon)
+
+    e = dx * (-sin_lon) + dy * cos_lon
+    n = dx * (-sin_lat * cos_lon) + dy * (-sin_lat * sin_lon) + dz * cos_lat
+    u = dx * (cos_lat * cos_lon) + dy * (cos_lat * sin_lon) + dz * sin_lat
+
+    elevation_rad = np.arctan2(u, np.sqrt(e**2 + n**2))
+    azimuth_rad = np.arctan2(e, n)
+
+    azimuth_deg = np.degrees(azimuth_rad) % 360.0
+    elevation_deg = np.degrees(elevation_rad)
 
     return azimuth_deg, elevation_deg, slant_range_km

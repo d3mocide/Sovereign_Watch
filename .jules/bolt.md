@@ -28,3 +28,6 @@
 ## 2024-05-18 - SGP4 Vectorization
 **Learning:** High-frequency orbit propagation using `satrec.sgp4` and `teme_to_ecef` over thousands of points is a major performance bottleneck for orbital groundtrack plotting. Python `for` loops overhead in these paths adds up significantly (~35ms per route).
 **Action:** Always prefer the vectorized C++ bindings `satrec.sgp4_array(jd_arr, fr_arr)` and complement them with fully vectorized NumPy versions of subsequent orbital calculations like `teme_to_ecef_vectorized` when generating large sets of points or groundtracks. This eliminates loop overhead completely, yielding a ~3.5x speedup.
+## 2024-05-30 - [Vectorizing SGP4 to Topocentric Coordinates]
+**Learning:** Computing individual satellite topocentric coordinates (azimuth, elevation, slant range) iteratively within a python pass loop over tens of thousands of time steps is extremely inefficient and limits scale. SGP4 supports vectorized coordinate arrays, as does numpy mathematically.
+**Action:** Always compute trajectory coordinates (TEME -> ECEF -> LLA / Topocentric) vector-wise on contiguous numpy arrays before entering high-frequency loops. Defer non-vectorizable actions like `datetime` instantiation to when iterations execute over specific events / conditions.

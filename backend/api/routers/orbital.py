@@ -17,11 +17,10 @@ from fastapi import APIRouter, Query, HTTPException
 from sgp4.api import Satrec, jday
 
 from utils.sgp4_utils import (
-    teme_to_ecef,
     teme_to_ecef_vectorized,
     ecef_to_lla_vectorized,
     geodetic_to_ecef,
-    ecef_to_topocentric,
+    ecef_to_topocentric_vectorized,
 )
 from core.database import db
 import numpy as np
@@ -170,27 +169,42 @@ async def get_passes(
         except Exception:
             continue  # skip malformed TLEs
 
-        # Walk the prediction window at step_seconds intervals
+        # ⚡ Bolt: Vectorize SGP4 trajectory computation and topocentric coordinate
+        # transformations over the entire time window to significantly reduce python loop overhead.
+        jd_start, fr_start = _jday_from_datetime(now)
+        step_days = step_seconds / 86400.0
+        num_steps = int(hours * 3600 / step_seconds)
+
+        jd_arr = np.full(num_steps + 1, jd_start)
+        fr_arr = fr_start + np.arange(num_steps + 1) * step_days
+
+        e_arr, r_arr, _ = satrec.sgp4_array(jd_arr, fr_arr)
+        valid_mask = e_arr == 0
+        valid_indices = np.where(valid_mask)[0]
+
+        if len(valid_indices) == 0:
+            continue
+
+        valid_r = r_arr[valid_mask]
+        valid_fr = fr_arr[valid_mask]
+
+        r_ecefs = teme_to_ecef_vectorized(valid_r, jd_arr[valid_mask], valid_fr)
+        az_arr, el_arr, rng_arr = ecef_to_topocentric_vectorized(
+            obs_ecef, r_ecefs, lat, lon
+        )
+
         current_pass_points: list[dict] = []
         in_pass = False
         tca_el = -999.0
         tca_point: Optional[dict] = None
 
-        jd_start, fr_start = _jday_from_datetime(now)
-        step_days = step_seconds / 86400.0
-        num_steps = int(hours * 3600 / step_seconds)
-
-        for i in range(num_steps + 1):
-            fr = fr_start + i * step_days
-            e, r, _ = satrec.sgp4(jd_start, fr)
-            if e != 0:
-                continue
-
-            r_ecef = teme_to_ecef(r, jd_start, fr)
-            az, el, rng = ecef_to_topocentric(obs_ecef, r_ecef, lat, lon)
+        for idx, step_idx in enumerate(valid_indices):
+            el = float(el_arr[idx])
 
             if el >= min_elevation:
-                t = now + timedelta(seconds=i * step_seconds)
+                az = float(az_arr[idx])
+                rng = float(rng_arr[idx])
+                t = now + timedelta(seconds=int(step_idx) * step_seconds)
                 point = {
                     "t": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "az": round(az, 2),
