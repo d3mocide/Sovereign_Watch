@@ -31,3 +31,6 @@
 ## 2024-05-30 - [Vectorizing SGP4 to Topocentric Coordinates]
 **Learning:** Computing individual satellite topocentric coordinates (azimuth, elevation, slant range) iteratively within a python pass loop over tens of thousands of time steps is extremely inefficient and limits scale. SGP4 supports vectorized coordinate arrays, as does numpy mathematically.
 **Action:** Always compute trajectory coordinates (TEME -> ECEF -> LLA / Topocentric) vector-wise on contiguous numpy arrays before entering high-frequency loops. Defer non-vectorizable actions like `datetime` instantiation to when iterations execute over specific events / conditions.
+## 2026-07-24 - Vectorize High-Frequency NumPy Operations Over Single Allocations
+**Learning:** Calling vectorized NumPy functions (e.g., `ecef_to_lla_vectorized`) iteratively on single elements wrapped via `np.array(...).reshape(1, 3)` within a loop inherently negates the performance benefits of vectorization, resulting in heavy overhead from continuous array allocation and function invocation.
+**Action:** When working with continuous batches of calculations (like computing current locations for multiple SGP4 tracked objects), always aggregate the data into native lists, process the batch via a single vectorized NumPy operation after the loop, and trace indices backward for final assignment.

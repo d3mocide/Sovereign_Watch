@@ -284,19 +284,35 @@ async def search_tracks(q: str, limit: int = 10):
 
         # For each matched satellite compute its current position via SGP4
         now = datetime.now(timezone.utc)
+        jd, fr = _jday(now)
+
+        sat_list = []
+        r_ecefs = []
+
         for row in sat_rows:
-            lat, lon = None, None
             try:
                 satrec = Satrec.twoline2rv(row["tle_line1"], row["tle_line2"])
-                jd, fr = _jday(now)
                 e, r, _ = satrec.sgp4(jd, fr)
                 if e == 0:
                     r_ecef = teme_to_ecef(r, jd, fr)
-                    la, lo, _ = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
-                    lat = round(float(la[0]), 5)
-                    lon = round(float(lo[0]), 5)
+                    r_ecefs.append(r_ecef)
+                    sat_list.append((row, len(r_ecefs) - 1))
+                else:
+                    sat_list.append((row, None))
             except Exception:
-                pass
+                sat_list.append((row, None))
+
+        la_arr, lo_arr = None, None
+        if r_ecefs:
+            # ⚡ Bolt: Vectorize LLA conversion over all matched satellites to eliminate loop allocation overhead
+            la_arr, lo_arr, _ = ecef_to_lla_vectorized(np.array(r_ecefs))
+
+        for row, idx in sat_list:
+            lat, lon = None, None
+            if idx is not None and la_arr is not None and lo_arr is not None:
+                lat = round(float(la_arr[idx]), 5)
+                lon = round(float(lo_arr[idx]), 5)
+
             results.append(
                 {
                     "entity_id": f"SAT-{row['norad_id']}",
