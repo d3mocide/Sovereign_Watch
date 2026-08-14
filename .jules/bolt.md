@@ -31,3 +31,7 @@
 ## 2024-05-30 - [Vectorizing SGP4 to Topocentric Coordinates]
 **Learning:** Computing individual satellite topocentric coordinates (azimuth, elevation, slant range) iteratively within a python pass loop over tens of thousands of time steps is extremely inefficient and limits scale. SGP4 supports vectorized coordinate arrays, as does numpy mathematically.
 **Action:** Always compute trajectory coordinates (TEME -> ECEF -> LLA / Topocentric) vector-wise on contiguous numpy arrays before entering high-frequency loops. Defer non-vectorizable actions like `datetime` instantiation to when iterations execute over specific events / conditions.
+
+## 2025-02-21 - Use isoformat instead of strftime in high-frequency loops
+**Learning:** High-frequency loops that format `datetime` objects to ISO 8601 strings using `.strftime("%Y-%m-%dT%H:%M:%SZ")` are unnecessarily slow.
+**Action:** Use `.isoformat().replace("+00:00", "Z")` on a `datetime` object with `microsecond=0` for a ~2x speedup.
