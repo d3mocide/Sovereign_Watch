@@ -76,3 +76,7 @@
 **Vulnerability:** Raw exception details (`str(e)`) were being leaked to the client in HTTP 400 responses during failed outbound requests.
 **Learning:** Returning `str(e)` in an `HTTPException` can inadvertently leak internal network details, unhandled edge cases, or stack traces to untrusted clients, aiding in reconnaissance.
 **Prevention:** Always catch exceptions securely, log the raw `exc_info` internally using a logger, and return a sanitized, generic error message (e.g., "Failed to connect to article source") to the client.
+## 2024-05-24 - Missing Rate Limiting on Global Configuration Endpoints
+**Vulnerability:** The `/api/config/location` and `/api/config/ai` POST endpoints lacked rate limiting, allowing authenticated attackers to potentially flood the Redis backend (`incr`, `publish`, `set`) with excessive requests, causing DoS or resource exhaustion.
+**Learning:** Even internal or non-sensitive configuration endpoints that write to the database/cache must be protected with rate limiting to prevent abuse and ensure service availability.
+**Prevention:** Always apply rate limiting to endpoints that perform write operations, especially those that mutate shared state.
