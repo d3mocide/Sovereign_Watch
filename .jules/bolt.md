@@ -31,3 +31,6 @@
 ## 2024-05-30 - [Vectorizing SGP4 to Topocentric Coordinates]
 **Learning:** Computing individual satellite topocentric coordinates (azimuth, elevation, slant range) iteratively within a python pass loop over tens of thousands of time steps is extremely inefficient and limits scale. SGP4 supports vectorized coordinate arrays, as does numpy mathematically.
 **Action:** Always compute trajectory coordinates (TEME -> ECEF -> LLA / Topocentric) vector-wise on contiguous numpy arrays before entering high-frequency loops. Defer non-vectorizable actions like `datetime` instantiation to when iterations execute over specific events / conditions.
+## 2025-02-23 - Fast ISO 8601 formatting for constant microseconds
+**Learning:** For performance-critical high-frequency Python loops, substituting `t.strftime("%Y-%m-%dT%H:%M:%SZ")` with `t.isoformat().replace("+00:00", "Z")` on datetimes that have had microseconds stripped (`.replace(microsecond=0)` *outside* the loop) yields a ~2x performance speedup. This optimizes the creation of UTC datetimes strings format while preventing microsecond formatting overhead.
+**Action:** When a loop generates heavily formatted date strings sequentially based on an initial datetime base, replace `.strftime` string formatting with `.isoformat()` with microseconds stripped out of the loop and explicit timezone replacement on iteration.
