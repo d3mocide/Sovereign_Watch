@@ -80,6 +80,7 @@ function decodeOne(buffer: Uint8Array): void {
             longs: Number,
             enums: String,
             bytes: String,
+            defaults: true, // Proto3 omits zero coordinates and equatorial elements.
         });
 
         // BUG-018: Removed hex debug computation (Array.from().map().join())

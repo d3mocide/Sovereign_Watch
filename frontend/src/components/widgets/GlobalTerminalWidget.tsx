@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, X, Play, Pause, Copy, Check, Trash2 } from 'lucide-react';
 import { syntaxHighlightJson } from '../../utils/syntaxHighlight';
@@ -119,8 +120,8 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
       setLogs([]);
   };
 
-  return (
-    <div className="absolute right-4 top-16 w-[800px] h-[600px] z-50 bg-black/90 backdrop-blur-md border border-tactical-border rounded shadow-2xl flex flex-col animate-in fade-in slide-in-from-top-4 duration-200">
+  const content = (
+    <div role="dialog" aria-label="Raw Data Terminal" className="hud-popover terminal-popover absolute right-4 top-16 w-[800px] h-[600px] z-[100] bg-black/90 backdrop-blur-md border border-tactical-border rounded shadow-2xl flex flex-col animate-in fade-in slide-in-from-top-4 duration-200">
 
       {/* Header */}
       <div className="flex items-center justify-between p-2 border-b border-white/10 bg-gradient-to-r from-hud-green/10 to-transparent">
@@ -209,4 +210,6 @@ export const GlobalTerminalWidget: React.FC<GlobalTerminalWidgetProps> = ({ onCl
       </div>
     </div>
   );
+  const root = document.querySelector(".hud-viewport");
+  return root ? createPortal(content, root) : content;
 };

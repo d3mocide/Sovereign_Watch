@@ -22,6 +22,7 @@ interface SituationGlobeProps {
   outagesData: FeatureCollection | null;
   worldCountriesData: FeatureCollection | null;
   showTerminator: boolean;
+  gdeltData: FeatureCollection | null;
   drStateRef: React.MutableRefObject<Map<string, DRState>>;
   mission: { lat: number; lon: number; radius_nm: number } | null;
   onGdeltClick?: (event: any) => void;
@@ -46,6 +47,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   outagesData,
   worldCountriesData,
   showTerminator,
+  gdeltData,
   drStateRef,
   mission,
   onGdeltClick,
@@ -78,13 +80,14 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     bearing: 0,
   });
 
-  const [now, setNow] = useState(0);
+  const cameraRef = useRef(viewState);
+  useEffect(() => { cameraRef.current = viewState; }, [viewState]);
   const lastFrameTimeRef = useRef(0);
   const visualStateRef = useRef<
     Map<string, { lat: number; lon: number; alt: number }>
   >(new Map());
   const [auroraData, setAuroraData] = useState<any>(null);
-  const [gdeltData, setGdeltData] = useState<any>(null);
+
   const [actors, setActors] = useState<ActorEntry[]>([]);
 
   // Poll for aurora data
@@ -106,6 +109,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     };
   }, []);
 
+
+
   // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
   useEffect(() => {
     let cancelled = false;
@@ -121,54 +126,6 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
     fetchActors();
     const id = setInterval(fetchActors, 5 * 60_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
-
-  // Poll GDELT conflict + tension events (tone ≤ -2) for the globe overlay
-  useEffect(() => {
-    let cancelled = false;
-    const fetchGdelt = async () => {
-      try {
-        const r = await fetch("/api/gdelt/events");
-        if (r.ok && !cancelled) setGdeltData(await r.json());
-      } catch {
-        /* silent fail */
-      }
-    };
-    fetchGdelt();
-    // 5 min matches the server-side cache TTL, so a cold-started backend
-    // (empty first response) recovers within one cache window.
-    const id = setInterval(fetchGdelt, 5 * 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
-  // Auto-rotation logic
-  useEffect(() => {
-    let raf: number;
-    lastFrameTimeRef.current = Date.now();
-
-    const rotate = () => {
-      const currentTime = Date.now();
-      const dt = currentTime - lastFrameTimeRef.current;
-
-      // Update longitude imperatively for 0-jitter rotation
-      const map = mapRef.current?.getMap();
-      if (map) {
-        lngRef.current =
-          (lngRef.current + GLOBE_ROTATION_DEG_PER_60FPS_FRAME * (dt / 16.67)) %
-          360;
-        map.jumpTo({
-          center: [lngRef.current, viewState.latitude],
-        });
-      }
-
-      setNow(currentTime);
-      raf = requestAnimationFrame(rotate);
-    };
-    raf = requestAnimationFrame(rotate);
-    return () => cancelAnimationFrame(raf);
   }, []);
 
   const countryOutageMap = useMemo(() => {
@@ -192,8 +149,8 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
   }, [outagesData]);
 
   // Imperative Layer Update to avoid reading refs in render
-  useEffect(() => {
-    if (now === 0 || !overlayRef.current) return;
+  const updateLayers = (now: number) => {
+    if (!overlayRef.current) { lastFrameTimeRef.current = now; return; }
     const cache = layerCacheRef.current!;
 
     const dt = now - lastFrameTimeRef.current;
@@ -318,7 +275,7 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         // GDELT conflict + tension only (tone ≤ -2) — same as OrbitalMap
         ...cache.get("gdelt", [gdeltData, onHover, onGdeltClick], () =>
           buildGdeltLayer(
-            gdeltData,
+            gdeltData as Parameters<typeof buildGdeltLayer>[0],
             true,
             true,
             -2,
@@ -331,27 +288,36 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         ...orbital,
       ],
     });
-  }, [
-    now,
-    satellitesRef,
-    drStateRef,
-    cablesData,
-    stationsData,
-    outagesData,
-    worldCountriesData,
-    countryOutageMap,
-    ixpData,
-    facilityData,
-    dnsRootData,
-    viewState.zoom,
-    showTerminator,
-    mission,
-    auroraData,
-    gdeltData,
-    actors,
-    onHover,
-    onGdeltClick,
-  ]);
+  };
+  const updateLayersRef = useRef(updateLayers);
+  useEffect(() => { updateLayersRef.current = updateLayers; });
+
+
+  useEffect(() => {
+    let raf: number;
+    let lastTick = 0;
+    let lastRotation = performance.now();
+    lastFrameTimeRef.current = Date.now();
+    const rotate = (timestamp: number) => {
+      raf = requestAnimationFrame(rotate);
+      if (document.hidden) { lastRotation = timestamp; return; }
+      if (timestamp - lastRotation < 1000 / 60 - 1) return;
+      const dt = Math.min(timestamp - lastRotation, 100);
+      lastRotation = timestamp;
+      const now = Date.now();
+      const map = mapRef.current?.getMap();
+      if (map) {
+        lngRef.current = (lngRef.current + GLOBE_ROTATION_DEG_PER_60FPS_FRAME * dt / 16.67) % 360;
+        map.jumpTo({ center: [lngRef.current, cameraRef.current.latitude] });
+      }
+      if (timestamp - lastTick >= 1000 / 30 - 1) {
+        lastTick = timestamp;
+        updateLayersRef.current(now);
+      }
+    };
+    raf = requestAnimationFrame(rotate);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <div className="w-full h-full bg-black relative overflow-hidden">
@@ -366,11 +332,14 @@ export const SituationGlobe: React.FC<SituationGlobeProps> = ({
         >
           <MapLibreAdapter
             ref={mapRef}
+            imperativeCamera
             viewState={viewState}
             onMove={(evt: any) => {
               const next = evt.viewState;
               if (!next) return;
+              cameraRef.current = next;
               lngRef.current = next.longitude;
+              if (!evt.originalEvent) return;
               setViewState((prev) => ({
                 latitude: next.latitude ?? prev.latitude,
                 longitude: next.longitude ?? prev.longitude,

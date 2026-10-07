@@ -2,12 +2,12 @@
 Orbital source — CelesTrak OMM fetch and SGP4 propagation.
 
 Fetches orbital element data from CelesTrak for curated satellite groups,
-propagates positions every 5 seconds using sgp4, and publishes TAK-format
+propagates positions every 15 seconds using sgp4, and publishes TAK-format
 events to the orbital_raw Kafka topic.
 
 Two internal loops run concurrently inside run():
     tle_update_loop   — refreshes orbital data from CelesTrak (every 6 hours)
-    propagation_loop  — propagates positions and publishes to Kafka (every 5 s)
+    propagation_loop  — propagates positions and publishes to Kafka (every 15 s)
 """
 
 import asyncio
@@ -23,6 +23,7 @@ import numpy as np
 from sgp4 import omm
 from sgp4.api import Satrec, SatrecArray, WGS72, jday
 from sources.base import BaseSource
+from telemetry import encode_orbital_event
 from utils import compute_course, ecef_to_lla_vectorized, teme_to_ecef_vectorized
 
 logger = logging.getLogger("space_pulse.orbital")
@@ -62,7 +63,7 @@ class OrbitalSource(BaseSource):
         self.fetch_hour = int(
             os.getenv("SPACE_TLE_FETCH_HOUR", os.getenv("ORBITAL_TLE_FETCH_HOUR", "-1"))
         )
-        self.propagate_interval_sec = 15
+        self.propagate_interval_sec = max(1, int(os.getenv("ORBITAL_PROPAGATE_INTERVAL_S", "15")))
 
         self.groups = [
             ("gp.php", "gps-ops"),
@@ -391,6 +392,7 @@ class OrbitalSource(BaseSource):
             jd_ago_arr = np.array([jd_ago])
             fr_ago_arr = np.array([fr_ago])
 
+            compute_start = time.perf_counter()
             e_raw, r_raw, v_raw = self.sat_array.sgp4(jd_arr, fr_arr)
             e_ago_raw, r_ago_raw, _ = self.sat_array.sgp4(jd_ago_arr, fr_ago_arr)
 
@@ -417,6 +419,9 @@ class OrbitalSource(BaseSource):
                 now_iso = now.isoformat() + "Z"
                 stale_iso = (now + timedelta(minutes=1)).isoformat() + "Z"
 
+                compute_seconds = time.perf_counter() - compute_start
+                publish_start = time.perf_counter()
+                bytes_sent = 0
                 batch_tasks = []
                 for i_valid, idx in enumerate(valid_idx):
                     meta = self.sat_meta[idx]
@@ -465,20 +470,29 @@ class OrbitalSource(BaseSource):
                         batch_tasks.append(self.redis_client.set("infra:iss_latest", iss_payload, ex=60))
                         batch_tasks.append(self.redis_client.publish("infrastructure:iss-position", iss_payload))
 
+                    frame = encode_orbital_event(tak_event)
+                    bytes_sent += len(frame)
                     batch_tasks.append(
                         self.producer.send(
                             self.topic,
-                            value=tak_event,
+                            value=frame,
                             key=tak_event["uid"].encode("utf-8"),
                         )
                     )
                     if len(batch_tasks) >= 500:
                         await asyncio.gather(*batch_tasks)
                         batch_tasks.clear()
-                        await asyncio.sleep(0.1)
+                        # Yield without adding artificial delay to every tranche.
+                        await asyncio.sleep(0)
 
                 if batch_tasks:
                     await asyncio.gather(*batch_tasks)
+                # Await acknowledgements before reporting the sweep complete.
+                await self.producer.flush()
+                logger.info(
+                    "Orbital stages: compute=%.3fs publish=%.3fs bytes=%d",
+                    compute_seconds, time.perf_counter() - publish_start, bytes_sent,
+                )
 
             elapsed = time.time() - start_time
             # Ensure at least 1 second of recovery sleep between heavy batches

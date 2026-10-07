@@ -1,3 +1,4 @@
+import { MobileSections } from "./MobileSections";
 /**
  * IntelSidebar — Left panel for the INTEL globe view.
  *
@@ -177,7 +178,8 @@ export function IntelSidebar({
   }, [onGenerateSitrep, actors, timeWindow, isOperator]);
 
   return (
-    <div className="flex h-[98%] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none">
+<MobileSections label="Intel sections" className="flex h-[98%] min-h-0 flex-col gap-3 overflow-hidden font-mono text-xs select-none" sections={[
+{ id: "overview", label: "Overview", content: (<>
       {/* Header */}
       <div className="shrink-0 px-3 py-3 bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-hud-green/30 to-transparent opacity-50" />
@@ -234,6 +236,9 @@ export function IntelSidebar({
         </div>
       </div>
 
+
+</>) },
+{ id: "threats", label: "Threats", content: (<>
       {/* Conflict Zones */}
       <div className="flex flex-col flex-none max-h-[35%] bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative">
         <div className="shrink-0 flex flex-col gap-1 px-3 py-2 border-b border-white/10 bg-white/5">
@@ -312,6 +317,9 @@ export function IntelSidebar({
         </div>
       </div>
 
+
+</>) },
+{ id: "countries", label: "Countries", content: (<>
       {/* Active Actors */}
       <div className="flex-1 flex flex-col min-h-0 bg-black/60 border border-white/10 backdrop-blur-xl rounded-sm overflow-hidden shadow-2xl relative transition-all">
         <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
@@ -364,6 +372,9 @@ export function IntelSidebar({
         </div>
       </div>
 
+
+</>) },
+{ id: "sitrep", label: "SITREP", content: (<>
       {/* SITREP Summary footer */}
       <div className="shrink-0 px-4 py-3 bg-black/70 border border-white/10 rounded-sm backdrop-blur-2xl shadow-2xl relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-hud-green/5 to-transparent pointer-events-none" />
@@ -435,6 +446,8 @@ export function IntelSidebar({
           </button>
         )}
       </div>
-    </div>
+
+</>) }
+]} />
   );
 }

@@ -10,7 +10,7 @@ from uvicorn.protocols.utils import ClientDisconnected
 import redis.asyncio as aioredis
 
 from core.config import settings
-from services.tak import transform_to_proto
+from services.tak import decode_live_message
 
 logger = logging.getLogger("SovereignWatch.Broadcast")
 
@@ -276,15 +276,14 @@ class BroadcastManager:
                     break
 
                 try:
-                    data = json.loads(msg.value.decode("utf-8"))
-                    tak_bytes = transform_to_proto(data)
+                    uid, tak_bytes = decode_live_message(msg.value)
                 except Exception as e:
                     logger.error(f"Error transforming message: {e}")
                     continue
 
                 # Keep the last-value cache warm regardless of client count, so
                 # the next client to connect can be bootstrapped immediately.
-                self._record_live(data.get("uid"), tak_bytes)
+                self._record_live(uid, tak_bytes)
 
                 if not self._clients:
                     continue
@@ -357,27 +356,25 @@ class BroadcastManager:
             return True
 
         sent = 0
-        for frame in frames:
+        for _, frame in coalesce_outgoing(frames):
             try:
                 await asyncio.wait_for(ws.send_bytes(frame), timeout=3.0)
             except asyncio.TimeoutError:
                 logger.warning("Snapshot send timed out — disconnecting")
                 return False
             except (
-                WebSocketDisconnect,
-                ConnectionClosedOK,
-                ConnectionClosedError,
+                WebSocketDisconnect, ConnectionClosedOK, ConnectionClosedError,
                 ClientDisconnected,
             ):
                 return False
-            except Exception as e:
-                logger.error(f"Snapshot send error: {e}")
+            except Exception as exc:
+                logger.error("Snapshot send error: %s", exc)
                 return False
             sent += 1
-            if sent % 256 == 0:
+            if sent % 8 == 0:
                 await asyncio.sleep(0)
+        logger.info("Replayed snapshot of %d entities in %d frames", len(frames), sent)
 
-        logger.info(f"Replayed snapshot of {sent} entities to new client")
         return True
 
     async def _client_worker(self, ws: WebSocket, q: asyncio.Queue):

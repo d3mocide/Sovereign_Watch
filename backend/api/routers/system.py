@@ -4,13 +4,15 @@ import logging
 import os
 import time as _time
 from datetime import datetime, timezone
+from typing import Annotated
 
 import httpx
 import yaml
 from core.auth import require_role
 from core.database import db
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from models.schemas import AIModelRequest, MissionLocation, WatchlistAddRequest
+from services.rate_limit import check_write_rate_limit
 
 
 router = APIRouter()
@@ -119,14 +121,16 @@ AI_MODEL_REDIS_KEY = "config:ai:active_model"
 AI_MODEL_DEFAULT = os.getenv("LITELLM_MODEL", "deep-reasoner")
 
 
-@router.post("/api/config/location", dependencies=[Depends(require_role("operator"))])
-async def set_mission_location(location: MissionLocation):
+@router.post("/api/config/location")
+async def set_mission_location(location: MissionLocation, user: Annotated[dict, Depends(require_role("operator"))]):
     """
     Update the active surveillance area.
     Publishes to Redis pub/sub to notify all pollers.
     """
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
+
+    await check_write_rate_limit("config_location", user)
 
     # Validate constraints
     if location.radius_nm < 10 or location.radius_nm > 300:
@@ -272,8 +276,8 @@ async def get_streams_config():
     ]
 
 
-@router.post("/api/config/ai", dependencies=[Depends(require_role("admin"))])
-async def set_ai_config(req: AIModelRequest):
+@router.post("/api/config/ai")
+async def set_ai_config(req: AIModelRequest, user: Annotated[dict, Depends(require_role("admin"))]):
     """Switch the active AI model used for track analysis."""
     available_models = load_ai_models()
     valid_ids = {m["id"] for m in available_models}
@@ -286,6 +290,8 @@ async def set_ai_config(req: AIModelRequest):
 
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
+
+    await check_write_rate_limit("config_ai", user)
 
     try:
         await db.redis_client.set(AI_MODEL_REDIS_KEY, req.model_id)
@@ -331,30 +337,14 @@ async def get_watchlist():
 
 
 @router.post(
-    "/api/watchlist", status_code=201, dependencies=[Depends(require_role("operator"))]
+    "/api/watchlist", status_code=201
 )
-async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
+async def add_to_watchlist(req: WatchlistAddRequest, user: Annotated[dict, Depends(require_role("operator"))]):
     """Add or refresh an ICAO24 in the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
 
-    # Rate Limiting
-    if request.client and request.client.host:
-        client_ip = request.client.host
-        rl_key = f"rate_limit:watchlist:{client_ip}"
-        try:
-            req_count = await db.redis_client.incr(rl_key)
-            if req_count == 1:
-                await db.redis_client.expire(rl_key, 60)
-            if req_count > 20:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded. Please try again later.",
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Rate limiting error: {e}")
+    await check_write_rate_limit("watchlist", user)
 
     icao24 = req.icao24.lower().strip()
     if (
@@ -383,30 +373,14 @@ async def add_to_watchlist(req: WatchlistAddRequest, request: Request):
 
 
 @router.delete(
-    "/api/watchlist/{icao24}", dependencies=[Depends(require_role("operator"))]
+    "/api/watchlist/{icao24}"
 )
-async def remove_from_watchlist(icao24: str, request: Request):
+async def remove_from_watchlist(icao24: str, user: Annotated[dict, Depends(require_role("operator"))]):
     """Remove an ICAO24 from the global watchlist."""
     if not db.redis_client:
         raise HTTPException(status_code=503, detail="Redis not ready")
 
-    # Rate Limiting
-    if request.client and request.client.host:
-        client_ip = request.client.host
-        rl_key = f"rate_limit:watchlist_delete:{client_ip}"
-        try:
-            req_count = await db.redis_client.incr(rl_key)
-            if req_count == 1:
-                await db.redis_client.expire(rl_key, 60)
-            if req_count > 20:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded. Please try again later.",
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Rate limiting error: {e}")
+    await check_write_rate_limit("watchlist_delete", user)
 
     icao24 = icao24.lower().strip()
 

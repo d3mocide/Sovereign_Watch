@@ -209,7 +209,7 @@ export default function KiwiNodeBrowser({
   return (
     <div
       ref={panelRef}
-      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[500px] z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl shadow-black/70 overflow-hidden"
+      className="kiwi-node-browser absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[500px] z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl shadow-black/70 overflow-hidden"
     >
       {/* ── Panel header ── */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">

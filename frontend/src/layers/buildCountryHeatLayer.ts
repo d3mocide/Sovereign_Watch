@@ -167,10 +167,18 @@ export function buildCountryHeatLayer(
     return matched;
   };
 
+  // The basemap already draws country boundaries. Do not triangulate invisible
+  // country fills merely to render a nearly transparent decorative outline.
+  const activeFeatures = countriesGeoJson.features.filter((feature) => {
+    const actor = getMatchedActor(feature);
+    return actor && actor.threat_level !== "STABLE";
+  });
+  if (!activeFeatures.length) return [];
+
   return [
     new GeoJsonLayer({
       id: `country-heat-${globeMode ? "globe" : "merc"}`,
-      data: countriesGeoJson as any,
+      data: { ...countriesGeoJson, features: activeFeatures } as any,
       pickable: false,
       stroked: true,
       filled: true,
@@ -192,6 +200,7 @@ export function buildCountryHeatLayer(
         }
         return 0.5;
       },
+      updateTriggers: { getFillColor: actors, getLineColor: actors, getLineWidth: actors },
       lineWidthUnits: "pixels",
       lineWidthMinPixels: 0.5,
       wrapLongitude: !globeMode,

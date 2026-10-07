@@ -193,7 +193,8 @@ export function buildArcData(
  */
 // OPTIMIZATION: Cache arc data based on gdeltData object reference to prevent
 // re-running buildArcData (a large reduce loop) every frame during animation.
-const arcDataCache = new WeakMap<any, GdeltArc[]>();
+const arcDataCache = new WeakMap<object, { centroids: CentroidMap | null; data: GdeltArc[] }>();
+const globeGeometryCache = new WeakMap<GdeltArc[], { segments: GdeltArcSegment[]; endpoints: GdeltArcEndpoint[] }>();
 
 function wrapLon(lon: number): number {
   return ((((lon + 180) % 360) + 360) % 360) - 180;
@@ -390,12 +391,12 @@ export function buildGdeltArcLayer(
   if (!visible || !gdeltData?.features?.length) return [];
 
   // Use cached data if available for this specific data object.
-  let data = arcDataCache.get(gdeltData);
-  if (!data) {
-    const centroids = centroidsCache ?? {};
-    data = buildArcData(gdeltData as any, centroids);
-    arcDataCache.set(gdeltData, data);
+  let cached = arcDataCache.get(gdeltData);
+  if (!cached || cached.centroids !== centroidsCache) {
+    cached = { centroids: centroidsCache, data: buildArcData(gdeltData as any, centroidsCache ?? {}) };
+    arcDataCache.set(gdeltData, cached);
   }
+  const data = cached.data;
 
   if (!data || !data.length) return [];
 
@@ -405,6 +406,8 @@ export function buildGdeltArcLayer(
   const pulse = 0.72 + 0.28 * pulseEase; // 28% amplitude
 
   if (globeMode) {
+    let geometry = globeGeometryCache.get(data);
+    if (!geometry) {
     const pathData: GdeltArcPath[] = data.map((d) => {
       // De-stack dense hub fans with deterministic per-arc endpoint jitter.
       const seedA = hash01(d.event_id || "gdelt-arc");
@@ -448,13 +451,13 @@ export function buildGdeltArcLayer(
           color[0],
           color[1],
           color[2],
-          Math.round(color[3] * pulse),
+          color[3],
         ],
         targetColor: [
           d.targetColor[0],
           d.targetColor[1],
           d.targetColor[2],
-          Math.round(d.targetColor[3] * pulse),
+          d.targetColor[3],
         ],
         path: buildArcPath3D(
           src,
@@ -519,12 +522,19 @@ export function buildGdeltArcLayer(
       ];
     });
 
+    geometry = { segments: segmentData, endpoints: endpointData };
+    globeGeometryCache.set(data, geometry);
+    }
+    const segmentData = geometry.segments;
+    const endpointData = geometry.endpoints;
+
     return [
       // 1. Ambient Shadow Shell — provides soft volume/halo and depth context
       new PathLayer<GdeltArcSegment>({
         id: "gdelt-arcs-3d-globe-shadow",
         data: segmentData,
         pickable: false,
+        opacity: pulse,
         getPath: (d) => d.path,
         getColor: (d) => [0, 0, 0, Math.round(d.color[3] * 0.35)],
         getWidth: (d) => d.width * 2.8,
@@ -533,7 +543,7 @@ export function buildGdeltArcLayer(
         jointRounded: false,
         capRounded: false,
         updateTriggers: {
-          getColor: animTick,
+          getColor: 0,
         },
         parameters: {
           depthTest: true,
@@ -545,6 +555,7 @@ export function buildGdeltArcLayer(
         id: "gdelt-arcs-3d-globe-shell",
         data: segmentData,
         pickable: false,
+        opacity: pulse,
         getPath: (d) => d.path,
         getColor: (d) => [
           Math.max(0, Math.round(d.color[0] * 0.4)),
@@ -558,7 +569,7 @@ export function buildGdeltArcLayer(
         jointRounded: false,
         capRounded: false,
         updateTriggers: {
-          getColor: animTick,
+          getColor: 0,
         },
         parameters: {
           depthTest: true,
@@ -570,6 +581,7 @@ export function buildGdeltArcLayer(
         id: "gdelt-arcs-3d-globe-core",
         data: segmentData,
         pickable: false,
+        opacity: pulse,
         getPath: (d) => d.path,
         getColor: (d) => d.color,
         getWidth: (d) => d.width,
@@ -578,7 +590,7 @@ export function buildGdeltArcLayer(
         jointRounded: false,
         capRounded: false,
         updateTriggers: {
-          getColor: animTick,
+          getColor: 0,
         },
         parameters: {
           depthTest: true,
@@ -590,6 +602,7 @@ export function buildGdeltArcLayer(
         id: "gdelt-arcs-3d-globe-highlight",
         data: segmentData,
         pickable: false,
+        opacity: pulse,
         getPath: (d) => d.path,
         getColor: (d) => [
           Math.min(255, Math.round(d.color[0] * 1.25 + 24)),
@@ -603,7 +616,7 @@ export function buildGdeltArcLayer(
         jointRounded: false,
         capRounded: false,
         updateTriggers: {
-          getColor: animTick,
+          getColor: 0,
         },
         parameters: {
           depthTest: true,
@@ -615,6 +628,7 @@ export function buildGdeltArcLayer(
         id: "gdelt-arcs-3d-globe-specular",
         data: segmentData,
         pickable: false,
+        opacity: pulse,
         getPath: (d) => d.path,
         getColor: (d) => [255, 255, 255, Math.round(d.color[3] * 0.85)],
         getWidth: (d) => d.width * 0.18,
@@ -623,7 +637,7 @@ export function buildGdeltArcLayer(
         jointRounded: false,
         capRounded: false,
         updateTriggers: {
-          getColor: animTick,
+          getColor: 0,
         },
         parameters: {
           depthTest: true,
@@ -634,6 +648,7 @@ export function buildGdeltArcLayer(
         id: "gdelt-arc-endpoints-globe",
         data: endpointData,
         pickable: false,
+        opacity: pulse,
         stroked: true,
         filled: true,
         getPosition: (d) => d.position,

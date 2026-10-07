@@ -184,3 +184,24 @@ def test_transform_to_proto_minimal():
     assert cot.how == "m-g"  # Default value
     assert cot.lat == 0.0
     assert cot.lon == 0.0
+
+
+def test_binary_live_message_preserves_wire_and_uid():
+    from services.tak import decode_live_message
+    message = TakMessage()
+    message.cotEvent.uid = "SAT-42"
+    message.cotEvent.lat = 0
+    message.cotEvent.detail.period_min = 95
+    wire = b"\xbf\x01\xbf" + message.SerializeToString()
+    uid, forwarded = decode_live_message(wire)
+    assert uid == "SAT-42"
+    assert forwarded is wire
+
+
+def test_legacy_live_message_still_decodes():
+    from services.tak import decode_live_message
+    uid, wire = decode_live_message(b'{"uid":"AIR-1","point":{"lat":42}}')
+    message = TakMessage()
+    message.ParseFromString(wire[3:])
+    assert uid == message.cotEvent.uid == "AIR-1"
+    assert message.cotEvent.lat == 42

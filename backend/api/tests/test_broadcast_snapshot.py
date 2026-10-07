@@ -103,7 +103,9 @@ async def test_send_snapshot_sends_all_frames():
     ws = FakeWS()
     ok = await mgr._send_snapshot(ws)
     assert ok is True
-    assert len(ws.sent) == 10
+    from .test_broadcast_batching import _parse_batch
+    assert len(ws.sent) == 1
+    assert _parse_batch(ws.sent[0]) == [_frame(f"e{i}") for i in range(10)]
 
 
 @pytest.mark.asyncio
@@ -118,7 +120,7 @@ async def test_send_snapshot_empty_is_noop():
 @pytest.mark.asyncio
 async def test_send_snapshot_handles_disconnect_midway():
     mgr = BroadcastManager()
-    for i in range(10):
+    for i in range(600):
         mgr._record_live(f"e{i}", _frame(f"e{i}"))
     ws = FakeWS(fail_after=3)
     ok = await mgr._send_snapshot(ws)

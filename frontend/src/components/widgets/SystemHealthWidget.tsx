@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
@@ -65,6 +66,7 @@ interface SatnogsStationsEnvelope {
 
 interface SystemHealthWidgetProps {
   isOpen: boolean;
+  inline?: boolean;
   onClose: () => void;
 }
 
@@ -183,6 +185,7 @@ function statusColor(status: PollerStatus): string {
 
 export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
   isOpen,
+  inline = false,
   onClose,
 }) => {
   const { hasRole } = useAuth();
@@ -321,11 +324,11 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
     ? satnogsMeta.source.replaceAll("_", " ").toUpperCase()
     : "UNAVAILABLE";
 
-  return (
+  const content = (
     <div
-      className="absolute top-[calc(100%+23px)] left-1/2 z-[100] w-[640px] max-h-[calc(100vh-88px)] -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200"
+      className={inline ? "mobile-inline-widget" : "hud-popover health-popover absolute top-[calc(100%+23px)] left-1/2 z-[100] w-[640px] max-h-[calc(100vh-88px)] -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200"}
       onClick={(e) => e.stopPropagation()}
-      role="dialog"
+      role={inline ? undefined : "dialog"}
       aria-label="System Health Checker"
     >
       <div className="flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border border-hud-green/30 bg-black/90 backdrop-blur-xl">
@@ -510,4 +513,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({
       </div>
     </div>
   );
+  if (inline) return content;
+  const root = document.querySelector(".hud-viewport");
+  return root ? createPortal(content, root) : content;
 };

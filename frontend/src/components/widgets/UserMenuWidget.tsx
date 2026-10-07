@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { LogOut, User, X } from "lucide-react";
 import React from "react";
 import { useAuth } from "../../hooks/useAuth";
@@ -15,9 +16,9 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
   const { user, logout, hasRole } = useAuth();
   if (!isOpen || !user) return null;
 
-  return (
+  const content = (
     <div
-      className="absolute top-[calc(100%+20px)] right-0 z-[100] w-[320px] animate-in slide-in-from-top-2 fade-in duration-200"
+      className="hud-popover absolute top-[calc(100%+20px)] right-0 z-[100] w-[320px] animate-in slide-in-from-top-2 fade-in duration-200"
       onClick={(e) => e.stopPropagation()}
       role="dialog"
       aria-label="User Menu"
@@ -100,4 +101,6 @@ export const UserMenuWidget: React.FC<UserMenuWidgetProps> = ({
       </div>
     </div>
   );
+  const root = document.querySelector(".hud-viewport");
+  return root ? createPortal(content, root) : content;
 };

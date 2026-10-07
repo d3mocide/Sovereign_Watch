@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Server, X } from "lucide-react";
 import React from "react";
 import { FilterPresets } from "./FilterPresets";
@@ -5,6 +6,7 @@ import { WatchlistManager } from "./WatchlistManager";
 
 interface SystemSettingsWidgetProps {
   isOpen: boolean;
+  inline?: boolean;
   onClose: () => void;
   filters: Record<string, boolean | string | number | string[]>;
   onFilterChange: (
@@ -15,17 +17,18 @@ interface SystemSettingsWidgetProps {
 
 export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
   isOpen,
+  inline = false,
   onClose,
   filters,
   onFilterChange,
 }) => {
   if (!isOpen) return null;
 
-  return (
+  const content = (
     <div
-      className="absolute top-[calc(100%+20px)] left-1/2 -translate-x-1/2 z-[100] w-[320px] animate-in slide-in-from-top-2 fade-in duration-200"
+      className={inline ? "mobile-inline-widget" : "hud-popover absolute top-[calc(100%+20px)] left-1/2 -translate-x-1/2 z-[100] w-[320px] animate-in slide-in-from-top-2 fade-in duration-200"}
       onClick={(e) => e.stopPropagation()}
-      role="dialog"
+      role={inline ? undefined : "dialog"}
       aria-label="System Settings"
     >
       <div className="bg-black/90 backdrop-blur-xl border border-hud-green/30 rounded-lg shadow-xl overflow-hidden flex flex-col">
@@ -100,4 +103,7 @@ export const SystemSettingsWidget: React.FC<SystemSettingsWidgetProps> = ({
       </div>
     </div>
   );
+  if (inline) return content;
+  const root = document.querySelector(".hud-viewport");
+  return root ? createPortal(content, root) : content;
 };

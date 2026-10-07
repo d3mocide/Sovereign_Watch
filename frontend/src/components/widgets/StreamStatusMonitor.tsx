@@ -30,7 +30,7 @@ function streamTextClass(status: string): string {
   return "text-white/25";
 }
 
-export const StreamStatusMonitor: React.FC = () => {
+export const StreamStatusMonitor: React.FC<{emptyLabel?: string}> = ({emptyLabel = '—'}) => {
   const [streamStatuses, setStreamStatuses] = useState<PollerHealth[]>([]);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export const StreamStatusMonitor: React.FC = () => {
       </span>
       <div className="flex items-center gap-1">
         {streamStatuses.length === 0 ? (
-          <span className="text-[8px] text-white/15">—</span>
+          <span className="text-[8px] text-white/15">{emptyLabel}</span>
         ) : (
           streamStatuses.map((s) => (
             <div

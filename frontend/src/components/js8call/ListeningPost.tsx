@@ -1,3 +1,4 @@
+import { MobileTabs } from "../layouts/MobileSections";
 /**
  * ListeningPost — Professional HF Operator Terminal
  *
@@ -127,6 +128,7 @@ export default function ListeningPost({
   isConnected,
   adcOverload = false,
 }: ListeningPostProps) {
+  const [mobilePanel, setMobilePanel] = useState('waterfall');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
@@ -420,9 +422,10 @@ export default function ListeningPost({
   };
 
   return (
-    <div className="flex-1 w-full flex h-full bg-[#05080a] text-slate-300 font-mono text-[11px] overflow-hidden select-none">
+    <div data-mobile-panel={mobilePanel} className="listening-post flex-1 w-full flex h-full bg-[#05080a] text-slate-300 font-mono text-[11px] overflow-hidden select-none">
+      <MobileTabs label="Listening sections" tabs={[{id:'waterfall',label:'Waterfall'},{id:'tuning',label:'Tuning'},{id:'audio',label:'Audio & gain'}]} value={mobilePanel} onChange={setMobilePanel} />
       {/* ── LEFT SIDEBAR: TUNING & FREQ ── */}
-      <div className="w-80 flex flex-col border-r border-[#1a2b36] bg-[#0a1218] shrink-0">
+      <div className="listening-tuning w-80 flex flex-col border-r border-[#1a2b36] bg-[#0a1218] shrink-0">
         {/* Top Header */}
         <div className="p-4 flex items-center gap-2 border-b border-[#1a2b36] bg-[#0d161d]">
           <Activity className="w-4 h-4 text-cyan-400" />
@@ -593,7 +596,7 @@ export default function ListeningPost({
       </div>
 
       {/* ── MAIN AREA: WATERFALL ── */}
-      <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
+      <div className="listening-waterfall flex-1 flex flex-col relative overflow-hidden bg-black">
         {/* ADC overload alert — dismissed automatically after 8 s */}
         {adcOverload && (
           <div className="absolute top-2 left-2 right-2 z-30 flex items-center gap-2 px-3 py-2 rounded bg-rose-900/80 border border-rose-500/60 backdrop-blur-sm">
@@ -768,7 +771,7 @@ export default function ListeningPost({
       </div>
 
       {/* ── RIGHT SIDEBAR: KiwiSDR SETTINGS ── */}
-      <div className="w-72 border-l border-[#1a2b36] bg-[#0a1218] flex flex-col pt-0 overflow-y-auto">
+      <div className="listening-audio w-72 border-l border-[#1a2b36] bg-[#0a1218] flex flex-col pt-0 overflow-y-auto">
         <CollapsibleSection
           title="Gain & Squelch"
           icon={Activity}

@@ -3,8 +3,9 @@ import {
   IconLayer,
   PathLayer,
   ScatterplotLayer,
-  SolidPolygonLayer,
 } from "@deck.gl/layers";
+import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
+import { SATELLITE_MESH, satelliteMeshScale } from "./satelliteMesh";
 import { CoTEntity, GroundTrackPoint } from "../types";
 
 type PathPoint3D = [number, number, number];
@@ -103,65 +104,6 @@ interface OrbitalLayerProps {
   onHover: (entity: CoTEntity | null, x: number, y: number) => void;
 }
 
-interface FaceDatum {
-  polygon: number[][];
-  entity: CoTEntity;
-  shade?: number;
-}
-
-function buildGemFaces(
-  satellites: CoTEntity[],
-  selectedUid: string | undefined,
-  zoom: number = 0,
-): FaceDatum[] {
-  const faces: FaceDatum[] = [];
-  const pxToDeg = 360 / 512 / Math.pow(2, Math.max(0, zoom));
-
-  for (const d of satellites) {
-    const isSelected = selectedUid === d.uid;
-    const alt = d.altitude || 1000;
-
-    const desiredPx = isSelected ? 12 : 6;
-    const sizeDegUnclamped = desiredPx * pxToDeg;
-
-    // Compensate for altitude expansion
-    const altRadiusScale = (6371 + alt / 1000) / 6371;
-    const sizeDeg = Math.min(
-      Math.max(sizeDegUnclamped / altRadiusScale, 0.02),
-      1.0,
-    );
-
-    const latRad = (d.lat * Math.PI) / 180;
-    const lonScale = Math.min(1 / Math.max(0.01, Math.cos(latRad)), 10);
-
-    // Vertical apex offset
-    const gemH = sizeDeg * 111_000 * altRadiusScale * 0.6;
-
-    const apex = [d.lon, d.lat, alt + gemH];
-    const nadir = [d.lon, d.lat, alt - gemH];
-    const vN = [d.lon, d.lat + sizeDeg, alt];
-    const vE = [d.lon + sizeDeg * lonScale, d.lat, alt];
-    const vS = [d.lon, d.lat - sizeDeg, alt];
-    const vW = [d.lon - sizeDeg * lonScale, d.lat, alt];
-
-    const tris = [
-      [apex, vN, vE],
-      [apex, vE, vS],
-      [apex, vS, vW],
-      [apex, vW, vN],
-      [nadir, vE, vN],
-      [nadir, vS, vE],
-      [nadir, vW, vS],
-      [nadir, vN, vW],
-    ];
-    const shades = [1.0, 0.75, 0.5, 0.75, 0.8, 0.6, 0.4, 0.6];
-    for (let i = 0; i < tris.length; i++) {
-      faces.push({ polygon: tris[i], entity: d, shade: shades[i] });
-    }
-  }
-  return faces;
-}
-
 export function getOrbitalLayers({
   satellites,
   selectedEntity,
@@ -176,11 +118,6 @@ export function getOrbitalLayers({
 }: OrbitalLayerProps) {
   const R_EARTH_KM = 6371;
   const sfx = projectionMode ? `-${projectionMode}` : "";
-  const gemFaces =
-    projectionMode === "globe"
-      ? buildGemFaces(satellites, selectedEntity?.uid, zoom)
-      : [];
-
   const selectedSat = selectedEntity
     ? satellites.find((s) => s.uid === selectedEntity.uid)
     : null;
@@ -359,52 +296,19 @@ export function getOrbitalLayers({
     // 4. Satellite Markers
     ...(projectionMode === "globe"
       ? [
-          new SolidPolygonLayer({
+          new SimpleMeshLayer<CoTEntity>({
             id: `satellite-markers-globe${sfx}`,
-            data: gemFaces,
-            getPolygon: (d: FaceDatum) => d.polygon as unknown as number[],
-            extruded: false,
-            getFillColor: (d: FaceDatum) => {
-              const base = getSatColor(
-                d.entity.detail?.category as string,
-                220,
-              );
-              const shade = d.shade || 1.0;
-              return [
-                Math.round(base[0] * shade),
-                Math.round(base[1] * shade),
-                Math.round(base[2] * shade),
-                base[3],
-              ];
-            },
+            data: satellites,
+            mesh: SATELLITE_MESH,
+            getPosition: d => [d.lon, d.lat, d.altitude || 1000],
+            getScale: d => satelliteMeshScale(d, selectedEntity?.uid, zoom),
+            getColor: d => getSatColor(d.detail?.category as string, 220),
+            material: false,
             pickable: true,
-            wrapLongitude: false,
-            parameters: { depthTest: true },
-            onHover: (info: {
-              object?: FaceDatum | null;
-              x: number;
-              y: number;
-            }) => {
-              onHover(
-                (info.object?.entity ?? null) as CoTEntity | null,
-                info.x,
-                info.y,
-              );
-            },
-            onClick: (info: { object?: FaceDatum | null }) => {
-              const entity = info.object?.entity ?? null;
-              if (entity) {
-                const newSelection =
-                  selectedEntity?.uid === entity.uid ? null : entity;
-                onEntitySelect(newSelection);
-              } else {
-                onEntitySelect(null);
-              }
-            },
-            updateTriggers: {
-              getPolygon: [selectedEntity?.uid],
-              getFillColor: [selectedEntity?.uid],
-            },
+            parameters: { depthCompare: "less-equal" },
+            onHover: (info: PickingInfo<CoTEntity>) => onHover(info.object ?? null, info.x, info.y),
+            onClick: (info: PickingInfo<CoTEntity>) => onEntitySelect(info.object?.uid === selectedEntity?.uid ? null : info.object ?? null),
+            updateTriggers: { getScale: [selectedEntity?.uid, zoom] },
           }),
         ]
       : [

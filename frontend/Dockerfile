@@ -1,9 +1,9 @@
 # =============================================================================
 # Stage 1 — deps: install pnpm + locked dependencies (shared by all stages)
 # =============================================================================
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9.15.9
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 

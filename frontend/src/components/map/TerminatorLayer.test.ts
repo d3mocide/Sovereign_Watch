@@ -5,7 +5,7 @@
  * Mercator maps, which don't care about edge length).
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 vi.mock("@deck.gl/layers", () => {
   class GeoJsonLayer {
@@ -23,7 +23,10 @@ import { vi } from "vitest";
 import { getTerminatorLayer } from "./TerminatorLayer";
 
 describe("getTerminatorLayer", () => {
-  it("keeps every edge of the night polygon within a small lat/lon step", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["2026-10-07T14:30:00Z", "2026-06-21T12:00:00Z", "2026-12-21T12:00:00Z"])("keeps valid, finely sampled night edges at %s", (date) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(date));
     const layer = getTerminatorLayer(true) as unknown as {
       props: { data: { features: [{ geometry: { coordinates: number[][][] } }] } };
     };
@@ -33,6 +36,7 @@ describe("getTerminatorLayer", () => {
     for (let i = 1; i < ring.length; i++) {
       const [lon0, lat0] = ring[i - 1];
       const [lon1, lat1] = ring[i];
+      expect(Math.abs(lat1)).toBeLessThanOrEqual(90);
       const latStep = Math.abs(lat1 - lat0);
       expect(latStep).toBeLessThanOrEqual(MAX_STEP_DEG);
 

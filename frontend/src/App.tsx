@@ -1,6 +1,10 @@
+import { MobileStatusCards } from './components/widgets/MobileStatusCards';
+import { useCompactLayout } from './hooks/useCompactLayout';
+import { MobileTacticalKey } from './components/map/MobileTacticalKey';
+import { MobileOverviewCard } from "./components/layouts/MobileOverviewCard";
 import type { FeatureCollection } from "geojson";
 import { AlertTriangle, CheckCircle2, ExternalLink, Globe, Loader2, Plane, Radar, Ship, X, XCircle } from "lucide-react";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentProps, type ComponentType } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties } from "react";
 import { getSetupStatus } from "./api/auth";
 import { fetchMissionH3Risk, type RiskSeverity } from "./api/h3Risk";
 import { IntelSidebar } from "./components/layouts/IntelSidebar";
@@ -138,6 +142,7 @@ function AuthenticatedApp() {
 
   // ── View & sidebar state ──────────────────────────────────────────────────
   const { viewMode, setViewMode } = useViewMode();
+  const compactLayout = useCompactLayout();
   const {
     isAlertsOpen,
     setIsAlertsOpen,
@@ -178,6 +183,7 @@ function AuthenticatedApp() {
   // ── Entity selection ──────────────────────────────────────────────────────
   const {
     selectedEntity,
+    selectionRevision,
     setSelectedEntity,
     historySegments,
     setHistorySegments,
@@ -338,7 +344,7 @@ function AuthenticatedApp() {
     useState<FeatureCollection | null>(null);
 
   useEffect(() => {
-    fetch("/world-countries.json")
+    fetch("/world-countries-overview.json")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -555,14 +561,14 @@ function AuthenticatedApp() {
   const mapHudStack =
     viewMode === "TACTICAL" || viewMode === "ORBITAL" ? (
       <div
-        className="pointer-events-none absolute top-[74px] z-20 flex flex-col items-end gap-3"
+        className="map-hud-stack pointer-events-none absolute z-20 flex flex-col items-end gap-3"
         style={{
-          right: hasRightSidebarContent ? 380 : 20,
+          "--hud-stack-right": `${hasRightSidebarContent ? 380 : 20}px`,
           transition: "right 0.3s ease-in-out",
-        }}
+        } as CSSProperties}
       >
         {/* 1. NWS Alerts (Tactical Only) */}
-        {viewMode === "TACTICAL" && filters?.showNWSAlerts !== false && (nwsAlertsData?.features?.length ?? 0) > 0 && (
+        {!compactLayout && viewMode === "TACTICAL" && filters?.showNWSAlerts !== false && (nwsAlertsData?.features?.length ?? 0) > 0 && (
           <div className="pointer-events-auto">
             <NWSAlertsWidget
               nwsAlerts={nwsAlertsData}
@@ -825,7 +831,7 @@ function AuthenticatedApp() {
   }, [viewMode]);
 
   const articleViewerOverlay = activeIntelArticle ? (
-    <div className="absolute z-20 top-[71px] left-6 right-6 bottom-14 pointer-events-none flex justify-center">
+    <div className="absolute z-20 top-[calc(var(--hud-top)+16px)] left-2 right-2 sm:left-6 sm:right-6 bottom-14 pointer-events-none flex justify-center">
       <div className="pointer-events-auto w-full max-w-5xl h-full max-h-[78vh] bg-black/90 border border-white/15 backdrop-blur-xl rounded-sm shadow-2xl overflow-hidden flex flex-col">
         <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
           <div className="min-w-0 flex items-center gap-2">
@@ -961,6 +967,14 @@ function AuthenticatedApp() {
         />
       )}
       <MainHud
+        viewMode={viewMode}
+        selectionKey={selectedEntity && selectedEntity.type !== "sitrep" ? `${selectedEntity.uid}:${selectionRevision}` : undefined}
+        selectionLabel={selectedEntity?.type !== 'sitrep' ? selectedEntity?.callsign || selectedEntity?.uid : undefined}
+        statusPanel={compactLayout && (viewMode === "TACTICAL" || viewMode === "ORBITAL") ? <><MobileStatusCards health={health} counts={trackCounts} mission={currentMission} />{mapHudStack}</> : mapHudStack}
+        mobileSummary={<MobileOverviewCard view={viewMode === 'ORBITAL' ? 'ORBITAL' : viewMode === 'INTEL' ? 'INTEL' : 'TACTICAL'} counts={trackCounts} eventCount={gdeltData?.features?.length ?? 0}>{viewMode === 'TACTICAL' && <MobileTacticalKey showAir={filters.showAir ?? true} showSea={filters.showSea ?? true} />}{viewMode === 'TACTICAL' && filters.showNWSAlerts !== false && <NWSAlertsWidget compact nwsAlerts={nwsAlertsData} mission={currentMission} onEvent={addEvent} />}{viewMode === 'INTEL' && <div className="mobile-intel-news"><OsintTicker speed={110} /></div>}</MobileOverviewCard>}
+        overlayOpen={isTerminalOpen || isAlertsOpen || isSystemSettingsOpen || isSystemHealthOpen || isUserMenuOpen}
+        onOverlayClose={() => { setIsTerminalOpen(false); setIsAlertsOpen(false); setIsSystemSettingsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(false); }}
+        onPanelOpen={() => { setIsTerminalOpen(false); setIsAlertsOpen(false); setIsSystemSettingsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(false); }}
         topBar={
           <TopBar
             alertsCount={alertsCount}
@@ -983,25 +997,23 @@ function AuthenticatedApp() {
             isReplayMode={replayMode}
             viewMode={viewMode}
             onViewChange={setViewMode}
-            onAlertsClick={() => setIsAlertsOpen(!isAlertsOpen)}
+            onAlertsClick={() => { setIsTerminalOpen(false); setIsSystemSettingsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(false); setIsAlertsOpen(!isAlertsOpen); }}
             isAlertsOpen={isAlertsOpen}
             alerts={events.filter((e) => e.type === "alert")}
             onAlertsClose={() => setIsAlertsOpen(false)}
             filters={filters as any}
             onFilterChange={handleFilterChange as any}
             isSystemSettingsOpen={isSystemSettingsOpen}
-            onSystemSettingsClick={() =>
-              setIsSystemSettingsOpen(!isSystemSettingsOpen)
+            onSystemSettingsClick={() => { setIsTerminalOpen(false); setIsAlertsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(false); setIsSystemSettingsOpen(!isSystemSettingsOpen); }
             }
             onSystemSettingsClose={() => setIsSystemSettingsOpen(false)}
             isSystemHealthOpen={isSystemHealthOpen}
-            onSystemHealthClick={() =>
-              setIsSystemHealthOpen(!isSystemHealthOpen)
+            onSystemHealthClick={() => { setIsTerminalOpen(false); setIsAlertsOpen(false); setIsSystemSettingsOpen(false); setIsUserMenuOpen(false); setIsSystemHealthOpen(!isSystemHealthOpen); }
             }
             onSystemHealthClose={() => setIsSystemHealthOpen(false)}
-            onTerminalClick={() => setIsTerminalOpen(!isTerminalOpen)}
+            onTerminalClick={() => { setIsAlertsOpen(false); setIsSystemSettingsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(false); setIsTerminalOpen(!isTerminalOpen); }}
             isUserMenuOpen={isUserMenuOpen}
-            onUserMenuClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            onUserMenuClick={() => { setIsTerminalOpen(false); setIsAlertsOpen(false); setIsSystemSettingsOpen(false); setIsSystemHealthOpen(false); setIsUserMenuOpen(!isUserMenuOpen); }}
             onUserMenuClose={() => setIsUserMenuOpen(false)}
           />
         }
@@ -1175,7 +1187,6 @@ function AuthenticatedApp() {
             />
 
              {articleViewerOverlay}
-             {mapHudStack}
 
             {replayMode && (
               <TimeControls
@@ -1255,7 +1266,6 @@ function AuthenticatedApp() {
             issPosition={issPosition}
             issTrack={issTrack}
             />
-             {mapHudStack}
           </>
         ) : viewMode === "INTEL" ? (
           <div className="absolute inset-0 flex flex-col">
@@ -1266,9 +1276,9 @@ function AuthenticatedApp() {
               onEntitySelect={handleEntitySelect}
             />
             {articleViewerOverlay}
-            <div className="absolute bottom-0 left-0 right-0 z-10">
+            {!compactLayout && <div className="intel-mobile-ticker absolute bottom-0 left-0 right-0 z-10">
               <OsintTicker speed={110} />
-            </div>
+            </div>}
           </div>
         ) : viewMode === "DASHBOARD" ? (
           <DashboardView
@@ -1287,10 +1297,10 @@ function AuthenticatedApp() {
             ixpData={ixpData}
             facilityData={facilityData}
             dnsRootData={dnsRootData}
-            
+            nwsAlertsData={nwsAlertsData}
           />
         ) : (
-          <div className="w-full h-full pt-14 overflow-hidden bg-slate-950">
+          <div className="radio-view w-full h-full pt-[var(--hud-top)] overflow-hidden bg-slate-950">
             <RadioTerminal
               stations={js8Stations}
               logEntries={js8LogEntries}

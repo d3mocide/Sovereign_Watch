@@ -60,17 +60,24 @@ function computeTerminator(date: Date) {
   // The terminator follows a great circle perpendicular to the sub-solar point
   const coords: number[][] = [];
 
-  // Sample every 1 degree of longitude
-  for (let lon_deg = -180; lon_deg <= 180; lon_deg++) {
-    const lon = lon_deg * Math.PI / 180;
-
-    // Formula for terminator latitude:
-    // tan(lat) = -cos(lon - subSolarLon) / tan(subSolarLat)
-    // lat = atan(...)
-    const lat = Math.atan(-Math.cos(lon - subSolarLon) / Math.tan(subSolarLat));
-
-    // Convert back to degrees
-    coords.push([lon_deg, lat * 180 / Math.PI]);
+  const latitudeAt = (longitude: number) => Math.atan(
+    -Math.cos(longitude * Math.PI / 180 - subSolarLon) / Math.tan(subSolarLat)
+  ) * 180 / Math.PI;
+  // Refine steep equinox sections so globe edges follow the surface.
+  const appendSegment = (left: number, right: number, depth = 0) => {
+    const leftLat = latitudeAt(left);
+    const rightLat = latitudeAt(right);
+    if (Math.abs(rightLat - leftLat) > 2 && depth < 20) {
+      const midpoint = (left + right) / 2;
+      appendSegment(left, midpoint, depth + 1);
+      appendSegment(midpoint, right, depth + 1);
+    } else {
+      coords.push([right, rightLat]);
+    }
+  };
+  coords.push([-180, latitudeAt(-180)]);
+  for (let longitude = -179; longitude <= 180; longitude++) {
+    appendSegment(longitude - 1, longitude);
   }
 
   // To make a polygon representing the *night* side, we need to connect the terminator
@@ -92,7 +99,7 @@ function computeTerminator(date: Date) {
 
   const rampSteps = Math.max(1, Math.round(Math.abs(poleLat - lastLat) / LAT_STEP_DEG));
   for (let i = 1; i <= rampSteps; i++) {
-    coords.push([180, lastLat + (poleLat - lastLat) * (i / rampSteps)]);
+    coords.push([180, i === rampSteps ? poleLat : lastLat + (poleLat - lastLat) * (i / rampSteps)]);
   }
 
   // Start this ramp exactly at the pole (i = returnSteps) so the pole-to-pole
@@ -100,7 +107,7 @@ function computeTerminator(date: Date) {
   // down to the terminator curve's start.
   const returnSteps = Math.max(1, Math.round(Math.abs(poleLat - firstLat) / LAT_STEP_DEG));
   for (let i = returnSteps; i >= 1; i--) {
-    coords.push([-180, firstLat + (poleLat - firstLat) * (i / returnSteps)]);
+    coords.push([-180, i === returnSteps ? poleLat : firstLat + (poleLat - firstLat) * (i / returnSteps)]);
   }
 
   // Close the polygon

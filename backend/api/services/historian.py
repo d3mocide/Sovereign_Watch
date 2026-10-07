@@ -240,6 +240,11 @@ async def historian_task():
                             "Historian throughput metrics error: %s", redis_err
                         )
 
+            # Position-only binary orbital events have no historical DB writes.
+            # Legacy JSON catalogue events still follow the TLE dedup/upsert path.
+            if msg.topic == "orbital_raw" and msg.value.startswith(b"\xbf\x01\xbf"):
+                continue
+
             try:
                 data = json.loads(msg.value.decode("utf-8"))
 

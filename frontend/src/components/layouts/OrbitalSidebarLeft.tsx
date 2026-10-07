@@ -1,3 +1,4 @@
+import { MobileSections } from "./MobileSections";
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import { MapFilters, PassResult } from '../../types';
@@ -115,7 +116,8 @@ export const OrbitalSidebarLeft: React.FC<OrbitalSidebarLeftProps> = ({
     };
 
     return (
-        <div className="flex flex-col h-full gap-2 animate-in fade-in duration-1000">
+<MobileSections label="Orbital sections" className="flex flex-col h-full gap-2" sections={[
+{ id: "satellites", label: "Satellites", content: (<>
             <OrbitalCategoryPills filters={filters} onFilterChange={onFilterChange} trackCount={trackCount} />
 
 
@@ -143,6 +145,9 @@ export const OrbitalSidebarLeft: React.FC<OrbitalSidebarLeftProps> = ({
                 )}
             </div>
 
+
+</>) },
+{ id: "passes", label: "Passes", content: (<>
             <PassPredictorWidget
                 passes={widgetPasses}
                 homeLocation={{ lat: observerLat, lon: observerLon }}
@@ -159,6 +164,9 @@ export const OrbitalSidebarLeft: React.FC<OrbitalSidebarLeftProps> = ({
                 }
             />
 
+
+</>) },
+{ id: "doppler", label: "Doppler", content: (<>
             {/* Doppler — on-demand when a sat is selected */}
             {selectedSatNorad && (
                 <>
@@ -172,6 +180,9 @@ export const OrbitalSidebarLeft: React.FC<OrbitalSidebarLeftProps> = ({
                     )}
                 </>
             )}
-        </div>
+
+{!selectedSatNorad && <p className="mobile-empty-state xl:hidden">Select a satellite on the map to inspect its Doppler shift.</p>}
+</>) }
+]} />
     );
 };

@@ -11,7 +11,7 @@
 
 import type { Feature, FeatureCollection } from "geojson";
 import { CloudRain, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { alertIntersectsAOT } from "../../utils/map/geoUtils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ interface Props {
   mission?: Mission | null;
   onEvent?: (event: IntelEvent) => void;
   visible?: boolean;
+  compact?: boolean;
 }
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
@@ -88,7 +89,8 @@ function currentTimestamp(): number { return Date.now(); }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }: Props) {
+export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true, compact = false }: Props) {
+  const contentId = useId();
   const [expanded, setExpanded] = useState(false);
 
   // Dedup: map of alertId → timestamp of last notification
@@ -147,19 +149,18 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
   const total = features.length;
   const aotTotal = aotFeatures.length;
 
-  if (total === 0) return null;
+  if (total === 0 && !compact) return null;
 
   return (
     <div
-      className="pointer-events-auto flex flex-col overflow-hidden
-                 animate-in slide-in-from-top duration-500 font-mono"
-      style={{ width: 262 }}
+      className={`nws-alerts-widget pointer-events-auto flex flex-col overflow-hidden font-mono ${compact ? 'mobile-nws-alerts' : 'animate-in slide-in-from-top duration-500'}`}
+      style={{ width: compact ? "100%" : 262 }}
     >
       {/* ── Header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        aria-controls="nws-alerts-content"
+        aria-controls={contentId}
         aria-label="Toggle NWS Alerts"
         className={`flex items-center justify-between p-2.5 backdrop-blur-md text-left w-full border focus-visible:ring-1 focus-visible:ring-amber-400 outline-none ${
           expanded ? "rounded-t-sm border-b-0" : "rounded-sm"
@@ -172,7 +173,7 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
         <div className="flex items-center gap-2">
           <CloudRain size={12} style={{ color: headerColor }} />
           <span className="text-[10px] font-bold tracking-[.25em] text-white/50 uppercase">
-            NWS_Alerts
+            {compact ? 'NWS Weather' : 'NWS_Alerts'}
           </span>
         </div>
 
@@ -181,25 +182,25 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
           {counts.extreme > 0 && (
             <span className="text-[9px] font-bold px-1 py-0.5 rounded"
                   style={{ background: "#ef444420", border: "1px solid #ef444455", color: "#ef4444" }}>
-              {counts.extreme}E
+              {counts.extreme}{compact ? ' Extreme' : 'E'}
             </span>
           )}
           {counts.severe > 0 && (
             <span className="text-[9px] font-bold px-1 py-0.5 rounded"
                   style={{ background: "#f9731620", border: "1px solid #f9731655", color: "#f97316" }}>
-              {counts.severe}S
+              {counts.severe}{compact ? ' Severe' : 'S'}
             </span>
           )}
           {counts.moderate > 0 && (
             <span className="text-[9px] font-bold px-1 py-0.5 rounded"
                   style={{ background: "#f59e0b20", border: "1px solid #f59e0b55", color: "#f59e0b" }}>
-              {counts.moderate}M
+              {counts.moderate}{compact ? ' Moderate' : 'M'}
             </span>
           )}
           {aotTotal === 0 && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white/30"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
-              0 ACTIVE
+              {compact ? (!nwsAlerts ? 'PENDING' : !mission ? 'SET MISSION' : '0 IN AREA') : '0 ACTIVE'}
             </span>
           )}
           {expanded ? (
@@ -213,7 +214,7 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
       {/* ── Body ── */}
       {expanded && (
         <div
-          id="nws-alerts-content"
+          id={contentId}
           className="border border-t-0 bg-black/50 backdrop-blur-md rounded-b-sm"
           style={{ borderColor: `${headerColor}25` }}
         >
@@ -232,7 +233,7 @@ export function NWSAlertsWidget({ nwsAlerts, mission, onEvent, visible = true }:
           <div className="max-h-60 overflow-y-auto scrollbar-none">
             {sorted.length === 0 ? (
               <div className="px-2.5 py-2 text-[9px] text-white/20 italic">
-                No alerts in mission area
+                {compact && !nwsAlerts ? 'Weather data is still loading.' : compact && !mission ? 'Select a mission area to see local weather alerts.' : 'No alerts in mission area'}
               </div>
             ) : (
               sorted.map((f, i) => {

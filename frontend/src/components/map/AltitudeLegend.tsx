@@ -24,7 +24,7 @@ export const AltitudeLegend: React.FC<AltitudeLegendProps> = ({ visible }) => {
     )`;
 
     return (
-        <div className="absolute left-[410px] top-[82px] z-10 w-[110px] pointer-events-none select-none flex flex-col widget-panel overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="absolute left-[410px] top-[82px] z-10 w-[110px] pointer-events-none select-none hidden xl:flex flex-col widget-panel overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
             {/* Header */}
             <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
                 <Crosshair size={12} className="text-hud-green" />

@@ -15,6 +15,7 @@ export function processSatelliteFrame(
   now: number,
   dt: number,
 ): CoTEntity[] {
+  if (!filters?.showSatellites) return [];
   const filteredSatellites: CoTEntity[] = [];
 
   for (const [uid, sat] of satellites) {

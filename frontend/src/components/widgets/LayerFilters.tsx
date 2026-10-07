@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import { useCompactLayout } from '../../hooks/useCompactLayout';
+import { MobileTrackFilters } from './MobileTrackFilters';
+import React, { useId, useState } from "react";
 import {
   Activity,
   Anchor,
@@ -62,9 +64,13 @@ interface LayerFiltersProps {
 }
 
 export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterChange }) => {
+  const compact = useCompactLayout();
+  const filterId = useId();
   const [airExpanded, setAirExpanded] = useState(false);
   const [seaExpanded, setSeaExpanded] = useState(false);
   const [satExpanded, setSatExpanded] = useState(false);
+
+  if (compact) return <MobileTrackFilters filters={filters} onFilterChange={onFilterChange} />;
 
   return (
     <div className="flex flex-col overflow-hidden relative">
@@ -106,12 +112,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
           {filters.showAir && airExpanded && (
             <div className="grid grid-cols-2 gap-1.5 px-0 mt-1">
               {/* Helicopter Sub-filter */}
-              <label htmlFor="filter-showhelicopter" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showHelicopter !== false ? 'border-air-accent/50 bg-air-accent/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showhelicopter`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showHelicopter !== false ? 'border-air-accent/50 bg-air-accent/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-air-accent">
                   <Helicopter size={10} className={filters.showHelicopter !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showHelicopter !== false ? 'text-white/80' : 'text-white/30'}`}>HELO</span>
                 </div>
-                <input id="filter-showhelicopter"
+                <input id={`${filterId}-filter-showhelicopter`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showHelicopter !== false}
@@ -123,12 +129,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Military Sub-filter */}
-              <label htmlFor="filter-showmilitary" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showMilitary !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showmilitary`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showMilitary !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-amber-500">
                   <Shield size={10} className={filters.showMilitary !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showMilitary !== false ? 'text-amber-500/80' : 'text-white/30'}`}>MIL</span>
                 </div>
-                <input id="filter-showmilitary"
+                <input id={`${filterId}-filter-showmilitary`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showMilitary !== false}
@@ -140,12 +146,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Gov Sub-filter */}
-              <label htmlFor="filter-showgovernment" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showGovernment !== false ? 'border-blue-400/50 bg-blue-400/10 shadow-[0_0_8px_rgba(96,165,250,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showgovernment`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showGovernment !== false ? 'border-blue-400/50 bg-blue-400/10 shadow-[0_0_8px_rgba(96,165,250,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-blue-400">
                   <Landmark size={10} className={filters.showGovernment !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showGovernment !== false ? 'text-blue-400/80' : 'text-white/30'}`}>GOV</span>
                 </div>
-                <input id="filter-showgovernment"
+                <input id={`${filterId}-filter-showgovernment`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showGovernment !== false}
@@ -157,12 +163,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Commercial Sub-filter */}
-              <label htmlFor="filter-showcommercial" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showCommercial !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showcommercial`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showCommercial !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-sky-400">
                   <Building2 size={10} className={filters.showCommercial !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showCommercial !== false ? 'text-sky-400/80' : 'text-white/30'}`}>COM</span>
                 </div>
-                <input id="filter-showcommercial"
+                <input id={`${filterId}-filter-showcommercial`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showCommercial !== false}
@@ -174,12 +180,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Civilian/GA Sub-filter */}
-              <label htmlFor="filter-showprivate" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPrivate !== false ? 'border-hud-green/30 bg-hud-green/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showprivate`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPrivate !== false ? 'border-hud-green/30 bg-hud-green/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-hud-green">
                   <Plane size={10} className={filters.showPrivate !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showPrivate !== false ? 'text-hud-green/80' : 'text-white/30'}`}>CIV</span>
                 </div>
-                <input id="filter-showprivate"
+                <input id={`${filterId}-filter-showprivate`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showPrivate !== false}
@@ -191,12 +197,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Drone Sub-filter */}
-              <label htmlFor="filter-showdrone" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showDrone !== false ? 'border-rose-400/50 bg-rose-400/10 shadow-[0_0_8px_rgba(251,113,133,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showdrone`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showDrone !== false ? 'border-rose-400/50 bg-rose-400/10 shadow-[0_0_8px_rgba(251,113,133,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-rose-400">
                   <Cpu size={10} className={filters.showDrone !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showDrone !== false ? 'text-rose-400/80' : 'text-white/30'}`}>DRONE</span>
                 </div>
-                <input id="filter-showdrone"
+                <input id={`${filterId}-filter-showdrone`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showDrone !== false}
@@ -247,12 +253,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
           {filters.showSea && seaExpanded && (
             <div className="grid grid-cols-2 gap-1.5 px-0 mt-1">
               {/* Cargo */}
-              <label htmlFor="filter-showcargo" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showCargo !== false ? 'border-sea-accent/50 bg-sea-accent/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showcargo`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showCargo !== false ? 'border-sea-accent/50 bg-sea-accent/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-sea-accent">
                   <Package size={10} className={filters.showCargo !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showCargo !== false ? 'text-sea-accent/80' : 'text-white/30'}`}>CARGO</span>
                 </div>
-                <input id="filter-showcargo"
+                <input id={`${filterId}-filter-showcargo`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showCargo !== false}
@@ -264,12 +270,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Tanker */}
-              <label htmlFor="filter-showtanker" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTanker !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showtanker`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTanker !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-amber-500">
                   <Droplets size={10} className={filters.showTanker !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showTanker !== false ? 'text-amber-500/80' : 'text-white/30'}`}>TANKER</span>
                 </div>
-                <input id="filter-showtanker"
+                <input id={`${filterId}-filter-showtanker`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showTanker !== false}
@@ -281,12 +287,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Passenger */}
-              <label htmlFor="filter-showpassenger" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPassenger !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showpassenger`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPassenger !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-sky-400">
                   <Users size={10} className={filters.showPassenger !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showPassenger !== false ? 'text-sky-400/80' : 'text-white/30'}`}>PASSENGER</span>
                 </div>
-                <input id="filter-showpassenger"
+                <input id={`${filterId}-filter-showpassenger`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showPassenger !== false}
@@ -298,12 +304,12 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* Fishing */}
-              <label htmlFor="filter-showfishing" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showFishing !== false ? 'border-hud-green/30 bg-hud-green/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showfishing`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showFishing !== false ? 'border-hud-green/30 bg-hud-green/10 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-hud-green">
                   <Waves size={10} className={filters.showFishing !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showFishing !== false ? 'text-hud-green/80' : 'text-white/30'}`}>FISHING</span>
                 </div>
-                <input id="filter-showfishing"
+                <input id={`${filterId}-filter-showfishing`}
                   type="checkbox"
                   className="sr-only"
                   checked={filters.showFishing !== false}
@@ -315,82 +321,82 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
               </label>
 
               {/* MILITARY */}
-              <label htmlFor="filter-showseamilitary" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSeaMilitary !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showseamilitary`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSeaMilitary !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-amber-500">
                   <Anchor size={10} className={filters.showSeaMilitary !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSeaMilitary !== false ? 'text-amber-500/80' : 'text-white/30'}`}>MIL</span>
                 </div>
-                <input id="filter-showseamilitary" type="checkbox" className="sr-only" checked={filters.showSeaMilitary !== false} onChange={(e) => onFilterChange('showSeaMilitary', e.target.checked)} />
+                <input id={`${filterId}-filter-showseamilitary`} type="checkbox" className="sr-only" checked={filters.showSeaMilitary !== false} onChange={(e) => onFilterChange('showSeaMilitary', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSeaMilitary !== false ? 'bg-amber-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSeaMilitary !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* LAW ENF */}
-              <label htmlFor="filter-showlawenforcement" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showLawEnforcement !== false ? 'border-sky-500/50 bg-sky-500/10 shadow-[0_0_8px_rgba(14,165,233,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showlawenforcement`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showLawEnforcement !== false ? 'border-sky-500/50 bg-sky-500/10 shadow-[0_0_8px_rgba(14,165,233,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-sky-500">
                   <Shield size={10} className={filters.showLawEnforcement !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showLawEnforcement !== false ? 'text-sky-500/80' : 'text-white/30'}`}>LAW ENF</span>
                 </div>
-                <input id="filter-showlawenforcement" type="checkbox" className="sr-only" checked={filters.showLawEnforcement !== false} onChange={(e) => onFilterChange('showLawEnforcement', e.target.checked)} />
+                <input id={`${filterId}-filter-showlawenforcement`} type="checkbox" className="sr-only" checked={filters.showLawEnforcement !== false} onChange={(e) => onFilterChange('showLawEnforcement', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showLawEnforcement !== false ? 'bg-sky-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showLawEnforcement !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* SAR */}
-              <label htmlFor="filter-showsar" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSar !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showsar`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSar !== false ? 'border-amber-500/50 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-amber-500">
                   <LifeBuoy size={10} className={filters.showSar !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSar !== false ? 'text-amber-500/80' : 'text-white/30'}`}>SAR</span>
                 </div>
-                <input id="filter-showsar" type="checkbox" className="sr-only" checked={filters.showSar !== false} onChange={(e) => onFilterChange('showSar', e.target.checked)} />
+                <input id={`${filterId}-filter-showsar`} type="checkbox" className="sr-only" checked={filters.showSar !== false} onChange={(e) => onFilterChange('showSar', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSar !== false ? 'bg-amber-500/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSar !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* TUG */}
-              <label htmlFor="filter-showtug" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTug !== false ? 'border-gray-400/50 bg-gray-400/10 shadow-[0_0_8px_rgba(156,163,175,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showtug`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showTug !== false ? 'border-gray-400/50 bg-gray-400/10 shadow-[0_0_8px_rgba(156,163,175,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-gray-400">
                   <Activity size={10} className={filters.showTug !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showTug !== false ? 'text-gray-400/80' : 'text-white/30'}`}>TUG</span>
                 </div>
-                <input id="filter-showtug" type="checkbox" className="sr-only" checked={filters.showTug !== false} onChange={(e) => onFilterChange('showTug', e.target.checked)} />
+                <input id={`${filterId}-filter-showtug`} type="checkbox" className="sr-only" checked={filters.showTug !== false} onChange={(e) => onFilterChange('showTug', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showTug !== false ? 'bg-gray-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showTug !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* PLEASURE */}
-              <label htmlFor="filter-showpleasure" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPleasure !== false ? 'border-pink-300/50 bg-pink-300/10 shadow-[0_0_8px_rgba(249,168,212,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showpleasure`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPleasure !== false ? 'border-pink-300/50 bg-pink-300/10 shadow-[0_0_8px_rgba(249,168,212,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-pink-300">
                   <Sailboat size={10} className={filters.showPleasure !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showPleasure !== false ? 'text-pink-300/80' : 'text-white/30'}`}>PLEASURE</span>
                 </div>
-                <input id="filter-showpleasure" type="checkbox" className="sr-only" checked={filters.showPleasure !== false} onChange={(e) => onFilterChange('showPleasure', e.target.checked)} />
+                <input id={`${filterId}-filter-showpleasure`} type="checkbox" className="sr-only" checked={filters.showPleasure !== false} onChange={(e) => onFilterChange('showPleasure', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showPleasure !== false ? 'bg-pink-300/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPleasure !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* HSC */}
-              <label htmlFor="filter-showhsc" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showHsc !== false ? 'border-emerald-300/50 bg-emerald-300/10 shadow-[0_0_8px_rgba(110,231,183,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showhsc`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showHsc !== false ? 'border-emerald-300/50 bg-emerald-300/10 shadow-[0_0_8px_rgba(110,231,183,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-emerald-300">
                   <Zap size={10} className={filters.showHsc !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showHsc !== false ? 'text-emerald-300/80' : 'text-white/30'}`}>HSC</span>
                 </div>
-                <input id="filter-showhsc" type="checkbox" className="sr-only" checked={filters.showHsc !== false} onChange={(e) => onFilterChange('showHsc', e.target.checked)} />
+                <input id={`${filterId}-filter-showhsc`} type="checkbox" className="sr-only" checked={filters.showHsc !== false} onChange={(e) => onFilterChange('showHsc', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showHsc !== false ? 'bg-emerald-300/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showHsc !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* PILOT */}
-              <label htmlFor="filter-showpilot" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPilot !== false ? 'border-teal-400/50 bg-teal-400/10 shadow-[0_0_8px_rgba(45,212,191,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showpilot`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showPilot !== false ? 'border-teal-400/50 bg-teal-400/10 shadow-[0_0_8px_rgba(45,212,191,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-teal-400">
                   <Compass size={10} className={filters.showPilot !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showPilot !== false ? 'text-teal-400/80' : 'text-white/30'}`}>PILOT</span>
                 </div>
-                <input id="filter-showpilot" type="checkbox" className="sr-only" checked={filters.showPilot !== false} onChange={(e) => onFilterChange('showPilot', e.target.checked)} />
+                <input id={`${filterId}-filter-showpilot`} type="checkbox" className="sr-only" checked={filters.showPilot !== false} onChange={(e) => onFilterChange('showPilot', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showPilot !== false ? 'bg-teal-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showPilot !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
               {/* SPECIAL */}
-              <label htmlFor="filter-showspecial" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSpecial !== false ? 'border-zinc-400/50 bg-zinc-400/10 shadow-[0_0_8px_rgba(161,161,170,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showspecial`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSpecial !== false ? 'border-zinc-400/50 bg-zinc-400/10 shadow-[0_0_8px_rgba(161,161,170,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-zinc-400">
                   <Settings size={10} className={filters.showSpecial !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSpecial !== false ? 'text-zinc-400/80' : 'text-white/30'}`}>SPECIAL</span>
                 </div>
-                <input id="filter-showspecial" type="checkbox" className="sr-only" checked={filters.showSpecial !== false} onChange={(e) => onFilterChange('showSpecial', e.target.checked)} />
+                <input id={`${filterId}-filter-showspecial`} type="checkbox" className="sr-only" checked={filters.showSpecial !== false} onChange={(e) => onFilterChange('showSpecial', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSpecial !== false ? 'bg-zinc-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSpecial !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
             </div>
@@ -430,50 +436,50 @@ export const LayerFilters: React.FC<LayerFiltersProps> = ({ filters, onFilterCha
         {satExpanded && (
           <div className="flex flex-col gap-1.5 px-0 mt-1 animate-in slide-in-from-top-2 fade-in duration-200">
             <div className="flex gap-1.5">
-              <label htmlFor="filter-showsatgps" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatGPS !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showsatgps`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatGPS !== false ? 'border-sky-400/50 bg-sky-400/10 shadow-[0_0_8px_rgba(56,189,248,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-sky-400">
                   <LocateFixed size={10} className={filters.showSatGPS !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatGPS !== false ? 'text-sky-400/80' : 'text-white/30'}`}>GPS</span>
                 </div>
-                <input id="filter-showsatgps" type="checkbox" className="sr-only" checked={filters.showSatGPS !== false} onChange={(e) => onFilterChange('showSatGPS', e.target.checked)} />
+                <input id={`${filterId}-filter-showsatgps`} type="checkbox" className="sr-only" checked={filters.showSatGPS !== false} onChange={(e) => onFilterChange('showSatGPS', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatGPS !== false ? 'bg-sky-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatGPS !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
-              <label htmlFor="filter-showsatweather" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatWeather !== false ? 'border-amber-400/50 bg-amber-400/10 shadow-[0_0_8px_rgba(251,191,36,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showsatweather`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatWeather !== false ? 'border-amber-400/50 bg-amber-400/10 shadow-[0_0_8px_rgba(251,191,36,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-amber-400">
                   <CloudRain size={10} className={filters.showSatWeather !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatWeather !== false ? 'text-amber-400/80' : 'text-white/30'}`}>WEATHER</span>
                 </div>
-                <input id="filter-showsatweather" type="checkbox" className="sr-only" checked={filters.showSatWeather !== false} onChange={(e) => onFilterChange('showSatWeather', e.target.checked)} />
+                <input id={`${filterId}-filter-showsatweather`} type="checkbox" className="sr-only" checked={filters.showSatWeather !== false} onChange={(e) => onFilterChange('showSatWeather', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatWeather !== false ? 'bg-amber-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatWeather !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
             </div>
             <div className="flex gap-1.5">
-              <label htmlFor="filter-showsatcomms" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatComms !== false ? 'border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_8px_rgba(52,211,153,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showsatcomms`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatComms !== false ? 'border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_8px_rgba(52,211,153,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-emerald-400">
                   <Radio size={10} className={filters.showSatComms !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatComms !== false ? 'text-emerald-400/80' : 'text-white/30'}`}>COMMS</span>
                 </div>
-                <input id="filter-showsatcomms" type="checkbox" className="sr-only" checked={filters.showSatComms !== false} onChange={(e) => onFilterChange('showSatComms', e.target.checked)} />
+                <input id={`${filterId}-filter-showsatcomms`} type="checkbox" className="sr-only" checked={filters.showSatComms !== false} onChange={(e) => onFilterChange('showSatComms', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatComms !== false ? 'bg-emerald-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatComms !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
 
-              <label htmlFor="filter-showsatsurveillance" className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatSurveillance !== false ? 'border-rose-400/50 bg-rose-400/10 shadow-[0_0_8px_rgba(251,113,133,0.2)]' : 'border-white/5 bg-white/5'}`}>
+              <label htmlFor={`${filterId}-filter-showsatsurveillance`} className={`flex-1 group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatSurveillance !== false ? 'border-rose-400/50 bg-rose-400/10 shadow-[0_0_8px_rgba(251,113,133,0.2)]' : 'border-white/5 bg-white/5'}`}>
                 <div className="flex items-center gap-1.5 text-rose-400">
                   <Eye size={10} className={filters.showSatSurveillance !== false ? 'opacity-100' : 'opacity-20'} />
                   <span className={`text-[9px] font-bold tracking-wide ${filters.showSatSurveillance !== false ? 'text-rose-400/80' : 'text-white/30'}`}>INTEL</span>
                 </div>
-                <input id="filter-showsatsurveillance" type="checkbox" className="sr-only" checked={filters.showSatSurveillance !== false} onChange={(e) => onFilterChange('showSatSurveillance', e.target.checked)} />
+                <input id={`${filterId}-filter-showsatsurveillance`} type="checkbox" className="sr-only" checked={filters.showSatSurveillance !== false} onChange={(e) => onFilterChange('showSatSurveillance', e.target.checked)} />
                 <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatSurveillance !== false ? 'bg-rose-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatSurveillance !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
               </label>
             </div>
 
-            <label htmlFor="filter-showsatother" className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatOther !== false ? 'border-slate-400/50 bg-slate-400/10 shadow-[0_0_8px_rgba(148,163,184,0.2)]' : 'border-white/5 bg-white/5'}`}>
+            <label htmlFor={`${filterId}-filter-showsatother`} className={`group flex cursor-pointer items-center justify-between rounded border p-1.5 transition-all ${filters.showSatOther !== false ? 'border-slate-400/50 bg-slate-400/10 shadow-[0_0_8px_rgba(148,163,184,0.2)]' : 'border-white/5 bg-white/5'}`}>
               <div className="flex items-center gap-1.5 text-slate-400">
                 <Box size={10} className={filters.showSatOther !== false ? 'opacity-100' : 'opacity-20'} />
                 <span className={`text-[9px] font-bold tracking-wide ${filters.showSatOther !== false ? 'text-slate-400/80' : 'text-white/30'}`}>OTHER</span>
               </div>
-              <input id="filter-showsatother" type="checkbox" className="sr-only" checked={filters.showSatOther !== false} onChange={(e) => onFilterChange('showSatOther', e.target.checked)} />
+              <input id={`${filterId}-filter-showsatother`} type="checkbox" className="sr-only" checked={filters.showSatOther !== false} onChange={(e) => onFilterChange('showSatOther', e.target.checked)} />
               <div className={`h-2 w-4 shrink-0 cursor-pointer rounded-full transition-colors relative ${filters.showSatOther !== false ? 'bg-slate-400/80' : 'bg-white/10'}`}><div className={`absolute top-0.5 h-1 w-1 rounded-full bg-black transition-all ${filters.showSatOther !== false ? 'left-2.5' : 'left-0.5'}`} /></div>
             </label>
           </div>

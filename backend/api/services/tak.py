@@ -125,3 +125,18 @@ def transform_to_proto(data: dict) -> bytes:
     magic = bytes([0xBF, 0x01, 0xBF])
 
     return magic + payload
+
+
+TAK_MAGIC = b"\xbf\x01\xbf"
+
+
+def decode_live_message(payload: bytes) -> tuple[str, bytes]:
+    """Forward binary producers unchanged; allow retained legacy Kafka records."""
+    if payload.startswith(TAK_MAGIC):
+        message = TakMessage()
+        message.ParseFromString(payload[len(TAK_MAGIC):])
+        if not message.cotEvent.uid:
+            raise ValueError("TAK event has no uid")
+        return message.cotEvent.uid, payload
+    data = json.loads(payload)
+    return data.get("uid"), transform_to_proto(data)

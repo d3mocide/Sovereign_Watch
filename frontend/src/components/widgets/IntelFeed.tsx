@@ -1,3 +1,5 @@
+import { useCompactLayout } from '../../hooks/useCompactLayout';
+import { LayerVisibilityControls } from './LayerVisibilityControls';
 import {
   Bell,
   Filter,
@@ -34,6 +36,7 @@ export const IntelFeed = ({
   filters,
   onFilterChange,
 }: IntelFeedProps) => {
+  const compact = useCompactLayout();
   const [showFilters, setShowFilters] = useState(false);
 
   const filteredEvents = useMemo(() => {
@@ -84,8 +87,8 @@ export const IntelFeed = ({
   );
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 overflow-hidden widget-panel">
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
+    <div className="flex flex-1 flex-col min-h-0 overflow-hidden widget-panel intel-feed">
+      <div className="intel-feed-header flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
         <div className="flex items-center gap-2 mr-auto">
           <Radio size={13} className="text-hud-green" />
           <span className="text-[10px] font-bold tracking-[.3em] text-white/50 uppercase">
@@ -103,7 +106,7 @@ export const IntelFeed = ({
               className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showAir ? "text-air-accent bg-air-accent/10 border border-air-accent/30" : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"}`}
               onClick={() => onFilterChange?.("showAir", !filters?.showAir)}
             >
-              <Plane size={12} />
+              <Plane size={12} /><span className="mobile-feed-label">Air</span>
             </button>
             <button
               title="Toggle Sea"
@@ -112,7 +115,7 @@ export const IntelFeed = ({
               className={`p-1 rounded transition-all active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${filters?.showSea ? "text-sea-accent bg-sea-accent/10 border border-sea-accent/30" : "text-white/30 hover:text-white/70 hover:bg-white/5 border border-transparent"}`}
               onClick={() => onFilterChange?.("showSea", !filters?.showSea)}
             >
-              <Ship size={12} />
+              <Ship size={12} /><span className="mobile-feed-label">Sea</span>
             </button>
             <button
               title="Toggle Orbital"
@@ -123,7 +126,7 @@ export const IntelFeed = ({
                 onFilterChange?.("showSatellites", !filters?.showSatellites)
               }
             >
-              <Satellite size={12} />
+              <Satellite size={12} /><span className="mobile-feed-label">Orbit</span>
             </button>
           </div>
 
@@ -142,8 +145,9 @@ export const IntelFeed = ({
       </div>
 
       {showFilters && filters && onFilterChange && (
-        <div className="border-b border-white/10 bg-black/60 p-3 max-h-[50vh] overflow-y-auto">
+        <div className="feed-filter-options border-b border-white/10 bg-black/60 p-3 max-h-[50vh] overflow-y-auto">
           <LayerFilters filters={filters} onFilterChange={onFilterChange} />
+          {compact && <div className="feed-map-layers"><LayerVisibilityControls filters={filters} onFilterChange={onFilterChange} /></div>}
         </div>
       )}
 
