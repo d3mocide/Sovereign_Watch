@@ -17,7 +17,7 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {
-    baseURL: process.env.BASE_URL ?? "http://localhost:5173",
+    baseURL: process.env.BASE_URL ?? "http://localhost:3700",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -36,7 +36,7 @@ export default defineConfig({
     ? undefined
     : {
         command: "pnpm run dev",
-        url: "http://localhost:5173",
+        url: "http://localhost:3700",
         reuseExistingServer: true,
         timeout: 120_000,
       },

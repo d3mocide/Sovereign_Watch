@@ -11,6 +11,8 @@ export type MapStyleDefinition =
 
 export interface MapAdapterProps {
   viewState: Record<string, number>;
+  /** Direct camera motion without per-frame controlled React updates. */
+  imperativeCamera?: boolean;
   onMove?: (evt: unknown) => void;
   onLoad?: (evt: unknown) => void;
   mapStyle: MapStyleDefinition;

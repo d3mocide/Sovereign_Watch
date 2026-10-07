@@ -284,19 +284,46 @@ async def search_tracks(q: str, limit: int = 10):
 
         # For each matched satellite compute its current position via SGP4
         now = datetime.now(timezone.utc)
+        jd, fr = _jday(now)
+
+        sat_list = []
+        r_ecefs = []
+
         for row in sat_rows:
-            lat, lon = None, None
             try:
                 satrec = Satrec.twoline2rv(row["tle_line1"], row["tle_line2"])
-                jd, fr = _jday(now)
                 e, r, _ = satrec.sgp4(jd, fr)
                 if e == 0:
                     r_ecef = teme_to_ecef(r, jd, fr)
-                    la, lo, _ = ecef_to_lla_vectorized(np.array(r_ecef).reshape(1, 3))
-                    lat = round(float(la[0]), 5)
-                    lon = round(float(lo[0]), 5)
+                    r_ecefs.append(r_ecef)
+                    sat_list.append((row, len(r_ecefs) - 1))
+                else:
+                    sat_list.append((row, None))
             except Exception:
-                pass
+                sat_list.append((row, None))
+
+        positions = {}
+        if r_ecefs:
+            try:
+                # Keep the normal path vectorized across the full search batch.
+                la_arr, lo_arr, _ = ecef_to_lla_vectorized(np.array(r_ecefs))
+                positions = {
+                    i: (round(float(la_arr[i]), 5), round(float(lo_arr[i]), 5))
+                    for i in range(len(r_ecefs))
+                }
+            except Exception:
+                # Preserve per-satellite isolation if one conversion is malformed.
+                logger.warning("Satellite batch conversion failed; isolating rows", exc_info=True)
+                for i, position in enumerate(r_ecefs):
+                    try:
+                        la, lo, _ = ecef_to_lla_vectorized(np.array(position).reshape(1, 3))
+                        positions[i] = (round(float(la[0]), 5), round(float(lo[0]), 5))
+                    except Exception:
+                        logger.debug("Satellite position unavailable", exc_info=True)
+
+        for row, idx in sat_list:
+            lat, lon = positions.get(idx, (None, None))
+
             results.append(
                 {
                     "entity_id": f"SAT-{row['norad_id']}",

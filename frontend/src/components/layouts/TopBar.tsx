@@ -1,3 +1,5 @@
+import { MobileTools } from './MobileTools';
+import { useCompactLayout } from '../../hooks/useCompactLayout';
 import React, { useEffect, useState } from 'react';
 import {
     AlertCircle,
@@ -16,8 +18,10 @@ import {
     LayoutDashboard,
     Newspaper,
     User,
+    SlidersHorizontal,
 } from 'lucide-react';
 
+import { useMobileNavigation } from './MobileNavigationContext';
 import { SystemHealth } from '../../hooks/useSystemHealth';
 import { IntelEvent } from '../../types';
 import { AlertsWidget } from '../widgets/AlertsWidget';
@@ -77,6 +81,9 @@ export const TopBar: React.FC<TopBarProps> = ({
     isTerminalOpen, onTerminalClick,
     isUserMenuOpen, onUserMenuClick, onUserMenuClose,
 }) => {
+    const compact = useCompactLayout();
+    const { toolsOpen, setToolsOpen, closePanels } = useMobileNavigation();
+    const openMenu = (action?: () => void) => { closePanels(); setToolsOpen(false); action?.(); };
     const [time, setTime] = useState(new Date());
     const { user } = useAuth();
 
@@ -104,27 +111,28 @@ export const TopBar: React.FC<TopBarProps> = ({
     const activeBars = getIntegrityBars();
 
     return (
-        <div className="flex h-[55px] items-center px-6 bg-black/40 backdrop-blur-md border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-50 relative">
+        <>
+        <div className="hud-topbar flex h-[55px] items-center px-2 sm:px-4 xl:px-6 bg-black/40 backdrop-blur-md border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-50 relative">
             {/* Subtle top glow */}
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-hud-green/20 to-transparent pointer-events-none" />
 
             {/* Logo and Domain */}
-            <div className="flex items-center gap-4 relative z-10">
+            <div className="hud-brand flex items-center gap-4 relative z-10">
                 <div className="relative">
                     <div className="h-7 w-1.5 bg-hud-green shadow-[0_0_12px_#00ff41]" />
                     <div className="absolute left-0 top-0 h-7 w-1.5 animate-pulse bg-hud-green opacity-50 blur-sm" />
                 </div>
-                <div className="flex flex-col gap-0.5">
+                <div className="hud-brand-copy flex flex-col gap-0.5">
                     <div className="flex items-center gap-3">
-                        <span className="text-lg font-black tracking-[0.3em] text-hud-green drop-shadow-[0_0_10px_rgba(0,255,65,0.6)]">
+                        <span className="text-xs sm:text-lg font-black tracking-[0.12em] xl:tracking-[0.3em] text-hud-green drop-shadow-[0_0_10px_rgba(0,255,65,0.6)]">
                             SOVEREIGN WATCH
                         </span>
-                        <span className="text-xs font-bold text-hud-green/50 opacity-80 select-none">//</span>
-                        <span className="text-sm font-bold tracking-widest text-white/90 drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]">
+                        <span className="hidden xl:block text-xs font-bold text-hud-green/50 opacity-80 select-none">//</span>
+                        <span className="hidden xl:block text-sm font-bold tracking-widest text-white/90 drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]">
                             NODE-01
                         </span>
                     </div>
-                    <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="hidden xl:flex items-center gap-2 overflow-hidden">
                         <span className="text-[9px] font-medium tracking-[0.2em] text-hud-green/40 uppercase">
                             Collection_Domain:
                         </span>
@@ -136,6 +144,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <div className="ml-2 h-[1px] w-24 bg-hud-green/20 shadow-[0_0_5px_rgba(0,255,65,0.3)]" />
                     </div>
                 </div>
+                <div className="mobile-brand xl:hidden"><span>SOVEREIGN</span><strong>WATCH</strong></div>
             </div>
             {/* Center Area - View Mode Toggle / Telemetry cluster */}
             <div className="ml-10 hidden items-center gap-4 xl:flex relative z-10">
@@ -219,9 +228,9 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
 
             {/* Right Side - Status and Time */}
-            <div className="ml-auto flex items-center gap-3 relative z-10">
+            <div className="ml-auto flex items-center gap-1 xl:gap-3 relative z-10">
                 {/* Latency Block */}
-                <div className="flex flex-col items-center mr-2">
+                <div className="hidden xl:flex flex-col items-center mr-2">
                     <div className="flex items-center gap-2">
                         <span className="text-[7px] text-white/40 uppercase tracking-tighter">Latency</span>
                         <span className="text-[10px] text-hud-green/80 tabular-nums font-mono drop-shadow-[0_0_3px_rgba(0,255,65,0.3)]">
@@ -243,24 +252,30 @@ export const TopBar: React.FC<TopBarProps> = ({
 
                 <div className="h-6 w-[1px] bg-white/10" />
 
+                <button className="mobile-tools-button xl:hidden" aria-label="Tools" aria-expanded={toolsOpen} aria-controls="mobile-map-tools" onClick={() => setToolsOpen(!toolsOpen)}><SlidersHorizontal size={17} aria-hidden="true" /><span>Tools</span></button>
                 {/* Status Icons Bar */}
                 <div
+                    id="desktop-map-tools"
+                    data-open={false}
                     role="toolbar"
                     aria-label="Map Toggles"
                     className="flex items-center gap-2 px-2.5 py-1 bg-black/30 backdrop-blur-sm border border-white/5 rounded-lg shadow-inner"
                 >
+
+
 
                     {/* Core Status */}
                     <div className="relative">
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onSystemSettingsClick?.();
+                                openMenu(onSystemSettingsClick);
                             }}
                             className={`flex items-center gap-2 px-2 py-0.5 rounded-md transition-all shadow-[0_0_10px_rgba(0,255,65,0.1)] outline-none group
                                 ${isSystemSettingsOpen ? 'bg-hud-green/30 border border-hud-green/50 ring-1 ring-hud-green/50' : 'bg-hud-green/10 border border-hud-green/20 hover:bg-hud-green/20 focus-visible:ring-1 focus-visible:ring-hud-green'}
                             `}
                             title="Core System Settings"
+                            aria-label="System settings"
                             aria-expanded={isSystemSettingsOpen}
                         >
                             <Server size={14} className="text-hud-green drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]" />
@@ -285,7 +300,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            onTerminalClick?.();
+                            openMenu(onTerminalClick);
                         }}
                         className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 focus-visible:ring-1 focus-visible:ring-hud-green outline-none ${isTerminalOpen ? 'bg-hud-green/20 text-hud-green border border-hud-green/30 shadow-[0_0_8px_rgba(0,255,65,0.3)]' : 'text-white/30 hover:bg-white/10 hover:text-white/80 border border-transparent'}`}
                         title={isTerminalOpen ? "Close Raw Data Terminal" : "Raw Data Terminal"}
@@ -365,7 +380,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onSystemHealthClick?.();
+                                openMenu(onSystemHealthClick);
                             }}
                             className={`p-1 rounded-md transition-all duration-200 hover:scale-105 active:scale-95 shadow-[0_0_10px_rgba(0,255,65,0.1)] outline-none group
                                 ${isSystemHealthOpen ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'bg-hud-green/10 text-hud-green border border-hud-green/20 hover:bg-hud-green/20 focus-visible:ring-1 focus-visible:ring-hud-green'}
@@ -393,7 +408,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 {/* Alerts Pill */}
                 <div className="flex items-center px-1 relative">
                     <button
-                        onClick={onAlertsClick}
+                        onClick={() => openMenu(onAlertsClick)}
                         aria-label={alertsCount > 0 ? `${alertsCount} Active Alerts` : "Alerts"}
                         aria-haspopup="dialog"
                         className={`group relative flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-all duration-300 backdrop-blur-md shadow-lg focus-visible:ring-1 focus-visible:ring-alert-red outline-none ${alertsCount > 0
@@ -419,7 +434,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
                 {/* Tactical Clock */}
                 <div className="flex flex-col items-end pl-0.5 justify-center">
-                    <div className="flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-2 pr-1.5 py-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
+                    <div className="hidden xl:flex items-center bg-black/50 border border-hud-green/30 rounded-lg pl-2 pr-1.5 py-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8),0_0_10px_rgba(0,255,65,0.15)] backdrop-blur-xl">
                         <div className="flex items-center gap-0.5 text-base font-bold tabular-nums tracking-widest text-hud-green drop-shadow-[0_0_8px_rgba(0,255,65,0.6)]">
                             <span>{hh}</span>
                             <span className={`${time.getSeconds() % 2 === 0 ? 'opacity-100 drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'opacity-30'} transition-opacity`}>:</span>
@@ -439,11 +454,12 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onUserMenuClick?.();
+                                openMenu(onUserMenuClick);
                             }}
                             className={`flex items-center gap-1.5 px-2 py-1 bg-black/30 border border-white/10 rounded-lg hover:bg-white/5 transition-all outline-none focus-visible:ring-1 focus-visible:ring-hud-green ${
                                 isUserMenuOpen ? 'bg-white/10 border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : ''
                             }`}
+                            aria-label="Account"
                             aria-expanded={isUserMenuOpen}
                         >
                             <User size={12} className={user.role === 'admin' ? 'text-red-400' : 'text-hud-green/80'} />
@@ -460,5 +476,22 @@ export const TopBar: React.FC<TopBarProps> = ({
                 )}
             </div>
         </div>
+        {compact && toolsOpen && <MobileTools onClose={() => setToolsOpen(false)} filters={filters} onFilterChange={onFilterChange} actions={[
+          ...(onToggleReplay ? [{label: 'Simulation replay', active: !!isReplayMode, onClick: onToggleReplay}] : []),
+          ...(onToggleTerminator ? [{label: 'Day / night overlay', active: !!showTerminator, onClick: onToggleTerminator}] : []),
+          ...(onToggleH3Risk ? [{label: 'Risk grid', active: !!showH3Risk, onClick: onToggleH3Risk}] : []),
+          ...(onToggleHistoryTails ? [{label: 'History trails', active: !!showHistoryTails, onClick: onToggleHistoryTails}] : []),
+          ...(onToggleVelocityVectors ? [{label: 'Velocity projections', active: !!showVelocityVectors, onClick: onToggleVelocityVectors}] : []),
+          ...(onTerminalClick ? [{label: 'Raw data terminal', onClick: () => openMenu(onTerminalClick)}] : []),
+        ]} />}
+        <nav className="mobile-view-nav flex h-12 items-center gap-1 overflow-x-auto border-b border-white/10 bg-black/90 px-2 xl:hidden" aria-label="Views">
+          {(['TACTICAL', 'ORBITAL', 'INTEL', 'DASHBOARD', 'RADIO'] as const).map(mode => (
+            <button key={mode} data-mode={mode} aria-current={viewMode === mode ? 'page' : undefined} onClick={() => { openMenu(); if (isTerminalOpen) onTerminalClick?.(); onAlertsClose?.(); onSystemSettingsClose?.(); onSystemHealthClose?.(); onUserMenuClose?.(); onViewChange?.(mode); }} className={`min-h-11 shrink-0 rounded px-3 text-[11px] font-bold ${viewMode === mode ? 'bg-hud-green/20 text-hud-green' : 'text-white/60'}`}>
+              {React.createElement(({TACTICAL:Globe,ORBITAL:Satellite,INTEL:Newspaper,DASHBOARD:LayoutDashboard,RADIO:Radio})[mode],{size:20,'aria-hidden':true})}
+              <span>{mode === 'DASHBOARD' ? 'Dashboard' : mode[0] + mode.slice(1).toLowerCase()}</span>
+            </button>
+          ))}
+        </nav>
+        </>
     );
 };

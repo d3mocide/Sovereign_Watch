@@ -1,4 +1,6 @@
 import React from "react";
+import { MobileSections } from "./MobileSections";
+import { LayerFilters } from "../widgets/LayerFilters";
 import { IntelFeed } from "../widgets/IntelFeed";
 import { JS8Widget } from "../widgets/JS8Widget";
 import { MissionNavigator } from "../widgets/MissionNavigator";
@@ -17,7 +19,7 @@ import {
 interface SidebarLeftProps {
   trackCounts: { air: number; sea: number; orbital: number };
   filters: import("../../types").MapFilters;
-  onFilterChange: (key: string, value: boolean | number | string[]) => void;
+  onFilterChange: (key: string, value: boolean | string | number | string[]) => void;
   events: IntelEvent[];
   missionProps: MissionProps | null;
   health?: SystemHealth;
@@ -53,7 +55,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   sendAction = () => {},
 }) => {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 overflow-clip animate-in fade-in duration-1000">
+    <MobileSections label="Tactical sections" className="flex h-full min-h-0 flex-col gap-2 overflow-clip" sections={[
+{ id: "mission", label: "Mission", content: (<>
       {/* Search Widget */}
       {mapActions && (
         <SearchWidget key="search-widget" mapActions={mapActions} onEntitySelect={onEntitySelect} />
@@ -71,6 +74,9 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         />
       )}
 
+
+</>) },
+{ id: "feeds", label: "Feeds", content: (<>
       {/* 2. System Intelligence Feed - Takes remaining space */}
       <div key="intel-feed" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <IntelFeed
@@ -82,6 +88,20 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         />
       </div>
 
+
+</>) },
+{ id: "layers", label: "Layers", content: (<>
+      {/* 4. Metrics, Analytics & Map Layers */}
+      <div className="w-full shrink-0">
+        <SystemStatus
+          trackCounts={trackCounts}
+          filters={filters}
+          onFilterChange={onFilterChange}
+        />
+      </div>
+<div className="xl:hidden"><LayerFilters filters={filters} onFilterChange={onFilterChange} /></div>
+</>) },
+{ id: "hf", label: "HF", content: (<>
       {/* 3. JS8Call / HF Radio */}
       <JS8Widget
         key="js8-widget"
@@ -96,14 +116,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         sendAction={sendAction}
       />
 
-      {/* 4. Metrics, Analytics & Map Layers */}
-      <div className="w-full shrink-0">
-        <SystemStatus
-          trackCounts={trackCounts}
-          filters={filters}
-          onFilterChange={onFilterChange}
-        />
-      </div>
-    </div>
+
+</>) }
+]} />
   );
 };

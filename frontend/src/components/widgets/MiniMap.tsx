@@ -1,3 +1,4 @@
+import { useMapContainerResize } from "../../hooks/useMapContainerResize";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -87,6 +88,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
   const [holdingFeatures, setHoldingFeatures] = useState<GeoJSON.Feature[]>([]);
   const [clusterFeatures, setClusterFeatures] = useState<GeoJSON.Feature[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const observeMapResize = useMapContainerResize();
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapReadyRef = useRef(false);
   const criticalHolds = holdingFeatures.filter((f: any) => {
@@ -106,6 +108,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       attributionControl: false,
     });
     mapRef.current = map;
+    observeMapResize(map);
     map.on("load", () => {
       const circle = makeMissionCircle(
         mission.lat,
@@ -399,7 +402,7 @@ export const MiniTacticalMap: React.FC<MiniMapProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [mission.lat, mission.lon, mission.radius_nm]);
+  }, [mission.lat, mission.lon, mission.radius_nm, observeMapResize]);
 
   useEffect(() => {
     let cancelled = false;

@@ -71,3 +71,8 @@ cache/
 # Vendored tool binaries — built locally from tools/mcp-language-server/build.sh
 # Binaries are architecture-specific and not committed to git.
 tools/bin/
+
+# Native process crash dumps
+/core
+**/core.[0-9]*
+/frontend/core

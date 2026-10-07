@@ -1,3 +1,5 @@
+import { useMapContainerResize } from "../../hooks/useMapContainerResize";
+import { useRenderPixelRatio } from "../../hooks/useRenderPixelRatio";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 // CSS lives with the adapter so only the selected map library's styles are
 // loaded — the lazy chunk for the unused adapter (and its CSS) never downloads.
@@ -41,6 +43,7 @@ const STENCIL_CLEAR_LAYER: CustomLayerInterface = {
 };
 
 function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
+  const renderPixelRatio = useRenderPixelRatio();
   // Strip globeMode — MapboxOverlay detects globe projection automatically
   // via getDefaultView(map) which returns GlobeView when the map is in globe mode.
   // Both projection and _full3d are managed internally on every map `render` event.
@@ -51,6 +54,7 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
     () =>
       new MapboxOverlay({
         ...rest,
+        useDevicePixels: renderPixelRatio,
         // Disable interleaved rendering to bypass MapLibre's depth buffer occlusion
         interleaved: false,
         // _full3d reads the Mapbox depth buffer to occlude globe far-side layers.
@@ -73,6 +77,7 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
       try {
         overlay.setProps({
           ...rest,
+        useDevicePixels: renderPixelRatio,
           interleaved: false,
           _full3d: false,
         } as any);
@@ -80,7 +85,7 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
         console.debug("[DeckGLOverlay] Transitioning props...");
       }
     }
-  }, [rest, overlay]);
+  }, [rest, overlay, renderPixelRatio]);
 
   const { onOverlayLoaded } = props;
   useEffect(() => {
@@ -98,6 +103,7 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
 const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
   const {
     viewState,
+    imperativeCamera = false,
     onMove,
     onLoad,
     mapStyle,
@@ -108,12 +114,22 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
     showAttribution,
     deckProps,
   } = props;
+  const observeMapResize = useMapContainerResize();
+  const nativeMapRef = useRef<MapRef | null>(null);
+  useEffect(() => {
+    if (imperativeCamera) nativeMapRef.current?.jumpTo({ center: [viewState.longitude, viewState.latitude], zoom: viewState.zoom, pitch: viewState.pitch, bearing: viewState.bearing });
+  }, [imperativeCamera, viewState]);
   return (
     <Map
-      ref={ref}
+      ref={(instance) => {
+        nativeMapRef.current = instance;
+        if (typeof ref === "function") ref(instance);
+        else if (ref) ref.current = instance;
+      }}
       canvasContextAttributes={{ antialias: true }}
       onLoad={(e) => {
         const map = e.target;
+        observeMapResize(map);
         const globeCapableMap = map as typeof map & {
           setAtmosphere?: (value: unknown) => void;
           setFog?: (value: unknown) => void;
@@ -155,7 +171,7 @@ const MapLibreAdapter = forwardRef<MapRef, MapAdapterProps>((props, ref) => {
 
         if (onLoad) onLoad(e);
       }}
-      {...viewState}
+      {...(imperativeCamera ? { initialViewState: viewState } : viewState)}
       onMove={onMove}
       mapStyle={mapStyle as string | StyleSpecification}
       style={style}

@@ -545,7 +545,9 @@ export function useAnimationLoop({
     const FRAME_BUDGET_BUSY_MS = 33; // ~30 fps
     const FRAME_BUDGET_IDLE_MS = 15; // ~60 fps cap (skip extra 120/144 Hz ticks)
 
-    const animate = () => {
+    let lastSidebarUpdate = 0;
+    let lastPaintTime = 0;
+    const animate = (timestamp: number) => {
       // Schedule the next tick first so an early (paced) return keeps the loop alive.
       rafRef.current = requestAnimationFrame(animate);
 
@@ -553,14 +555,16 @@ export function useAnimationLoop({
       const now = Date.now();
       const rawDt = now - lastFrameTimeRef.current;
 
-      const entityLoad = entities.size + satellitesRef.current.size;
+      if (document.hidden) return;
+      const entityLoad = entities.size + (filtersRef.current?.showSatellites ? countsRef.current.orbital : 0);
       const frameBudget =
         entityLoad > PACE_ENTITY_THRESHOLD
           ? FRAME_BUDGET_BUSY_MS
           : FRAME_BUDGET_IDLE_MS;
       // Not yet due: skip all work this tick. dt keeps accumulating, so the
       // interpolators see the true elapsed time on the next executed frame.
-      if (rawDt < frameBudget) return;
+      if (timestamp - lastPaintTime < frameBudget - 1) return;
+      lastPaintTime = timestamp;
 
       const dt = Math.min(rawDt, 100);
       lastFrameTimeRef.current = now;
@@ -607,12 +611,12 @@ export function useAnimationLoop({
         if (
           currentSelected &&
           _onEntityLiveUpdate &&
-          Math.floor(now / 33) % 2 === 0
+          now - lastSidebarUpdate >= 150
         ) {
           const updatedSelected = interpolated.find(
             (e) => e.uid === currentSelected.uid,
           );
-          if (updatedSelected) _onEntityLiveUpdate(updatedSelected);
+          if (updatedSelected) { _onEntityLiveUpdate(updatedSelected); lastSidebarUpdate = now; }
         }
       }
 
@@ -747,17 +751,7 @@ export function useAnimationLoop({
 
       const orbitalCount = filteredSatellites.length;
 
-      if (
-        (airCount > 0 ||
-          seaCount > 0 ||
-          orbitalCount > 0 ||
-          (countsRef.current.air === 0 &&
-            countsRef.current.sea === 0 &&
-            countsRef.current.orbital === 0)) &&
-        (countsRef.current.air !== airCount ||
-          countsRef.current.sea !== seaCount ||
-          countsRef.current.orbital !== orbitalCount)
-      ) {
+      if (countsRef.current.air !== airCount || countsRef.current.sea !== seaCount || countsRef.current.orbital !== orbitalCount) {
         countsRef.current = {
           air: airCount,
           sea: seaCount,
@@ -772,11 +766,11 @@ export function useAnimationLoop({
 
       // Live sidebar update for selected satellite
       const _selectedEntityState = selectedEntityStateRef.current;
-      if (_selectedEntityState) {
+      if (_selectedEntityState && now - lastSidebarUpdate >= 150) {
         const updatedSat = filteredSatellites.find(
           (s) => s.uid === _selectedEntityState.uid,
         );
-        if (updatedSat) _onEntityLiveUpdate?.(updatedSat);
+        if (updatedSat) { _onEntityLiveUpdate?.(updatedSat); lastSidebarUpdate = now; }
       }
 
       // ── Layer composition + overlay update ───────────────────────────────

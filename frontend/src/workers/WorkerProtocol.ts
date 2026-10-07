@@ -38,8 +38,14 @@ export function startWorkerProtocol({
 
   worker.postMessage({ type: "init", payload: "/tak.proto?v=" + Date.now() });
 
+  let workerReady = false;
   worker.onmessage = (event: MessageEvent) => {
     const { type, data } = event.data;
+    if (type === "status" && event.data.status === "ready") {
+      workerReady = true;
+      connect();
+      return;
+    }
     if (type === "entity_batch") {
       for (const item of data) {
         onEntityUpdate(item);
@@ -83,7 +89,7 @@ export function startWorkerProtocol({
   };
 
   const connect = () => {
-    if (isCleaningUp) return;
+    if (isCleaningUp || !workerReady) return;
     if (ws && ws.readyState === WebSocket.OPEN) return;
 
     clearReconnectTimeout();
@@ -164,7 +170,7 @@ export function startWorkerProtocol({
   };
 
   const nudgeReconnect = () => {
-    if (isCleaningUp) return;
+    if (isCleaningUp || !workerReady) return;
     if (ws && ws.readyState === WebSocket.OPEN) return;
     reconnectAttempts = 0;
     connect();
@@ -195,7 +201,7 @@ export function startWorkerProtocol({
   };
   document.addEventListener("visibilitychange", onVisibilityChange);
 
-  connect();
+  // The server sends its snapshot immediately; wait for the decoder schema.
 
   return () => {
     isCleaningUp = true;

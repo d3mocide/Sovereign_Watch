@@ -63,8 +63,10 @@ class SpacePulseService:
     async def setup(self):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=KAFKA_BROKERS,
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-            linger_ms=50,
+            value_serializer=lambda v: v if isinstance(v, bytes) else json.dumps(v).encode("utf-8"),
+            compression_type="gzip",
+            max_batch_size=131072,
+            linger_ms=10,
         )
         await self.producer.start()
         logger.info("Kafka producer started")

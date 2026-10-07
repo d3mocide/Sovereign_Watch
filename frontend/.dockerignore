@@ -2,3 +2,7 @@ node_modules
 .git
 *.log
 dist
+
+# Native process crash dumps
+/core
+**/core.[0-9]*

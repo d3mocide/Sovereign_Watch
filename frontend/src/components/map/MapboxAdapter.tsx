@@ -1,3 +1,5 @@
+import { useMapContainerResize } from "../../hooks/useMapContainerResize";
+import { useRenderPixelRatio } from "../../hooks/useRenderPixelRatio";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 // CSS lives with the adapter so only the selected map library's styles are
 // loaded — the lazy chunk for the unused adapter (and its CSS) never downloads.
@@ -27,6 +29,7 @@ const BASEMAP_CONFIG: Record<string, boolean | string> = {
 };
 
 function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
+  const renderPixelRatio = useRenderPixelRatio();
   const { globeMode, ...rest } = props;
 
   // We pass _full3d so DeckGL enables full 3D perspective matrix synchronization
@@ -36,6 +39,7 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
     () =>
       new MapboxOverlay({
         ...rest,
+        useDevicePixels: renderPixelRatio,
         _full3d: true,
       } as any),
   );
@@ -55,13 +59,14 @@ function DeckGLOverlay(props: MapAdapterProps["deckProps"]) {
       try {
         overlay.setProps({
           ...rest,
+        useDevicePixels: renderPixelRatio,
           _full3d: true,
         } as any);
       } catch {
         console.debug("[DeckGLOverlay] Transitioning props...");
       }
     }
-  }, [rest, globeMode, overlay]);
+  }, [rest, globeMode, overlay, renderPixelRatio]);
 
   const { onOverlayLoaded } = props;
   useEffect(() => {
@@ -94,6 +99,7 @@ const MapboxAdapter = forwardRef<
     deckProps,
   } = props;
 
+  const observeMapResize = useMapContainerResize();
   // Mapbox Standard (v3) styling configuration.
   // We use useMemo to ensure that even if BASEMAP_CONFIG is static,
   // the object reference passed to the `config` prop changes whenever
@@ -108,7 +114,7 @@ const MapboxAdapter = forwardRef<
   return (
     <Map
       ref={ref}
-      onLoad={onLoad}
+      onLoad={(event) => { observeMapResize(event.target); onLoad?.(event); }}
       initialViewState={viewState}
       onMove={onMove}
       mapStyle={mapStyle as string | StyleSpecification}

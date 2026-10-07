@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     # Async Kafka producer
     "aiokafka==0.13.0",
+    "protobuf==6.33.5",
     # Async Redis client
     "redis==7.3.0",
     # HTTP clients

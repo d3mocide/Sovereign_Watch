@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Added
+- Dedicated phone and tablet workspaces for Tactical, Orbital, Intel, Dashboard and Radio, with safe-area-aware navigation and SovereignGlass styling.
+- Full-width mobile entity details that open immediately on selection, plus a dedicated Tools drawer with Layers, Display and System tabs.
+- Host disk-write sampling, annual write projections and optional SSD rated-TBW estimates; read-only storage and query profiling tools.
+- PostgreSQL query attribution through migration V007 and `pg_stat_statements`.
+
+### Changed
+- Batch satellite-search coordinate conversion and optimize orbital timestamp serialization while retaining precise propagation epochs.
+- Pin Ruff and make its established correctness rules explicit; run CI on dev/main with frozen Python installs and TAK clausalizer coverage.
+- Pace map animation and render resolution to device size, reuse map layers, reduce country geometry and GPU allocation overhead, and stabilize map sizing during view changes.
+- Publish compact TAK Protobuf orbital positions with Kafka batching/compression and configurable 15-second propagation cadence; preserve retained legacy message compatibility.
+- Sample system metrics in the background, reuse Kafka clients, and batch initial live-track snapshots.
+- Bound Docker logs to 10 MiB × 3 files by default and configure eight Kafka topics with age and per-partition byte budgets.
+- Pin pnpm to 9.15.9 and Redpanda to the deployment-compatible v25.3.17; persist the space-pulse cache and use frozen dependency installs.
+
+### Fixed
+- Isolate malformed satellite positions, repair NumPy groundtrack timedelta handling, and include RF Pulse test dependencies in its lockfile.
+- Apply atomic expiring write limits per authenticated user and operation, keeping users behind nginx independent.
+- iOS safe-area clipping, overlapping mobile map controls and menus, squashed filter groups, inconsistent dashboard panels and oversized overview headers.
+- Direct chevron expansion and independent checkbox routing across Tools, Feeds and Layers; restore mobile map-layer selections.
+- Sparse mobile Status presentation and hidden NWS weather information: show separate mission/connection/tracking/stream summaries and expandable mission weather on the Tactical map.
+- Early live snapshots arriving before the frontend worker schema is ready, zero-valued Protobuf fields, and globe terminator geometry/rendering artifacts.
+
+
 ## [1.1.3] - 2026-07-20
 
 ### Fixed

@@ -675,7 +675,7 @@ export function OrbitalMap({
       <StarField active={!!globeMode} />
 
       {/* z-index:1 ensures the map canvas stacks above the StarField (z-index:0) */}
-      <div style={{ position: 'relative', zIndex: 1, width: '100vw', height: '100vh' }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
       <Suspense fallback={null}>
         <MapComponent
           key={globeMode ? "map-globe" : "map-mercator"}
@@ -707,8 +707,8 @@ export function OrbitalMap({
           {...(mapToken ? { mapboxAccessToken: mapToken } : {})}
           globeMode={globeMode}
           style={{
-            width: "100vw",
-            height: "100vh",
+            width: "100%",
+            height: "100%",
             userSelect: "none",
             WebkitUserSelect: "none",
           }}

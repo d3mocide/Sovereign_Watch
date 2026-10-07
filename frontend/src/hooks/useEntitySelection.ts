@@ -5,6 +5,7 @@ export function useEntitySelection(
   addEvent: (e: Omit<IntelEvent, "id" | "time">) => void,
 ) {
   const [selectedEntity, setSelectedEntity] = useState<CoTEntity | null>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
   const [historySegments, setHistorySegments] = useState<HistorySegment[]>([]);
   const [followMode, setFollowMode] = useState(false);
 
@@ -22,6 +23,7 @@ export function useEntitySelection(
   const handleSetSelectedSatNorad = useCallback(
     (noradId: number | null) => {
       if (noradId) {
+        setSelectionRevision(revision => revision + 1);
         const liveKey = `SAT-${noradId}`;
         const liveEntity = orbitalSatellitesRef.current?.current.get(liveKey);
 
@@ -53,6 +55,7 @@ export function useEntitySelection(
 
   const handleEntitySelect = useCallback(
     (e: CoTEntity | null) => {
+      if (e) setSelectionRevision(revision => revision + 1);
       setSelectedEntity(e);
       setHistorySegments([]);
       setFollowMode(false);
@@ -84,6 +87,7 @@ export function useEntitySelection(
 
   return {
     selectedEntity,
+    selectionRevision,
     setSelectedEntity,
     historySegments,
     setHistorySegments,

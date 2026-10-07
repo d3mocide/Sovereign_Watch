@@ -17,6 +17,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { FeatureCollection } from "geojson";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchH3Risk, type H3RiskCellData } from "../../api/h3Risk";
+import { LayerCache } from "../../layers/layerCache";
 import { buildH3RiskLayer } from "../../layers/buildH3RiskLayer";
 import {
   buildCountryHeatLayer,
@@ -68,6 +69,9 @@ export function IntelGlobe({
   // Mutable refs for high-performance rAF loop (prevents React re-renders every frame)
   const mapRef = useRef<any>(null);
   const lngRef = useRef(15);
+  const cameraRef = useRef(viewState);
+  useEffect(() => { cameraRef.current = viewState; }, [viewState]);
+  const layerCacheRef = useRef(new LayerCache());
   const spinRef = useRef(spin);
   spinRef.current = spin;
   const lastInteractionRef = useRef<number>(0);
@@ -185,13 +189,17 @@ export function IntelGlobe({
   // Animation & Data Layer composition loop
   useEffect(() => {
     let last = performance.now();
+    let lastLayers = -Infinity;
     let raf: number;
 
     const loop = (now: number) => {
-      const dt = (now - last) / 1000;
+      raf = requestAnimationFrame(loop);
+      if (document.hidden) { last = now; return; }
+      if (now - last < 1000 / 60 - 1) return;
+      const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
 
-      animTickRef.current = (animTickRef.current + dt) % 1;
+      animTickRef.current += dt;
 
       // PERFORMANCE OPTIMIZATION: Imperative Spin
       // We update the map instance directly instead of triggering a React render cycle via setViewState.
@@ -201,25 +209,19 @@ export function IntelGlobe({
         if (idleMs >= SPIN_RESUME_DELAY_MS) {
           lngRef.current = (lngRef.current + SPIN_DEG_PER_SEC * dt) % 360;
           mapRef.current.jumpTo({
-            center: [lngRef.current, viewState.latitude],
+            center: [lngRef.current, cameraRef.current.latitude],
           });
         }
       }
 
+      // Camera motion remains smooth; static geometry and pulse updates run independently.
+      if (now - lastLayers < 100) return;
+      lastLayers = now;
       if (overlayRef.current) {
         overlayRef.current.setProps({
           layers: [
-            ...buildH3RiskLayer(
-              h3RiskCellsRef.current,
-              !!filtersRef.current?.showH3Risk,
-            ),
-            ...buildCountryHeatLayer(
-              worldCountriesDataRef.current as any,
-              actorsRef.current,
-              true,
-              globeModeRef.current,
-              animTickRef.current,
-            ),
+            ...layerCacheRef.current.get("h3", [h3RiskCellsRef.current, filtersRef.current?.showH3Risk], () => buildH3RiskLayer(h3RiskCellsRef.current, !!filtersRef.current?.showH3Risk)),
+            ...layerCacheRef.current.get("countries", [worldCountriesDataRef.current, actorsRef.current, globeModeRef.current], () => buildCountryHeatLayer(worldCountriesDataRef.current as any, actorsRef.current, true, globeModeRef.current, 0)),
             ...gdeltLayerRef.current,
             ...buildGdeltArcLayer(
               gdeltDataRef.current as any,
@@ -231,7 +233,6 @@ export function IntelGlobe({
         });
       }
 
-      raf = requestAnimationFrame(loop);
     };
 
     raf = requestAnimationFrame(loop);
@@ -239,28 +240,28 @@ export function IntelGlobe({
   }, []); // Only run once on mount
 
   const zoomBy = useCallback((delta: number) => {
-    setViewState((prev) => ({
-      ...prev,
-      zoom: Math.max(1, Math.min(8, prev.zoom + delta)),
+    setViewState(() => ({
+      ...cameraRef.current,
+      zoom: Math.max(1, Math.min(8, cameraRef.current.zoom + delta)),
     }));
   }, []);
 
   const handleAdjustBearing = useCallback((delta: number) => {
-    setViewState((prev) => ({
-      ...prev,
-      bearing: (prev.bearing + delta) % 360,
+    setViewState(() => ({
+      ...cameraRef.current,
+      bearing: (cameraRef.current.bearing + delta) % 360,
     }));
   }, []);
 
   const handleAdjustPitch = useCallback((delta: number) => {
-    setViewState((prev) => ({
-      ...prev,
-      pitch: Math.max(0, Math.min(60, prev.pitch + delta)),
+    setViewState(() => ({
+      ...cameraRef.current,
+      pitch: Math.max(0, Math.min(60, cameraRef.current.pitch + delta)),
     }));
   }, []);
 
   const handleResetNorth = useCallback(() => {
-    setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }));
+    setViewState({ ...cameraRef.current, bearing: 0, pitch: 0 });
   }, []);
 
   return (
@@ -302,13 +303,15 @@ export function IntelGlobe({
             }
           }
         }}
+        imperativeCamera
         viewState={viewState}
         onMove={(evt: any) => {
           if (evt.originalEvent) {
             lastInteractionRef.current = performance.now();
           }
           const next = evt.viewState;
-          if (next) {
+          if (next) cameraRef.current = next;
+          if (next && evt.originalEvent) {
             lngRef.current = next.longitude;
             setViewState({
               latitude: next.latitude,
@@ -321,8 +324,8 @@ export function IntelGlobe({
         }}
         mapStyle={mapStyle}
         style={{
-          width: "100vw",
-          height: "100vh",
+          width: "100%",
+          height: "100%",
           userSelect: "none",
           WebkitUserSelect: "none",
         }}
@@ -343,7 +346,7 @@ export function IntelGlobe({
         enable3d={enable3d}
         onSet2D={() => {
           setEnable3d(false);
-          setViewState((prev) => ({ ...prev, pitch: 0, bearing: 0 }));
+          setViewState(() => ({ ...cameraRef.current, pitch: 0, bearing: 0 }));
         }}
         onSet3D={() => setEnable3d(true)}
         onAdjustBearing={handleAdjustBearing}

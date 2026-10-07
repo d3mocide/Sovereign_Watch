@@ -19,7 +19,7 @@ export const SpeedLegend: React.FC<SpeedLegendProps> = ({ visible }) => {
     )`;
 
     return (
-        <div className="absolute left-[410px] top-[325px] z-10 w-[110px] pointer-events-none select-none flex flex-col widget-panel p-0 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="absolute left-[410px] top-[325px] z-10 w-[110px] pointer-events-none select-none hidden xl:flex flex-col widget-panel p-0 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
             {/* Header */}
             <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
                 <Anchor size={12} className="text-cyan-400" />

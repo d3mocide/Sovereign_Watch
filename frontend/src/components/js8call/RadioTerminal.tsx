@@ -1,3 +1,4 @@
+import { MobileTabs } from "../layouts/MobileSections";
 /**
  * Sovereign Watch – JS8Call Radio Terminal
  * =========================================
@@ -217,6 +218,8 @@ export default function RadioTerminal({
   // ── State ──────────────────────────────────────────────────────────────────
 
   // Radio operating mode: JS8 decode terminal vs. live audio listening post vs. WebSDR
+  const [mobileStations, setMobileStations] = useState(false);
+  const [mobileSetup, setMobileSetup] = useState(false);
   const [radioMode, setRadioMode] = useState<"JS8" | "LISTEN" | "WEBSDR">(
     "JS8",
   );
@@ -285,7 +288,7 @@ export default function RadioTerminal({
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (sharedLogEntries.length > 0) scrollToBottom();
   }, [sharedLogEntries, scrollToBottom]);
 
   // UTC clock — updates every second
@@ -442,7 +445,7 @@ export default function RadioTerminal({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 text-slate-200 font-mono text-sm selection:bg-indigo-500/30 overflow-hidden relative">
+    <div data-mobile-stations={mobileStations} data-mobile-setup={mobileSetup} className="radio-terminal flex flex-col h-full bg-slate-950/80 text-slate-200 font-mono text-sm selection:bg-indigo-500/30 overflow-hidden relative">
       {/* Subtle background glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
 
@@ -460,8 +463,9 @@ export default function RadioTerminal({
           </div>
         </div>
 
+        <button className="radio-setup-toggle xl:hidden" aria-expanded={mobileSetup} onClick={() => { setMobileSetup(!mobileSetup); setKiwiPanelOpen(false); }}>Setup</button>
         {/* Center: KiwiSDR config widget + JS8Call station info */}
-        <div className="flex items-center gap-3 text-xs">
+        <div className="radio-console-controls flex items-center gap-3 text-xs">
           {/* SDR node selector — opens the KiwiNodeBrowser floating panel */}
           {radioMode !== "WEBSDR" && (
             <div className="relative" ref={sdrContainerRef}>
@@ -519,7 +523,7 @@ export default function RadioTerminal({
           <div className="w-px h-6 bg-slate-800 shrink-0" />
 
           {/* Mode toggle: JS8 decode / Listening Post / WebSDR*/}
-          <div className="flex rounded-md overflow-hidden border border-white/10 shrink-0">
+          <div className="radio-desktop-modes flex rounded-md overflow-hidden border border-white/10 shrink-0">
             <button
               onClick={() => setRadioMode("JS8")}
               title="JS8Call decode mode"
@@ -700,7 +704,7 @@ export default function RadioTerminal({
 
       {/* ── BAND + MODE BAR — hidden in LISTEN mode ── */}
       {radioMode === "JS8" && (
-        <div className="shrink-0 bg-black/30 border-b border-white/10 px-3 py-1.5 flex items-center gap-4 overflow-x-auto z-10 relative">
+        <div className="radio-band-controls shrink-0 bg-black/30 border-b border-white/10 px-3 py-1.5 flex items-center gap-4 overflow-x-auto z-10 relative">
           {/* Band presets */}
           <div className="flex items-center gap-1 shrink-0">
             <span className="text-[10px] text-slate-600 uppercase tracking-widest mr-1 shrink-0">
@@ -817,8 +821,9 @@ export default function RadioTerminal({
         </div>
       )}
 
+      <MobileTabs label="Radio sections" tabs={[{id:'messages',label:'Messages'},{id:'stations',label:'Heard'},{id:'listen',label:'Listen'},{id:'websdr',label:'Receivers'}]} value={radioMode === 'LISTEN' ? 'listen' : radioMode === 'WEBSDR' ? 'websdr' : mobileStations ? 'stations' : 'messages'} onChange={id => { setMobileStations(id === 'stations'); setMobileSetup(false); setKiwiPanelOpen(false); setRadioMode(id === 'listen' ? 'LISTEN' : id === 'websdr' ? 'WEBSDR' : 'JS8'); }} />
       {/* ── MAIN BODY ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="radio-body flex flex-1 min-h-0 overflow-hidden">
         {radioMode === "LISTEN" ? (
           <ListeningPost
             analyserNode={analyserNode}
@@ -848,15 +853,19 @@ export default function RadioTerminal({
           <>
             {/* MESSAGE LOG – left, dominant, bottom-anchored like a chat terminal */}
             <main
-              className="flex-1 flex flex-col overflow-y-auto p-4"
+              data-empty={sharedLogEntries.length === 0}
+              className="radio-messages flex-1 flex flex-col overflow-y-auto p-4"
               ref={logContainerRef}
             >
               {/* Push messages to the bottom when the log is sparse */}
               <div className="flex-1 flex flex-col justify-end">
                 <div className="space-y-1.5">
                   {sharedLogEntries.length === 0 && (
-                    <div className="text-center p-8 text-slate-600 italic text-xs">
-                      Listening for JS8Call traffic…
+                    <div className="radio-empty-state">
+                      <div className="radio-empty-symbol" aria-hidden="true"><Radio size={28} /></div>
+                      <h2>No messages yet</h2>
+                      <p>{bridgeConnected && js8IsConnected ? 'Incoming JS8Call traffic will appear here.' : 'Link your radio or browse a receiver to start listening.'}</p>
+                      <button className="xl:hidden" onClick={() => setMobileSetup(true)}>Open radio setup</button>
                     </div>
                   )}
                   {sharedLogEntries.map((entry) => (
@@ -868,7 +877,7 @@ export default function RadioTerminal({
             </main>
 
             {/* RIGHT SIDEBAR */}
-            <aside className="w-72 bg-black/30 backdrop-blur-md border-l border-white/10 hidden md:flex flex-col shrink-0 relative z-10 shadow-[-5px_0_15px_rgba(0,0,0,0.2)]">
+            <aside className="radio-stations w-72 bg-black/30 backdrop-blur-md border-l border-white/10 hidden md:flex flex-col shrink-0 relative z-10 shadow-[-5px_0_15px_rgba(0,0,0,0.2)]">
               {/* Sidebar tab bar */}
               <div className="flex border-b border-white/10 bg-black/40 shrink-0 relative">
                 <div className="absolute top-0 right-0 w-32 h-1 bg-indigo-500/30 blur-md pointer-events-none" />
@@ -1015,12 +1024,12 @@ export default function RadioTerminal({
 
       {/* ── TRANSMIT PANEL — hidden in LISTEN mode ── */}
       {radioMode === "JS8" && (
-        <footer className="shrink-0 bg-black/50 backdrop-blur-xl border-t border-white/10 z-20 relative">
+        <footer className="radio-transmit shrink-0 bg-black/50 backdrop-blur-xl border-t border-white/10 z-20 relative">
           {/* Subtle glow underneath footer */}
           <div className="absolute bottom-0 left-0 w-full h-1/2 bg-indigo-500/5 blur-xl pointer-events-none" />
 
           {/* Group quick-select */}
-          <div className="flex items-center gap-1.5 px-5 pt-2 relative z-10">
+          <div className="radio-quick-targets flex items-center gap-1.5 px-5 pt-2 relative z-10">
             <span className="text-[9px] text-slate-700 uppercase tracking-widest font-bold shrink-0">
               Quick
             </span>
@@ -1048,7 +1057,7 @@ export default function RadioTerminal({
           {/* TX form */}
           <form
             onSubmit={handleSend}
-            className="flex items-center gap-3 px-5 py-2 relative z-10"
+            className="radio-send-form flex items-center gap-3 px-5 py-2 relative z-10"
           >
             <span className="text-slate-500 font-semibold text-xs tracking-wider">
               TO
@@ -1058,6 +1067,7 @@ export default function RadioTerminal({
               value={txTarget}
               onChange={(e) => setTxTarget(e.target.value.toUpperCase())}
               placeholder="@GHOSTNET"
+              aria-label="Message recipient"
               maxLength={20}
               disabled={!bridgeConnected}
               className="
@@ -1077,6 +1087,7 @@ export default function RadioTerminal({
                     ? "TYPE MESSAGE AND PRESS ENTER… (NO Transmit on KiwiSDR)"
                     : "NOT CONNECTED"
                 }
+                aria-label="Radio message"
                 maxLength={160}
                 disabled={!bridgeConnected || txPending}
                 autoComplete="off"
@@ -1113,7 +1124,7 @@ export default function RadioTerminal({
           </form>
 
           {/* Status bar */}
-          <div className="flex items-center gap-4 px-5 pb-2 text-[10px] text-slate-600 font-mono relative z-10">
+          <div className="radio-footer-status flex items-center gap-4 px-5 pb-2 text-[10px] text-slate-600 font-mono relative z-10">
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               <span className="text-slate-500">{utcTime} UTC</span>

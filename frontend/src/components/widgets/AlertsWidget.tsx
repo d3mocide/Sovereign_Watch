@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import React from 'react';
 import { ShieldAlert, X, AlertTriangle } from 'lucide-react';
 import { IntelEvent } from '../../types';
@@ -19,8 +20,8 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
         return date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
 
-    return (
-        <div className="absolute top-[calc(100%+20px)] left-1/2 -translate-x-1/2 z-[100] w-[350px] animate-in slide-in-from-top-4 fade-in duration-200">
+    const content = (
+        <div className="hud-popover absolute top-[calc(100%+20px)] left-1/2 -translate-x-1/2 z-[100] w-[350px] animate-in slide-in-from-top-4 fade-in duration-200">
             <div className="bg-black/80 backdrop-blur-xl border border-alert-red/30 rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[600px]">
 
                 {/* Header */}
@@ -81,4 +82,6 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             </div>
         </div>
     );
+  const root = document.querySelector(".hud-viewport");
+  return root ? createPortal(content, root) : content;
 };

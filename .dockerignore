@@ -16,3 +16,8 @@ build
 .env
 .env.*
 !.env.example
+
+# Native process crash dumps
+/core
+**/core.[0-9]*
+/frontend/core

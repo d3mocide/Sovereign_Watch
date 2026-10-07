@@ -35,6 +35,7 @@ from routers import (
 from services.broadcast import broadcast_service
 from services.historian import historian_task, rf_sites_cleanup_task
 from services.log_handler import RedisLogHandler
+from services.system_metrics import system_metrics
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -122,6 +123,7 @@ async def lifespan(app: FastAPI):
     historian_task_handle = asyncio.create_task(_historian_supervisor())
     rf_cleanup_task_handle = asyncio.create_task(rf_sites_cleanup_task())
     await broadcast_service.start()
+    await system_metrics.start()
     # Continuously pre-warm the news feed cache in the background so a fresh
     # dashboard always hits a warm cache instead of blocking on the upstream
     # RSS fetch (refreshes on startup, then on an interval).
@@ -145,6 +147,7 @@ async def lifespan(app: FastAPI):
                 await handle
             except asyncio.CancelledError:
                 pass
+    await system_metrics.stop()
     await broadcast_service.stop()
     await db.disconnect()
 

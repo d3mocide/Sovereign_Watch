@@ -1,0 +1,14 @@
+[Unit]
+Description=Sovereign Watch host disk write sampling
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/Sovereign_Watch
+ExecStart=/usr/bin/python3 /opt/Sovereign_Watch/tools/storage/disk-writes.py --device sda --interval 60 --output /var/tmp/sovereign-disk-writes
+Restart=on-failure
+RestartSec=10
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target

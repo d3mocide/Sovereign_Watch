@@ -1,3 +1,10 @@
+# Bound each container's logs to approximately 30 MiB by default.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+    max-file: "${DOCKER_LOG_MAX_FILES:-3}"
+
 networks:
   sovereign-net-frontend:
     driver: bridge
@@ -8,12 +15,15 @@ volumes:
   sovereign-vol-redpanda:
   sovereign-vol-postgres:
   sovereign-vol-redis:
+  sovereign-vol-space-cache:
 
 
 services:
   # --- Ingestion & Streaming ---
   sovereign-redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:latest
+    logging: *bounded-logging
+    # Retained cluster uses the 25.3 logical version; upgrades must be staged.
+    image: docker.redpanda.com/redpandadata/redpanda:v25.3.17
     container_name: sovereign-redpanda
     command:
       - redpanda
@@ -44,8 +54,12 @@ services:
   # Runs init-topics.sh after the broker is healthy.
   # To add a new topic, edit backend/redpanda/init-topics.sh — do not inline commands here.
   sovereign-redpanda-init:
-    image: docker.redpanda.com/redpandadata/redpanda:latest
+    logging: *bounded-logging
+    image: docker.redpanda.com/redpandadata/redpanda:v25.3.17
     container_name: sovereign-redpanda-init
+    # The CLI-only init image declares a data volume; avoid anonymous disk volumes.
+    tmpfs:
+      - /var/lib/redpanda/data:size=16m
     depends_on:
       sovereign-redpanda:
         condition: service_healthy
@@ -59,6 +73,7 @@ services:
 
   # --- Ingestion: Maritime AIS ---
   sovereign-ais-poller:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/maritime_poller
       dockerfile: Dockerfile
@@ -85,6 +100,7 @@ services:
 
   # --- Ingestion: Aviation ADS-B ---
   sovereign-adsb-poller:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/aviation_poller
       dockerfile: Dockerfile
@@ -125,11 +141,16 @@ services:
 
   # --- Ingestion: Space Domain ---
   sovereign-space-pulse:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/space_pulse
       dockerfile: Dockerfile
     container_name: sovereign-space-pulse
+    volumes:
+      - ./backend/api/proto:/app/proto:ro
+      - sovereign-vol-space-cache:/app/cache
     environment:
+      - ORBITAL_PROPAGATE_INTERVAL_S=${ORBITAL_PROPAGATE_INTERVAL_S:-15}
       - KAFKA_BROKERS=sovereign-redpanda:9092
       - REDIS_HOST=sovereign-redis
       - REDIS_PORT=6379
@@ -162,6 +183,7 @@ services:
 
   # --- Ingestion: Infrastructure (Cables, Outages, Datacenters, FCC Towers) ---
   sovereign-infra-poller:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/infra_poller
       dockerfile: Dockerfile
@@ -184,6 +206,7 @@ services:
 
   # --- Ingestion: Geopolitical OSINT (GDELT) ---
   sovereign-gdelt-pulse:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/gdelt_pulse
       dockerfile: Dockerfile
@@ -204,6 +227,7 @@ services:
 
   # --- Ingestion: RF Infrastructure ---
   sovereign-rf-pulse:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/rf_pulse
       dockerfile: Dockerfile
@@ -234,6 +258,7 @@ services:
 
   # --- Processing: TAK Clausalizer ---
   sovereign-tak-clausalizer:
+    logging: *bounded-logging
     build:
       context: ./backend/ingestion/tak_clausalizer
       dockerfile: Dockerfile
@@ -256,6 +281,7 @@ services:
 
   # --- Persistence ---
   sovereign-timescaledb:
+    logging: *bounded-logging
     image: timescale/timescaledb-ha:pg16
     container_name: sovereign-timescaledb
     shm_size: 1g
@@ -274,7 +300,13 @@ services:
       - -ccheckpoint_timeout=15min
       - -cmax_wal_size=2GB
       - -cwal_compression=on
+      - -cshared_preload_libraries=timescaledb,pg_stat_statements
+      - -cpg_stat_statements.track=top
+      - -cpg_stat_statements.max=1000
       - -ctimescaledb.max_background_workers=8
+      # Reserve worker slots for Timescale jobs, parallel queries, and launchers.
+      - -cmax_worker_processes=16
+      - -cmax_parallel_workers=4
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-sovereign_watch}
@@ -290,6 +322,7 @@ services:
       retries: 5
 
   sovereign-redis:
+    logging: *bounded-logging
     image: redis:alpine
     container_name: sovereign-redis
     command: redis-server --appendonly yes
@@ -306,6 +339,7 @@ services:
   # --- Backend API ---
   # Runs schema migrations before starting uvicorn (see backend/api/migrate.py).
   sovereign-backend:
+    logging: *bounded-logging
     build:
       context: ./backend/api
       dockerfile: Dockerfile
@@ -365,6 +399,7 @@ services:
 
   # --- JS8Call Radio Terminal ---
   sovereign-js8call:
+    logging: *bounded-logging
     build:
       context: ./js8call
       dockerfile: Dockerfile
@@ -397,6 +432,7 @@ services:
   # VITE_* vars are baked into the bundle at build time via build.args.
   # To change them you must rebuild the image: docker compose build sovereign-frontend
   sovereign-frontend:
+    logging: *bounded-logging
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -419,6 +455,7 @@ services:
 
   # --- Nginx Reverse Proxy ---
   sovereign-nginx:
+    logging: *bounded-logging
     image: nginx:alpine
     container_name: sovereign-nginx
     ports:

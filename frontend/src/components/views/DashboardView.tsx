@@ -1,3 +1,6 @@
+import { MobileOverviewCard } from "../layouts/MobileOverviewCard";
+import { useCompactLayout } from "../../hooks/useCompactLayout";
+import { MobileTabs } from "../layouts/MobileSections";
 import type { FeatureCollection } from "geojson";
 import {
   Activity,
@@ -49,7 +52,7 @@ interface DashboardViewProps {
   facilityData?: FeatureCollection | null;
   nwsAlertsData?: FeatureCollection | null;
   dnsRootData?: import("../../types").DnsRootServer[];
-  
+
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -68,9 +71,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   ixpData,
   facilityData,
   dnsRootData,
-  
+
   nwsAlertsData,
 }) => {
+  const compact = useCompactLayout();
+  const [mobileSection, setMobileSection] = useState('summary');
+  const [mobileMap, setMobileMap] = useState('local');
+  const [mobileFeed, setMobileFeed] = useState('passes');
   const mission = missionProps?.currentMission ?? null;
   const obsLat = mission?.lat ?? 45.5152;
   const obsLon = mission?.lon ?? -122.6784;
@@ -97,7 +104,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [trackCounts]);
 
   // Pass predictions — single hook, category swaps on tab change
-  const { passes, loading: passesLoading } = usePassPredictions(
+  const { passes, loading: passesLoading, error: passesError, refetch: refetchPasses } = usePassPredictions(
     obsLat,
     obsLon,
     {
@@ -138,8 +145,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, []);
 
   // ── Derived ──
-  const alerts = events.filter((e) => e.type === "alert").slice(0, 20);
-  const intelEvents = events.filter((e) => e.type !== "alert").slice(0, 30);
+  const alerts = useMemo(() => events.filter((e) => e.type === "alert").slice(0, 20), [events]);
+  const intelEvents = useMemo(() => events.filter((e) => e.type !== "alert").slice(0, 30), [events]);
   const [selectedGdelt, setSelectedGdelt] = useState<any | null>(null);
   const [hoveredGdelt, setHoveredGdelt] = useState<any | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
@@ -191,9 +198,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     "text-white/20 border-transparent hover:text-white/40 hover:bg-white/5";
 
   return (
-    <div className="w-full h-full pt-[55px] bg-tactical-bg text-hud-green font-mono flex flex-col overflow-hidden">
+    <div data-mobile-section={mobileSection} data-mobile-map={mobileMap} data-mobile-feed={mobileFeed} className="dashboard-view w-full h-full pt-[var(--hud-top)] bg-tactical-bg text-hud-green font-mono flex flex-col overflow-hidden">
       {/* ── Stats Bar ── */}
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-black/70 border-b border-white/5 flex-shrink-0 flex-wrap">
+      <div className="dashboard-status flex items-center gap-4 px-4 py-1.5 bg-black/70 border-b border-white/5 flex-shrink-0 flex-wrap">
         {/* Mission area */}
         <div className="flex items-center gap-1.5">
           <Globe size={10} className="text-hud-green/50" />
@@ -280,13 +287,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </span>
       </div>
 
+      <MobileTabs label="Dashboard sections" tabs={[{id:'summary',label:'Summary'},{id:'maps',label:'Maps'},{id:'intel',label:'Intel'},{id:'feeds',label:'Feeds'}]} value={mobileSection} onChange={setMobileSection} />
+      {compact && mobileSection === 'summary' && <div className="mobile-dashboard-overview"><MobileOverviewCard view="DASHBOARD" counts={trackCounts} alertCount={alerts.length} description={mission ? `Mission area · ${mission.radius_nm} NM` : 'Choose a mission area to begin'} /></div>}
       {/* ── Main 3-column grid ── */}
       <div
-        className="flex-1 grid min-h-0 overflow-hidden"
-        style={{ gridTemplateColumns: "265px 1fr 265px" }}
+        className="dashboard-grid flex-1 grid min-h-0"
       >
         {/* Left — Alerts + Intel Feed */}
-        <div className="flex flex-col border-r border-white/5 min-h-0 overflow-hidden">
+        <div className="dashboard-summary flex flex-col border-r border-white/5 min-h-0 overflow-hidden">
           <div
             className="flex flex-col border-b border-white/5 overflow-hidden"
             style={{ flex: "0 0 40%" }}
@@ -377,10 +385,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Center — Split Map View (Tactical AO vs Global Situation) */}
-        <div className="relative overflow-hidden bg-black min-h-0 grid grid-cols-2">
+        <div className="dashboard-maps relative overflow-hidden bg-black min-h-0 grid grid-cols-2" data-mobile-map={mobileMap}>
+          <MobileTabs label="Dashboard maps" tabs={[{id:'local',label:'Mission map'},{id:'global',label:'Global globe'}]} value={mobileMap} onChange={setMobileMap} />
           {/* Tactical Left */}
-          <div className="relative border-r border-white/5 overflow-hidden">
-            {mission ? (
+          <div className="dashboard-local-map relative border-r border-white/5 overflow-hidden">
+            {mission && (!compact || mobileSection === "summary" || (mobileSection === "maps" && mobileMap === "local")) ? (
               <MiniTacticalMap
                 mission={mission}
                 entitiesRef={entitiesRef}
@@ -418,12 +427,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Global Right */}
-          <SituationGlobe
+          <div className="dashboard-global-map relative min-h-0">
+          {(!compact || (mobileSection === "maps" && mobileMap === "global")) && <SituationGlobe
             satellitesRef={satellitesRef}
             cablesData={cablesData}
             stationsData={stationsData}
             outagesData={outagesData}
             worldCountriesData={worldCountriesData}
+            gdeltData={gdeltData}
             showTerminator={showTerminator}
             drStateRef={drStateRef}
             mission={missionProps?.currentMission ?? null}
@@ -435,8 +446,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ixpData={ixpData}
             facilityData={facilityData}
             dnsRootData={dnsRootData}
-            
-          />
+
+          />}
+          </div>
 
           {/* Situation Globe Tooltip (Heads-up Display) */}
           {hoveredGdelt && hoverPos && (
@@ -497,7 +509,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Right — Global Stability */}
-        <div className="flex flex-col border-l border-white/5 min-h-0 overflow-hidden">
+        <div className="dashboard-intel flex flex-col border-l border-white/5 min-h-0 overflow-hidden">
           {selectedGdelt ? (
             <div className="flex flex-col flex-1 bg-black/40">
               <div className="p-4 border-b border-white/5 bg-red-500/5">
@@ -566,13 +578,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      <div className="dashboard-feed-navigation"><MobileTabs label="Dashboard feeds" tabs={[{id:'passes',label:'Passes'},{id:'outages',label:'Outages'},{id:'news',label:'News'}]} value={mobileFeed} onChange={setMobileFeed} /></div>
       {/* ── Bottom 3-panel row ── */}
       <div
-        className="flex-shrink-0 border-t border-white/5 grid min-h-0"
-        style={{ height: "200px", gridTemplateColumns: "1fr 1fr 1fr" }}
+        className="dashboard-bottom flex-shrink-0 border-t border-white/5 grid min-h-0"
+
       >
         {/* Orbital Passes with category tabs */}
-        <div className="flex flex-col border-r border-white/5 overflow-hidden">
+        <div className="dashboard-pass-feed flex flex-col border-r border-white/5 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
             <Satellite size={11} className="text-purple-400 flex-shrink-0" />
             {(["intel", "weather", "gps"] as PassCategory[]).map((cat) => (
@@ -595,7 +608,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : Array.isArray(passes) && passes.length === 0 ? (
               <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
-                No Passes in Window
+                {!mission ? "Select a mission area to predict passes" : passesError ? "Pass predictions unavailable" : "No passes in this time window"}
+                {passesError && <button className="ml-2 min-h-11 px-2 text-hud-green" onClick={refetchPasses}>Retry</button>}
               </div>
             ) : Array.isArray(passes) ? (
               <div className="grid grid-cols-3 gap-px bg-white/[0.03]">
@@ -627,11 +641,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span
+                          title={pass.name}
                           className={`text-[9px] font-bold truncate mr-1 ${accentColor}`}
                         >
-                          {pass.name.length > 15
-                            ? pass.name.substring(0, 12) + "…"
-                            : pass.name}
+                          {pass.name}
                         </span>
                         <span className="text-[7px] text-white/15 tabular-nums">
                           {pass.norad_id.toString().slice(-5)}
@@ -660,19 +673,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : (
               <div className="flex items-center justify-center h-10 text-[9px] text-white/15 uppercase tracking-widest">
-                Error Loading Passes
+                {!mission ? "Select a mission area to predict passes" : passesError ? "Pass predictions unavailable" : "No passes in this time window"}
+                {passesError && <button className="ml-2 min-h-11 px-2 text-hud-green" onClick={refetchPasses}>Retry</button>}
               </div>
             )}
           </div>
         </div>
 
         {/* Internet Outages */}
-        <div className="flex flex-col border-r border-white/5 overflow-hidden">
+        <div className="dashboard-outage-feed flex flex-col border-r border-white/5 overflow-hidden">
           <OutageAlertPanel />
         </div>
 
         {/* News Feed */}
-        <div className="flex flex-col overflow-hidden">
+        <div className="dashboard-news-feed flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 border-b border-white/5 flex-shrink-0">
             <Newspaper size={11} className="text-hud-green/50" />
             <span className="text-[10px] font-bold tracking-widest uppercase text-white/55">

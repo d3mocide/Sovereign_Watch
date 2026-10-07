@@ -127,7 +127,7 @@ export function MapControls({
 
   return (
     <div
-      className={`absolute ${bottomClass} left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto`}
+      className={`map-control-bar absolute ${bottomClass} left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[100] pointer-events-auto`}
     >
       {/* Optional 3D camera controls — bearing + pitch */}
       {showCameraControls && (

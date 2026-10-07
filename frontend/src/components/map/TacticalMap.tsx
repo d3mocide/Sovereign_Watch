@@ -1032,8 +1032,8 @@ export function TacticalMap({
         style={{
           position: "relative",
           zIndex: 1,
-          width: "100vw",
-          height: "100vh",
+          width: "100%",
+          height: "100%",
         }}
       >
         <Suspense fallback={null}>
@@ -1102,8 +1102,8 @@ export function TacticalMap({
             {...(mapToken ? { mapboxAccessToken: mapToken } : {})}
             globeMode={globeMode}
             style={{
-              width: "100vw",
-              height: "100vh",
+              width: "100%",
+              height: "100%",
               userSelect: "none",
               WebkitUserSelect: "none",
             }}
