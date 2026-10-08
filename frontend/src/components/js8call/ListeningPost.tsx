@@ -132,6 +132,8 @@ export default function ListeningPost({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const [waterfallReady, setWaterfallReady] = useState(false);
+  const lastWaterfallRow = useRef(0);
 
   const { hasRole } = useAuth();
   const isOperator = hasRole('operator');
@@ -149,7 +151,9 @@ export default function ListeningPost({
   // Settings
   const [manGain, setManGain] = useState(50); // 0-120 KiwiSDR manGain
   const [agcOn, setAgcOn] = useState(true); // AGC enabled by default
-  const [wfSkip, setWfSkip] = useState(1); // client-side frame skip (1=all,2=every other,…)
+  const [wfSkip, setWfSkip] = useState(1);
+  const wfSkipRef = useRef(1);
+  wfSkipRef.current = wfSkip; // client-side frame skip (1=all,2=every other,…)
   const [sqn, setSqn] = useState(20);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
@@ -212,6 +216,21 @@ export default function ListeningPost({
     wfApertureRef.current = wfAperture;
   }, [wfOffset, wfCmap, wfAperture]);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resize = () => {
+      const bounds = canvas.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+      canvas.width = Math.max(1, Math.round(bounds.width * ratio));
+      canvas.height = Math.max(2, Math.round(bounds.height * ratio));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+    return () => observer.disconnect();
+  }, []);
+
   const drawRow = useCallback(
     (
       pixels: Uint8Array | number[],
@@ -220,6 +239,7 @@ export default function ListeningPost({
       h: number,
     ) => {
       const srcLen = pixels.length;
+      if (!srcLen || w < 1 || h < 2) return;
 
       // 1. SCROLL DOWN (GPU ACCELERATED)
       // Moving the entire viewport down by 1px
@@ -265,7 +285,7 @@ export default function ListeningPost({
         // Sample every ~1 second (at 30fps) to find the noise floor.
         // We use a cheap percentile approximation to avoid sorting the whole array.
         let sum = 0;
-        const sampleSize = Math.floor(srcLen / 10);
+        const sampleSize = Math.max(1, Math.floor(srcLen / 10));
         for (let j = 0; j < sampleSize; j++) {
             sum += pixels[j * 10]; // Subsample every 10th bin
         }
@@ -312,6 +332,9 @@ export default function ListeningPost({
       // WIDE mode: Use WebSocket binary stream
       let reconnectTimeout: number | undefined;
       let active = true;
+      const watchdog = window.setInterval(() => {
+        if (Date.now() - lastWaterfallRow.current > 3000) setWaterfallReady(false);
+      }, 1000);
 
       const connect = () => {
         if (!active) return;
@@ -320,15 +343,18 @@ export default function ListeningPost({
         wsRef.current = ws;
 
         ws.onmessage = (evt) => {
-          if (evt.data instanceof ArrayBuffer) {
+          if (active && evt.data instanceof ArrayBuffer) {
+            lastWaterfallRow.current = Date.now();
+            setWaterfallReady(true);
             wfFrameCountRef.current += 1;
-            if (wfFrameCountRef.current % wfSkip !== 0) return; // client-side cadence
+            if (wfFrameCountRef.current % wfSkipRef.current !== 0) return; // client-side cadence
             const pixels = new Uint8Array(evt.data);
             drawRow(pixels, ctx2d, canvas.width, canvas.height);
           }
         };
 
         ws.onclose = () => {
+          if (active) setWaterfallReady(false);
           if (active) {
             reconnectTimeout = window.setTimeout(connect, 3000);
           }
@@ -339,6 +365,7 @@ export default function ListeningPost({
 
       return () => {
         active = false;
+        window.clearInterval(watchdog);
         if (reconnectTimeout) window.clearTimeout(reconnectTimeout);
         const ws = wsRef.current;
         if (ws) {
@@ -354,7 +381,7 @@ export default function ListeningPost({
       };
     }
     // Only re-create the WebSocket when wfMode or analyserNode changes.
-    // wfSkip is read via closure but doesn't need to close/reopen the socket;
+    // wfSkip is read via ref without closing/reopening the socket;
     // wfOffset is read via wfOffsetRef; zoom is sent separately via SET_ZOOM action.
      
   }, [wfMode, analyserNode]);
@@ -597,6 +624,11 @@ export default function ListeningPost({
 
       {/* ── MAIN AREA: WATERFALL ── */}
       <div className="listening-waterfall flex-1 flex flex-col relative overflow-hidden bg-black">
+        {activeKiwiConfig && wfMode === "WIDE" && !waterfallReady && (
+          <div role="status" className="absolute top-3 right-3 z-20 rounded bg-black/70 px-3 py-2 text-xs text-amber-300">
+            Waiting for receiver waterfall…
+          </div>
+        )}
         {/* ADC overload alert — dismissed automatically after 8 s */}
         {adcOverload && (
           <div className="absolute top-2 left-2 right-2 z-30 flex items-center gap-2 px-3 py-2 rounded bg-rose-900/80 border border-rose-500/60 backdrop-blur-sm">
@@ -667,8 +699,8 @@ export default function ListeningPost({
 
         <canvas
           ref={canvasRef}
-          className="flex-1 w-full block bg-black"
-          style={{ imageRendering: "pixelated" }}
+          className="flex-1 w-full min-h-0 block bg-black"
+          style={{ imageRendering: "auto" }}
           width={1024}
           height={600}
         />
