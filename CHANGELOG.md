@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-07
+
 ### Added
 - Dedicated phone and tablet workspaces for Tactical, Orbital, Intel, Dashboard and Radio, with safe-area-aware navigation and SovereignGlass styling.
 - Full-width mobile entity details that open immediately on selection, plus a dedicated Tools drawer with Layers, Display and System tabs.
@@ -18,6 +20,10 @@
 - Pin pnpm to 9.15.9 and Redpanda to the deployment-compatible v25.3.17; persist the space-pulse cache and use frozen dependency installs.
 
 ### Fixed
+- Restore working KiwiSDR-to-JS8Call decoding with a compatible decoder runtime, correct PCM byte order and an audio source JS8Call can capture.
+- Pair KiwiSDR audio and waterfall sessions, forward ordinary and directed decodes, and resize waterfalls correctly on desktop and phones.
+- Report actual decoder capture readiness, stop the bridge when a critical process exits, and clearly show the radio integration as receive-only.
+- Prevent stale listening audio connections and bound playback backlog after background-tab stalls.
 - Isolate malformed satellite positions, repair NumPy groundtrack timedelta handling, and include RF Pulse test dependencies in its lockfile.
 - Apply atomic expiring write limits per authenticated user and operation, keeping users behind nginx independent.
 - iOS safe-area clipping, overlapping mobile map controls and menus, squashed filter groups, inconsistent dashboard panels and oversized overview headers.

@@ -1,11 +1,13 @@
-# Release candidate - v1.2.0 - Mobile Workspaces & Operational Efficiency
+# Release - v1.2.0 - Mobile Workspaces, Performance & Radio Recovery
 
-**Draft: not released.** Release preparation is on `release/mobile-performance-v1.2.0`, based on v1.1.3. Local verification passes; GitHub CI and final merge/release review remain pending. See the [readiness report](agent_docs/tasks/2026-10-07-release-readiness-v1-2-0.md).
+Release gates passed for the mobile/performance foundation and radio recovery.
+See the [final gate report](agent_docs/tasks/2026-10-07-release-gates-v1-2-0.md).
 
 Sovereign Watch gains usable phone and tablet workspaces while retaining its desktop interface. Maps resize more reliably, menus provide readable touch controls, and selecting an object opens its details immediately. The stack also gains bounded logs and replay budgets, more efficient orbital streaming, and tools to measure disk writes and query costs.
 
 ## Key features
 
+- Working KiwiSDR audio, JS8Call decoding and responsive waterfalls, verified with a known recording and live on-air traffic.
 - Tactical, Orbital, Intel, Dashboard and Radio mobile layouts with iOS safe areas and consistent black/green frosted-glass styling.
 - Full-width entity details, a dedicated Tools drawer, expanded Feeds/Layers filtering, compact overviews and on-map mission NWS alerts.
 - Lower rendering and message-conversion overhead, background metrics sampling and batched live snapshots.
@@ -22,7 +24,14 @@ Sovereign Watch gains usable phone and tablet workspaces while retaining its des
 - The new space cache volume is approximately catalog-sized; existing database, Redis and Kafka volumes are retained.
 - Disk-write estimates describe host block writes, not physical NAND wear. A VMware guest cannot determine the hypervisor SSD's remaining endurance budget; use [the storage guide](tools/storage/README.md).
 - Browser evidence uses API fixtures and blank basemaps. It verifies layout and interactions, not physical-device performance. No unmeasured speedup or drive-life guarantee is claimed.
-- Frontend package version remains v1.1.3 until a release version is explicitly finalized. No new dependency upgrade is required for the mobile layouts.
+- The radio image now uses Ubuntu 24.04 for JS8Call 3.0.3 runtime compatibility,
+  with a Qt-visible PulseAudio capture source. Rebuild `sovereign-js8call` during
+  upgrade; a bridge connection alone no longer implies decoder readiness.
+- Radio reception depends on public receiver availability, input overload and
+  propagation. This integration is receive-only; browser audio volume does not
+  resolve remote ADC overload. See the [repeatable radio test](tools/radio/README.md).
+- Frontend package metadata is updated to v1.2.0. Mobile layouts require no new
+  frontend dependency upgrade.
 
 ## Upgrade instructions
 
@@ -31,7 +40,7 @@ Run after the v1.2.0 tag has been published, from a clean checkout with your exi
 ```bash
 git fetch origin --tags
 git checkout v1.2.0
-docker compose build sovereign-frontend sovereign-backend sovereign-space-pulse
+docker compose build sovereign-frontend sovereign-backend sovereign-space-pulse sovereign-js8call
 docker compose up -d sovereign-timescaledb sovereign-redpanda sovereign-redis
 docker compose up -d --force-recreate sovereign-redpanda-init
 docker compose up -d --build
@@ -39,6 +48,22 @@ docker compose up -d --build
 
 Check backend startup for migration V007, service health, Kafka lag and retention settings. Use `bash tools/storage/live-audit.sh` for a read-only audit. Preserve volume backups and keep volumes when reverting application images; this release does not require deleting data.
 
-## Verification and remaining work
+## Verification
 
-See the [release-readiness report](agent_docs/tasks/2026-10-07-release-readiness-v1-2-0.md) for exact test evidence, open PR recommendations and remaining GitHub CI and publication steps. PR #342/#343 changes and a hardened implementation of #345 are included locally; GitHub PRs remain unchanged.
+All frontend and nine Python-service CI jobs passed for the radio patch. Targeted
+local gates passed frontend lint/typecheck and 318 tests, radio Ruff and 40 tests,
+and Docker image builds. The real-decoder test recovered all four messages from
+a pinned upstream WAV; live KiwiSDR reception also produced real JS8 traffic.
+Desktop and phone browsers painted actual incoming waterfall rows without
+horizontal overflow.
+
+The running stack has 14 services, healthy radio/database/cache/broker services,
+applied V007, successful latest retention/compression runs, bounded logs and
+stable Kafka consumers. Historical policy failure counters remain cumulative.
+Earlier mobile/performance evidence and its limits are recorded in the
+[foundation readiness report](agent_docs/tasks/2026-10-07-release-readiness-v1-2-0.md);
+radio verification is in the [radio recovery report](agent_docs/tasks/2026-10-07-radio-recovery.md).
+
+PR #347 delivered the foundation. Redundant PRs #342–#346 were closed after their
+selected improvements were incorporated. This release adds the radio recovery
+and finalizes the release documentation and version metadata.
