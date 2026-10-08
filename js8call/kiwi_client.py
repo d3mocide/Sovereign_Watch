@@ -31,6 +31,7 @@ Authentication (matches reference kiwiclient):
 """
 
 import asyncio
+import array
 import logging
 import time
 from typing import Callable, Optional, Dict
@@ -51,7 +52,7 @@ logger = logging.getLogger("js8bridge.kiwi_client")
 SND_FLAG_ADC_OVFL   = 0x02  # ADC overflow: antenna/input overloaded
 SND_FLAG_STEREO     = 0x08  # Stereo/IQ frame (GPS timestamp header prepended)
 SND_FLAG_COMPRESSED = 0x10  # IMA-ADPCM compressed (we request compression=0)
-SND_FLAG_LE_PCM     = 0x80  # PCM is little-endian (always set on current KiwiSDR)
+SND_FLAG_LE_PCM     = 0x80  # PCM is little-endian when this flag is set
 
 # ---------------------------------------------------------------------------
 # Mode → (low_cut_Hz, high_cut_Hz) filter passband
@@ -187,6 +188,10 @@ class KiwiClient:
         self._zoom:        int   = 5
         self._disconnecting: bool = False
         self._frame_count: int   = 0
+        self._session_ts: int = 0
+        self._audio_last_received: float = 0.0
+        self._waterfall_last_received: float = 0.0
+        self._audio_ready: Optional[asyncio.Future] = None
 
         # Client-side squelch gate with hysteresis.
         # The server squelch (SET squelch=1 max=<close_thresh>) acts as a
@@ -217,6 +222,8 @@ class KiwiClient:
                    Sent in plaintext via ``SET auth t=kiwi p=<password>`` per
                    the KiwiSDR protocol (reference kiwiclient behaviour).
         """
+        if mode in {"iq", "drm", "qam"}:
+            raise ValueError(f"{mode.upper()} does not produce supported mono audio; choose USB/LSB/AM/FM")
         if not _HAS_WEBSOCKETS:
             raise RuntimeError("websockets library not installed")
 
@@ -234,6 +241,10 @@ class KiwiClient:
         }
 
         ts = int(time.time() * 1000)
+        self._session_ts = ts
+        self._audio_last_received = 0.0
+        self._waterfall_last_received = 0.0
+        self._audio_ready = asyncio.get_running_loop().create_future()
         last_exc: Optional[Exception] = None
         for template in _WS_PATH_TEMPLATES:
             uri = template.format(host=host, port=port, ts=ts, stream="SND")
@@ -261,6 +272,13 @@ class KiwiClient:
 
         self._recv_task      = asyncio.create_task(self._receive_loop(),   name="kiwi-recv")
         self._keepalive_task = asyncio.create_task(self._keepalive_loop(), name="kiwi-keepalive")
+
+        try:
+            # An open socket is not evidence that auth succeeded or audio flows.
+            await asyncio.wait_for(asyncio.shield(self._audio_ready), timeout=10)
+        except BaseException:
+            await self.disconnect()
+            raise
 
         self._on_status({
             "connected": True,
@@ -611,6 +629,8 @@ class KiwiClient:
                     pass
 
         self._command_tasks.clear()
+        if self._audio_ready is not None and not self._audio_ready.done():
+            self._audio_ready.cancel()
 
         for ws in (self._ws, self._wf_ws):
             if ws:
@@ -697,6 +717,7 @@ class KiwiClient:
     async def _receive_loop(self) -> None:
         """Read binary SND frames; dispatch PCM payload via on_audio callback."""
         logger.debug("KiwiClient receive loop started")
+        failed = False
         try:
             async for frame in self._ws:
                 if not isinstance(frame, bytes):
@@ -705,13 +726,18 @@ class KiwiClient:
                 # Text-framed MSG (audio_init, rate negotiation, etc.)
                 if frame.startswith(b"MSG "):
                     msg_text = frame.decode("utf-8", errors="ignore")
+                    for error in ("badp=1", "too_busy=", "down=1", "inactivity_timeout=1"):
+                        if error in msg_text:
+                            raise RuntimeError(f"KiwiSDR rejected stream: {msg_text[4:160]}")
                     if "audio_rate=" in msg_text:
                         try:
-                            ar_in = int(msg_text.split("audio_rate=")[1].split()[0])
+                            ar_in = int(float(msg_text.split("audio_rate=")[1].split()[0]))
+                            if ar_in != 12000:
+                                raise RuntimeError(f"Unsupported Kiwi audio rate: {ar_in} Hz")
                             logger.info("KiwiClient dynamic audio rate: %d Hz", ar_in)
                             await self._ws.send(f"SET AR OK in={ar_in} out=44100")
                         except Exception as e:
-                            logger.warning("Failed to parse audio_rate from %r: %s", msg_text, e)
+                            raise RuntimeError(f"Invalid Kiwi audio rate: {msg_text[4:160]}") from e
                     continue
 
                 # SND binary audio frame:
@@ -742,7 +768,22 @@ class KiwiClient:
                                 self._squelch_open = False
                             # In the hysteresis band: maintain current state.
 
+                    if flags & (SND_FLAG_COMPRESSED | SND_FLAG_STEREO):
+                        # Never play ADPCM or IQ headers as signed mono audio.
+                        logger.debug("Ignoring non-mono/uncompressed SND flags %#x", flags)
+                        continue
                     pcm = frame[10:]
+                    if len(pcm) % 2:
+                        logger.debug("Ignoring truncated PCM frame")
+                        continue
+                    if not flags & SND_FLAG_LE_PCM:
+                        samples = array.array("h")
+                        samples.frombytes(pcm)
+                        samples.byteswap()
+                        pcm = samples.tobytes()
+                    self._audio_last_received = time.monotonic()
+                    if self._audio_ready is not None and not self._audio_ready.done():
+                        self._audio_ready.set_result(None)
                     if pcm and (not self._squelch_enabled or self._squelch_open):
                         self._on_audio(pcm)
 
@@ -750,6 +791,9 @@ class KiwiClient:
             logger.debug("KiwiClient receive loop cancelled")
             raise
         except BaseException as exc:
+            failed = True
+            if self._audio_ready is not None and not self._audio_ready.done():
+                self._audio_ready.set_exception(RuntimeError(str(exc)))
             logger.error("KiwiClient receive error: %s", repr(exc))
             # Distinguish clean close from unexpected disconnect
             closed_err = _HAS_WEBSOCKETS and isinstance(exc, _wse.ConnectionClosedError)
@@ -762,6 +806,21 @@ class KiwiClient:
                 logger.warning("KiwiClient receive error: %s", exc)
                 if not self._disconnecting and self._on_disconnect:
                     self._on_disconnect(0)
+
+        finally:
+            if not failed and not self._disconnecting:
+                if self._audio_ready is not None and not self._audio_ready.done():
+                    self._audio_ready.set_exception(RuntimeError("Kiwi closed before audio"))
+                if self._on_disconnect:
+                    self._on_disconnect(0)
+
+    @property
+    def audio_receiving(self) -> bool:
+        return self.is_connected and time.monotonic() - self._audio_last_received < 3
+
+    @property
+    def waterfall_receiving(self) -> bool:
+        return self._wf_ws is not None and time.monotonic() - self._waterfall_last_received < 3
 
     async def _keepalive_loop(self) -> None:
         """Send SET keepalive every KEEPALIVE_INTERVAL seconds."""
@@ -793,7 +852,7 @@ class KiwiClient:
             "Origin": f"http://{host}:{port}",
             "User-Agent": "Mozilla/5.0 (SovereignWatch/1.0; NativeKiwiClient)"
         }
-        ts = int(time.time() * 1000)
+        ts = self._session_ts
 
         try:
             ws = None
@@ -843,6 +902,7 @@ class KiwiClient:
                     continue
                 if len(frame) > 16 and frame[:3] == b"W/F":
                     pixels = frame[16:]
+                    self._waterfall_last_received = time.monotonic()
                     if self._on_waterfall:
                         self._on_waterfall(pixels)
         except asyncio.CancelledError:

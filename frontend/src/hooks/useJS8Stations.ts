@@ -137,7 +137,7 @@ export function useJS8Stations(): UseJS8StationsResult {
         const type = asString(payload.type, "");
 
         if (type === "CONNECTED") {
-          setJs8Connected(asBoolean(payload.js8call_connected, false));
+          setJs8Connected(asBoolean(payload.js8call_connected, false) && asBoolean(payload.decoder_audio_ready, false));
           setJs8Mode(asString(payload.speed, "normal"));
           const c = asString(payload.callsign, "--");
           const g = asString(payload.grid, "----");
@@ -186,6 +186,11 @@ export function useJS8Stations(): UseJS8StationsResult {
             setActiveKiwiConfig(null);
             kiwiNodeRef.current = null;
           }
+          return;
+        }
+
+        if (type === "RADIO.STATUS") {
+          setJs8Connected(asBoolean(payload.js8call_connected, false) && asBoolean(payload.decoder_audio_ready, false));
           return;
         }
 
@@ -287,7 +292,7 @@ export function useJS8Stations(): UseJS8StationsResult {
           return;
         }
 
-        if (type === "RX.DIRECTED" || type === "TX.SENT") {
+        if (type === "RX.DIRECTED" || type === "RX.ACTIVITY" || type === "TX.SENT") {
           const entry: JS8LogEntry = {
             id: `${Date.now()}-${Math.random()}`,
             type,

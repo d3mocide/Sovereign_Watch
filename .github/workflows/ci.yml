@@ -351,5 +351,5 @@ jobs:
 
       - name: Test
         working-directory: js8call
-        # Exclude manual_test_* files — they require a live JS8Call or KiwiSDR instance.
-        run: uv run --frozen python -m pytest tests/test_kiwi_compatibility.py tests/test_kiwi_debounce.py -q
+        # Default test_* discovery excludes the manual live-receiver scripts.
+        run: uv run --frozen python -m pytest tests -q

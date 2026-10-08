@@ -46,6 +46,7 @@ from typing import Optional
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -207,6 +208,8 @@ _station_registry: dict[str, dict] = {}
 # must be sent back to that observed source address, not to a fixed port.
 _js8_reply_addr: Optional[tuple[str, int]] = None
 _js8_last_heard: float = 0.0
+_last_decode_at: Optional[float] = None
+_decoder_audio_ready = False
 JS8_HEARD_TIMEOUT = 60.0  # seconds without a datagram → considered disconnected
 
 # Merged local station state (callsign/grid/freq/speed), updated from JS8Call
@@ -386,6 +389,7 @@ def _start_pacat() -> Optional[subprocess.Popen]:
                 "--device=KIWI_RX", "--stream-name=KiwiSDR-RX-Native",
             ],
             stdin=subprocess.PIPE,
+            bufsize=0,
             stderr=subprocess.DEVNULL,
         )
         if proc.stdin:
@@ -740,6 +744,23 @@ async def _queue_broadcaster() -> None:
 # All data is forwarded via _enqueue_from_thread().
 # ===========================================================================
 
+def on_rx_activity(message: dict) -> None:
+    """Forward ordinary decoded frames as well as directed messages."""
+    global _last_decode_at
+    _last_decode_at = time.time()
+    params = message.get("params", {})
+    _enqueue_from_thread({
+        "type": "RX.ACTIVITY",
+        "text": message.get("value", ""),
+        "snr": params.get("SNR"),
+        "freq": params.get("FREQ"),
+        "offset": params.get("OFFSET"),
+        "speed": params.get("SPEED"),
+        "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
+        "ts_unix": int(time.time()),
+    })
+
+
 def on_rx_directed(message: dict) -> None:
     logger.info("RX DIRECTED: %s", message)
     try:
@@ -748,7 +769,7 @@ def on_rx_directed(message: dict) -> None:
             "type": "RX.DIRECTED",
             "from": params.get("FROM", ""),
             "to": params.get("TO", ""),
-            "text": params.get("TEXT", ""),
+            "text": params.get("TEXT") or message.get("value", ""),
             "snr": params.get("SNR", 0),
             "freq": params.get("FREQ", 0),
             "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
@@ -782,7 +803,7 @@ def on_rx_spot(message: dict) -> None:
 
 
 def on_station_status(message: dict) -> None:
-    logger.info("STATION STATUS: %s", message)
+    logger.debug("STATION STATUS: %s", message)
     try:
         params = message.get("params", {})
         payload = {
@@ -843,18 +864,19 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
             logger.warning("UDP: rejected datagram from unexpected source %s", sender_ip)
             return
 
-        # Every datagram (including the periodic PING) tells us where JS8Call's
-        # socket lives — commands must be sent back to this address.
-        first_contact = _js8_reply_addr is None
-        _js8_reply_addr = addr
-        _js8_last_heard = time.monotonic()
-
         try:
             line = data.decode("utf-8").strip()
             if not line:
                 return
             message = json.loads(line)
-            m_type = message.get("type", "")
+            if not isinstance(message, dict) or not isinstance(message.get("type"), str):
+                return
+            m_type = message["type"]
+            if not m_type:
+                return
+            first_contact = _js8_reply_addr is None
+            _js8_reply_addr = addr
+            _js8_last_heard = time.monotonic()
             params = message.get("params", {}) or {}
             value = message.get("value", "")
 
@@ -865,8 +887,11 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
                 _udp_send("STATION.GET_GRID")
                 _udp_send("RIG.GET_FREQ")
                 _udp_send("MODE.GET_SPEED")
+                _udp_send("RX.SET_FILTER_ENABLED", False)
 
-            if m_type == "RX.DIRECTED":
+            if m_type == "RX.ACTIVITY":
+                on_rx_activity(message)
+            elif m_type == "RX.DIRECTED":
                 on_rx_directed(message)
             elif m_type == "RX.SPOT":
                 on_rx_spot(message)
@@ -900,6 +925,43 @@ class JS8CallUDPProtocol(asyncio.DatagramProtocol):
 # Application Lifespan (startup / shutdown)
 # ===========================================================================
 
+def radio_status() -> dict:
+    native = _kiwi_native if not KIWI_USE_SUBPROCESS else None
+    return {
+        "js8call_connected": _js8_is_connected(),
+        "decoder_audio_ready": _decoder_audio_ready,
+        "kiwi_connected": _kiwi_is_running(),
+        "audio_receiving": bool(native and native.audio_receiving),
+        "waterfall_receiving": bool(native and native.waterfall_receiving),
+        "last_decode_at": _last_decode_at,
+        "receive_only": True,
+    }
+
+
+def _probe_decoder_audio() -> bool:
+    """Distinguish the remap stream from an actual JS8Call capture client."""
+    try:
+        result = subprocess.run(
+            ["pactl", "--format=json", "list", "source-outputs"],
+            capture_output=True, text=True, timeout=1, check=True,
+        )
+        return any(
+            row.get("properties", {}).get("application.process.binary") == "JS8Call"
+            and not row.get("corked", True)
+            for row in json.loads(result.stdout)
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+
+
+async def _status_broadcaster() -> None:
+    global _decoder_audio_ready
+    while True:
+        _decoder_audio_ready = await asyncio.to_thread(_probe_decoder_audio)
+        await _broadcast_json({"type": "RADIO.STATUS", **radio_status()})
+        await asyncio.sleep(2)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _event_loop, _message_queue, js8_client_udp_transport
@@ -914,6 +976,7 @@ async def lifespan(app: FastAPI):
     _event_loop = asyncio.get_running_loop()
     _message_queue = asyncio.Queue(maxsize=500)
     broadcaster = asyncio.create_task(_queue_broadcaster())
+    status_broadcaster = asyncio.create_task(_status_broadcaster())
 
     # ── KiwiSDR setup ──────────────────────────────────────────────────────
     if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
@@ -978,6 +1041,7 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ───────────────────────────────────────────────────────────
     broadcaster.cancel()
+    status_broadcaster.cancel()
     if KIWI_USE_SUBPROCESS or not _HAS_NATIVE_KIWI:
         _stop_kiwi_pipeline()
     else:
@@ -1063,6 +1127,7 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
 
     await websocket.send_json({
         "type": "CONNECTED",
+        "decoder_audio_ready": _decoder_audio_ready,
         "message": "JS8Call bridge active",
         "js8call_connected": _js8_is_connected(),
         "kiwi_connected": _kiwi_is_running(),
@@ -1105,26 +1170,9 @@ async def ws_js8(websocket: WebSocket, token: str | None = Query(default=None)) 
             # Payload: {"action": "SEND", "target": "@ALLCALL", "message": "..."}
             # ------------------------------------------------------------------
             if action == "SEND":
-                target = cmd.get("target", "@ALLCALL")
-                message = cmd.get("message", "")
-                if not message:
-                    await websocket.send_json({"type": "ERROR", "message": "Empty message"})
-                    continue
-
-                # BUG-014: Removed redundant inner `if action == "SEND"` guard
-                # (always True here) and unified to a single `message` variable.
-                tx_target = target.upper()
-                tx_msg = f"{tx_target} {message}"
-                # Forward dynamically to JS8Call UDP port
-                _udp_send("TX.SEND_MESSAGE", tx_msg)
-                # Echo the sent message back so the UI can display it in the log
-                _enqueue_from_thread({
-                    "type": "TX.SENT",
-                    "from": "LOCAL",
-                    "to": tx_target,
-                    "text": message,
-                    "timestamp": time.strftime("%H:%M:%SZ", time.gmtime()),
-                    "ts_unix": int(time.time()),
+                await websocket.send_json({
+                    "type": "ERROR",
+                    "message": "This KiwiSDR station is receive-only; transmission is unavailable.",
                 })
 
             # ------------------------------------------------------------------
@@ -1743,12 +1791,13 @@ async def get_websdr_nodes(
 # ===========================================================================
 
 @app.get("/health")
-async def health() -> dict:
-    return {
-        "status": "ok",
-        "js8call_connected": _js8_is_connected(),
-        "kiwi_connected": _kiwi_is_running(),
-    }
+async def health():
+    state = radio_status()
+    ready = state["js8call_connected"] and state["decoder_audio_ready"]
+    return JSONResponse(
+        {"status": "ok" if ready else "degraded", **state},
+        status_code=200 if ready else 503,
+    )
 
 
 # ===========================================================================
@@ -1761,5 +1810,6 @@ if __name__ == "__main__":
         host=JS8CALL_HOST,
         port=BRIDGE_PORT,
         log_level="info",
+        access_log=False,
         # reload=False in container – hot reload not useful in production
     )

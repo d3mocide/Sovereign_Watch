@@ -32,7 +32,7 @@ import {
   Server,
   Signal,
 } from "lucide-react";
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -212,7 +212,6 @@ export default function RadioTerminal({
   js8Mode: sharedJs8Mode,
   sMeterDbm,
   adcOverload = false,
-  sendMessage,
   sendAction,
 }: RadioTerminalProps) {
   // ── State ──────────────────────────────────────────────────────────────────
@@ -225,8 +224,6 @@ export default function RadioTerminal({
   );
 
   const [txTarget, setTxTarget] = useState("@GHOSTNET");
-  const [txMessage, setTxMessage] = useState("");
-  const [txPending, setTxPending] = useState(false);
 
   const [kiwiConfig, setKiwiConfig] = useState({
     host: KIWI_DEFAULT_HOST,
@@ -299,20 +296,6 @@ export default function RadioTerminal({
     return () => clearInterval(id);
   }, []);
 
-  // ── Transmit handler ───────────────────────────────────────────────────────
-
-  const handleSend = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      const msg = txMessage.trim();
-      if (!msg || !bridgeConnected || txPending) return;
-      sendMessage(txTarget.trim() || "@ALLCALL", msg);
-      setTxMessage("");
-      setTxPending(true);
-      setTimeout(() => setTxPending(false), 16000);
-    },
-    [bridgeConnected, txMessage, txTarget, txPending, sendMessage],
-  );
 
   // ── KiwiSDR connect / disconnect ───────────────────────────────────────────
 
@@ -673,8 +656,11 @@ export default function RadioTerminal({
           )}
         </div>
 
-        {/* Right: connection state */}
+        {/* Bridge and decoder are independent readiness stages. */}
         <div className="flex items-center gap-3 text-xs font-semibold tracking-wide">
+          <span className={js8IsConnected ? "text-emerald-400" : "text-amber-400"}>
+            {js8IsConnected ? "DECODER READY" : "DECODER OFFLINE"}
+          </span>
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md border backdrop-blur-sm shadow-sm transition-all duration-300 ${
               bridgeConnected
@@ -1054,74 +1040,9 @@ export default function RadioTerminal({
             ))}
           </div>
 
-          {/* TX form */}
-          <form
-            onSubmit={handleSend}
-            className="radio-send-form flex items-center gap-3 px-5 py-2 relative z-10"
-          >
-            <span className="text-slate-500 font-semibold text-xs tracking-wider">
-              TO
-            </span>
-            <input
-              type="text"
-              value={txTarget}
-              onChange={(e) => setTxTarget(e.target.value.toUpperCase())}
-              placeholder="@GHOSTNET"
-              aria-label="Message recipient"
-              maxLength={20}
-              disabled={!bridgeConnected}
-              className="
-              bg-black/40 border border-white/10 rounded-md px-3 py-2 w-32
-              font-mono text-xs font-bold text-indigo-300 uppercase tracking-wider
-              focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30
-              disabled:opacity-40 transition-all shadow-inner
-            "
-            />
-            <div className="flex-1 flex items-center gap-3">
-              <input
-                type="text"
-                value={txMessage}
-                onChange={(e) => setTxMessage(e.target.value.toUpperCase())}
-                placeholder={
-                  bridgeConnected
-                    ? "TYPE MESSAGE AND PRESS ENTER… (NO Transmit on KiwiSDR)"
-                    : "NOT CONNECTED"
-                }
-                aria-label="Radio message"
-                maxLength={160}
-                disabled={!bridgeConnected || txPending}
-                autoComplete="off"
-                spellCheck={false}
-                className="
-                flex-1 bg-black/40 border border-white/10 rounded-md px-4 py-2
-                font-mono text-sm text-slate-100 uppercase
-                focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30
-                disabled:opacity-40 disabled:cursor-not-allowed
-                transition-all shadow-inner placeholder:text-slate-600
-              "
-              />
-              <span
-                className={`text-[10px] font-mono w-12 text-right ${txMessage.length > 140 ? "text-red-400 font-bold" : "text-slate-500"}`}
-              >
-                {txMessage.length}/160
-              </span>
-            </div>
-            <button
-              type="submit"
-              disabled={!bridgeConnected || !txMessage.trim() || txPending}
-              className="
-              px-6 py-2 rounded-md font-mono text-xs font-bold uppercase tracking-widest
-              transition-all duration-200 shadow-[0_0_10px_rgba(79,70,229,0.2)] border
-              bg-indigo-600 hover:bg-indigo-500 hover:shadow-[0_0_15px_rgba(79,70,229,0.4)]
-              border-indigo-400/30 text-white
-              disabled:bg-black/40 disabled:text-slate-500 disabled:border-white/5
-              disabled:cursor-not-allowed disabled:shadow-none
-              focus:outline-none focus:ring-2 focus:ring-indigo-500/50
-            "
-            >
-              {txPending ? "TX…" : "SEND"}
-            </button>
-          </form>
+          <div className="radio-send-form px-5 py-3 text-xs font-mono text-emerald-300/70 border-t border-white/10">
+            RECEIVE ONLY · KiwiSDR supplies audio; decoded JS8 traffic appears above.
+          </div>
 
           {/* Status bar */}
           <div className="radio-footer-status flex items-center gap-4 px-5 pb-2 text-[10px] text-slate-600 font-mono relative z-10">

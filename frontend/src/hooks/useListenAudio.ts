@@ -123,6 +123,9 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
       nextPlayRef.current = now + PREBUFFER_S;
       setIsPlaying(true);
     }
+    setIsPlaying(true);
+    // Avoid an ever-growing playback backlog after a throttled/background tab.
+    if (nextPlayRef.current - now > 1) nextPlayRef.current = now + PREBUFFER_S;
     source.start(nextPlayRef.current);
     nextPlayRef.current += buffer.duration;
   }, []);
@@ -143,8 +146,10 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
     }
 
     let reconnectTimeout: number | undefined;
+    let disposed = false;
 
     const connect = () => {
+      if (disposed) return;
       const token = getToken();
     const ws = new WebSocket(getAudioWSUrl(token));
       ws.binaryType = 'arraybuffer';
@@ -161,6 +166,7 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
       }, 500);
 
       ws.onopen = () => {
+        if (disposed) { ws.close(); return; }
         setIsConnected(true);
         nextPlayRef.current = 0;
         lastDataTsRef.current = Date.now();
@@ -174,7 +180,7 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
         // We no longer proactively suspend here. 
         // Suspension is handled by the 'active' useEffect below or on component unmount.
 
-        if (active) {
+        if (!disposed) {
           reconnectTimeout = window.setTimeout(connect, 3000);
         }
       };
@@ -192,6 +198,7 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
     connect();
 
     return () => {
+      disposed = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (wsRef.current) {
         wsRef.current.close();
@@ -212,6 +219,11 @@ export function useListenAudio(active: boolean): UseListenAudioResult {
       audioCtxRef.current.resume();
     }
   }, [active, audioEnabled]);
+
+  useEffect(() => () => {
+    void audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+  }, []);
 
   return {
     analyserNode,
