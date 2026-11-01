@@ -16,13 +16,13 @@ dependencies = [
     # >= 0.9.0 has ever been published on PyPI. Pinned to actual latest.
     "pyjs8call==0.2.3",
     "websockets==16.0",
-    "aiohttp==3.13.3",
+    "aiohttp==3.14.4",
     "python-jose[cryptography]==3.5.0",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest==9.0.2",
+    "pytest==9.0.3",
 ]
 
 [tool.setuptools]
